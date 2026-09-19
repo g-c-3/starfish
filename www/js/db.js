@@ -1,4 +1,4 @@
-// db.js — SQLite schema & init for Actioner
+// db.js — SQLite schema & init for Dumpzone
 // Uses @capacitor-community/sqlite. All data is local-only.
 
 const SCHEMA_VERSION = 1;
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS meta (
 `;
 
 async function initDb(sqlite) {
-  const db = await sqlite.createConnection('actioner.db', false, 'no-encryption', SCHEMA_VERSION, false);
+  const db = await sqlite.createConnection('dumpzone.db', false, 'no-encryption', SCHEMA_VERSION, false);
   await db.open();
   await db.execute(SCHEMA_SQL);
 

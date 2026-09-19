@@ -3,13 +3,13 @@
 
 import { LocalNotifications } from '@capacitor/local-notifications';
 
-const CHANNEL_ID = 'actioner_reminders';
+const CHANNEL_ID = 'dumpzone_reminders';
 
 async function ensureChannel() {
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: 'Reminders',
-    description: 'Actioner reminder alerts',
+    description: 'Dumpzone reminder alerts',
     sound: 'notify_tone.wav', // must exist at android/app/src/main/res/raw/notify_tone.wav
     importance: 5, // max — heads-up notification + sound
     visibility: 1  // show full content on lock screen
@@ -33,7 +33,7 @@ async function scheduleReminder(entry) {
   await LocalNotifications.schedule({
     notifications: [{
       id: hashIdToInt(entry.id),
-      title: 'Actioner Reminder',
+      title: 'Dumpzone Reminder',
       body: entry.label,
       channelId: CHANNEL_ID,
       schedule,

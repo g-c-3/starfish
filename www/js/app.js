@@ -264,7 +264,7 @@ async function setGradientMode(on, color1 = null, color2 = null) {
   applyAppearance(await getAppearance());
 }
 
-window.Actioner = {
+window.Dumpzone = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel, unlockPrivateNotes, lockPrivateNotes,
   search: (q) => searchEntries(db, q), softDelete: (id) => softDelete(db, id),
   listAllTags: () => listAllTags(db),
