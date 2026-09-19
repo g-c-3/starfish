@@ -4,6 +4,39 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 10**
+
+Built: `www/js/gdrive.js` — the actual Drive backup engine (Session 9 was design + manual-setup docs
+only). Auth via silent `GoogleAuth.signIn()`, folder find-or-create, storage check against Drive's
+`about.get` quota, multipart upload of the exact same encrypted archive `backup.js` produces, a
+read-only preview function, and restore that delegates to `backup.js`'s existing `restoreBackup()`
+rather than duplicating its append/overwrite/dedup logic. Small schema addition: `credentials` gets a
+`last_drive_backup_at` column alongside the existing local `last_backup_at`.
+
+Resolved, with evidence rather than assumption, the two things Session 9 left open:
+- **No refresh-token store of our own** (Decision 30) — dropped `grantOfflineAccess` from
+  `capacitor.config.json`; the native SDK's own cached-consent sign-in is enough since every Drive
+  call happens in the foreground.
+- **Auto-backup scheduling mechanism** (Decision 31) — checked `@capacitor/background-runner`
+  against its actual Capacitor 6 documentation before deciding, rather than assuming it would work:
+  its headless environment has no SQLite or Filesystem access, so it literally cannot read entries or
+  build a backup payload. Chose a check-on-app-open/resume design instead
+  (`checkAndRunAutoBackupIfDue()`), consistent with the project's existing preference for local
+  notifications over AlarmManager. Tradeoff stated plainly in the decision: no app open means no
+  auto-backup that cycle — visible and honest rather than a silent background promise that might not
+  hold.
+
+Decisions made: 30–31.
+
+Next session start point: unchanged blocker — none of `gdrive.js` can be device-tested until the
+manual Google Cloud Console steps (`android-notes/native-setup.md` §10) are done and the real OAuth
+client ID replaces the placeholder in `capacitor.config.json`. Once that's done: the Settings UI
+(connect/disconnect, manual "Backup now to Drive", frequency picker) and wiring
+`checkAndRunAutoBackupIfDue()` into app startup. Also still standing: confirm the CI run is green,
+and Phase 7's zip-library choice.
+
+---
+
 **Session 9**
 
 Built: planning + scaffolding for Phase 13 (Google Drive backup), no runtime code yet — this phase

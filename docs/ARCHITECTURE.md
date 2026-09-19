@@ -196,16 +196,44 @@ returns quota (`storageQuota.limit`/`usageInDrive`); the same "required vs. avai
 won't fit" check `backup.js` already does against `navigator.storage.estimate()` applies here against
 that response instead. Shown before the upload starts, not discovered mid-transfer.
 
-**Auto-backup is time-based (daily/weekly, user-configurable), manual "Backup now" always available
-too.** Needs a background scheduling mechanism the app doesn't have yet (everything today is
-foreground-only or a local notification) — this is new native-plugin surface, not just new JS.
+**No refresh-token store of our own.** `gdrive.js` never requests `grantOfflineAccess`/a serverAuthCode
+and never persists a token. It calls `GoogleAuth.signIn()` fresh, in the foreground, whenever Drive
+access is needed; the native Android SDK returns cached consent silently (no UI) if the person already
+granted it and their on-device Google session is still valid. Less code, nothing sensitive to secure
+beyond what Android's own account manager already secures.
 
-**What's still an open implementation choice:** which Capacitor plugin handles Google Sign-In
-(`@codetrix-studio/capacitor-google-auth` fits the app's current Capacitor 6 pin and supports
-`grantOfflineAccess` for a long-lived refresh token; the newer official-style Capawesome plugin
-requires Capacitor 8, a separate, larger upgrade not undertaken for this alone), and which plugin
-handles the periodic background trigger for auto-backup. Both are resolved when Phase 13 is coded,
-not before — see ROADMAP.md.
+**Auto-backup runs as a check on app open/resume, not via OS-level background scheduling.**
+`@capacitor/background-runner` was evaluated and rejected: its headless JS environment (confirmed
+against the Capacitor 6 docs, not assumed) exposes only `console`/`fetch`/`crypto`/timers plus
+`CapacitorDevice`, `CapacitorKV` (a plain string key/value store, not SQLite), `CapacitorNotifications`,
+and `CapacitorGeolocation` — no SQLite, no Filesystem. It cannot read the entries table or captured
+files, so it cannot build a backup payload at all, independent of any interval/battery concerns.
+Every other Android background-task path (AlarmManager, a foreground service) adds exactly the kind
+of native complexity the project already chose to avoid for reminders (Decision — notifications are
+scheduled local notifications, not alarms). Checking on open/resume instead costs nothing new: it
+runs in the same foreground context everything else already uses, with full SQLite/Filesystem/network
+access, and is transparently reliable (if the app isn't opened, no backup runs, which is an honest and
+visible limitation rather than a silent one).
+
+`checkAndRunAutoBackupIfDue()` (`gdrive.js`) compares `credentials.last_drive_backup_at` against the
+configured `auto_backup_frequency` (`meta` table, alongside `dark_mode` etc. — an App Settings item,
+Decision 8's categories) and, if due, signs in silently and backs up without prompting; if silent
+sign-in fails (no cached consent) or no passphrase is available to the passive check, it skips quietly
+rather than interrupting whatever the person opened the app to do.
+
+**Storage check before every upload, same pattern as local (Decision 8).** Drive's `about.get` API
+returns quota (`storageQuota.limit`/`usage`); the same "required vs. available, block if it won't
+fit" check `backup.js` already does against `navigator.storage.estimate()` applies here against that
+response instead — `limit` absent means an unlimited-storage account, treated as no cap. Shown before
+the upload starts, not discovered mid-transfer.
+
+**Restore reuses `backup.js`'s `restoreBackup()` directly** — `gdrive.js`'s `restoreFromDrive()` only
+fetches the archive from Drive and hands it to the exact same append/overwrite/dedup/tag-restore logic
+Phase 6 already has. One restore engine regardless of source, not two to keep in sync.
+
+**Google Sign-In plugin: `@codetrix-studio/capacitor-google-auth`**, chosen for compatibility with the
+app's current Capacitor 6 pin — the newer, more actively-recommended Capawesome Google Sign-In plugin
+requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these five)
 

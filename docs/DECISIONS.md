@@ -142,3 +142,15 @@ always available regardless of the auto-backup setting. Requires a background sc
 not yet chosen (Phase 13) — everything in the app today is foreground-only or a local notification.
 "Fully offline" language across docs/UI updates to "offline-first, optional cloud backup" once this
 ships, since the old phrasing stops being accurate the moment Drive backup exists as a feature.
+
+**30. No refresh-token/serverAuthCode store for Drive auth.** `gdrive.js` never requests
+`grantOfflineAccess`; it calls `GoogleAuth.signIn()` fresh each time, relying on the native Android
+SDK's own silent-consent caching. Nothing of our own to persist or secure beyond what Android's
+account manager already handles.
+
+**31. Auto-backup is a check on app open/resume, not `@capacitor/background-runner`.** That plugin's
+headless JS environment has no SQLite or Filesystem access (confirmed against the Capacitor 6 docs) —
+it cannot read entries or captured files, so it cannot build a backup payload, independent of any
+timing/battery concerns. AlarmManager/a foreground service were also passed over, consistent with the
+existing choice to keep reminders as local notifications rather than alarms. The tradeoff is explicit:
+if the app isn't opened, no auto-backup runs — an honest, visible limit rather than a silent one.
