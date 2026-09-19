@@ -2,7 +2,7 @@
 
 ## Minimum (quick reference)
 
-- [ ] 0 — Repo scaffold & docs
+- [x] 0 — Repo scaffold & docs
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
@@ -18,21 +18,25 @@
 
 ## Detailed
 
-- [ ] **0 — Repo scaffold & docs.** Seed the four docs files; upload the existing local scaffold
-  (`www/`, `capacitor.config.json`, `package.json`, `.github/workflows/build-android.yml`,
-  `android-notes/native-setup.md`). Closes once docs and scaffold are both committed.
+- [x] **0 — Repo scaffold & docs.** Docs and scaffold (`www/`, `capacitor.config.json`,
+  `package.json`, `.github/workflows/build-android.yml`, `android-notes/native-setup.md`) both
+  confirmed committed on `main`.
 - [ ] **1 — Infra & secrets (manual).**
-  - [ ] Package name: `com.dumpzone.app` (already set).
-  - [ ] Android signing — keystore + 4 GitHub secrets (see `android-notes/native-setup.md`).
+  - [x] Package name: `com.dumpzone.app` (set in `capacitor.config.json`).
+  - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. CI
+    run against the live secrets not yet confirmed green — pending manual check.
   - [ ] AdMob account, one Rewarded ad unit (not Interstitial).
   - [ ] App icon — not started.
   - [ ] Play Console account — not blocking; only if Play distribution is later decided on.
 - [ ] **2 — Core data layer.** `db.js` (schema, FTS5, tags, label history, soft-delete),
-  `crypto.js` (PBKDF2/AES-GCM). Drafted locally; not committed or device-tested.
+  `crypto.js` (PBKDF2/AES-GCM). Committed; not device-tested. Stale pre-rebrand naming
+  (`actioner.db`, header comment) fixed this session.
 - [ ] **3 — Capture & intent engine.** `intents.js` (reminder/expense detection, OCR label
-  suggestion), `notifications.js`, `ads.js`. Drafted locally; not committed or device-tested.
+  suggestion), `notifications.js`, `ads.js`. Committed; not device-tested. `notifications.js`'s
+  stale pre-rebrand naming (channel id, titles) fixed this session.
 - [ ] **4 — App shell & control flow.** `app.js`, `index.html`, `style.css`. Functional skeleton
-  drafted; real UI screens not built.
+  committed; real UI screens not built. `app.js`'s stale `window.Actioner` global renamed to
+  `window.Dumpzone` this session.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
@@ -45,12 +49,12 @@
   (`label_history`), batch add with auto-numbering (`batchAddWithCommonLabel()` drafted). No UI yet.
 - [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
   quick-capture widget, expense charts, backup-reminder nudge, auto-lock timeout, map view,
-  confidence-confirmation chip, dark mode toggle, gradient mode toggle (2 color pickers, same-color
-  allowed). None started.
+  confidence-confirmation chip, dark mode toggle (done), gradient mode toggle (done, 2 color pickers,
+  same-color allowed). Remaining items not started.
 - [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
   not implemented.
-- [ ] **11 — CI/CD.** `build-android.yml` drafted locally, not committed or run live. First live run
-  likely needs log-driven fixes, same as any first native CI build.
+- [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
+  (Session 3). Live green run against the now-set secrets not yet confirmed — manual check pending.
 - [ ] **12 — Ads integration.** Wire `ads.js`'s decision logic to a real AdMob plugin, rewarded unit
   only. Logic drafted; native plugin call not.
 
