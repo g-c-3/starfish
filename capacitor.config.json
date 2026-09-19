@@ -14,7 +14,7 @@
     },
     "GoogleAuth": {
       "scopes": ["https://www.googleapis.com/auth/drive.file"],
-      "grantOfflineAccess": true,
+      "grantOfflineAccess": false,
       "androidClientId": "REPLACE_WITH_ANDROID_OAUTH_CLIENT_ID.apps.googleusercontent.com"
     }
   }
