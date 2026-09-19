@@ -19,20 +19,17 @@ Also set `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`dumpzone`), and `KEY_PASSWORD` as se
 (alias `dumpzone`, secrets set) — this section is a reference for regenerating one if ever needed.
 
 ## 2. App icon
-Source artwork lives at `resources/icon.png` (repo root), a single 1254×1254 square, no transparency.
-`@capacitor/assets` generates every density (legacy `mipmap-*` + adaptive `mipmap-anydpi-v26`) from
-this one file — CI runs it automatically (`npx @capacitor/assets generate --android`, right after the
-`android/` platform exists, before `cap sync`). To change the icon: replace `resources/icon.png` and
-commit; nothing else to touch.
+Source artwork lives at `resources/icon.png` (repo root) — must be full-bleed (content to the edges,
+no pre-baked margin). `@capacitor/assets` generates every density (legacy `mipmap-*` + adaptive
+`mipmap-anydpi-v26`) from this one file — CI runs it automatically (`npx @capacitor/assets generate
+--android`, right after the `android/` platform exists, before `cap sync`). To change the icon:
+replace `resources/icon.png` with a full-bleed square and commit; nothing else to touch.
 
-No separate foreground/background layers were supplied, so the same flattened image is used for both
-the legacy icon and the adaptive icon's single layer. Measured artwork margin is ~16–20% on every
-side, just inside Android's recommended adaptive-icon safe zone (content within the center ~66%) — so
-it should survive a circular or squircle launcher mask without meaningfully cropping the folder or
-shield, but this hasn't been confirmed on an actual device/launcher yet. If a launcher's mask crops it
-more than expected, the fix is supplying `resources/icon-foreground.png` (transparent background,
-content further inset) and `resources/icon-background.png` separately — `@capacitor/assets` picks
-those up over the single `icon.png` automatically when both are present.
+**Do not supply a pre-padded source.** The generator applies its own adaptive-icon safe-zone inset;
+a source that already carries margin stacks with that inset and renders visibly smaller than sibling
+icons on the launcher (confirmed on-device, Session 7 — see Decision 24). If you want more breathing
+room around the artwork, that's controlled by supplying a dedicated `resources/icon-foreground.png`
+(transparent background) at the size you want, not by padding the single combined `icon.png`.
 
 ## 3. Permissions (AndroidManifest.xml)
 Add:
