@@ -1,0 +1,9 @@
+* { box-sizing: border-box; }
+body { font-family: -apple-system, Roboto, sans-serif; margin: 0; background: #0f1115; color: #eee; }
+.screen { min-height: 100vh; padding: 20px; }
+.hidden { display: none; }
+input, button { font-size: 16px; padding: 12px; margin: 6px 0; width: 100%; border-radius: 8px; border: 1px solid #333; }
+button { background: #488AFF; color: white; border: none; cursor: pointer; }
+#capture-bar { display: flex; gap: 8px; margin: 12px 0; }
+#capture-bar button { font-size: 22px; width: auto; flex: 1; }
+#timeline { margin-top: 12px; }
