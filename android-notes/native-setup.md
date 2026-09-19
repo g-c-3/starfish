@@ -80,3 +80,32 @@ Only needed if you find notifications getting delayed on aggressive OEMs (Xiaomi
 foreground service keeps the process alive for scheduled reminders. Adds a persistent notification icon —
 tradeoff between reliability and being unobtrusive. Treat as a v2 addition if standard Local Notifications
 prove unreliable in testing on your actual device.
+
+## 10. Google Drive backup — Google Cloud Console setup (Phase 13, optional/opt-in)
+This is the manual, one-time setup this feature needs before any code can talk to Drive. Everything
+here is web-UI on console.cloud.google.com — no terminal.
+
+1. **Create a Google Cloud project** (or reuse one) at console.cloud.google.com. Free tier is enough.
+2. **Enable the Google Drive API**: APIs & Services → Library → search "Google Drive API" → Enable.
+3. **Configure the OAuth consent screen**: APIs & Services → OAuth consent screen.
+   - User type: External (unless you have a Google Workspace to make it Internal).
+   - Scopes: add `https://www.googleapis.com/auth/drive.file` only — do not add `drive` or
+     `drive.readonly`, both are restricted and require a paid security assessment (Decision 26).
+   - While in Testing status, add your own Google account under "Test users" so you can sign in
+     during development.
+   - **Before relying on auto-backup: Audience → Publish App → switch from Testing to Production.**
+     Skipping this means your refresh token silently expires after 7 days (Decision 27) — auto-backup
+     would just stop working with no error message pointing at the cause. Because the only scope
+     requested is non-sensitive, publishing does not trigger Google's full manual review queue.
+4. **Create an Android OAuth client**: APIs & Services → Credentials → Create Credentials → OAuth
+   client ID → Application type: Android.
+   - Package name: `com.dumpzone.app`.
+   - SHA-1 certificate fingerprint: from the release keystore generated in §1. One extra command run
+     the same way that keystore was generated: `keytool -list -v -keystore release.keystore -alias
+     dumpzone` — the output includes a line starting `SHA1:`. Paste that value in.
+5. **Copy the generated client ID** (ends `.apps.googleusercontent.com`) into
+   `capacitor.config.json`'s `plugins.GoogleAuth.androidClientId` — this file already has the field,
+   just replace the placeholder value.
+
+Nothing else in Phase 13 can be wired up (`gdrive.js`, sign-in button, auto-backup scheduler) until
+this exists, the same way Phase 1's AdMob unit and signing secrets blocked their own downstream work.
