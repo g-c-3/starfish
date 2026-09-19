@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS credentials (
   private_pin_salt TEXT,
   private_pin_hint TEXT,
   auto_lock_minutes INTEGER DEFAULT 5,
-  last_backup_at INTEGER
+  last_backup_at INTEGER,
+  last_drive_backup_at INTEGER
 );
 
 -- ===== Entries (unified timeline) =====
