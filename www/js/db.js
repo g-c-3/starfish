@@ -159,7 +159,8 @@ async function purgeOldTrash(db) {
   const rows = await db.query(`SELECT id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`, [cutoff]);
   for (const row of (rows.values || [])) {
     await db.run(`DELETE FROM entries_fts WHERE id = ?`, [row.id]);
-    await db.run(`DELETE FROM entries WHERE id = ?`, [row.id]);
+    await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [row.id]); // explicit — ON DELETE CASCADE needs
+    await db.run(`DELETE FROM entries WHERE id = ?`, [row.id]);          // PRAGMA foreign_keys=ON, not set here
   }
 }
 
