@@ -4,6 +4,41 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 11**
+
+Built: the actual UI for both Phase 6 (local backup/restore) and Phase 13's settings (Drive connect,
+auto-backup config, Drive backup list). `index.html` gets a Backup & Restore section and a Google
+Drive section (both plain `<details>` blocks, matching Appearance's existing bare style — no visual
+design pass, Phase 4 still owns that); `style.css` gets minimal supporting styles (checkbox groups,
+a modal-overlay pattern, a warning-text color); `app.js` wires all of it to `backup.js`/`gdrive.js`.
+
+Real design point resolved while wiring, not left implicit: **a due auto-backup can't run fully
+silently**, because the backup passkey is never stored (existing credentials rule) and
+`checkAndRunAutoBackupIfDue()`'s `passphraseGetter` hook has to come from somewhere real. Built a
+small one-tap banner that asks for the passkey only when a backup is actually due, with an explicit
+skip option that leaves the due-date untouched rather than silently deferring a full cycle. Recorded
+as Decision 32 — this is a real behavior a future session could otherwise "simplify" back into an
+unsafe passphrase cache.
+
+Small cleanup along the way: removed `index.html`'s five separate `<script type="module">` tags for
+db.js/crypto.js/intents.js/notifications.js/ads.js — `app.js` already `import`s all of them, so those
+were redundant (harmless, since ES modules execute once per URL regardless, but pure clutter).
+
+Known rough edge, flagged rather than hidden: Drive's restore and manual-backup flows use plain
+`prompt()`/`confirm()` for the passkey and mode choice, while local restore and the auto-backup-due
+check use the nicer purpose-built dialogs. Inconsistent, functional, worth revisiting once Phase 4
+does a real design pass rather than this bare-skeleton styling.
+
+Decisions made: 32.
+
+Next session start point: same standing blocker on Phase 13 — none of the Drive UI can be
+device-tested until the manual Google Cloud Console steps are done and a real OAuth client ID
+replaces the placeholder in `capacitor.config.json`. Phase 6's local backup/restore UI has no such
+blocker and can be tested as soon as a build succeeds. Also still standing: confirm the CI run is
+green, and Phase 7's zip-library choice.
+
+---
+
 **Session 10**
 
 Built: `www/js/gdrive.js` — the actual Drive backup engine (Session 9 was design + manual-setup docs

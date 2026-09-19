@@ -154,3 +154,9 @@ it cannot read entries or captured files, so it cannot build a backup payload, i
 timing/battery concerns. AlarmManager/a foreground service were also passed over, consistent with the
 existing choice to keep reminders as local notifications rather than alarms. The tradeoff is explicit:
 if the app isn't opened, no auto-backup runs — an honest, visible limit rather than a silent one.
+
+**32. A due auto-backup shows a one-tap passkey prompt, never runs fully silently.** The backup
+passkey is never stored (existing credentials rule), so `checkAndRunAutoBackupIfDue()` can't cache it
+across sessions — when the schedule says a backup is due, the app shows a small banner asking for the
+passkey once, with an explicit "Skip this time" option that leaves `last_drive_backup_at` untouched so
+it comes due again next open rather than silently waiting out the full interval.

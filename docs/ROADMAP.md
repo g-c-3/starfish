@@ -47,9 +47,12 @@
   (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
   storage sanity checks (`navigator.storage.estimate()` — an estimate, no device free-space API
   exists in Capacitor core), safety-backup-before-overwrite with its explicit-confirmation gate,
-  extract-to-storage (no DB import). Not wired to any UI screen. Not run on a device — flag as risk.
-  Cross-PIN private-notes append path is written but especially untested (no way to exercise it
-  without two real devices or a manually crafted second-PIN backup).
+  extract-to-storage (no DB import). UI now wired in `index.html`/`app.js`: category checkboxes,
+  mode selector with both descriptions always shown, the overwrite confirmation dialog (safety-backup
+  checkbox defaulted on). Not run on a device — flag as risk. Cross-PIN private-notes append path is
+  written but especially untested (no way to exercise it without two real devices or a manually
+  crafted second-PIN backup). Still plain/unstyled — matches Phase 4's current bare-skeleton look,
+  not a finished visual design.
 - [ ] **7 — Per-file actions.** Share, Download-for-append (encrypted, optional passkey, shared
   sidecar schema), plain Download, Edit, Delete. Depends on 6's sidecar schema.
 - [ ] **8 — Tags & label UX.** Shared tag picker (`listAllTags()` drafted), label autocomplete
@@ -81,10 +84,13 @@
   - [x] Auto-backup mechanism decided: a check on app open/resume (`checkAndRunAutoBackupIfDue()`),
     not OS-level background scheduling — `@capacitor/background-runner` confirmed incapable of
     SQLite/Filesystem access, so it can't build a payload at all (Decision 31).
-  - [ ] Settings UI: connect/disconnect account, manual "Backup now to Drive", auto-backup
+  - [x] Settings UI: connect/disconnect account, manual "Backup now to Drive", auto-backup
     enabled/frequency picker (writes `meta.auto_backup_enabled`/`auto_backup_frequency`),
     storage-check display (same visual pattern as local backup's). Also the call site that invokes
-    `checkAndRunAutoBackupIfDue()` on app open and supplies it a passphrase getter.
+    `checkAndRunAutoBackupIfDue()` on app open and supplies it a passphrase getter. **Known rough
+    edge:** Drive restore/backup-now use plain `prompt()`/`confirm()` for the one-off passphrase and
+    mode choice rather than the nicer modal built for local restore's overwrite confirmation and the
+    auto-backup-due banner — functional, inconsistent, worth revisiting once Phase 4's real UI exists.
   - [ ] "Fully offline" language in docs/UI updated to "offline-first, optional cloud backup"
     (Decision 29) — done in ARCHITECTURE.md this session; still needs doing in any in-app copy once
     that copy exists (Phase 4's UI is still a bare skeleton).
