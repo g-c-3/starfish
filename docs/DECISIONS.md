@@ -117,3 +117,28 @@ adaptive-icon generator applies its own safe-zone inset; a source that already c
 with that inset and renders visibly smaller than sibling icons on the launcher — confirmed on-device
 (Session 7) and fixed by re-cropping `resources/icon.png` to ~2–6% margin. Any future icon swap
 follows this same rule.
+
+**25. Google Drive backup is opt-in and additive, never a replacement for local backup.** Local-only
+stays the default and fully functional with no account, forever. Connecting a Google account adds a
+second destination for the same backup file; nothing about local capture, search, or backup/restore
+starts depending on it.
+
+**26. Drive access uses the `drive.file` OAuth scope only** — the app can see/manage only files it
+created itself, never the rest of the person's Drive. Chosen specifically because it's Google's
+non-sensitive tier: basic verification only, not the restricted-scope security assessment full or
+readonly Drive access would require.
+
+**27. The Google Cloud OAuth consent screen must be published to Production, not left in Testing.**
+Testing-mode refresh tokens for non-basic scopes expire after 7 days, which would silently break
+time-based auto-backup about a week in. Production removes that limit without triggering full manual
+verification, since the scope (Decision 26) stays non-sensitive.
+
+**28. A Drive backup is byte-for-byte the same encrypted archive format as a local backup** (Decision
+21) — same passphrase, same KDF, same "never stored" rule. Drive only ever holds the opaque encrypted
+blob; one engine, two destinations.
+
+**29. Auto-backup to Drive is time-based (daily/weekly, user-configurable)**, with manual "Backup now"
+always available regardless of the auto-backup setting. Requires a background scheduling mechanism
+not yet chosen (Phase 13) — everything in the app today is foreground-only or a local notification.
+"Fully offline" language across docs/UI updates to "offline-first, optional cloud backup" once this
+ships, since the old phrasing stops being accurate the moment Drive backup exists as a feature.

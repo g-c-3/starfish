@@ -1,15 +1,19 @@
 # Architecture — Dumpzone
 
-A fully offline, privacy-first personal capture & action app for Android, built with Capacitor.
-No accounts, no server, no automated inference, no external verification. Everything lives on the device.
+A fully offline-first, privacy-first personal capture & action app for Android, built with Capacitor.
+No account or server is required for anything the app does by default. No automated inference, no
+external verification. An entirely optional, opt-in Google Drive backup exists for anyone who wants
+an off-device copy (see §4b) — everything else stays local-only, with or without it.
 
 > Working name history: prototyped as "Actioner" during early design; finalized as **Dumpzone**.
-> Package id / app id should be updated to `com.dumpzone.app` (see `capacitor.config.json`) before first release build.
 
 Last updated: 2026-09-19 (seed session — full design consolidated from pre-repo conversation; no code beyond the scaffold committed yet).
 
 ## 1. Core principles
-- 100% local storage (SQLite), no network calls except the ad SDK.
+- 100% local storage (SQLite) by default. No account or server is required for capture, search,
+  reminders, expenses, or local backup/restore.
+- The only network calls in the app are the ad SDK and, only if the person explicitly opts in,
+  Google Drive backup (§4b). Neither is reachable from, or required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
@@ -159,6 +163,49 @@ Appending a backup containing private notes encrypted under a *different* PIN re
    normal forgotten-PIN case) — everything else in the backup still imports normally.
 The app-open password is unaffected either way: it lives in the `credentials` table, untouched by append mode,
 which only ever touches `entries`.
+
+## 4b. Google Drive backup (optional, opt-in — Decisions 25–29)
+
+Everything above (§4) is the local backup/restore engine and remains the default; nothing here
+changes it or depends on it being used. This section is an **additional** destination for the same
+kind of backup file, reachable only if the person explicitly connects a Google account.
+
+**Opt-in, not a replacement.** Local-only stays the default and fully functional forever. Connecting
+Drive adds a second place a backup can be written to/read from; it never becomes required.
+
+**Same encryption, same everything, different destination.** A Drive backup is the exact same
+AES-GCM-encrypted archive `backup.js` already produces (Decision 21) — same passphrase, same KDF,
+same "never stored" rule for the passkey. Google's servers only ever see the encrypted blob, the same
+as if it were sitting on the device's own storage.
+
+**Auth scope: `drive.file` only, never full Drive access.** This scope grants access only to files
+the app itself creates — Dumpzone can never browse, read, or touch anything else in the person's
+Drive. It's also Google's "non-sensitive" tier, which matters practically: it needs only basic app
+verification, not the restricted-scope security assessment (CASA) that full/readonly Drive access
+would require — the difference between a solo developer being able to ship this at all and not.
+
+**The OAuth consent screen must be published to Production, not left in Testing.** A project in
+Testing status with an external audience gets refresh tokens that expire after 7 days for any scope
+beyond basic profile/email — which would silently break time-based auto-backup about a week after
+setup, with no obvious symptom beyond backups quietly stopping. Publishing to Production removes that
+limit; because the scope stays non-sensitive, this does not trigger Google's full manual verification
+queue. See `android-notes/native-setup.md` §10 for the exact console steps.
+
+**Storage check before every upload, same pattern as local (Decision 8).** Drive's `about.get` API
+returns quota (`storageQuota.limit`/`usageInDrive`); the same "required vs. available, block if it
+won't fit" check `backup.js` already does against `navigator.storage.estimate()` applies here against
+that response instead. Shown before the upload starts, not discovered mid-transfer.
+
+**Auto-backup is time-based (daily/weekly, user-configurable), manual "Backup now" always available
+too.** Needs a background scheduling mechanism the app doesn't have yet (everything today is
+foreground-only or a local notification) — this is new native-plugin surface, not just new JS.
+
+**What's still an open implementation choice:** which Capacitor plugin handles Google Sign-In
+(`@codetrix-studio/capacitor-google-auth` fits the app's current Capacitor 6 pin and supports
+`grantOfflineAccess` for a long-lived refresh token; the newer official-style Capawesome plugin
+requires Capacitor 8, a separate, larger upgrade not undertaken for this alone), and which plugin
+handles the periodic background trigger for auto-backup. Both are resolved when Phase 13 is coded,
+not before — see ROADMAP.md.
 
 ## 5. Per-file actions (every entry gets these five)
 

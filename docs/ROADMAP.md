@@ -15,6 +15,7 @@
 - [ ] 10 — Security hardening
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
+- [ ] 13 — Google Drive backup (optional, opt-in)
 
 ## Detailed
 
@@ -63,6 +64,22 @@
   (Session 3). Live green run against the now-set secrets not yet confirmed — manual check pending.
 - [ ] **12 — Ads integration.** Wire `ads.js`'s decision logic to a real AdMob plugin, rewarded unit
   only. Logic drafted; native plugin call not.
+- [ ] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement
+  (Decision 25). Sub-items, roughly in dependency order:
+  - [ ] Manual: Google Cloud project, enable Drive API, OAuth consent screen scoped to `drive.file`
+    only (Decision 26), **published to Production** before relying on auto-backup (Decision 27) —
+    walkthrough in `android-notes/native-setup.md` §10.
+  - [ ] Manual: Android-type OAuth client (package `com.dumpzone.app` + release keystore's SHA-1).
+  - [ ] Google Sign-In plugin wired (`@codetrix-studio/capacitor-google-auth`, chosen for Capacitor 6
+    compatibility — see ARCHITECTURE.md §4b for why the newer Capawesome plugin wasn't picked).
+  - [ ] `gdrive.js`: auth, find/create the app's backup folder, upload/download reusing
+    `backup.js`'s exact archive format (Decision 28), storage check via Drive's `about.get` quota.
+  - [ ] Background scheduling mechanism for time-based auto-backup (Decision 29) — not yet chosen;
+    nothing in the app does background work today.
+  - [ ] Settings UI: connect/disconnect account, manual "Backup now to Drive", auto-backup frequency
+    picker, storage-check display (same visual pattern as local backup's).
+  - [ ] "Fully offline" language in docs/UI updated to "offline-first, optional cloud backup"
+    (Decision 29) once this ships — not before, so docs don't claim a feature that doesn't exist yet.
 
 Phases with a real dependency (e.g. 7 needs 6) are worked in order. Phases without one (e.g. 9's
 individual items) can be picked up in any order once prerequisites are met.

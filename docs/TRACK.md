@@ -13,3 +13,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-19 | Session 6 | Decision 23 | Phase 1 app-icon sub-item closed (resources/icon.png + CI-generated densities via @capacitor/assets) |
 | 2026-09-19 | Session 7 | Decision 24 | App icon bug fixed — re-cropped resources/icon.png full-bleed after user-reported/confirmed double-padding on-device |
 | 2026-09-19 | Session 8 | none | resources/icon.png background recolored dark navy → white |
+| 2026-09-19 | Session 9 | Decisions 25–29 | Phase 13 added (Google Drive backup, opt-in) — design + manual-setup docs only, no runtime code yet; "fully offline" language updated to "offline-first" |

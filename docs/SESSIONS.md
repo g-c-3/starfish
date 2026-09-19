@@ -4,6 +4,41 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 9**
+
+Built: planning + scaffolding for Phase 13 (Google Drive backup), no runtime code yet — this phase
+has real prerequisites (an OAuth client that doesn't exist) the same way Phase 1's signing did.
+`ARCHITECTURE.md` gets a new §4b design section; `capacitor.config.json` gets the `GoogleAuth` plugin
+config block with a placeholder client ID; `package.json` gets
+`@codetrix-studio/capacitor-google-auth` (chosen over the newer Capawesome Google Sign-In plugin
+specifically because it supports Capacitor 6 — the project's current pin — while Capawesome's needs
+Capacitor 8, a separate, larger upgrade not undertaken for this); `android-notes/native-setup.md`
+gets §10, the Google Cloud Console walkthrough (project, Drive API, OAuth consent screen, Android
+OAuth client, SHA-1 from the existing release keystore).
+
+Researched before committing to any of it: confirmed `drive.file` is Google's non-sensitive scope
+tier (basic verification only, not the restricted-scope security assessment full/readonly Drive
+access needs) and confirmed that a Testing-status consent screen gets 7-day refresh token expiry for
+any non-basic scope — both facts drove Decisions 26–27 and the explicit "publish to Production" step
+in the setup walkthrough. Also confirmed the current recommended Capacitor Google Sign-In plugin
+requires Capacitor 8 before picking the older, Capacitor-6-compatible alternative instead.
+
+"Fully offline" language in `ARCHITECTURE.md` §1/header changed to "offline-first" per this session's
+confirmed direction (Decision 29) — done now, ahead of the feature shipping, since the docs already
+needed to describe an opt-in exception (Decision 25) regardless of when the code lands.
+
+Decisions made: 25–29 (Drive backup is opt-in/additive; `drive.file` scope only; consent screen must
+be Production, not Testing; same encrypted-archive format as local; auto-backup is time-based with
+manual backup always available, plus the offline-language update).
+
+Next session start point: same standing items (confirm the Actions run is green; Phase 6 UI or
+Phase 7's zip-library choice) plus, whenever you've done the manual Google Cloud Console steps in
+`android-notes/native-setup.md` §10: `gdrive.js` (mirrors `backup.js`'s create/restore shape against
+Drive's API instead of the filesystem) and the background-scheduling choice for auto-backup, still
+open per ARCHITECTURE.md §4b.
+
+---
+
 **Session 8**
 
 Built: `resources/icon.png` background changed from dark navy to white. Un-mixed the flat, uniform
