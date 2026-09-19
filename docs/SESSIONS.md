@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 7**
+
+Bugs fixed: app icon rendered visibly smaller than sibling dock icons on-device (user-reported,
+confirmed via screenshot comparison). Cause: the source `resources/icon.png` already carried ~17–20%
+margin (flagged as a risk in Session 6, not yet wrong at that point); `@capacitor/assets` applies its
+own adaptive-icon safe-zone inset on top of whatever source it's given, so the two paddings stacked
+into a double shrink. Fix: re-cropped the same artwork to its actual content bounding box and
+re-centered it full-bleed (~2–6% margin) before handing it to the generator. Why correct: removing
+the redundant margin leaves only the generator's own inset, matching how sibling icons are padded.
+
+Decisions made: 24 (icon source images must be full-bleed; a rule for any future icon swap, not just
+this one).
+
+Next session start point: same as before this detour — confirm the Actions run is green, then either
+the backup/restore UI (Phase 6) or a zip-library choice for Phase 7. Re-confirm the icon visually
+once a build with the new crop is installed; the fix is based on measurement + the known cause, not a
+second on-device screenshot.
+
+---
+
 **Session 6**
 
 Built: app icon pipeline. Source artwork saved as `resources/icon.png` (1254×1254, no transparency).

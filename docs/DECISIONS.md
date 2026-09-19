@@ -111,3 +111,9 @@ choosing overwrite is how a full replace is done — there's no separate "wipe e
 per-density PNGs. `resources/icon.png` is the only file to touch when the icon changes; no separate
 adaptive-icon foreground/background layers exist yet since only one flattened image was supplied —
 revisit if launcher-mask cropping turns out to be a problem on a real device.
+
+**24. Icon source images must be supplied full-bleed (artwork to the edges), not pre-padded.** The
+adaptive-icon generator applies its own safe-zone inset; a source that already carries margin stacks
+with that inset and renders visibly smaller than sibling icons on the launcher — confirmed on-device
+(Session 7) and fixed by re-cropping `resources/icon.png` to ~2–6% margin. Any future icon swap
+follows this same rule.
