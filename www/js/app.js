@@ -7,8 +7,18 @@ import { hashPassword, verifyPassword, deriveAesKey, encryptPrivateNote } from '
 import { detectIntent, suggestLabel } from './intents.js';
 import { scheduleReminder, requestPermissions, registerActionTypes } from './notifications.js';
 import { runDailyAdGateIfDue } from './ads.js';
+import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
+import {
+  ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
+  restoreFromDrive, checkAndRunAutoBackupIfDue
+} from './gdrive.js';
 
 const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
+
+const CATEGORY_LABELS = {
+  notes: 'Notes', private_notes: 'Private Notes', voice: 'Voice', images: 'Images', pdfs: 'PDFs',
+  files: 'Files', expenses: 'Expenses', reminders: 'Reminders', tags: 'Tags', app_settings: 'App Settings'
+};
 
 let db;
 let privateSessionKey = null; // set only after PIN unlock, cleared on lock/background
@@ -62,6 +72,7 @@ async function onUnlocked() {
 
   await showDigest();
   await showMainTimeline();
+  await checkAutoBackupOnOpen(); // after unlock, after main UI — never blocks getting into the app
 }
 
 // ---- Digest (home screen summary) ----
@@ -264,6 +275,207 @@ async function setGradientMode(on, color1 = null, color2 = null) {
   applyAppearance(await getAppearance());
 }
 
+// ---- Backup & Restore UI (local — Phase 6) ----
+function renderCategoryCheckboxes(containerId, idPrefix) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = ALL_CATEGORIES.map((cat) => `
+    <label>
+      <input type="checkbox" class="${idPrefix}-cat" value="${cat}" checked />
+      ${CATEGORY_LABELS[cat] || cat}
+    </label>
+  `).join('');
+}
+
+function getCheckedCategories(idPrefix) {
+  return Array.from(document.querySelectorAll(`.${idPrefix}-cat:checked`)).map((el) => el.value);
+}
+
+async function handleBackupNow() {
+  const statusEl = document.getElementById('backup-status');
+  const passphrase = document.getElementById('backup-passphrase').value;
+  const hint = document.getElementById('backup-hint').value;
+  const categories = getCheckedCategories('backup');
+  if (!passphrase) { statusEl.textContent = 'Enter a backup passkey first.'; return; }
+  if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
+
+  statusEl.textContent = 'Checking storage…';
+  const result = await createBackup(db, { passphrase, hint, categories });
+  if (!result.ok && result.reason === 'insufficient_storage') {
+    statusEl.textContent = `Not enough space: needs ~${formatBytes(result.requiredBytes)}, ` +
+      `${formatBytes(result.availableBytes)} available.`;
+    return;
+  }
+  statusEl.textContent = result.ok
+    ? `Saved as ${result.path}.`
+    : `Backup failed: ${result.reason || 'unknown error'}.`;
+}
+
+// Shared by both local restore and Drive restore — shows the overwrite warning dialog when needed,
+// resolves to { proceed, takeSafetyBackup } once the person decides.
+function confirmOverwriteIfNeeded(mode) {
+  if (mode !== 'overwrite') return Promise.resolve({ proceed: true, takeSafetyBackup: false });
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('overwrite-confirm-dialog');
+    const safetyCheckbox = document.getElementById('safety-backup-checkbox');
+    dialog.classList.remove('hidden');
+    const cleanup = () => {
+      dialog.classList.add('hidden');
+      confirmBtn.removeEventListener('click', onConfirm);
+      cancelBtn.removeEventListener('click', onCancel);
+    };
+    const confirmBtn = document.getElementById('overwrite-confirm-btn');
+    const cancelBtn = document.getElementById('overwrite-cancel-btn');
+    const onConfirm = () => { cleanup(); resolve({ proceed: true, takeSafetyBackup: safetyCheckbox.checked }); };
+    const onCancel = () => { cleanup(); resolve({ proceed: false }); };
+    confirmBtn.addEventListener('click', onConfirm);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+async function handleLocalRestore() {
+  const statusEl = document.getElementById('restore-status');
+  const fileInput = document.getElementById('restore-file-input');
+  const passphrase = document.getElementById('restore-passphrase').value;
+  const categories = getCheckedCategories('restore');
+  const mode = document.querySelector('input[name="restore-mode"]:checked').value;
+
+  if (!fileInput.files[0]) { statusEl.textContent = 'Choose a backup file first.'; return; }
+  if (!passphrase) { statusEl.textContent = 'Enter the backup passkey.'; return; }
+  if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
+
+  const { proceed, takeSafetyBackup } = await confirmOverwriteIfNeeded(mode);
+  if (!proceed) { statusEl.textContent = 'Restore cancelled.'; return; }
+
+  statusEl.textContent = 'Reading file…';
+  // Read via the browser File API directly rather than @capacitor/filesystem — a picked file's
+  // content:// URI isn't a plain Filesystem path, and restoreBackup() accepts a parsed archiveObj
+  // either way, so there's nothing Filesystem-specific to gain here.
+  const text = await fileInput.files[0].text();
+  let archiveObj;
+  try { archiveObj = JSON.parse(text); } catch { statusEl.textContent = 'Not a valid backup file.'; return; }
+
+  statusEl.textContent = 'Restoring…';
+  const result = await restoreBackup(db, {
+    passphrase, archiveObj, mode, categories, takeSafetyBackup, confirmedDestructive: true
+  });
+  statusEl.textContent = result.ok
+    ? `Done — added ${result.summary.added}, skipped ${result.summary.skippedExactDup} exact duplicates, ` +
+      `${result.summary.restoredLabeled} restored under "(Restored)".`
+    : `Restore failed: ${result.reason || 'unknown error'}.`;
+}
+
+function formatBytes(n) {
+  if (n === null || n === undefined) return 'unknown';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ---- Google Drive backup UI (optional, opt-in — Phase 13) ----
+async function refreshDriveConnectionView() {
+  const disconnectedView = document.getElementById('drive-disconnected-view');
+  const connectedView = document.getElementById('drive-connected-view');
+  const auth = await ensureSignedIn({ silent: true }); // never prompts here — just checks cached consent
+  disconnectedView.classList.toggle('hidden', auth.ok);
+  connectedView.classList.toggle('hidden', !auth.ok);
+  if (!auth.ok) return;
+
+  document.getElementById('drive-account-email').textContent = auth.email;
+  document.getElementById('auto-backup-toggle').checked = (await metaGet('auto_backup_enabled', 'false')) === 'true';
+  document.getElementById('auto-backup-frequency').value = await metaGet('auto_backup_frequency', 'weekly');
+  await renderDriveBackupList(auth.accessToken);
+}
+
+async function renderDriveBackupList(accessToken) {
+  const listEl = document.getElementById('drive-backup-list');
+  const backups = await listDriveBackups(accessToken);
+  if (backups.length === 0) { listEl.textContent = 'No backups on Drive yet.'; return; }
+  listEl.innerHTML = backups.map((b) => `
+    <div class="drive-backup-row">
+      <span>${b.name} — ${new Date(b.createdTime).toLocaleDateString()}</span>
+      <button class="drive-restore-btn" data-file-id="${b.id}">Restore</button>
+    </div>
+  `).join('');
+  listEl.querySelectorAll('.drive-restore-btn').forEach((btn) => {
+    btn.addEventListener('click', () => handleDriveRestore(btn.dataset.fileId, accessToken));
+  });
+}
+
+async function handleDriveRestore(fileId, accessToken) {
+  const statusEl = document.getElementById('drive-backup-status');
+  const passphrase = prompt('Backup passkey for this Drive backup:'); // one-off, not stored anywhere
+  if (!passphrase) return;
+
+  let preview;
+  try { preview = await previewDriveBackup(accessToken, fileId, passphrase); }
+  catch { statusEl.textContent = 'Wrong passkey or corrupted backup.'; return; }
+
+  const categories = preview.categories; // restore everything the backup contains, same as opening a local file with all boxes checked
+  const mode = confirm(
+    `This backup has: ${categories.map((c) => CATEGORY_LABELS[c] || c).join(', ')}. ` +
+    `Click OK to Append (safe, adds to existing data), Cancel to choose Overwrite instead.`
+  ) ? 'append' : 'overwrite';
+
+  const { proceed, takeSafetyBackup } = await confirmOverwriteIfNeeded(mode);
+  if (!proceed) { statusEl.textContent = 'Restore cancelled.'; return; }
+
+  statusEl.textContent = 'Restoring from Drive…';
+  const result = await restoreFromDrive(db, {
+    accessToken, fileId, passphrase, mode, categories, takeSafetyBackup, confirmedDestructive: true
+  });
+  statusEl.textContent = result.ok
+    ? `Done — added ${result.summary.added}, skipped ${result.summary.skippedExactDup} exact duplicates.`
+    : `Restore failed: ${result.reason || 'unknown error'}.`;
+}
+
+async function handleDriveBackupNow() {
+  const statusEl = document.getElementById('drive-backup-status');
+  const passphrase = prompt('Backup passkey (never stored — needed for this upload only):');
+  if (!passphrase) return;
+  statusEl.textContent = 'Checking Drive storage…';
+  const result = await backupToDrive(db, { passphrase, categories: ALL_CATEGORIES });
+  if (!result.ok && result.reason === 'insufficient_drive_storage') {
+    statusEl.textContent = `Not enough Drive space: needs ~${formatBytes(result.requiredBytes)}, ` +
+      `${formatBytes(result.availableBytes)} available.`;
+    return;
+  }
+  statusEl.textContent = result.ok ? `Uploaded ${result.name}.` : `Upload failed: ${result.reason}.`;
+  if (result.ok) await refreshDriveConnectionView();
+}
+
+// Runs once per app open/resume, after unlock. Never silent about needing the passkey (Decision 32) —
+// the passkey is never stored, so a due auto-backup shows a one-tap banner instead of failing quietly
+// or trying to cache the passkey across sessions.
+async function checkAutoBackupOnOpen() {
+  const banner = document.getElementById('auto-backup-due-banner');
+  const result = await checkAndRunAutoBackupIfDue(db, {
+    categories: ALL_CATEGORIES,
+    passphraseGetter: () => new Promise((resolve) => {
+      banner.classList.remove('hidden');
+      const input = document.getElementById('auto-backup-passphrase-input');
+      const runBtn = document.getElementById('auto-backup-run-btn');
+      const skipBtn = document.getElementById('auto-backup-skip-btn');
+      const cleanup = () => {
+        banner.classList.add('hidden');
+        runBtn.removeEventListener('click', onRun);
+        skipBtn.removeEventListener('click', onSkip);
+      };
+      const onRun = () => { const v = input.value; cleanup(); resolve(v || null); };
+      const onSkip = () => { cleanup(); resolve(null); };
+      runBtn.addEventListener('click', onRun);
+      skipBtn.addEventListener('click', onSkip);
+    })
+  });
+  // Surface anything other than a clean run or an expected skip in drive-backup-status, even though
+  // that panel likely isn't open right now — better found later than lost entirely.
+  if (!result.ok || (result.ok && !result.skipped)) {
+    const statusEl = document.getElementById('drive-backup-status');
+    if (!result.ok) statusEl.textContent = `Auto-backup failed: ${result.reason || 'unknown error'}.`;
+    else if (result.fileId) statusEl.textContent = `Auto-backup uploaded ${result.name}.`;
+  }
+}
+
 window.Dumpzone = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel, unlockPrivateNotes, lockPrivateNotes,
   search: (q) => searchEntries(db, q), softDelete: (id) => softDelete(db, id),
@@ -301,4 +513,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     color1Input.addEventListener('input', onColorChange);
     color2Input.addEventListener('input', onColorChange); // identical values to color1 are valid, not an error
   }
+
+  // Backup & Restore (local) wiring
+  renderCategoryCheckboxes('backup-categories', 'backup');
+  renderCategoryCheckboxes('restore-categories', 'restore');
+  document.getElementById('backup-now-btn').addEventListener('click', handleBackupNow);
+  document.getElementById('restore-btn').addEventListener('click', handleLocalRestore);
+
+  // Google Drive backup wiring — off by default, nothing here runs until the person opts in
+  document.getElementById('drive-connect-btn').addEventListener('click', async () => {
+    await ensureSignedIn({ silent: false }); // shows Google's own sign-in UI on first connect
+    await refreshDriveConnectionView();
+  });
+  document.getElementById('drive-disconnect-btn').addEventListener('click', async () => {
+    await signOut();
+    await metaSet('auto_backup_enabled', 'false'); // disconnecting implies no more unattended uploads
+    await refreshDriveConnectionView();
+  });
+  document.getElementById('drive-backup-now-btn').addEventListener('click', handleDriveBackupNow);
+  document.getElementById('auto-backup-toggle').addEventListener('change', (e) => metaSet('auto_backup_enabled', e.target.checked ? 'true' : 'false'));
+  document.getElementById('auto-backup-frequency').addEventListener('change', (e) => metaSet('auto_backup_frequency', e.target.value));
+  await refreshDriveConnectionView(); // silent — reflects existing connection state, never prompts on load
 });
