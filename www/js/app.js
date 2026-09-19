@@ -18,6 +18,8 @@ async function bootstrap() {
   const sqlite = new SQLiteConnection(CapacitorSQLite);
   db = await initDb(sqlite);
 
+  applyAppearance(await getAppearance()); // apply theme before rendering the lock screen
+
   await requestPermissions();
   await registerActionTypes();
   await purgeOldTrash(db);
@@ -218,10 +220,85 @@ async function showMainTimeline() {
   return rows.values || [];
 }
 
+// ---- Appearance: dark mode + gradient mode (both stored in the generic `meta` table, no schema
+// change needed; both fall under the App Settings backup category). Purely cosmetic — never gates
+// any feature or data access. ----
+async function metaGet(key, fallback = null) {
+  const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
+  return (r.values && r.values[0]) ? r.values[0].value : fallback;
+}
+async function metaSet(key, value) {
+  await db.run(
+    `INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+    [key, value]
+  );
+}
+
+async function getAppearance() {
+  return {
+    darkMode: (await metaGet('dark_mode', 'off')) === 'on',
+    gradientMode: (await metaGet('gradient_mode', 'off')) === 'on',
+    gradientColor1: await metaGet('gradient_color_1', '#488AFF'),
+    gradientColor2: await metaGet('gradient_color_2', '#FF6B9D')
+  };
+}
+
+function applyAppearance({ darkMode, gradientMode, gradientColor1, gradientColor2 }) {
+  const root = document.documentElement;
+  root.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  root.setAttribute('data-gradient', gradientMode ? 'on' : 'off');
+  // Same color for both is valid — collapses to a single-tone glow, not an error case.
+  root.style.setProperty('--gradient-1', gradientColor1);
+  root.style.setProperty('--gradient-2', gradientColor2);
+}
+
+async function setDarkMode(on) {
+  await metaSet('dark_mode', on ? 'on' : 'off');
+  applyAppearance(await getAppearance());
+}
+
+async function setGradientMode(on, color1 = null, color2 = null) {
+  await metaSet('gradient_mode', on ? 'on' : 'off');
+  if (color1) await metaSet('gradient_color_1', color1);
+  if (color2) await metaSet('gradient_color_2', color2); // color2 === color1 is a valid, supported choice
+  applyAppearance(await getAppearance());
+}
+
 window.Actioner = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel, unlockPrivateNotes, lockPrivateNotes,
   search: (q) => searchEntries(db, q), softDelete: (id) => softDelete(db, id),
-  listAllTags: () => listAllTags(db)
+  listAllTags: () => listAllTags(db),
+  getAppearance, setDarkMode, setGradientMode
 };
 
-document.addEventListener('DOMContentLoaded', bootstrap);
+document.addEventListener('DOMContentLoaded', async () => {
+  await bootstrap();
+
+  // Appearance settings UI wiring — populate controls from stored state, then wire changes back.
+  const appearance = await getAppearance();
+  const darkToggle = document.getElementById('dark-mode-toggle');
+  const gradToggle = document.getElementById('gradient-mode-toggle');
+  const gradPickers = document.getElementById('gradient-color-pickers');
+  const color1Input = document.getElementById('gradient-color-1');
+  const color2Input = document.getElementById('gradient-color-2');
+
+  if (darkToggle) {
+    darkToggle.checked = appearance.darkMode;
+    darkToggle.addEventListener('change', (e) => setDarkMode(e.target.checked));
+  }
+  if (gradToggle && gradPickers) {
+    gradToggle.checked = appearance.gradientMode;
+    gradPickers.classList.toggle('hidden', !appearance.gradientMode);
+    gradToggle.addEventListener('change', (e) => {
+      gradPickers.classList.toggle('hidden', !e.target.checked);
+      setGradientMode(e.target.checked, color1Input.value, color2Input.value);
+    });
+  }
+  if (color1Input && color2Input) {
+    color1Input.value = appearance.gradientColor1;
+    color2Input.value = appearance.gradientColor2;
+    const onColorChange = () => setGradientMode(gradToggle.checked, color1Input.value, color2Input.value);
+    color1Input.addEventListener('input', onColorChange);
+    color2Input.addEventListener('input', onColorChange); // identical values to color1 are valid, not an error
+  }
+});
