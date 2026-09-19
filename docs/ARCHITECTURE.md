@@ -216,8 +216,7 @@ which only ever touches `entries`.
 - **On-this-day resurfacing** — a simple date-diff query surfaced on app open (after the ad gate), e.g.
   "1 month ago you saved..." Pure rule-based recency query, no automated inference.
 - **Storage usage breakdown** — a Settings screen showing size used per category (Voice/Images/PDFs/Files),
-  with a "clear items older than X days" action per category to help manage device storage proactively.
-- **Home-screen quick-capture widget** — a 4-button Android widget (voice/photo/note/expense) that jumps
+  with a "clear items older than X days" action per category to help manage device storage proactively.- **Home-screen quick-capture widget** — a 4-button Android widget (voice/photo/note/expense) that jumps
   straight into capture mode, skipping the app-open password for *creation only* (not for viewing existing
   data). Treated as the highest-leverage retention feature discussed — reduces the friction that normally kills
   daily use of note-taking apps.
@@ -227,6 +226,17 @@ which only ever touches `entries`.
   (see above) actually usable, since that recovery flow depends on a recent backup existing.
 - **App auto-lock timeout** — configurable inactivity timeout (`credentials.auto_lock_minutes`, default 5) that
   re-locks the app, so the password isn't only a one-time gate at cold launch.
+- **Dark mode** — on/off toggle, stored as `meta.dark_mode` (`'on'`/`'off'`). No system-theme auto-detection
+  required for v1; the toggle is the single source of truth once set. Applies via a `data-theme` attribute on
+  `<html>` and CSS custom properties, not a full stylesheet swap.
+- **Gradient mode** — on/off toggle, independent of dark mode (all four combinations — light/flat,
+  light/gradient, dark/flat, dark/gradient — are valid). When on, exposes two color pickers
+  (`meta.gradient_color_1`, `meta.gradient_color_2`); picking the same color for both is explicitly allowed and
+  collapses the effect to a soft single-tone glow rather than a two-tone gradient. Rendered as a soft background
+  gradient plus a blurred "spillover/glow" layer behind cards/panels (large, blurred, semi-transparent color
+  blobs positioned behind content — pure CSS, no native plugin) — purely cosmetic, no effect on data, search, or
+  any other behavior. Both settings live under the App Settings backup category (see Backup & Restore above),
+  so they travel with a backup/restore like any other non-sensitive preference.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 

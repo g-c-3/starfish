@@ -84,3 +84,12 @@ no-terminal workflow — every file is a full, ready-to-download replacement.
 
 **17. Docs use numbers, not dates.** DECISIONS.md and SESSIONS.md entries are numbered only; TRACK.md
 is the sole place mapping any of it to a real date/time.
+
+**18. Dark mode: simple on/off, no auto-detection required for v1.** Stored as a local preference
+(`meta.dark_mode`), applied via a `data-theme` attribute and CSS variables. Falls under the App
+Settings backup category.
+
+**19. Gradient mode: on/off, independent of dark mode, two user-pickable colors.** Same color allowed
+for both — collapses to a single-tone glow rather than a two-tone gradient, by design, not a bug to
+guard against. Rendered as a soft background gradient plus a blurred glow/spillover layer behind
+cards — pure CSS, cosmetic only, no functional effect. Also falls under App Settings.

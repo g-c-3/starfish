@@ -45,7 +45,8 @@
   (`label_history`), batch add with auto-numbering (`batchAddWithCommonLabel()` drafted). No UI yet.
 - [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
   quick-capture widget, expense charts, backup-reminder nudge, auto-lock timeout, map view,
-  confidence-confirmation chip. None started.
+  confidence-confirmation chip, dark mode toggle, gradient mode toggle (2 color pickers, same-color
+  allowed). None started.
 - [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
   not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` drafted locally, not committed or run live. First live run
