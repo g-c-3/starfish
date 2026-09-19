@@ -1,0 +1,16 @@
+{
+  "appId": "com.dumpzone.app",
+  "appName": "Dumpzone",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#488AFF",
+      "sound": "notify_tone.wav"
+    }
+  }
+}
