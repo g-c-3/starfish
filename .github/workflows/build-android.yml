@@ -37,6 +37,17 @@ jobs:
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
+      - name: Verify keystore secrets are set
+        run: |
+          if [ ! -s android/app/release.keystore ]; then
+            echo "::error::KEYSTORE_BASE64 secret is missing or empty — release.keystore decoded to 0 bytes. Set it under repo Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+            echo "::error::One or more of KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD is missing. Set all four secrets before running this workflow."
+            exit 1
+          fi
+
       - name: Build signed release APK
         working-directory: android
         env:
@@ -46,7 +57,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=release.keystore \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/release.keystore" \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PASSWORD
