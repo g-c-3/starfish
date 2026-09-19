@@ -8,7 +8,7 @@
 - [ ] 3 — Capture & intent engine
 - [ ] 4 — App shell & control flow
 - [ ] 5 — Native plugin wiring
-- [ ] 6 — Backup & restore engine
+- [~] 6 — Backup & restore engine (core logic done, no UI, not device-tested)
 - [ ] 7 — Per-file actions
 - [ ] 8 — Tags & label UX
 - [ ] 9 — Additional features
@@ -40,9 +40,13 @@
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
-- [ ] **6 — Backup & restore engine.** Largest unbuilt piece: append/overwrite modes, safety-backup
-  flow, selective backup/restore (incl. Tags, App Settings), storage checks, UUID dedup,
-  extract-without-import. Fully specced in ARCHITECTURE.md; no code yet.
+- [~] **6 — Backup & restore engine.** `backup.js` built: create/encrypt/write, open/decrypt/restore
+  (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
+  storage sanity checks (`navigator.storage.estimate()` — an estimate, no device free-space API
+  exists in Capacitor core), safety-backup-before-overwrite with its explicit-confirmation gate,
+  extract-to-storage (no DB import). Not wired to any UI screen. Not run on a device — flag as risk.
+  Cross-PIN private-notes append path is written but especially untested (no way to exercise it
+  without two real devices or a manually crafted second-PIN backup).
 - [ ] **7 — Per-file actions.** Share, Download-for-append (encrypted, optional passkey, shared
   sidecar schema), plain Download, Edit, Delete. Depends on 6's sidecar schema.
 - [ ] **8 — Tags & label UX.** Shared tag picker (`listAllTags()` drafted), label autocomplete

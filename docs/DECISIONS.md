@@ -93,3 +93,16 @@ Settings backup category.
 for both — collapses to a single-tone glow rather than a two-tone gradient, by design, not a bug to
 guard against. Rendered as a soft background gradient plus a blurred glow/spillover layer behind
 cards — pure CSS, cosmetic only, no functional effect. Also falls under App Settings.
+
+**20. Captured file storage path convention: `Directory.Data/files/<uuid>.<extension>`.** Not
+previously pinned down; backup/restore needs a fixed convention to read and write against. Files are
+named by the owning entry's own id, so a restored file and its DB row always agree.
+
+**21. Full backup is a single AES-GCM-encrypted JSON archive, not a zip.** Keeps the "no external
+library" stance (crypto.js only) for Phase 6; file bytes travel base64-encoded inside the JSON.
+Per-file download-for-append (Phase 7, Decision 9) is a separate, later decision to use a zip
+container — the two share the same entry-record schema but not the same container format.
+
+**22. Overwrite-mode restore is destructive only within the selected categories**, not a full-device
+wipe by default. Existing rows in unselected categories are untouched. Selecting every category and
+choosing overwrite is how a full replace is done — there's no separate "wipe everything" switch.

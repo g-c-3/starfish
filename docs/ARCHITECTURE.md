@@ -345,6 +345,7 @@ dumpzone/
       intents.js         -> rule-based reminder/expense detector + OCR label suggestion
       notifications.js  -> local notification scheduling (tone, snooze/done actions)
       ads.js            -> rewarded ad gate logic
+      backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       app.js            -> app bootstrap / router / expense follow-up flow
   capacitor.config.json
   package.json
@@ -355,12 +356,14 @@ dumpzone/
 ## 13. Status
 Implemented in code already: schema (including tags, label history, soft-delete columns), FTS5 search,
 credential hashing/KDF/AES helpers, the intent engine (reminders, expenses, OCR label suggestion), notification
-scheduling, the ad-gate decision logic, and the app bootstrap control flow (auth → ad gate → digest → timeline,
-plus the expense follow-up timeout).
+scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
+plus the expense follow-up timeout), and the core backup/restore engine (`backup.js`: build/encrypt/write,
+open/decrypt/restore in both append and overwrite modes with UUID dedup, selective categories with storage
+sanity checks, safety-backup-before-overwrite, extract-to-storage). Not yet wired to any UI, not device-tested.
 
-Specified in this doc but not yet coded: the full backup/restore engine (append vs. overwrite, selective
-backup/restore with storage sanity checks, safety-backup-before-overwrite, UUID-based dedup, per-file
-download-for-append zips with the shared sidecar schema), the quick-capture home-screen widget, expense charts,
+Specified in this doc but not yet coded: per-file download-for-append zips with the shared sidecar schema
+(Phase 7 — reuses `backup.js`'s entry-record shape but needs a zip library, not yet chosen), the quick-capture
+home-screen widget, expense charts,
 the map view, the confidence-confirmation chip UI, and the on-this-day/storage-breakdown screens. These are the
 next implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after

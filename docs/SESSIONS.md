@@ -4,6 +4,40 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 5**
+
+Built: `www/js/backup.js` — Phase 6 core engine. Create/encrypt/write a full or selective backup
+(`createBackup`), open/decrypt without touching the DB (`openBackupFile`/`decryptBackupPayload`),
+restore in append or overwrite mode with UUID dedup and storage sanity checks (`restoreBackup`), and
+extract a category's raw files + JSON sidecar to device storage with no DB import
+(`extractCategoryToStorage`). No UI wiring yet; not run on a device.
+
+Bugs fixed (caught during this session's own build, before commit): `createBackup` initially wrote
+`last_backup_at` to the `meta` table — wrong; `db.js`'s schema keeps it on the single-row
+`credentials` table. Fixed to `UPDATE credentials SET last_backup_at=? WHERE id=1`. Separately, the
+first draft of `buildBackupPayload`/`restoreBackup` ignored that tags are a many-to-many join
+(`entry_tags`), not a column on `entries` — payload now collects each entry's tag names via a join
+query, and restore re-creates the `tags` rows and `entry_tags` links (and updates `label_history`,
+matching what a normal capture does via `insertEntry`, since restore bypasses that helper to preserve
+original `created_at`).
+
+Also fixed, pre-existing (Phase 2, not previously flagged): `entry_tags` has `ON DELETE CASCADE`
+foreign keys, but nothing in `db.js` ever sets `PRAGMA foreign_keys = ON`, so hard deletes were
+leaving orphaned `entry_tags` rows. Surfaced by writing overwrite-mode restore's delete step; the
+same gap already existed in `purgeOldTrash`. Fixed both with an explicit `DELETE FROM entry_tags`
+before the parent row delete, rather than relying on a pragma that capacitor-community/sqlite may not
+carry across every connection.
+
+Decisions made: 20–22 (file storage path convention; full backup is a single encrypted JSON, not a
+zip; overwrite restore is destructive only within selected categories, not a full wipe by default).
+
+Next session start point: Phase 6 has no UI yet — build the backup/restore screens (category
+checkboxes, mode selector with the two always-shown descriptions, storage-check display, the
+overwrite confirmation dialog). After that, or in parallel if CI is confirmed green by then: Phase 7
+(per-file actions), which needs a zip library decision first (Decision 21 explicitly left this open).
+
+---
+
 **Session 4**
 
 Bugs fixed: pre-rebrand name "Actioner" (see Decision 12) survived in four places after the app was
