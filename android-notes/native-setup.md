@@ -9,13 +9,14 @@ Run once, locally impossible without a machine — but you can do it in a throwa
 or via any online/temporary Linux shell you trust, then delete the keystore from that machine:
 
 ```bash
-keytool -genkeypair -v -keystore release.keystore -alias actioner \
+keytool -genkeypair -v -keystore release.keystore -alias dumpzone \
   -keyalg RSA -keysize 2048 -validity 10000
 base64 release.keystore > release.keystore.base64
 ```
 Paste the contents of `release.keystore.base64` into the GitHub Secret `KEYSTORE_BASE64`.
-Also set `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`actioner`), and `KEY_PASSWORD` as secrets.
-**Never commit the raw keystore file to the repo.**
+Also set `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`dumpzone`), and `KEY_PASSWORD` as secrets.
+**Never commit the raw keystore file to the repo.** Already done for the live release keystore
+(alias `dumpzone`, secrets set) — this section is a reference for regenerating one if ever needed.
 
 ## 2. Permissions (AndroidManifest.xml)
 Add:
