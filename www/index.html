@@ -30,6 +30,17 @@
 
     <input id="search-input" placeholder="Search everything..." />
     <div id="timeline"></div>
+
+    <details id="appearance-settings">
+      <summary>Appearance</summary>
+      <label><input type="checkbox" id="dark-mode-toggle" /> Dark mode</label>
+      <label><input type="checkbox" id="gradient-mode-toggle" /> Gradient mode</label>
+      <div id="gradient-color-pickers" class="hidden">
+        <label>Color 1 <input type="color" id="gradient-color-1" value="#488AFF" /></label>
+        <label>Color 2 <input type="color" id="gradient-color-2" value="#FF6B9D" /></label>
+        <p style="font-size:12px; opacity:0.7;">Pick the same color twice for a single soft glow instead of a two-tone gradient.</p>
+      </div>
+    </details>
   </div>
 
   <div id="ad-gate-screen" class="screen hidden">
