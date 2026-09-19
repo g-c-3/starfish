@@ -11,6 +11,11 @@
       "smallIcon": "ic_stat_notify",
       "iconColor": "#488AFF",
       "sound": "notify_tone.wav"
+    },
+    "GoogleAuth": {
+      "scopes": ["https://www.googleapis.com/auth/drive.file"],
+      "grantOfflineAccess": true,
+      "androidClientId": "REPLACE_WITH_ANDROID_OAUTH_CLIENT_ID.apps.googleusercontent.com"
     }
   }
 }

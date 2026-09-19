@@ -16,7 +16,8 @@
     "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/preferences": "^6.0.2",
     "@capacitor-community/sqlite": "^6.0.2",
-    "@capawesome-team/capacitor-android-foreground-service": "^6.1.0"
+    "@capawesome-team/capacitor-android-foreground-service": "^6.1.0",
+    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
