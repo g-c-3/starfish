@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 8**
+
+Built: `resources/icon.png` background changed from dark navy to white. Un-mixed the flat, uniform
+original background (`RGB(11,13,27)`, confirmed uniform by sampling) against white per-pixel rather
+than a flat color swap, so soft anti-aliased edges around the folder/shield don't leave a dark fringe.
+Same artwork footprint as Session 7's full-bleed crop — only color changed, not size/position — so no
+regression on the double-padding fix from Decision 24.
+
+Note: corners are pure white, but pixels nearer the artwork sit slightly off-white (~231–239) since
+the original art's own soft drop-shadow, previously invisible against the dark canvas, is now a faint
+visible vignette. Left as-is — reads as intentional depth, not a defect — but flagging in case a
+perfectly flat white is wanted instead.
+
+Decisions made: none (cosmetic asset change, not a new rule).
+
+Next session start point: unchanged — confirm the Actions run is green, then Phase 6 UI or Phase 7's
+zip-library choice. Re-confirm the icon on-device once built, same caveat as Session 7.
+
+---
+
 **Session 7**
 
 Bugs fixed: app icon rendered visibly smaller than sibling dock icons on-device (user-reported,
