@@ -1,9 +1,69 @@
+/* Base tokens — light theme default */
+:root {
+  --bg: #f5f5f7;
+  --fg: #16181d;
+  --card-bg: #ffffff;
+  --border: #d8d8dc;
+  --accent: #488AFF;
+  --accent-fg: #ffffff;
+  --gradient-1: transparent;
+  --gradient-2: transparent;
+}
+
+/* Dark theme override — applied when <html data-theme="dark"> */
+:root[data-theme="dark"] {
+  --bg: #0f1115;
+  --fg: #eeeeee;
+  --card-bg: #1a1d24;
+  --border: #333333;
+  --accent: #488AFF;
+  --accent-fg: #ffffff;
+}
+
 * { box-sizing: border-box; }
-body { font-family: -apple-system, Roboto, sans-serif; margin: 0; background: #0f1115; color: #eee; }
-.screen { min-height: 100vh; padding: 20px; }
+
+body {
+  font-family: -apple-system, Roboto, sans-serif;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  position: relative;
+}
+
+.screen { min-height: 100vh; padding: 20px; position: relative; z-index: 1; }
 .hidden { display: none; }
-input, button { font-size: 16px; padding: 12px; margin: 6px 0; width: 100%; border-radius: 8px; border: 1px solid #333; }
-button { background: #488AFF; color: white; border: none; cursor: pointer; }
+
+input, button {
+  font-size: 16px; padding: 12px; margin: 6px 0; width: 100%;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--fg);
+}
+button { background: var(--accent); color: var(--accent-fg); border: none; cursor: pointer; }
+
 #capture-bar { display: flex; gap: 8px; margin: 12px 0; }
 #capture-bar button { font-size: 22px; width: auto; flex: 1; }
 #timeline { margin-top: 12px; }
+
+/* --- Gradient mode: soft background gradient + blurred glow/spillover layer ---
+   Toggled by adding data-gradient="on" to <html>. Colors set via --gradient-1/--gradient-2
+   CSS custom properties, written at runtime from the two color pickers (app.js).
+   Purely cosmetic: sits behind all content (z-index: 0), never intercepts input. */
+:root[data-gradient="on"] body {
+  background: var(--bg);
+}
+
+:root[data-gradient="on"] body::before {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, var(--gradient-1) 0%, transparent 45%),
+    radial-gradient(circle at 80% 75%, var(--gradient-2) 0%, transparent 45%);
+  filter: blur(60px);
+  opacity: 0.55;
+}
+
+/* If both gradient colors are set identical, the two radial blobs overlap into one soft
+   single-tone glow rather than a visible two-tone blend — this is intentional, not a bug. */
