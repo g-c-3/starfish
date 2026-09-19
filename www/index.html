@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dumpzone</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="lock-screen" class="screen">
+    <h1>Dumpzone</h1>
+    <input id="password-input" type="password" placeholder="Password" />
+    <button id="unlock-btn">Unlock</button>
+    <div id="password-hint"></div>
+  </div>
+
+  <div id="main-screen" class="screen hidden">
+    <header>
+      <h2>Today</h2>
+      <div id="digest"></div>
+    </header>
+
+    <div id="capture-bar">
+      <button data-type="note">📝</button>
+      <button data-type="voice">🎙️</button>
+      <button data-type="image">📷</button>
+      <button data-type="pdf">📄</button>
+      <button data-type="file">📁</button>
+    </div>
+
+    <input id="search-input" placeholder="Search everything..." />
+    <div id="timeline"></div>
+  </div>
+
+  <div id="ad-gate-screen" class="screen hidden">
+    <p>Loading...</p>
+  </div>
+
+  <script type="module" src="js/db.js"></script>
+  <script type="module" src="js/crypto.js"></script>
+  <script type="module" src="js/intents.js"></script>
+  <script type="module" src="js/notifications.js"></script>
+  <script type="module" src="js/ads.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
