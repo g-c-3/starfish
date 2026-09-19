@@ -4,6 +4,27 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 6**
+
+Built: app icon pipeline. Source artwork saved as `resources/icon.png` (1254×1254, no transparency).
+Added `@capacitor/assets` as a devDependency and a `generate-icons` script; `build-android.yml` now
+runs `npx @capacitor/assets generate --android` right after the `android/` platform exists (fresh or
+committed) and before `cap sync`, so every mipmap density and the adaptive-icon layer are generated
+from that one file on every CI run — no per-density PNGs to hand-produce or commit.
+
+Checked (not just assumed): measured the artwork's actual margin against Android's adaptive-icon safe
+zone — ~16–20% on every side, against a ~17% recommended minimum. Close enough that it should survive
+a circular/squircle launcher mask, but this is a measurement against a spec, not a device screenshot;
+flagged as unconfirmed in `android-notes/native-setup.md` §2 and `ROADMAP.md`.
+
+Decisions made: 23 (icon generated from one source file via CI, not hand-crafted per density).
+
+Next session start point: same as before — confirm the Actions run is green (still can't check this
+from here), then either the backup/restore UI screens (Phase 6) or a zip-library choice for Phase 7.
+The app icon can be visually confirmed once any CI build succeeds and the APK is installed.
+
+---
+
 **Session 5**
 
 Built: `www/js/backup.js` — Phase 6 core engine. Create/encrypt/write a full or selective backup

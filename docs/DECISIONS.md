@@ -106,3 +106,8 @@ container — the two share the same entry-record schema but not the same contai
 **22. Overwrite-mode restore is destructive only within the selected categories**, not a full-device
 wipe by default. Existing rows in unselected categories are untouched. Selecting every category and
 choosing overwrite is how a full replace is done — there's no separate "wipe everything" switch.
+
+**23. App icon generated from one source file via `@capacitor/assets` in CI**, not hand-crafted
+per-density PNGs. `resources/icon.png` is the only file to touch when the icon changes; no separate
+adaptive-icon foreground/background layers exist yet since only one flattened image was supplied —
+revisit if launcher-mask cropping turns out to be a problem on a real device.

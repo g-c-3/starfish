@@ -10,3 +10,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-19 | Session 3 | none | Phase 1 signing sub-item closed (keystore generated, secrets set); CI signing-path bug fixed |
 | 2026-09-19 | Session 4 | none | Phase 0 checkbox closed (was stale); Phase 1 sub-items checked off; pre-rebrand "Actioner" naming fixed across db.js/app.js/notifications.js/native-setup.md |
 | 2026-09-19 | Session 5 | Decisions 20–22 | Phase 6 core engine built (backup.js); pre-existing entry_tags orphan-row bug fixed in db.js (purgeOldTrash) |
+| 2026-09-19 | Session 6 | Decision 23 | Phase 1 app-icon sub-item closed (resources/icon.png + CI-generated densities via @capacitor/assets) |

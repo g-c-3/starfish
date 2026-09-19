@@ -26,7 +26,9 @@
   - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. CI
     run against the live secrets not yet confirmed green — pending manual check.
   - [ ] AdMob account, one Rewarded ad unit (not Interstitial).
-  - [ ] App icon — not started.
+  - [x] App icon — source artwork at `resources/icon.png`; CI generates all densities via
+    `@capacitor/assets`. Not yet confirmed on-device; adaptive-icon safe-zone margin measured
+    close to the recommended minimum (see `android-notes/native-setup.md` §2).
   - [ ] Play Console account — not blocking; only if Play distribution is later decided on.
 - [ ] **2 — Core data layer.** `db.js` (schema, FTS5, tags, label history, soft-delete),
   `crypto.js` (PBKDF2/AES-GCM). Committed; not device-tested. Stale pre-rebrand naming
