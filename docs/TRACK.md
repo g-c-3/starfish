@@ -21,3 +21,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-19 | Session 14 | none | Main capture bar + timeline wired for the first time (captureFile() built, Phase 7's actions finally attached to real UI); shared tag picker built for both main + vault |
 | 2026-09-19 | Session 15 | none | Edit wired to UI (main + vault); fixed two real bugs in editEntry() found while wiring it — a fields.text/body_text mismatch and expense/reminder fields never being written at all |
 | 2026-09-19 | Session 16 | Decision 45 | App-level auto-lock built (column existed since Session 1, never enforced); immediate lock-on-background added for both app password and Vault PIN (privateSessionKey's own comment promised this since Session 13, was never wired) |
+| 2026-09-19 | Session 17 | none | Digest/on-this-day/storage-breakdown built; fixed a digest privacy leak (vault entries were counted, same class of leak Decision 40 already closed elsewhere) |

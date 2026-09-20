@@ -4,6 +4,35 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 17**
+
+Built the digest, on-this-day, and storage breakdown (ARCHITECTURE §6). `showDigest()` has had real
+query logic since early on but nothing ever rendered it to `#digest` — fixed, and while fixing it,
+found it also never excluded vault entries from its counts. A "3 notes today" digest counting 1
+public + 2 vault notes would have hinted that vault activity happened, without revealing what — the
+same class of leak Decision 40 (Session 13) already closed for search and autocomplete, just not
+checked against this surface at the time. Fixed the same way: `is_private=0` added to the query.
+
+`onThisDay()` and `storageBreakdown()` are new. Both exclude vault entries for the same reason as
+the digest fix above — neither needed a new decision, just applying Decision 40 somewhere it hadn't
+been checked yet. Storage breakdown reuses `fileactions.js`'s `getSelectableEntries()` for sizes
+rather than computing them a second way; its "clear items older than 30 days" action reuses the
+existing bulk-delete path (soft-delete into the 30-day trash, not permanent).
+
+Also cleaned up: `onUnlocked()` was calling `showDigest()`/`showMainTimeline()` and discarding the
+results — actual rendering has always happened via separate functions in `DOMContentLoaded`, so
+those calls did nothing. Removed rather than left as confusing dead code.
+
+Decisions made: none — applying Decision 40 to two surfaces it hadn't been checked against yet, not
+a new design call.
+
+Next session start point: same standing items — confirm the CI run is green, Phase 13 still blocked
+on manual OAuth setup, nothing run on an actual device across six sessions of accumulated surface
+now. Remaining Phase 9 items (data-transparency screen, quick-capture widget, expense charts,
+backup-reminder nudge, map view, confidence-confirmation chip) are unblocked whenever picked up.
+
+---
+
 **Session 16**
 
 Checked whether `credentials.auto_lock_minutes` — a column that's existed since Session 1 — was

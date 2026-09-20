@@ -11,7 +11,7 @@
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
-- [~] 9 — Additional features (auto-lock timeout done, rest not started)
+- [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown done; rest not started)
 - [ ] 10 — Security hardening
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
@@ -120,7 +120,17 @@
   the Vault pivot, but nothing ever listened for backgrounding — the vault would stay unlocked
   indefinitely across app-switches, relying only on its idle timer. Both the app-level password lock
   and the vault now lock immediately on backgrounding (`@capacitor/app`'s `appStateChange`), not just
-  after idle timeout. Remaining items not started.
+  after idle timeout.
+  **Digest, on-this-day, and storage breakdown done.** `showDigest()` had backend logic since early
+  on but was never rendered anywhere — fixed, and while fixing it, found it also never excluded
+  vault entries from its counts: a "3 notes today" digest with 1 public + 2 vault notes would have
+  hinted at vault activity outside the vault, the same class of leak Decision 40 already closed for
+  search/autocomplete. Fixed the same way — `is_private=0` added to the query. `onThisDay()` and
+  `storageBreakdown()` are new, both excluding vault entries for the same reason; storage breakdown
+  reuses `fileactions.js`'s `getSelectableEntries()` for sizes rather than computing them a second
+  way, and its "clear items older than 30 days" action reuses the existing bulk-delete (soft-delete,
+  30-day trash, not permanent). Remaining items (data-transparency screen, quick-capture widget,
+  expense charts, backup-reminder nudge, map view, confidence-confirmation chip) not started.
 - [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
   not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
