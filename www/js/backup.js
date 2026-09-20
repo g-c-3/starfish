@@ -53,7 +53,7 @@ async function readFileBase64(filePath) {
   return res.data; // already base64
 }
 
-async function buildBackupPayload(db, categories) {
+async function buildBackupPayload(db, categories, entryIds = null) {
   const wantAll = (name) => categories.includes(name);
   const payload = {
     schemaVersion: SCHEMA_VERSION,
@@ -61,12 +61,16 @@ async function buildBackupPayload(db, categories) {
     categories: [...categories],
     entries: [],
     tags: [],
-    settings: {}
+    settings: {},
+    privateNotesSalt: null // set below only if private_notes is included — one salt for every private note on this device
   };
 
   const entryCategoryNames = Object.keys(ENTRY_CATEGORIES).filter(wantAll);
   if (entryCategoryNames.length > 0) {
-    const rows = (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL`)).values || [];
+    const idFilter = entryIds ? ` AND id IN (${entryIds.map(() => '?').join(',')})` : '';
+    const rows = (await db.query(
+      `SELECT * FROM entries WHERE deleted_at IS NULL${idFilter}`, entryIds || []
+    )).values || [];
     for (const row of rows) {
       const cat = entryCategoryNames.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;
@@ -81,6 +85,11 @@ async function buildBackupPayload(db, categories) {
       out.tags = tagRows.map((t) => t.name); // entry_tags is a join table, not a column — carried separately
       payload.entries.push(out);
     }
+  }
+
+  if (wantAll('private_notes') && payload.entries.some((e) => e._category === 'private_notes')) {
+    const cred = (await db.query(`SELECT private_pin_salt FROM credentials WHERE id=1`)).values[0];
+    payload.privateNotesSalt = cred?.private_pin_salt || null; // needed to re-derive the source key on cross-PIN append
   }
 
   if (wantAll('tags')) {
@@ -225,8 +234,11 @@ async function restoreBackup(db, opts) {
     if (entry._category === 'private_notes' && opts.sourcePin && opts.currentPrivateKey) {
       // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
       // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
+      // payload.privateNotesSalt is the ONE salt for every private note in this payload (Decision — a
+      // device has one PIN, one salt) — not per-entry; entry._sourcePinSalt never existed as a field.
+      if (!payload.privateNotesSalt) throw new Error('Backup has no privateNotesSalt — cannot decrypt its private notes');
       const { decryptPrivateNote, encryptPrivateNote, deriveAesKey } = await import('./crypto.js');
-      const { key: sourceKey } = await deriveAesKey(opts.sourcePin, entry._sourcePinSalt);
+      const { key: sourceKey } = await deriveAesKey(opts.sourcePin, payload.privateNotesSalt);
       const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
       encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
     }

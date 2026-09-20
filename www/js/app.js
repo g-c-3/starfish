@@ -12,6 +12,7 @@ import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
   restoreFromDrive, checkAndRunAutoBackupIfDue
 } from './gdrive.js';
+import { importAppendZips } from './fileactions.js';
 
 const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
 
@@ -476,6 +477,31 @@ async function checkAutoBackupOnOpen() {
   }
 }
 
+// ---- Append files from download (Phase 7) — always append mode, no overwrite option here ----
+// prompt()/confirm() again for the one-off passphrase/PIN, same known rough edge as the Drive
+// flows (ROADMAP) — a batch of individually-downloaded zips can each need a different passkey or
+// the private-notes PIN, so a single upfront input wouldn't cover every file in the selection.
+async function handleAppendImport() {
+  const statusEl = document.getElementById('append-import-status');
+  const fileInput = document.getElementById('append-import-input');
+  if (!fileInput.files.length) { statusEl.textContent = 'Choose one or more files first.'; return; }
+
+  statusEl.textContent = 'Importing…';
+  const report = await importAppendZips(db, fileInput.files, {
+    passphraseGetter: (hint) => Promise.resolve(
+      prompt(hint ? `Backup passkey (hint: ${hint}):` : 'Backup passkey:')
+    ),
+    pinGetter: () => Promise.resolve(prompt('Private-notes PIN for this file:'))
+  });
+
+  let msg = `Processed ${report.filesProcessed} of ${fileInput.files.length} — ` +
+    `added ${report.added}, skipped ${report.skippedExactDup} duplicates, ${report.restoredLabeled} "(Restored)".`;
+  if (report.errors.length > 0) {
+    msg += ` ${report.errors.length} failed: ${report.errors.map((e) => `${e.file} (${e.error})`).join('; ')}.`;
+  }
+  statusEl.textContent = msg;
+}
+
 window.Dumpzone = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel, unlockPrivateNotes, lockPrivateNotes,
   search: (q) => searchEntries(db, q), softDelete: (id) => softDelete(db, id),
@@ -534,4 +560,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('auto-backup-toggle').addEventListener('change', (e) => metaSet('auto_backup_enabled', e.target.checked ? 'true' : 'false'));
   document.getElementById('auto-backup-frequency').addEventListener('change', (e) => metaSet('auto_backup_frequency', e.target.value));
   await refreshDriveConnectionView(); // silent — reflects existing connection state, never prompts on load
+
+  document.getElementById('append-import-btn').addEventListener('click', handleAppendImport);
 });
