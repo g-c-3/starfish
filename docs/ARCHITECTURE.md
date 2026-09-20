@@ -28,7 +28,6 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Type | Body content | Searchable by | Extra fields |
 |---|---|---|---|
 | Text note | typed | label + body | `is_private` |
-| Private note | typed, AES-encrypted at rest | label only (until PIN unlock, then body too) | pin-derived key |
 | Voice recording | audio file | label only | noise_reduction (bool) |
 | Image | OCR'd | label + OCR text | ocr_text |
 | PDF | OCR'd | label + OCR text | ocr_text |
@@ -36,13 +35,26 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Expense | amount + category | label/category | amount, category, replied (bool) |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until |
 
+`is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Files — Private Vault, §3b)
+turns ANY of the five into a vault entry: AES-encrypted at rest under the vault PIN's derived key,
+excluded from both `entries_fts` and `label_history` entirely (not just the body — see §3b), and
+findable only through the vault's own in-memory search once unlocked. Expenses/Reminders have no
+private variant — out of vault scope.
+
 ## 3. Credentials (three independent locks)
-1. **App-open password** — gates app launch. Salted hash in DB. Recoverable via backup-passkey proof (see below).
-2. **Private-notes PIN** — independent. Derives AES key for private note bodies via PBKDF2. NOT recoverable via backup; only "reset & wipe private notes" is available if forgotten.
+1. **App-open password — optional ("quick access").** Gates app launch when set; a `NULL` hash means no lock
+   screen at all on open. Addable/removable anytime in Settings, not just at first run. Salted hash in DB when
+   set. Recoverable via backup-passkey proof (see below) — only meaningful when a password exists to recover.
+2. **Vault PIN** — independent. Derives an AES key for every vault entry (any of the five types, not just
+   text — §3b) via PBKDF2. NOT recoverable via backup; only "reset & wipe the Vault" is available if forgotten.
+   Its own auto-lock timer (`vault_auto_lock_minutes`), separate from whatever the app-open password's own
+   timeout is — locking the app doesn't necessarily lock the Vault and vice versa.
 3. **Backup passkey** — never stored anywhere. Combined with a random salt (stored unencrypted in backup header) via PBKDF2/Argon2id to derive the backup's AES-256 key. Forgetting it makes that backup permanently unrecoverable.
 
 All three support an optional, plaintext **hint** — but not all stored the same way. The app-open password and
-private-notes PIN hints are stored locally in the `credentials` table, same as their hashes. The **backup
+Vault PIN hints are stored locally in the `credentials` table, same as their hashes (both nullable — password
+because it's optional, PIN because Vault setup can happen any time after first run, not necessarily during it).
+The **backup
 passkey hint cannot be stored locally** (nothing about the backup passkey persists on the device by design) —
 it lives **inside the backup file's own header**, unencrypted alongside the salt, and is shown to the user **at
 restore time, before the passkey prompt** (similar to how a Wi-Fi network shows its hint before asking for the
@@ -51,35 +63,78 @@ tip discouraging hints that reveal the answer. The backup passkey hint gets a **
 specifically (not just a tip), since that file can leave the device entirely (uploaded to Drive/email/etc.),
 making a bad hint there a bigger real-world exposure than one that only ever sits in local app storage.
 
-Nothing stops a user from using the same value for all three — that's their call, but Settings should carry a
+Nothing stops a user from using the same value for all three (when the app-open password is set at all) —
+that's their call, but Settings should carry a
 soft, non-blocking warning ("Using the same password across all three reduces protection if one is ever
 exposed"). The three are otherwise fully independent: changing the app-open password doesn't touch the PIN or
-require a new backup; changing the PIN only re-encrypts private notes under a freshly derived key; making a new
+require a new backup; changing the PIN only re-encrypts vault entries under a freshly derived key; making a new
 backup only ever uses whatever passkey is typed in at that moment — an older backup keeps working with whatever
 passkey was used when *it* was made.
 
 ### Forgot password
-- **App-open password:** recoverable via backup-passkey proof — see flow below.
-- **Private-notes PIN:** NOT recoverable, even with a valid backup restore (the backup passkey only unlocks the
-  backup archive; it does not unlock private-note bodies, which are separately encrypted under the PIN-derived
-  key). Only option is "Reset private notes" (destructive, wipes that section only). An optional self-written
+- **App-open password:** recoverable via backup-passkey proof — see flow below. Moot if quick access is
+  enabled (no password exists to forget).
+- **Vault PIN:** NOT recoverable, even with a valid backup restore (the backup passkey only unlocks the
+  backup archive; it does not unlock vault entries, which are separately encrypted under the PIN-derived
+  key). Only option is "Reset Vault" (destructive, wipes that section only). An optional self-written
   hint (not a real recovery mechanism) can be shown to help jog memory.
 - **Backup passkey:** never stored anywhere, by design. Forgetting it makes that specific backup file permanently
   unrecoverable. No in-app flow can help here.
 
 ### Forgot app password flow
 User selects a backup file + enters its passkey → successful decryption is proof of ownership →
-user sets a new app-open password and the DB (including the *old* password's hash, PIN, and private notes) is restored.
+user sets a new app-open password and the DB (including the *old* password's hash, PIN, and Vault entries) is restored.
 If no backup exists, only option is full local wipe.
 
 ### What restore actually asks for (important distinction)
 A normal restore (not the forgot-password recovery flow above) **only ever prompts for the backup passkey** —
-never the app-open password or the private-notes PIN. Those two credentials live inside the restored database
+never the app-open password or the Vault PIN. Those two credentials live inside the restored database
 itself as hashes/derived keys, so they come back automatically at whatever they were on the source device at
-backup time, and the app shows its normal lock screen afterward using that restored app-open password. If the
+backup time, and the app shows its normal lock screen afterward using that restored app-open password (or skips
+straight in, if quick access was what the source device had). If the
 app-open password was changed *after* the backup was made, restoring reverts it to the older, backed-up value —
 worth a one-time notice at restore time: "This will restore your data as of [backup date] — password and notes
 will match that point in time."
+
+## 3b. Private Vault (pivot — was notes-only "private notes," now spans five types)
+
+Text, Voice, Image, PDF, and Files can all be private now, gated by the one Vault PIN (§3). The Vault is meant
+to be **an exact functional replica of the main app** — same capture, same edit, same tags/label autocomplete,
+same search, same trash-with-30-day-restore, same five per-file actions in the same order — with three
+deliberate differences, all safety-necessary rather than arbitrary:
+
+1. **Everything lives encrypted at rest, including raw file bytes.** A vault entry's `file_path` stays `NULL`;
+   its content (base64 file bytes, plus OCR text for image/pdf, bundled together as one JSON string) travels
+   inside `encrypted_body` instead, via the exact same `encryptPrivateNote`/`decryptPrivateNote` AES-GCM calls
+   a private note's text always used. A note's own plaintext shape is unchanged, so pre-pivot private notes
+   need no migration. Content is only ever decrypted into memory (a `Blob`/object URL for files), never written
+   back to disk unencrypted except at the explicit moment Download is invoked (point 3 below).
+2. **Search is a fresh in-memory index built on unlock, discarded on lock — nothing persisted, not even
+   encrypted** (Decision 39). Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
+   autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
+3. **Share and plain Download work exactly like the main app's** (Decision 41, reversed from an earlier,
+   more restrictive default) — the UI should carry a one-time notice that doing so puts a plaintext copy
+   outside the vault's encryption boundary from that point on, but nothing is blocked. "Download for append"
+   stays vault-PIN-only, no passkey/default option — that restriction is about the format safely round-tripping
+   back into a vault, not about limiting what the person can do with their own content.
+4. **Vault entries never touch `entries_fts` or `label_history` — not just their body, their label too**
+   (Decision 40). This was a real, silently-shipped bug until this pivot: both tables were being written for
+   *every* entry regardless of `is_private`, meaning a vault item's title (though never its body) was
+   discoverable via ordinary, no-PIN search, and its label could surface as an autocomplete suggestion in the
+   normal capture bar. Fixed in `insertEntry()` (db.js) and `restoreBackup()` (backup.js).
+
+**Its own trash, its own auto-lock.** The Vault has a second 30-day trash bin, independent of the main app's —
+same restore/permanent-delete, same 30-day rule, distinguished from the main bin by `is_private` rather than a
+second table (`listTrash()`/`restoreFromTrash()`/`permanentlyDeleteEntry()` in db.js are shared, generic
+functions). Its auto-lock timer is its own column (`vault_auto_lock_minutes`), independent of whatever the
+app-open password's own timeout does — locking one doesn't necessarily lock the other.
+
+**Backup category.** Every vault entry, regardless of type, falls under one unified `private_vault` backup
+category (was a notes-only `private_notes` category before this pivot) — see backup.js's `ENTRY_CATEGORIES`.
+
+**"Select files" multi-select** (Decision 44) is shared between the main app and the Vault: category-grouped,
+per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
+append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
 ## 4. Backup & Restore (full design)
 
@@ -247,10 +302,11 @@ the same (one file round-trips back in, same dedup handling as a full restore) b
 simpler, and it means `decryptBackupPayload()`/`restoreBackup()` handle a per-file import with zero
 extra code, not a second decrypt/dedup path to maintain.
 
-1. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Private notes get
-   no Share/Download at all — a Copy button instead**, which copies decrypted plaintext to the clipboard and
-   auto-clears the clipboard after ~30–60 seconds. A one-time notice on first use: content leaves the app's
-   encryption boundary once shared or copied.
+1. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Works identically
+   for Vault entries** (Decision 41, pivot — was Copy-only before): content is decrypted into memory first,
+   never written to disk unencrypted, but otherwise no restriction. A one-time notice on first vault
+   Share/Download: content leaves the vault's encryption boundary as plaintext from that point on. `copyPrivateNote()`
+   still exists as an extra convenience for vault text specifically, not a replacement for Share/Download anymore.
 2. **Download for append** — produces a file meant to round-trip back into Dumpzone later (this device, another
    device, or after a reinstall). **Always encrypted, never plaintext** — the only thing optional is whether a
    user-supplied passkey is used:
@@ -264,9 +320,12 @@ extra code, not a second decrypt/dedup path to maintain.
      The UI must say so plainly: *"No passkey set — file will use default app-level encryption (not secured
      against other Dumpzone users)."* The file's own `mode` field (`passkey`/`default`/`pin`) records which was
      used so import doesn't have to guess whether to prompt for a passkey.
-   - **Private notes exception:** no passkey prompt, no optional toggle — always encrypted with the note's own
-     PIN-derived key (the PIN itself is used as the passphrase into the same `encryptBackup()` call, with a
-     fresh random salt each export — self-contained, no need to carry the device's stored PIN salt along).
+   - **Vault exception (any of the five types, not just text):** no passkey prompt, no optional toggle — always
+     encrypted with the vault's own PIN-derived key (the PIN itself is used as the passphrase into the same
+     `encryptBackup()` call, with a
+     fresh random salt each export — self-contained, no need to carry the device's stored PIN salt along). This
+     restriction is unaffected by Decision 41 — it's about the format safely round-tripping back into a vault,
+     not about limiting what the person can otherwise do with their content (which Share/Download above now allow).
    - Zip contents: one encrypted JSON file (see implementation note above) — **the same underlying schema used
      by full backups**, so one shared import/dedup engine (`restoreBackup()`) handles both a full-backup restore
      and appending a handful of individually-downloaded zips.
@@ -274,21 +333,21 @@ extra code, not a second decrypt/dedup path to maintain.
      any number of these zips at once, running each through `importAppendZips()` (append mode only, no
      overwrite option on this screen) and producing a combined summary report.
 3. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
-   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). Not private
-   notes (see #1). Built (`downloadPlain()`).
+   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). **Works for
+   Vault entries too** (Decision 41, pivot) — decrypted into memory first, written out plain only at the moment
+   this is explicitly invoked. Built (`downloadPlain()`).
 4. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
    correcting misreads that hurt search; expense amount/category editable; reminder time/repeat editable and
-   must reschedule its notification, not just silently update the DB row. Private note edits require the PIN
-   already unlocked for that session. Built (`editEntry()`), takes a caller-supplied reschedule callback for
-   reminders rather than importing `notifications.js` directly, to avoid a circular import with `app.js`.
-5. **Delete** — soft-delete into the 30-day trash bin (see Additional features → Trash below); consistent with
+   must reschedule its notification, not just silently update the DB row. **Vault entries of any type**
+   (not just text) require the vault PIN already unlocked for that session to edit content — label/tags-only
+   edits don't, since those were never encrypted. Built (`editEntry()`), takes a caller-supplied reschedule
+   callback for reminders rather than importing `notifications.js` directly, to avoid a circular import with `app.js`.
+5. **Delete** — soft-delete into the 30-day trash bin (main or Vault's own — §3b); consistent with
    the append-mode philosophy of never silently destroying data. Already existed as `db.js`'s `softDelete()`;
    `fileactions.js` re-exports it so every per-file action is reachable from one module.
 
-**Not yet wired to a UI beyond the import screen** — the other four actions (`shareEntry`,
-`copyPrivateNote`, `downloadPlain`, `editEntry`) are implemented and callable but have no buttons
-attached to them yet, because there's nothing to attach them to: `showMainTimeline()` (Phase 4) still
-just returns rows, it doesn't render an entry list. That's a Phase 4 gap, not a Phase 7 one.
+**"Select files" multi-select** (Decision 44, §3b) covers four of these five in bulk — Share, Download,
+Download for append, Delete — shared between main and Vault, category-grouped with per-item size shown.
 
 ## 6. Additional features (all approved, part of v1 scope)
 
@@ -304,8 +363,10 @@ just returns rows, it doesn't render an entry list. That's a Phase 4 gap, not a 
 - **Quick-repeat patterns** — a "repeat monthly/weekly" toggle at creation time for recurring reminders (rent,
   bills) and recurring expenses, using the existing `repeat_rule` field already on the `entries` schema.
 - **Trash / soft-delete (30-day auto-purge)** — every Delete is a soft-delete (`deleted_at` timestamp set, row
-  hidden from all normal queries and from FTS results) with a dedicated "Trash" screen to restore or empty early.
-  A background job (`purgeOldTrash` in `db.js`) permanently removes anything older than 30 days.
+  hidden from all normal queries and from FTS results) with a dedicated "Trash" screen to restore or delete
+  permanently early. **Two independent bins** (main + Vault — §3b), same rule, distinguished by `is_private`
+  rather than a second table. A background job (`purgeOldTrash` in `db.js`) permanently removes anything older
+  than 30 days from both.
 - **On-this-day resurfacing** — a simple date-diff query surfaced on app open (after the ad gate), e.g.
   "1 month ago you saved..." Pure rule-based recency query, no automated inference.
 - **Storage usage breakdown** — a Settings screen showing size used per category (Voice/Images/PDFs/Files),
@@ -440,6 +501,7 @@ dumpzone/
       ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
+      vault.js          -> Private Vault: content bundling, save/load, in-memory search index
       fileactions.js    -> per-file actions: share, download-for-append (+ its zip import), plain download, edit
       app.js            -> app bootstrap / router / expense follow-up flow
   capacitor.config.json
@@ -449,17 +511,21 @@ dumpzone/
 ```
 
 ## 13. Status
-Implemented in code already: schema (including tags, label history, soft-delete columns), FTS5 search,
+Implemented in code already: schema (tags, label history, soft-delete columns, optional app-password/vault-PIN
+columns), FTS5 search (main app only — Vault search is a separate in-memory index, §3b),
 credential hashing/KDF/AES helpers, the intent engine (reminders, expenses, OCR label suggestion), notification
 scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
-plus the expense follow-up timeout), and the core backup/restore engine (`backup.js`: build/encrypt/write,
-open/decrypt/restore in both append and overwrite modes with UUID dedup, selective categories with storage
-sanity checks, safety-backup-before-overwrite, extract-to-storage). Not yet wired to any UI, not device-tested.
+plus the expense follow-up timeout) including the optional-password/first-run-setup path, the core backup/restore
+engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — blocked on manual OAuth setup for
+device testing), all five per-file actions (`fileactions.js`) including the "Select files" multi-select, and
+the Private Vault (`vault.js` + its `app.js`/`index.html` wiring — capture/browse/search across all five types,
+its own trash bin, its own auto-lock). Screen show/hide wiring (`showScreen()`) was itself missing until the
+Vault pivot surfaced it — every UI section built in every prior session was technically unreachable before that.
+**None of this has been run on an actual device or through CI yet** — that remains the standing risk flagged
+at the end of every session since Phase 1.
 
-Specified in this doc but not yet coded: per-file download-for-append zips with the shared sidecar schema
-(Phase 7 — reuses `backup.js`'s entry-record shape but needs a zip library, not yet chosen), the quick-capture
-home-screen widget, expense charts,
-the map view, the confidence-confirmation chip UI, and the on-this-day/storage-breakdown screens. These are the
+Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the map view,
+the confidence-confirmation chip UI, and the on-this-day/storage-breakdown screens. These are the
 next implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.

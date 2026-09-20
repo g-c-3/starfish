@@ -4,6 +4,56 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 13**
+
+Pivot, spanning a large chunk of the app: app-open password made optional; "Private Notes"
+generalized into a full Private Vault covering Text/Voice/Image/PDF/Files, with the explicit goal
+of full functional parity with the main app (same capture, edit, tags, search, trash, five per-file
+actions). Decisions 36–44. New file: `vault.js`. Changed: `db.js`, `backup.js`, `fileactions.js`,
+`app.js`, `index.html`, `style.css`.
+
+Built: `vault.js` (content bundling — note text unchanged, file types get a small JSON envelope of
+base64 bytes + OCR text, encrypted together via the exact same `encryptPrivateNote`/
+`decryptPrivateNote` calls private notes always used; save/load; the in-memory-only search index,
+chosen over a persistent encrypted index specifically to avoid a second on-disk artifact that has
+to stay in sync with the vault's actual contents). Optional app-password flow, including a
+first-run setup screen that — it turned out — never existed before at all, only the check-against-it
+path did. The vault's own trash bin and its own auto-lock timer, independent of the main app's.
+Share/Download reversed to work identically for vault and non-vault entries, on explicit direction
+overriding an earlier, more cautious default. The "Select files" multi-select screen, shared between
+main and vault, category-grouped with per-item size.
+
+Bugs found and fixed, in order of how serious they were:
+1. **Two real privacy leaks**, both pre-existing, surfaced while designing how vault content should
+   be indexed: `insertEntry()` (db.js) and `restoreBackup()` (backup.js) were writing every entry's
+   **label** — not just its body — into `entries_fts` and `label_history` unconditionally, meaning
+   a vault item's title was discoverable via ordinary, no-PIN search and could surface as an
+   autocomplete suggestion in the normal capture bar. Fixed in both places.
+2. **A foundational gap**: nothing anywhere ever toggled screen visibility. `unlock-btn` had no
+   click listener; `main-screen` was never actually shown after a successful unlock. Every UI
+   section built across every session since backup/restore first got a UI has been technically
+   unreachable until `showScreen()` was added this session while wiring the optional-password flow.
+3. Bulk "download for append" would have thrown for every vault item in a multi-select — no PIN was
+   ever collected for that flow. Fixed by prompting once upfront when the action needs it.
+4. Deleting a vault item (single or bulk) never rebuilt the in-memory search index, so a deleted
+   item would keep appearing in vault search/browse until the next unlock. Fixed both call sites.
+5. `saveNote()`'s pre-pivot private-notes path duplicated logic that now belongs to `vault.js` and
+   bypassed it entirely (no index rebuild, no shared save path). Redirected to delegate to
+   `captureToVault()` instead of maintaining two ways to create a private text entry.
+
+Verified before presenting, not just written: every JS file syntax-checked (`node --check`), and
+every `getElementById()` call in `app.js` cross-referenced against `index.html`'s actual ids —
+zero missing.
+
+Decisions made: 36–44.
+
+Next session start point: same standing items — confirm the CI run is green, Phase 13 (Drive)
+still blocked on manual OAuth setup. Nothing in this pivot has been run on an actual device yet,
+same flagged risk as everything else. Vault UI is functional but plain (`prompt()`/`confirm()` for
+capture and some per-item actions) — a real design pass is still Phase 4's job, not done here.
+
+---
+
 **Session 12**
 
 Built: `www/js/fileactions.js` — Phase 7, all five per-file actions. The substantial new piece is

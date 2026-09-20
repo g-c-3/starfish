@@ -181,3 +181,73 @@ referenced `entry._sourcePinSalt`, a field `buildBackupPayload` never actually s
 device), and `restoreBackup` reads that instead. Cross-PIN private-notes append was non-functional
 until this fix; same-PIN append (the common case) was unaffected, since that path never touched the
 missing field.
+
+---
+
+**Pivot: app-open password optional; "Private Notes" generalized into a Private Vault spanning
+Text/Voice/Image/PDF/Files, with full feature parity to the main app. Decisions 36–44.**
+
+**36. App-open password is optional ("quick access").** First-run setup offers it, blank means no
+lock screen at all on open. Addable/removable anytime after via Settings (`setAppPassword`/
+`removeAppPassword`). Doesn't touch the other two credentials — Vault PIN and backup passkey stay
+exactly as independent as before.
+
+**37. "Private" is no longer notes-only — Private Vault spans Text, Voice, Image, PDF, and Files**,
+each independently browsable plus an "All" combined view. Expenses/Reminders stay out of vault scope
+(not requested, don't obviously fit "vault" as a concept). Same vault PIN gates all five.
+
+**38. Vault file bytes are encrypted at rest, not just gated behind a PIN in the UI.** Non-negotiable,
+not asked as a question: a "private" photo sitting as a plaintext file anyone with file-manager
+access could open would defeat the entire point. Implementation: no new column, no second encryption
+scheme — a vault entry's `file_path` stays NULL, and its base64 file bytes (plus OCR text for
+image/pdf, bundled together) travel inside the exact same `encrypted_body` column and
+`encryptPrivateNote`/`decryptPrivateNote` calls a private note's text already used. A note's
+plaintext is unchanged (still just its text) — zero migration needed for existing private notes.
+
+**39. Vault search is an in-memory index built fresh on unlock, discarded on lock — never persisted,
+not even encrypted.** Considered a persistent encrypted index and rejected it: SQLite FTS5 has no
+native encryption, so a "persistent encrypted index" would still mean decrypting everything into an
+in-memory FTS5 table on every unlock anyway — at which point most of the work is identical to the
+simple option, minus a second on-disk artifact that has to be kept in sync with the vault's actual
+contents on every add/edit/delete (a real, ongoing bug surface for a feature whose entire point is
+"don't leak this"). At this scale (a personal vault, not an enterprise search problem) the
+performance case for persistence doesn't hold either. Mirrors `privateSessionKey`'s existing
+in-memory-only lifecycle, not a new pattern.
+
+**40. Vault labels/content are excluded from the shared `entries_fts` search index and the shared
+`label_history` autocomplete table entirely — not just the body.** Fixed two real bugs to make this
+true: `insertEntry()` (db.js) and `restoreBackup()` (backup.js) were both indexing a private entry's
+**label** into `entries_fts` even though the body was already excluded — meaning a vault note titled
+something sensitive would surface in ordinary, no-PIN search with just an empty preview, leaking its
+existence and title. Both also wrote every entry's label to `label_history` unconditionally, which
+would have let a vault-only label surface as an autocomplete suggestion in the normal (non-vault)
+capture bar. Vault's own search/autocomplete instead comes from the in-memory index (Decision 39).
+
+**41. Share and plain Download work identically for vault and non-vault entries — reversed from this
+session's earlier default.** Originally scoped vault items to a Copy-only alternative on the reasoning
+that Share/Download inherently means the content leaves the encryption boundary as plaintext.
+Overridden on explicit direction: user convenience — "they should have the ability to use the file
+however they want" — outweighs that caution here. Content is still decrypted only into memory first,
+never written to disk unencrypted until the moment Download is explicitly invoked; the UI should
+carry a one-time notice that sharing/downloading a vault item means it's plaintext from that point on.
+"Download for append" (still fully encrypted, still requires the vault PIN, never a passkey/default
+option) is unaffected — that restriction was never about limiting convenience, it's about the format's
+entire purpose being a safe round-trip back into a vault.
+
+**42. Private Vault has its own 30-day trash bin, independent of the main app's**, plus its own
+auto-lock timer (`credentials.vault_auto_lock_minutes`, separate column, separate from
+`auto_lock_minutes`). No new table for the second bin — `deleted_at`+`is_private` are enough to
+distinguish "which bin" a soft-deleted row belongs to; `listTrash()`/`restoreFromTrash()`/
+`permanentlyDeleteEntry()` (db.js) are shared, generic functions, not duplicated per bin.
+
+**43. Every per-file action's UI shows Share / Download / Download for append / Edit / Delete in that
+order, identically, for both non-vault and vault entries** — full parity, per explicit direction
+("every single thing in non private will be exactly replicated in private vault"), Share/Download
+restriction lifted per Decision 41.
+
+**44. "Select files" multi-select: category-grouped, size shown per item, selectable individually or
+as a whole category.** Bulk actions cover four of the five (Share, Download, Download for append,
+Delete) — Edit stays per-item only, bulk-editing arbitrary fields across mixed entry types doesn't
+have a coherent meaning. One shared implementation for both main and vault (same parity principle).
+Known limitation, not papered over: Capacitor's Share plugin has no multi-file share of its own, so a
+bulk Share opens one native share sheet per item sequentially rather than a single combined share.

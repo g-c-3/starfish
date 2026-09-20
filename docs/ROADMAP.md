@@ -16,6 +16,7 @@
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
+- [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 
 ## Detailed
 
@@ -33,13 +34,23 @@
   - [ ] Play Console account — not blocking; only if Play distribution is later decided on.
 - [ ] **2 — Core data layer.** `db.js` (schema, FTS5, tags, label history, soft-delete),
   `crypto.js` (PBKDF2/AES-GCM). Committed; not device-tested. Stale pre-rebrand naming
-  (`actioner.db`, header comment) fixed this session.
+  (`actioner.db`, header comment) fixed earlier. **Vault pivot:** `is_private` generalized from
+  notes-only to any type; app-password columns now nullable (optional password); added
+  `vault_auto_lock_minutes`, `restoreFromTrash`/`permanentlyDeleteEntry`/`listTrash`. Fixed a real
+  bug found during the pivot: private entries' **labels** (not just bodies) were being written to
+  `entries_fts` and `label_history` unconditionally — meaning a vault item's title was discoverable
+  via ordinary, no-PIN search and could surface in the normal capture bar's autocomplete. Fixed in
+  both `insertEntry()` here and `restoreBackup()` in backup.js (Decision 40).
 - [ ] **3 — Capture & intent engine.** `intents.js` (reminder/expense detection, OCR label
   suggestion), `notifications.js`, `ads.js`. Committed; not device-tested. `notifications.js`'s
-  stale pre-rebrand naming (channel id, titles) fixed this session.
-- [ ] **4 — App shell & control flow.** `app.js`, `index.html`, `style.css`. Functional skeleton
-  committed; real UI screens not built. `app.js`'s stale `window.Actioner` global renamed to
-  `window.Dumpzone` this session.
+  stale pre-rebrand naming (channel id, titles) fixed earlier.
+- [~] **4 — App shell & control flow.** `app.js`, `index.html`, `style.css`. **Foundational gap
+  found and fixed during the Vault pivot:** nothing anywhere ever toggled screen visibility —
+  `unlock-btn` had no click listener, `main-screen` was never shown after unlock. Every UI section
+  built across every prior session (backup/restore, Drive, import) was technically unreachable
+  until `showScreen()` was added this session. Now wired: first-run setup (optional app-password +
+  optional Vault PIN), the lock screen, quick-access skip path, main screen, and the new Vault
+  screen. Still plain/unstyled, matching the rest of Phase 4 — no visual design pass yet.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
@@ -49,25 +60,33 @@
   exists in Capacitor core), safety-backup-before-overwrite with its explicit-confirmation gate,
   extract-to-storage (no DB import). UI now wired in `index.html`/`app.js`: category checkboxes,
   mode selector with both descriptions always shown, the overwrite confirmation dialog (safety-backup
-  checkbox defaulted on). Not run on a device — flag as risk. Cross-PIN private-notes append path is
+  checkbox defaulted on). Not run on a device — flag as risk. **Vault pivot:** the notes-only
+  `private_notes` category is now a unified `private_vault` category spanning all five vault types
+  (Decision 37). Cross-PIN append path (renamed from cross-PIN-private-notes to cross-PIN-vault) is
   written but especially untested (no way to exercise it without two real devices or a manually
   crafted second-PIN backup). Still plain/unstyled — matches Phase 4's current bare-skeleton look,
   not a finished visual design.
-- [~] **7 — Per-file actions.** `fileactions.js` built, all five: Share (native share sheet, private
-  notes get Copy instead), Download-for-append (encrypted zip, reuses `backup.js`'s exact
+- [~] **7 — Per-file actions.** `fileactions.js` built, all five: Share, Download-for-append
+  (encrypted zip, reuses `backup.js`'s exact
   payload/archive pipeline scoped to one entry — Decision 34, zip library is `@zip.js/zip.js` not
-  JSZip — Decision 33), plain Download (label as filename, not private notes), Edit (reminders
+  JSZip — Decision 33), plain Download, Edit (reminders
   reschedule via a caller-supplied callback), Delete (re-exports `db.js`'s existing `softDelete`).
   The "Append files from download" multi-select import screen is built and wired
   (`index.html`/`app.js`, `importAppendZips()`). **Not run on a device.**
-  **Known rough edge:** the import screen's per-file passphrase/PIN prompts use `prompt()`, same
-  category of shortcut as the Drive flows' rough edge (Phase 13) — spec's "reuse last passkey for
-  a session" convenience isn't wired in yet, so a batch of same-passkey files each prompt separately.
-  **Only Share/Download/Edit/Delete have no UI buttons yet** — not a Phase 7 gap, a Phase 4 one:
-  `showMainTimeline()` doesn't render an entry list yet for buttons to attach to.
-  Along the way, fixed a real Session 5 bug: `restoreBackup`'s cross-PIN append path referenced a
-  field (`entry._sourcePinSalt`) that was never actually set anywhere — cross-PIN private-notes
-  append was non-functional until this session (Decision 35). Same-PIN append was unaffected.
+  **Vault pivot — Share/Download reversed (Decision 41):** originally scoped Vault entries to
+  Copy-only; overridden on explicit direction that user convenience outweighs that caution — all
+  five actions now work identically for Vault and non-Vault entries, decrypting into memory first.
+  Added the "Select files" multi-select screen (category-grouped, per-item size, bulk Share/
+  Download/Download-for-append/Delete — Decision 44), shared between main and Vault.
+  **Known rough edge:** the import screen's and bulk-download-for-append's per-file passphrase/PIN
+  prompts use `prompt()`, same category of shortcut as the Drive flows' rough edge (Phase 13) —
+  spec's "reuse last passkey for a session" convenience isn't wired in yet.
+  Two real bugs caught and fixed while wiring the UI: bulk "download for append" would have thrown
+  for every Vault item (no PIN was ever collected for that flow); deleting a Vault item never
+  rebuilt the in-memory search index, so it would keep appearing in Vault search/browse until the
+  next unlock. Both fixed before this was presented, not after.
+  Earlier fix, still standing: Session 5's `restoreBackup` cross-PIN append bug
+  (`entry._sourcePinSalt` never actually set — Decision 35).
 - [ ] **8 — Tags & label UX.** Shared tag picker (`listAllTags()` drafted), label autocomplete
   (`label_history`), batch add with auto-numbering (`batchAddWithCommonLabel()` drafted). No UI yet.
 - [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
@@ -107,6 +126,32 @@
   - [ ] "Fully offline" language in docs/UI updated to "offline-first, optional cloud backup"
     (Decision 29) — done in ARCHITECTURE.md this session; still needs doing in any in-app copy once
     that copy exists (Phase 4's UI is still a bare skeleton).
+- [~] **14 — Private Vault** (pivot; work spans Phases 2/4/6/7 above — this entry cross-references
+  rather than duplicates). Text/Voice/Image/PDF/Files, unified under `is_private` (was notes-only),
+  gated by the Vault PIN. See ARCHITECTURE.md §3b for the full design. Built this session:
+  - [x] `vault.js`: content bundling (note text unchanged from pre-pivot; file types get a small
+    JSON envelope of base64 bytes + OCR text, encrypted together via the same
+    `encryptPrivateNote`/`decryptPrivateNote` calls private notes always used), save/load, and the
+    in-memory-only search index (Decision 39 — built fresh on unlock, discarded on lock, never
+    persisted even encrypted).
+  - [x] Two real privacy leaks fixed (Decision 40): private entries' labels — not just bodies —
+    were hitting `entries_fts` and `label_history` unconditionally in both `insertEntry()` and
+    `restoreBackup()`. Vault-only label autocomplete now comes from the in-memory index instead.
+  - [x] File encryption at rest (Decision 38) — vault entries never write file bytes to disk
+    unencrypted; `file_path` stays NULL, content lives in `encrypted_body`.
+  - [x] Optional app-open password (Decision 36) — first-run setup screen built (didn't exist
+    before at all; only the check-against-it path did), `setAppPassword`/`removeAppPassword` for
+    Settings-time changes.
+  - [x] Vault's own trash bin and own auto-lock timer (Decision 42) — `vault_auto_lock_minutes`
+    column, `listTrash`/`restoreFromTrash`/`permanentlyDeleteEntry` shared with the main bin,
+    distinguished by `is_private` rather than a second table.
+  - [x] Share/Download parity with the main app (Decision 41) — reversed an earlier, more
+    restrictive default on explicit direction.
+  - [x] "Select files" multi-select (Decision 44), shared between main and Vault.
+  - [ ] **Not run on a device or through CI.** Same standing risk as everything else — flagged, not
+    resolved, since that requires the manual Google Cloud/CI steps from earlier phases regardless.
+  - [ ] Vault UI is functional but plain (prompt()/confirm() for capture and some actions) —
+    matches Phase 4's overall bare-skeleton state, not a finished design.
 
 Phases with a real dependency (e.g. 7 needs 6) are worked in order. Phases without one (e.g. 9's
 individual items) can be picked up in any order once prerequisites are met.
