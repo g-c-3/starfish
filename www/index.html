@@ -7,7 +7,21 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div id="lock-screen" class="screen">
+  <div id="first-run-setup" class="screen hidden">
+    <h1>Welcome to Dumpzone</h1>
+    <p style="font-size:13px; opacity:0.8;">Both are optional and can be changed later in Settings.</p>
+    <h4>App-open password (optional)</h4>
+    <p class="mode-description">Leave blank for quick access — no password prompt when opening the app.</p>
+    <input id="setup-app-password" type="password" placeholder="App-open password (optional)" />
+    <input id="setup-app-password-hint" type="text" placeholder="Optional hint" />
+    <h4>Private Vault PIN (optional, set up anytime)</h4>
+    <p class="mode-description">A separate PIN just for the Vault — independent of the app-open password above.</p>
+    <input id="setup-vault-pin" type="password" placeholder="Vault PIN (optional)" />
+    <input id="setup-vault-pin-hint" type="text" placeholder="Optional hint" />
+    <button id="first-run-continue-btn">Continue</button>
+  </div>
+
+  <div id="lock-screen" class="screen hidden">
     <h1>Dumpzone</h1>
     <input id="password-input" type="password" placeholder="Password" />
     <button id="unlock-btn">Unlock</button>
@@ -29,7 +43,28 @@
     </div>
 
     <input id="search-input" placeholder="Search everything..." />
+    <button id="select-files-btn" class="secondary-btn">Select files</button>
     <div id="timeline"></div>
+
+    <details id="trash-settings">
+      <summary>Trash</summary>
+      <p class="mode-description">Deleted items stay here 30 days before being permanently removed automatically.</p>
+      <div id="trash-list"></div>
+    </details>
+
+    <details id="vault-settings">
+      <summary>Private Vault</summary>
+      <p class="mode-description">Its own PIN, its own encryption, its own auto-lock — separate from the app-open password above.</p>
+      <div id="vault-pin-setup-view" class="hidden">
+        <input id="vault-setup-pin-input" type="password" placeholder="Set a Vault PIN" />
+        <input id="vault-setup-pin-hint-input" type="text" placeholder="Optional hint" />
+        <button id="vault-setup-pin-btn">Set up Vault</button>
+      </div>
+      <div id="vault-locked-view">
+        <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
+        <button id="vault-unlock-btn">Unlock Vault</button>
+      </div>
+    </details>
 
     <details id="appearance-settings">
       <summary>Appearance</summary>
@@ -95,6 +130,66 @@
       <button id="append-import-btn">Import selected files</button>
       <div id="append-import-status" class="status-line"></div>
     </details>
+  </div>
+
+  <div id="vault-screen" class="screen hidden">
+    <header class="vault-banner">
+      <h2>🔒 PRIVATE VAULT</h2>
+      <button id="vault-lock-btn" class="secondary-btn">Lock</button>
+    </header>
+
+    <div id="vault-capture-bar">
+      <button data-vault-type="note">📝 Text</button>
+      <button data-vault-type="voice">🎙️ Voice</button>
+      <button data-vault-type="image">📷 Image</button>
+      <button data-vault-type="pdf">📄 PDF</button>
+      <button data-vault-type="file">📁 Files</button>
+    </div>
+
+    <input id="vault-search-input" placeholder="Search the vault..." />
+    <button id="vault-select-files-btn" class="secondary-btn">Select files</button>
+
+    <div id="vault-tabs">
+      <button class="vault-tab active" data-vault-tab="all">All</button>
+      <button class="vault-tab" data-vault-tab="note">Text</button>
+      <button class="vault-tab" data-vault-tab="voice">Voice</button>
+      <button class="vault-tab" data-vault-tab="image">Image</button>
+      <button class="vault-tab" data-vault-tab="pdf">PDF</button>
+      <button class="vault-tab" data-vault-tab="file">Files</button>
+    </div>
+    <div id="vault-list"></div>
+
+    <details id="vault-trash-settings">
+      <summary>Vault Trash</summary>
+      <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
+      <div id="vault-trash-list"></div>
+    </details>
+
+    <details id="vault-lock-settings">
+      <summary>Vault auto-lock</summary>
+      <label>Lock the Vault after
+        <select id="vault-auto-lock-select">
+          <option value="1">1 minute</option>
+          <option value="5" selected>5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+        </select>
+        of inactivity — independent of the app-open lock timing.
+      </label>
+    </details>
+  </div>
+
+  <div id="select-files-screen" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:520px; max-height:80vh; overflow-y:auto;">
+      <h3>Select files</h3>
+      <div id="select-files-groups"></div>
+      <div class="status-line" id="select-files-status"></div>
+      <button id="select-files-share-btn" class="secondary-btn">Share selected</button>
+      <button id="select-files-download-btn" class="secondary-btn">Download selected</button>
+      <button id="select-files-append-btn" class="secondary-btn">Download for append</button>
+      <button id="select-files-delete-btn" class="secondary-btn warning-text">Delete selected</button>
+      <button id="select-files-close-btn" class="secondary-btn">Close</button>
+    </div>
   </div>
 
   <div id="overwrite-confirm-dialog" class="modal-overlay hidden">
