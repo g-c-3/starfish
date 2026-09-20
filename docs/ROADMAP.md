@@ -96,9 +96,14 @@
   next unlock. Both fixed before this was presented, not after.
   Earlier fix, still standing: Session 5's `restoreBackup` cross-PIN append bug
   (`entry._sourcePinSalt` never actually set — Decision 35).
-  Now attached to real UI (Phase 4): both the main timeline and vault list render Share/Download/
-  Download for append/Delete buttons per entry. **Edit still has no button anywhere** — the
-  function (`editEntry()`) works, nothing in the UI calls it yet.
+  Now attached to real UI (Phase 4): both the main timeline and vault list render all five actions
+  — Share/Download/Download for append/Edit/Delete — per entry. Wiring Edit surfaced two more real
+  bugs in `editEntry()` itself, fixed before wiring anything to it: it expected `fields.text` for
+  vault entries but `fields.body_text` for non-vault notes, so calling it consistently from one UI
+  would have silently no-op'd whichever side didn't match; and expense/reminder fields
+  (`amount`/`expense_category`/`fire_at`/`repeat_rule`) were never actually written to the row at
+  all — only checked, to decide whether to call the reminder-reschedule callback — meaning editing a
+  reminder's time or an expense's amount would have silently done nothing.
 - [~] **8 — Tags & label UX.** `promptForTags()` built and wired into both main and vault capture —
   shows existing tags (`listAllTags()`) as a hint, free-text creates new ones (`applyTags()`'s
   `INSERT OR IGNORE` already handled "new tag" with no changes needed). Tags now display per entry

@@ -4,6 +4,36 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 15**
+
+Closed the one item left open from last session: Edit had no UI button anywhere. Wiring it exposed
+two real bugs already sitting in `editEntry()` (fileactions.js), fixed before anything called it:
+
+1. It expected `fields.text` for vault entries but `fields.body_text` for non-vault notes — a
+   mismatch that meant calling it consistently from one UI (which is what building the Edit button
+   required) would have silently no-op'd whichever side didn't match the field name it happened to
+   check. Normalized on `fields.text` for both; non-vault notes map it to `body_text` internally.
+2. Expense/reminder-specific fields (`amount`, `expense_category`, `fire_at`, `repeat_rule`) were
+   checked — to decide whether to call the reminder-reschedule callback — but never actually written
+   to the `updates` object, so editing a reminder's time or an expense's amount would have silently
+   done nothing to the row at all. Fixed by copying any of those four present in `fields` into
+   `updates`, same as `label` already was.
+
+Built the shared `editEntryUI()` prompt flow (label always; text for notes, prefilled from
+`body_text` or, for vault notes, from the in-memory index's `searchableText` — which is already the
+note's own decrypted text; amount/category for expenses; date/time for reminders, parsed and handed
+to `scheduleReminder` via the existing `rescheduleReminder` callback hook). Wired to both the main
+timeline and vault list.
+
+Decisions made: none — bug fixes and UI wiring for an already-flagged gap, not new design calls.
+
+Next session start point: nothing specific left flagged from Phase 4/7/8's UI wiring. Standing items
+unchanged: confirm the CI run is green, Phase 13 still blocked on manual OAuth setup, nothing run on
+an actual device yet — that last one is worth prioritizing once the OAuth setup is done, since a
+meaningful amount of untested surface has accumulated across several sessions now.
+
+---
+
 **Session 14**
 
 Follow-on from the Vault pivot, checking for the same class of gap on the non-vault side and
