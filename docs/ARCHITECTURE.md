@@ -45,10 +45,14 @@ private variant — out of vault scope.
 1. **App-open password — optional ("quick access").** Gates app launch when set; a `NULL` hash means no lock
    screen at all on open. Addable/removable anytime in Settings, not just at first run. Salted hash in DB when
    set. Recoverable via backup-passkey proof (see below) — only meaningful when a password exists to recover.
+   Own idle auto-lock (`auto_lock_minutes`) plus an immediate lock on backgrounding (Decision 45) — moot when
+   quick access is enabled, since there's nothing to lock back to.
 2. **Vault PIN** — independent. Derives an AES key for every vault entry (any of the five types, not just
    text — §3b) via PBKDF2. NOT recoverable via backup; only "reset & wipe the Vault" is available if forgotten.
    Its own auto-lock timer (`vault_auto_lock_minutes`), separate from whatever the app-open password's own
-   timeout is — locking the app doesn't necessarily lock the Vault and vice versa.
+   timeout is — locking the app doesn't necessarily lock the Vault and vice versa. Also locks immediately on
+   backgrounding, same as the app-open password (Decision 45) — `privateSessionKey` never survives the app
+   actually leaving the foreground, not just an idle window.
 3. **Backup passkey** — never stored anywhere. Combined with a random salt (stored unencrypted in backup header) via PBKDF2/Argon2id to derive the backup's AES-256 key. Forgetting it makes that backup permanently unrecoverable.
 
 All three support an optional, plaintext **hint** — but not all stored the same way. The app-open password and

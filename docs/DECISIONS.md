@@ -251,3 +251,10 @@ Delete) — Edit stays per-item only, bulk-editing arbitrary fields across mixed
 have a coherent meaning. One shared implementation for both main and vault (same parity principle).
 Known limitation, not papered over: Capacitor's Share plugin has no multi-file share of its own, so a
 bulk Share opens one native share sheet per item sequentially rather than a single combined share.
+
+**45. Both locks — app-level password and Vault PIN — lock immediately on backgrounding, not just
+after idle timeout.** `@capacitor/app`'s `appStateChange` listener triggers this; the app-level idle
+timer itself resets via one delegated document-level listener (click/keydown/input) rather than
+manually calling `armAppAutoLock()` from every capture/search/browse function individually — the
+vault's own timer needed several follow-up patches for exactly that omission, so the app-level one
+was built to not repeat it. No-op when quick access is enabled — there's nothing to lock back to.

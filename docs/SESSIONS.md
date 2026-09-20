@@ -4,6 +4,36 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 16**
+
+Checked whether `credentials.auto_lock_minutes` — a column that's existed since Session 1 — was
+actually enforced anywhere. It wasn't. Built it: `armAppAutoLock()`/`disarmAppAutoLock()`, reset via
+one delegated document-level listener (click/keydown/input) rather than manually calling it from
+every capture/search/browse function — the vault's own auto-lock (Session 13) needed several
+follow-up patches specifically because it relied on remembering to call `armVaultAutoLock()` at every
+touchpoint; this one is built to not repeat that mistake. No-op when quick access is enabled, since
+there's nothing to lock back to.
+
+Also found, while working in this area: `privateSessionKey`'s own comment has said "cleared on vault
+lock/background" since the Vault pivot (Session 13), but nothing ever actually listened for the app
+backgrounding — the vault would stay unlocked indefinitely across app-switches if someone left and
+returned within the idle window. Added `@capacitor/app`'s `appStateChange` listener
+(`registerBackgroundLock()`, called once in `bootstrap()`), which now immediately locks both the
+vault and the app-level password screen on backgrounding, not just after idle timeout. New
+dependency: `@capacitor/app`.
+
+Added a Settings control (`#app-auto-lock-select`) mirroring the vault's existing one.
+
+Decisions made: 45.
+
+Next session start point: same standing items — confirm the CI run is green, Phase 13 still blocked
+on manual OAuth setup, nothing run on an actual device yet. Phase 9's remaining items (digest,
+on-this-day, storage breakdown, expense charts, map view, quick-capture widget,
+confidence-confirmation chip, backup-reminder nudge) are all unblocked, unstarted work for whenever
+device-testing priority (flagged last session) isn't the more pressing choice.
+
+---
+
 **Session 15**
 
 Closed the one item left open from last session: Edit had no UI button anywhere. Wiring it exposed

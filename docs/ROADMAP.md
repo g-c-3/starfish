@@ -11,7 +11,7 @@
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
-- [ ] 9 — Additional features
+- [~] 9 — Additional features (auto-lock timeout done, rest not started)
 - [ ] 10 — Security hardening
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
@@ -111,10 +111,16 @@
   flagged elsewhere in this doc — real chip UI and live autocomplete-as-you-type are still Phase 4's
   design pass, not built here. Label autocomplete (`label_history`) and batch add with
   auto-numbering (`batchAddWithCommonLabel()`) are drafted but not wired into any UI yet.
-- [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
-  quick-capture widget, expense charts, backup-reminder nudge, auto-lock timeout, map view,
+- [~] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
+  quick-capture widget, expense charts, backup-reminder nudge, map view,
   confidence-confirmation chip, dark mode toggle (done), gradient mode toggle (done, 2 color pickers,
-  same-color allowed). Remaining items not started.
+  same-color allowed). **Auto-lock timeout done** — `credentials.auto_lock_minutes` has existed since
+  Session 1 but was never actually enforced anywhere until now (Decision 45). Also fixed while
+  building it: `privateSessionKey`'s own comment has said "cleared on vault lock/background" since
+  the Vault pivot, but nothing ever listened for backgrounding — the vault would stay unlocked
+  indefinitely across app-switches, relying only on its idle timer. Both the app-level password lock
+  and the vault now lock immediately on backgrounding (`@capacitor/app`'s `appStateChange`), not just
+  after idle timeout. Remaining items not started.
 - [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
   not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
