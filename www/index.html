@@ -52,6 +52,20 @@
       <div id="trash-list"></div>
     </details>
 
+    <details id="app-lock-settings">
+      <summary>App lock</summary>
+      <p class="mode-description">Only applies if an app-open password is set — quick access has nothing to lock back to.</p>
+      <label>Lock the app after
+        <select id="app-auto-lock-select">
+          <option value="1">1 minute</option>
+          <option value="5" selected>5 minutes</option>
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+        </select>
+        of inactivity, or immediately when backgrounded.
+      </label>
+    </details>
+
     <details id="vault-settings">
       <summary>Private Vault</summary>
       <p class="mode-description">Its own PIN, its own encryption, its own auto-lock — separate from the app-open password above.</p>
