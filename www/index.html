@@ -85,6 +85,16 @@
         <div id="drive-backup-list"></div>
       </div>
     </details>
+
+    <details id="append-import-settings">
+      <summary>Append files from download</summary>
+      <p style="font-size:12px; opacity:0.8;">Import one or more files someone downloaded via an
+        entry's "Download for append" action. Always adds to what's already here — same duplicate
+        handling as a regular append restore. Not for full backup files (use Backup &amp; Restore above).</p>
+      <input id="append-import-input" type="file" accept=".zip" multiple />
+      <button id="append-import-btn">Import selected files</button>
+      <div id="append-import-status" class="status-line"></div>
+    </details>
   </div>
 
   <div id="overwrite-confirm-dialog" class="modal-overlay hidden">
