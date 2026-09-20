@@ -15,9 +15,11 @@
     "@capacitor/geolocation": "^6.0.1",
     "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/preferences": "^6.0.2",
+    "@capacitor/share": "^6.0.2",
     "@capacitor-community/sqlite": "^6.0.2",
     "@capawesome-team/capacitor-android-foreground-service": "^6.1.0",
-    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4"
+    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
+    "@zip.js/zip.js": "^2.8.26"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
