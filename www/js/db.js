@@ -8,13 +8,14 @@ const SCHEMA_SQL = `
 -- ===== Credentials =====
 CREATE TABLE IF NOT EXISTS credentials (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  app_password_hash TEXT NOT NULL,
-  app_password_salt TEXT NOT NULL,
+  app_password_hash TEXT,            -- NULL = no app-open password set (optional, "quick access")
+  app_password_salt TEXT,
   app_password_hint TEXT,
   private_pin_hash TEXT,
   private_pin_salt TEXT,
   private_pin_hint TEXT,
-  auto_lock_minutes INTEGER DEFAULT 5,
+  auto_lock_minutes INTEGER DEFAULT 5,       -- app-level lock timeout
+  vault_auto_lock_minutes INTEGER DEFAULT 5, -- Private Vault's own, independent timeout — separate lock, separate timer
   last_backup_at INTEGER,
   last_drive_backup_at INTEGER
 );
@@ -25,10 +26,14 @@ CREATE TABLE IF NOT EXISTS entries (
   id TEXT PRIMARY KEY,               -- uuid
   type TEXT NOT NULL,
   label TEXT NOT NULL,               -- required for every entry
-  body_text TEXT,                    -- typed note body / OCR text / null for voice+file
-  is_private INTEGER DEFAULT 0,      -- notes only
-  encrypted_body BLOB,               -- private notes only (AES ciphertext)
-  file_path TEXT,                    -- voice/image/pdf/file
+  body_text TEXT,                    -- typed note body / OCR text / null for voice+file. NULL when is_private=1 (see below)
+  is_private INTEGER DEFAULT 0,      -- Private Vault flag — any type (note/voice/image/pdf/file), not notes-only
+  encrypted_body BLOB,               -- Private Vault only (AES ciphertext). Shape depends on type — see vault.js:
+                                      --   note: plaintext is the note text itself (unchanged from pre-vault format)
+                                      --   voice/file: plaintext is JSON {fileData} (base64)
+                                      --   image/pdf: plaintext is JSON {fileData, ocrText} (base64 + OCR text, both encrypted together)
+  file_path TEXT,                    -- voice/image/pdf/file WHEN is_private=0 only. Vault entries keep this NULL —
+                                      -- their bytes live inside encrypted_body instead, so nothing sits on disk unencrypted.
   extension TEXT,                    -- generic files
   auto_category TEXT,                -- generic files: Documents/Audio/Archives/Other
   noise_reduction INTEGER,           -- voice only
@@ -126,16 +131,19 @@ async function insertEntry(db, entry) {
      noise_reduction, latitude, longitude, amount, expense_category, replied, fire_at, repeat_rule, now, now]
   );
 
-  // Index label always; index body only if not private and not voice/file (those have no useful body_text anyway)
-  const indexableBody = (!is_private && body_text) ? body_text : '';
-  await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, indexableBody]);
-
-  // Track label for autocomplete
-  await db.run(
-    `INSERT INTO label_history (type, label) VALUES (?,?)
-     ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
-    [type, label]
-  );
+  // Private Vault entries are excluded from BOTH the searchable index and label autocomplete —
+  // not just the body. Indexing even the label would let its existence/title leak into ordinary,
+  // no-PIN search results; feeding label_history would let it surface as an autocomplete suggestion
+  // in the normal (non-vault) capture bar. Vault search/autocomplete instead comes from the
+  // in-memory index vault.js builds fresh on unlock — see vault.js's buildVaultIndex().
+  if (!is_private) {
+    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, body_text || '']);
+    await db.run(
+      `INSERT INTO label_history (type, label) VALUES (?,?)
+       ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
+      [type, label]
+    );
+  }
 }
 
 async function searchEntries(db, queryText, opts = {}) {
@@ -155,13 +163,34 @@ async function softDelete(db, id) {
   await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [Date.now(), id]);
 }
 
+// Two independent bins share this same deleted_at/is_private pair rather than needing a second set
+// of columns or tables: "the vault's bin" is just WHERE is_private=1, "the main bin" is WHERE is_private=0.
+// Same 30-day rule for both (Decision — one soft-delete/purge policy, applied per-bin by this filter).
+async function listTrash(db, { isPrivate = false } = {}) {
+  const rows = await db.query(
+    `SELECT * FROM entries WHERE deleted_at IS NOT NULL AND is_private = ? ORDER BY deleted_at DESC`,
+    [isPrivate ? 1 : 0]
+  );
+  return rows.values || [];
+}
+
+async function restoreFromTrash(db, id) {
+  await db.run(`UPDATE entries SET deleted_at = NULL WHERE id = ?`, [id]);
+}
+
+// User-triggered "delete permanently" from within a trash bin — same cascade-safe deletion
+// purgeOldTrash already does, just invoked on demand for one id instead of everything past 30 days.
+async function permanentlyDeleteEntry(db, id) {
+  await db.run(`DELETE FROM entries_fts WHERE id = ?`, [id]);
+  await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [id]); // explicit — see purgeOldTrash's own note
+  await db.run(`DELETE FROM entries WHERE id = ?`, [id]);
+}
+
 async function purgeOldTrash(db) {
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const rows = await db.query(`SELECT id FROM entries WHERE deleted_at IS NOT NULL AND deleted_at < ?`, [cutoff]);
   for (const row of (rows.values || [])) {
-    await db.run(`DELETE FROM entries_fts WHERE id = ?`, [row.id]);
-    await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [row.id]); // explicit — ON DELETE CASCADE needs
-    await db.run(`DELETE FROM entries WHERE id = ?`, [row.id]);          // PRAGMA foreign_keys=ON, not set here
+    await permanentlyDeleteEntry(db, row.id); // same cascade-safe deletion as a manual "delete permanently"
   }
 }
 
@@ -179,4 +208,8 @@ async function listAllTags(db) {
   return rows.values || [];
 }
 
-export { initDb, insertEntry, searchEntries, softDelete, purgeOldTrash, listAllTags, SCHEMA_SQL };
+export {
+  initDb, insertEntry, searchEntries, softDelete,
+  listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
+  listAllTags, SCHEMA_SQL
+};

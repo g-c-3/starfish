@@ -13,18 +13,23 @@ import { encryptBackup, decryptBackup } from './crypto.js';
 const SCHEMA_VERSION = 1;
 const FILES_DIR = 'files'; // Directory.Data/files/<uuid>.<ext> — where captured file bytes live on-device
 
-// Categories are independent selectable units. Notes/Private Notes are both type='note',
-// split by is_private. Tags and App Settings have no per-entry rows.
+// Categories are independent selectable units. Voice/Images/PDFs/Files exclude private ones —
+// EVERY private entry, regardless of underlying type, falls under the one unified private_vault
+// category instead (Private Vault pivot — was notes-only "private_notes" before). Tags and App
+// Settings have no per-entry rows. Expenses/Reminders have no private variant (out of vault scope).
 const ENTRY_CATEGORIES = {
   notes: (e) => e.type === 'note' && !e.is_private,
-  private_notes: (e) => e.type === 'note' && e.is_private,
-  voice: (e) => e.type === 'voice',
-  images: (e) => e.type === 'image',
-  pdfs: (e) => e.type === 'pdf',
-  files: (e) => e.type === 'file',
+  voice: (e) => e.type === 'voice' && !e.is_private,
+  images: (e) => e.type === 'image' && !e.is_private,
+  pdfs: (e) => e.type === 'pdf' && !e.is_private,
+  files: (e) => e.type === 'file' && !e.is_private,
   expenses: (e) => e.type === 'expense',
-  reminders: (e) => e.type === 'reminder'
+  reminders: (e) => e.type === 'reminder',
+  private_vault: (e) => e.is_private === 1 // any type — Text/Voice/Image/PDF/Files, unified
 };
+// Non-vault file-bearing categories only — buildBackupPayload reads file_path for these. Vault
+// entries (any type) keep file_path NULL; their bytes already travel inside encrypted_body, which
+// every category's row spread already carries, so private_vault needs no entry here.
 const FILE_BEARING_CATEGORIES = new Set(['voice', 'images', 'pdfs', 'files']);
 const ALL_CATEGORIES = [...Object.keys(ENTRY_CATEGORIES), 'tags', 'app_settings'];
 
@@ -62,7 +67,7 @@ async function buildBackupPayload(db, categories, entryIds = null) {
     entries: [],
     tags: [],
     settings: {},
-    privateNotesSalt: null // set below only if private_notes is included — one salt for every private note on this device
+    privateVaultSalt: null // set below only if private_vault is included — one salt for every Private Vault entry on this device
   };
 
   const entryCategoryNames = Object.keys(ENTRY_CATEGORIES).filter(wantAll);
@@ -87,9 +92,9 @@ async function buildBackupPayload(db, categories, entryIds = null) {
     }
   }
 
-  if (wantAll('private_notes') && payload.entries.some((e) => e._category === 'private_notes')) {
+  if (wantAll('private_vault') && payload.entries.some((e) => e._category === 'private_vault')) {
     const cred = (await db.query(`SELECT private_pin_salt FROM credentials WHERE id=1`)).values[0];
-    payload.privateNotesSalt = cred?.private_pin_salt || null; // needed to re-derive the source key on cross-PIN append
+    payload.privateVaultSalt = cred?.private_pin_salt || null; // needed to re-derive the source key on cross-PIN append
   }
 
   if (wantAll('tags')) {
@@ -168,7 +173,7 @@ function estimateRestoreSize(payload, categories) {
 // opts: {
 //   passphrase, archiveObj, mode: 'append' | 'overwrite', categories,
 //   takeSafetyBackup: bool, confirmedDestructive: bool (required if mode='overwrite' && !takeSafetyBackup),
-//   sourcePin: string|null (only if private_notes selected and encrypted under a different PIN),
+//   sourcePin: string|null (only if private_vault selected and encrypted under a different PIN),
 //   currentPrivateKey: CryptoKey|null (this device's active PIN-derived key, for re-encrypting)
 // }
 async function restoreBackup(db, opts) {
@@ -231,14 +236,14 @@ async function restoreBackup(db, opts) {
 
     let bodyText = entry.body_text;
     let encryptedBody = entry.encrypted_body;
-    if (entry._category === 'private_notes' && opts.sourcePin && opts.currentPrivateKey) {
+    if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
       // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
       // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
-      // payload.privateNotesSalt is the ONE salt for every private note in this payload (Decision — a
+      // payload.privateVaultSalt is the ONE salt for every Private Vault entry in this payload (Decision — a
       // device has one PIN, one salt) — not per-entry; entry._sourcePinSalt never existed as a field.
-      if (!payload.privateNotesSalt) throw new Error('Backup has no privateNotesSalt — cannot decrypt its private notes');
+      if (!payload.privateVaultSalt) throw new Error('Backup has no privateVaultSalt — cannot decrypt its Private Vault entries');
       const { decryptPrivateNote, encryptPrivateNote, deriveAesKey } = await import('./crypto.js');
-      const { key: sourceKey } = await deriveAesKey(opts.sourcePin, payload.privateNotesSalt);
+      const { key: sourceKey } = await deriveAesKey(opts.sourcePin, payload.privateVaultSalt);
       const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
       encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
     }
@@ -260,13 +265,17 @@ async function restoreBackup(db, opts) {
        entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
        entry.snoozed_until, entry.notified || 0, entry.created_at || Date.now(), Date.now()]
     );
-    const indexableBody = (!entry.is_private && bodyText) ? bodyText : '';
-    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, indexableBody]);
-    await db.run(
-      `INSERT INTO label_history (type, label) VALUES (?,?)
-       ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
-      [entry.type, label]
-    );
+    // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts
+    // and label_history entirely, not just their body — indexing even the label would leak a
+    // vault item's existence/title into ordinary, no-PIN search and autocomplete.
+    if (!entry.is_private) {
+      await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, bodyText || '']);
+      await db.run(
+        `INSERT INTO label_history (type, label) VALUES (?,?)
+         ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
+        [entry.type, label]
+      );
+    }
     for (const tagName of entry.tags || []) {
       await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
       const tagRow = (await db.query(`SELECT id FROM tags WHERE name = ?`, [tagName])).values[0];

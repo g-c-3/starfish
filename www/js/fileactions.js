@@ -16,6 +16,7 @@ import {
   buildBackupPayload, decryptBackupPayload, restoreBackup
 } from './backup.js';
 import { encryptBackup } from './crypto.js';
+import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
 
 // Not a secret, not meant to be one — see ARCHITECTURE.md §5 point 2. Every Dumpzone install embeds
 // this same value, so a default-encrypted export is only ever obfuscated against casual viewing,
@@ -39,16 +40,16 @@ function sanitizeFilename(label) {
 // Action 2 — Download for append. One entry, wrapped in the exact same archive format a full
 // backup uses, scoped via buildBackupPayload's entryIds filter — see backup.js.
 // ---------------------------------------------------------------------------
-// opts: { passphrase?: string, pin?: string } — exactly one applies, chosen by the entry's category:
-// private notes require `pin` (no toggle, per spec); anything else uses `passphrase` if given, else
-// the app-level default. Passing both or neither for the wrong category is a caller error, not
-// silently resolved here.
+// opts: { passphrase?: string, pin?: string } — exactly one applies, chosen by whether the entry is
+// in the Private Vault (row.is_private, any type): vault entries require `pin`, no toggle, same as
+// before this pivot generalized "private notes" to "any vault type"; anything else uses `passphrase`
+// if given, else the app-level default. Passing both or neither for the wrong kind is a caller error.
 async function downloadForAppend(db, entryId, opts = {}) {
-  const { cat } = await getEntryCategory(db, entryId);
+  const { row, cat } = await getEntryCategory(db, entryId);
   let chosenPassphrase, mode;
 
-  if (cat === 'private_notes') {
-    if (!opts.pin) throw new Error('Private notes require the private-notes PIN — no default/optional path');
+  if (row.is_private) {
+    if (!opts.pin) throw new Error('Private Vault entries require the vault PIN — no default/optional path');
     chosenPassphrase = opts.pin;
     mode = 'pin';
   } else if (opts.passphrase) {
@@ -133,11 +134,26 @@ async function importAppendZips(db, files, getters) {
 }
 
 // ---------------------------------------------------------------------------
-// Action 1 — Share. Private notes get Copy-to-clipboard instead, never Share (spec, §5 point 1).
+// Action 1 — Share. Works identically for vault and non-vault entries (pivot: user convenience over
+// restriction — content is decrypted only into memory first for vault items, never written to disk
+// unencrypted; a one-time notice in the UI should say sharing/downloading a vault item means it
+// leaves the vault's encryption boundary as plaintext from that point on, same as Download below).
 // ---------------------------------------------------------------------------
-async function shareEntry(db, entryId) {
+async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  if (cat === 'private_notes') throw new Error('Private notes use copyPrivateNote(), not shareEntry()');
+
+  if (row.is_private) {
+    if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before sharing');
+    const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    if (row.type === 'note') {
+      await Share.share({ text: content.text, title: row.label });
+    } else {
+      const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeFor(row));
+      try { await Share.share({ url: blobUrl, title: row.label }); }
+      finally { URL.revokeObjectURL(blobUrl); }
+    }
+    return;
+  }
 
   if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
@@ -147,8 +163,15 @@ async function shareEntry(db, entryId) {
   }
 }
 
-// One-time notice tracked in meta (see app.js's metaGet/metaSet) — caller checks/sets
-// 'private_copy_notice_shown' before calling this; kept here as just the copy+auto-clear mechanics.
+function mimeTypeFor(row) {
+  const byExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+    pdf: 'application/pdf', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
+  return byExt[row.extension] || (row.type === 'image' ? 'image/jpeg' : row.type === 'pdf' ? 'application/pdf'
+    : row.type === 'voice' ? 'audio/mp4' : 'application/octet-stream');
+}
+
+// Extra convenience alongside Share/Download now that both work for vault items too (not a
+// replacement for either anymore) — quick clipboard copy for vault note text specifically.
 async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
   await navigator.clipboard.writeText(plaintext);
   setTimeout(async () => {
@@ -160,16 +183,27 @@ async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
 }
 
 // ---------------------------------------------------------------------------
-// Action 3 — Download (plain). Unencrypted, filename is the entry's label, not its UUID. Not for
-// private notes (spec, §5 point 3 — they get Copy only, same restriction as Share).
+// Action 3 — Download (plain). Unencrypted, filename is the entry's label, not its UUID. Works for
+// vault entries too (pivot) — decrypted into memory first, written out as plain bytes only at the
+// point the person explicitly asked for a plaintext copy outside the vault.
 // ---------------------------------------------------------------------------
-async function downloadPlain(db, entryId) {
+async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  if (cat === 'private_notes') throw new Error('Private notes have no plain download — use copyPrivateNote()');
+  const ext = row.extension ? `.${row.extension}` : (row.type === 'note' ? '.txt' : '');
 
-  const ext = row.extension ? `.${row.extension}` : (FILE_BEARING_CATEGORIES.has(cat) ? '' : '.txt');
+  if (row.is_private) {
+    if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before downloading');
+    const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const fileName = `${sanitizeFilename(row.label)}${ext}`;
+    if (row.type === 'note') {
+      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.text, encoding: 'utf8', recursive: true });
+    } else {
+      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.fileData, recursive: true });
+    }
+    return fileName;
+  }
+
   const fileName = `${sanitizeFilename(row.label)}${ext}`;
-
   if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
     await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data, recursive: true });
@@ -183,22 +217,32 @@ async function downloadPlain(db, entryId) {
 
 // ---------------------------------------------------------------------------
 // Action 4 — Edit. Reminders must reschedule their notification, not just update the row silently.
-// Private note edits require the session already PIN-unlocked (caller passes the live session key).
+// Vault entries of ANY type require the session already PIN-unlocked to edit content (label/tags-only
+// edits don't need the session — they're never encrypted in the first place).
 // ---------------------------------------------------------------------------
 async function editEntry(db, entryId, fields, { privateSessionKey = null, rescheduleReminder = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  const updates = { ...fields, updated_at: Date.now() };
+  const contentFieldsChanged = fields.text !== undefined || fields.fileData !== undefined || fields.ocrText !== undefined;
 
-  if (cat === 'private_notes' && fields.body_text !== undefined) {
-    if (!privateSessionKey) throw new Error('Private notes locked — unlock with PIN before editing');
+  if (row.is_private && contentFieldsChanged) {
+    if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
+    const { content: existing } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const merged = { ...existing, ...fields }; // partial edits (e.g. just a corrected OCR text) keep the rest
+    const plaintext = buildVaultPlaintext(row.type, merged);
     const { encryptPrivateNote } = await import('./crypto.js');
-    updates.encrypted_body = await encryptPrivateNote(privateSessionKey, fields.body_text);
-    delete updates.body_text; // private notes never carry plaintext in body_text
+    const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
+    await db.run(`UPDATE entries SET encrypted_body=?, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]);
   }
+
+  const updates = { updated_at: Date.now() };
+  if (fields.label !== undefined) updates.label = fields.label;
+  if (!row.is_private && fields.body_text !== undefined) updates.body_text = fields.body_text; // non-vault notes only
 
   const setClause = Object.keys(updates).map((k) => `${k}=?`).join(', ');
   await db.run(`UPDATE entries SET ${setClause} WHERE id=?`, [...Object.values(updates), entryId]);
 
+  // entries_fts/label_history only exist for non-vault entries in the first place (db.js/vault.js
+  // both deliberately skip them for is_private=1) — so only touch them for non-vault label edits.
   if (!row.is_private && updates.label !== undefined) {
     await db.run(`UPDATE entries_fts SET label=? WHERE id=?`, [updates.label, entryId]);
   }
@@ -209,13 +253,66 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
 
 // ---------------------------------------------------------------------------
 // Action 5 — Delete. Already exists as db.js's softDelete(); re-exported here only so every
-// per-file action is reachable from one module, not because the logic lives here.
+// per-file action is reachable from one module, not because the logic lives here. Works identically
+// for vault and non-vault — vault items land in the vault's own trash bin, same 30-day rule, just
+// filtered by is_private (see db.js's listTrash()) rather than a second table.
 // ---------------------------------------------------------------------------
 export { softDelete as deleteEntry } from './db.js';
+
+// ---------------------------------------------------------------------------
+// "Select files" screen support — groups entries by category with a size next to each, so a
+// category can be selected as a whole or picked apart item by item. Bulk actions (Share, Download,
+// Download for append, Delete — Edit stays per-item only, bulk-editing doesn't make sense) just
+// loop the same four functions above; nothing new to keep in sync with them.
+// ---------------------------------------------------------------------------
+async function getSelectableEntries(db, { vaultIndex = null } = {}) {
+  const rows = (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0`)).values || [];
+  const groups = {};
+  for (const row of rows) {
+    const cat = Object.keys(ENTRY_CATEGORIES).find((c) => c !== 'private_vault' && ENTRY_CATEGORIES[c](row));
+    if (!cat) continue;
+    let sizeBytes = 0;
+    if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
+      try { sizeBytes = (await Filesystem.stat({ path: row.file_path, directory: Directory.Data })).size; }
+      catch { sizeBytes = 0; } // file missing/unreadable — still list the entry, just with an unknown size
+    } else if (row.body_text) {
+      sizeBytes = new Blob([row.body_text]).size;
+    }
+    (groups[cat] = groups[cat] || []).push({ id: row.id, label: row.label, type: row.type, sizeBytes });
+  }
+  // Vault items come from the already-decrypted in-memory index (vault.js) — never re-decrypt here
+  // just to compute a size that index already has.
+  if (vaultIndex) {
+    groups.private_vault = vaultIndex.map((e) => ({ id: e.id, label: e.label, type: e.type, sizeBytes: e.sizeBytes }));
+  }
+  return groups;
+}
+
+// action: 'share' | 'download' | 'download_append' | 'delete'. Runs sequentially, not in parallel —
+// Share in particular opens one native share sheet per item since Capacitor's Share plugin has no
+// multi-file share of its own; a known UX limitation for large selections, not something to paper
+// over with an invented multi-file bundle format.
+async function runBulkAction(db, action, entryIds, opts = {}) {
+  const results = [];
+  for (const id of entryIds) {
+    try {
+      if (action === 'share') await shareEntry(db, id, opts);
+      else if (action === 'download') await downloadPlain(db, id, opts);
+      else if (action === 'download_append') await downloadForAppend(db, id, opts);
+      else if (action === 'delete') { const { softDelete } = await import('./db.js'); await softDelete(db, id); }
+      else throw new Error(`Unknown bulk action: ${action}`);
+      results.push({ id, ok: true });
+    } catch (err) {
+      results.push({ id, ok: false, error: err.message || String(err) });
+    }
+  }
+  return results;
+}
 
 export {
   APP_DEFAULT_PASSPHRASE,
   downloadForAppend, importAppendZips,
   shareEntry, copyPrivateNote,
-  downloadPlain, editEntry
+  downloadPlain, editEntry,
+  getSelectableEntries, runBulkAction
 };
