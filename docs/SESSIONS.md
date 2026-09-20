@@ -4,6 +4,36 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 14**
+
+Follow-on from the Vault pivot, checking for the same class of gap on the non-vault side and
+finding it: the main app's capture bar had no click listeners at all (only the vault's got wired
+during the pivot), and there was no equivalent of `captureToVault()` for the main app —
+`captureText`/`saveNote` only ever handled typed text, never voice/image/pdf/file.
+
+Built: `captureFile()` (mirrors `captureToVault`, unencrypted, writes to
+`Directory.Data/files/<uuid>.<ext>`, the existing storage convention from Decision 20), wired to the
+main capture bar. Rendered the main timeline for the first time — `showMainTimeline()` has returned
+rows since early on, but nothing ever displayed them or attached the five per-file actions (built in
+Phase 7, unused since) to anything. Now both the main timeline and vault list show Share/Download/
+Download-for-append/Delete per entry, plus tags (one bulk `GROUP_CONCAT` query for the main
+timeline, matching the bulk approach `vault.js`'s index already used for its own tags). Built a
+shared `promptForTags()` — same `prompt()`-based rough edge as other one-offs already flagged
+elsewhere, wired into both main and vault capture (vault capture previously collected no tags at
+all).
+
+Noted, not fixed: captured images/PDFs have no OCR text yet — that's genuinely Phase 5's job (native
+plugin wiring), not something to fake here. Labels/tags still make everything findable meanwhile.
+
+Decisions made: none — this was closing gaps already flagged in ROADMAP (Phase 4/7's missing
+timeline UI), not new design calls.
+
+Next session start point: Edit still has no UI button anywhere (function exists, nothing calls it).
+Same standing items beyond that: confirm the CI run is green, Phase 13 still blocked on manual OAuth
+setup, nothing in the app run on an actual device yet.
+
+---
+
 **Session 13**
 
 Pivot, spanning a large chunk of the app: app-open password made optional; "Private Notes"

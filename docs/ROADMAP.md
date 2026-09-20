@@ -6,11 +6,11 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [ ] 4 — App shell & control flow
+- [~] 4 — App shell & control flow (main capture + timeline now wired, still unstyled)
 - [ ] 5 — Native plugin wiring
-- [~] 6 — Backup & restore engine (core logic done, no UI, not device-tested)
-- [~] 7 — Per-file actions (all five built, no timeline UI to attach buttons to yet)
-- [ ] 8 — Tags & label UX
+- [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
+- [~] 7 — Per-file actions (all five built, now attached to the main timeline)
+- [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
 - [ ] 9 — Additional features
 - [ ] 10 — Security hardening
 - [ ] 11 — CI/CD
@@ -48,9 +48,18 @@
   found and fixed during the Vault pivot:** nothing anywhere ever toggled screen visibility —
   `unlock-btn` had no click listener, `main-screen` was never shown after unlock. Every UI section
   built across every prior session (backup/restore, Drive, import) was technically unreachable
-  until `showScreen()` was added this session. Now wired: first-run setup (optional app-password +
-  optional Vault PIN), the lock screen, quick-access skip path, main screen, and the new Vault
-  screen. Still plain/unstyled, matching the rest of Phase 4 — no visual design pass yet.
+  until `showScreen()` was added. Now wired: first-run setup (optional app-password +
+  optional Vault PIN), the lock screen, quick-access skip path, main screen, and the Vault
+  screen. **Second gap, found and fixed the session after:** the main capture bar's five buttons
+  had no click listeners at all — only the vault's got wired during the pivot. `captureText`/
+  `saveNote` only ever handled typed text; there was no equivalent of `captureToVault()` for
+  voice/image/pdf/file on the non-vault side. Built `captureFile()` to fill that gap (mirrors
+  `captureToVault`, unencrypted, writes to `Directory.Data/files/<uuid>.<ext>` per the existing
+  storage convention). Also: `showMainTimeline()` returned rows but nothing ever rendered them or
+  attached the five per-file actions (built in Phase 7, sitting unused ever since) to anything —
+  that's now done too, with tags shown per entry (one bulk `GROUP_CONCAT` query, not N+1).
+  OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
+  yet — labels/tags still work for search. Still plain/unstyled, matching the rest of Phase 4.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
@@ -87,8 +96,16 @@
   next unlock. Both fixed before this was presented, not after.
   Earlier fix, still standing: Session 5's `restoreBackup` cross-PIN append bug
   (`entry._sourcePinSalt` never actually set — Decision 35).
-- [ ] **8 — Tags & label UX.** Shared tag picker (`listAllTags()` drafted), label autocomplete
-  (`label_history`), batch add with auto-numbering (`batchAddWithCommonLabel()` drafted). No UI yet.
+  Now attached to real UI (Phase 4): both the main timeline and vault list render Share/Download/
+  Download for append/Delete buttons per entry. **Edit still has no button anywhere** — the
+  function (`editEntry()`) works, nothing in the UI calls it yet.
+- [~] **8 — Tags & label UX.** `promptForTags()` built and wired into both main and vault capture —
+  shows existing tags (`listAllTags()`) as a hint, free-text creates new ones (`applyTags()`'s
+  `INSERT OR IGNORE` already handled "new tag" with no changes needed). Tags now display per entry
+  in both the main timeline and vault list. Same `prompt()`-based rough edge as other one-offs
+  flagged elsewhere in this doc — real chip UI and live autocomplete-as-you-type are still Phase 4's
+  design pass, not built here. Label autocomplete (`label_history`) and batch add with
+  auto-numbering (`batchAddWithCommonLabel()`) are drafted but not wired into any UI yet.
 - [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
   quick-capture widget, expense charts, backup-reminder nudge, auto-lock timeout, map view,
   confidence-confirmation chip, dark mode toggle (done), gradient mode toggle (done, 2 color pickers,
