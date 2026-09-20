@@ -133,10 +133,11 @@ async function onUnlocked() {
 
   // Ad gate BEFORE main UI — but never blocks if no ad available (see ads.js).
   await runDailyAdGateIfDue(window.adSdk, metaStore);
-
-  await showDigest();
-  await showMainTimeline();
-  await checkAutoBackupOnOpen(); // after unlock, after main UI — never blocks getting into the app
+  await checkAutoBackupOnOpen(); // never blocks getting into the app
+  // Actual rendering (digest, on-this-day, timeline) happens via DOMContentLoaded's render*()
+  // functions, called once right after bootstrap() resolves — showDigest()/showMainTimeline()
+  // themselves are pure data queries with no DOM side effect, so calling them here too would just
+  // be discarded results.
 }
 
 // ---- Digest (home screen summary) ----
@@ -144,10 +145,55 @@ async function showDigest() {
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const rows = await db.query(
     `SELECT type, COUNT(*) as cnt, SUM(amount) as total FROM entries
-     WHERE created_at >= ? AND deleted_at IS NULL GROUP BY type`,
+     WHERE created_at >= ? AND deleted_at IS NULL AND is_private=0 GROUP BY type`,
     [startOfDay.getTime()]
   );
   return rows.values || [];
+}
+
+// "1 month/year ago you saved..." — pure rule-based date-diff, no automated inference (ARCHITECTURE
+// §6). Private entries excluded, same reasoning as showDigest() above — resurfacing a vault item's
+// existence/label outside the vault would be exactly the leak Decision 40 already closed elsewhere.
+async function onThisDay() {
+  const now = new Date();
+  const rows = await db.query(
+    `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0
+     AND CAST(strftime('%m', created_at/1000, 'unixepoch') AS INTEGER) = ?
+     AND CAST(strftime('%d', created_at/1000, 'unixepoch') AS INTEGER) = ?
+     AND created_at < ? ORDER BY created_at DESC`,
+    [now.getMonth() + 1, now.getDate(), new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()]
+  );
+  return rows.values || [];
+}
+
+// Storage usage per category (ARCHITECTURE §6) — reuses fileactions.js's getSelectableEntries()
+// rather than re-computing file sizes a second way; that function already does the one Filesystem.stat
+// per file this needs.
+async function storageBreakdown() {
+  const groups = await getSelectableGroups();
+  return Object.entries(groups).map(([cat, items]) => ({
+    category: cat,
+    count: items.length,
+    totalBytes: items.reduce((sum, it) => sum + (it.sizeBytes || 0), 0),
+    items
+  }));
+}
+
+// "Clear items older than X days" per category (ARCHITECTURE §6) — soft-deletes, same as any other
+// Delete (30-day trash, not permanent), reusing the existing bulk-delete path rather than a new one.
+async function clearOldInCategory(category, olderThanDays) {
+  const groups = await getSelectableGroups();
+  const items = groups[category] || [];
+  if (items.length === 0) return { cleared: 0 };
+  const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+  const rows = await db.query(
+    `SELECT id FROM entries WHERE id IN (${items.map(() => '?').join(',')}) AND created_at < ?`,
+    [...items.map((it) => it.id), cutoff]
+  );
+  const ids = (rows.values || []).map((r) => r.id);
+  if (ids.length === 0) return { cleared: 0 };
+  await runBulkFileAction('delete', ids);
+  return { cleared: ids.length };
 }
 
 // ---- Capture pipeline: any text-producing input (typed, OCR, voice label) flows through here ----
@@ -743,6 +789,7 @@ window.Dumpzone = {
   downloadForAppend: (id, opts) => downloadForAppend(db, id, opts),
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
   getSelectableGroups, runBulkFileAction,
+  onThisDay, storageBreakdown, clearOldInCategory,
   captureFile
 };
 
@@ -1074,6 +1121,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     }));
   }
   await renderMainTimeline();
+
+  // ---- Digest, on-this-day, storage breakdown (ARCHITECTURE §6) — backend logic (showDigest,
+  // onThisDay, storageBreakdown) existed already; none of it was ever rendered until now. ----
+  async function renderDigest() {
+    const rows = await showDigest();
+    if (rows.length === 0) { document.getElementById('digest').textContent = 'Nothing yet today.'; return; }
+    document.getElementById('digest').textContent = rows.map((r) =>
+      r.total ? `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''} ($${r.total.toFixed(2)})` : `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''}`
+    ).join(' · ');
+  }
+  await renderDigest();
+
+  async function renderOnThisDay() {
+    const rows = await onThisDay();
+    const el = document.getElementById('on-this-day');
+    if (rows.length === 0) { el.textContent = ''; return; }
+    const yearsAgo = (createdAt) => Math.floor((Date.now() - createdAt) / (365.25 * 24 * 60 * 60 * 1000));
+    el.innerHTML = rows.map((r) => {
+      const years = yearsAgo(r.created_at);
+      return `<p class="mode-description">${years === 0 ? 'Earlier this year' : `${years} year${years > 1 ? 's' : ''} ago`} you saved "${r.label}"</p>`;
+    }).join('');
+  }
+  await renderOnThisDay();
+
+  async function renderStorageBreakdown() {
+    const breakdown = await storageBreakdown();
+    document.getElementById('storage-breakdown-list').innerHTML = breakdown.map((b) => `
+      <div class="drive-backup-row">
+        <span>${CATEGORY_LABELS[b.category] || b.category}: ${b.count} item${b.count !== 1 ? 's' : ''}, ${formatBytes(b.totalBytes)}</span>
+        <button class="clear-old-btn" data-cat="${b.category}">Clear items older than 30 days</button>
+      </div>
+    `).join('') || 'Nothing captured yet.';
+    document.querySelectorAll('.clear-old-btn').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Move matching items to trash? They stay recoverable for 30 days.')) return;
+      const result = await clearOldInCategory(b.dataset.cat, 30);
+      alert(`${result.cleared} item(s) moved to trash.`);
+      await renderStorageBreakdown(); await renderMainTimeline();
+    }));
+  }
+  document.getElementById('storage-breakdown-settings').addEventListener('toggle', (e) => { if (e.target.open) renderStorageBreakdown(); });
 
   // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).
   // isVault: main-timeline rows carry real columns (amount, expense_category, fire_at, body_text);
