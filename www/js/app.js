@@ -834,6 +834,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="vault-share-btn" data-id="${e.id}">Share</button>
           <button class="vault-download-btn" data-id="${e.id}">Download</button>
           <button class="vault-append-btn" data-id="${e.id}">Download for append</button>
+          <button class="vault-edit-btn" data-id="${e.id}">Edit</button>
           <button class="vault-delete-btn warning-text" data-id="${e.id}">Delete</button>
         </span>
       </div>
@@ -841,6 +842,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.shareEntry(b.dataset.id)));
     document.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.downloadPlain(b.dataset.id)));
+    document.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
+      const item = items.find((i) => i.id === b.dataset.id);
+      await editEntryUI(item, true);
+      await renderVaultList(typeOrAll);
+    }));
     document.querySelectorAll('.vault-append-btn').forEach((b) => b.addEventListener('click', async () => {
       const pin = prompt('Vault PIN (required for Download for append):');
       if (pin) await window.downloadForAppend(b.dataset.id, { pin });
@@ -1004,6 +1010,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="main-share-btn" data-id="${row.id}">Share</button>
           <button class="main-download-btn" data-id="${row.id}">Download</button>
           <button class="main-append-btn" data-id="${row.id}">Download for append</button>
+          <button class="main-edit-btn" data-id="${row.id}">Edit</button>
           <button class="main-delete-btn warning-text" data-id="${row.id}">Delete</button>
         </span>
       </div>
@@ -1012,11 +1019,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.shareEntry(b.dataset.id)));
     document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.downloadPlain(b.dataset.id)));
     document.querySelectorAll('.main-append-btn').forEach((b) => b.addEventListener('click', () => window.downloadForAppend(b.dataset.id, {})));
+    document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
+      const row = rows.find((r) => r.id === b.dataset.id);
+      await editEntryUI(row, false);
+      await renderMainTimeline();
+    }));
     document.querySelectorAll('.main-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await softDelete(db, b.dataset.id); await renderMainTimeline();
     }));
   }
   await renderMainTimeline();
+
+  // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).
+  // isVault: main-timeline rows carry real columns (amount, expense_category, fire_at, body_text);
+  // vault items only ever carry {id,label,tags,searchableText,...} from the in-memory index — but
+  // vault scope is Text/Voice/Image/PDF/Files only, so the expense/reminder branches below simply
+  // never apply to a vault item, not a data gap. Text content for a vault note comes from
+  // searchableText, which vault.js's index already stores as the note's own decrypted text. ----
+  async function editEntryUI(item, isVault) {
+    const newLabel = prompt('New label:', item.label);
+    if (newLabel === null) return; // cancelled
+    const fields = { label: newLabel };
+
+    if (item.type === 'note') {
+      const currentText = isVault ? item.searchableText : (item.body_text || '');
+      const newText = prompt('New text:', currentText);
+      if (newText !== null) fields.text = newText;
+    } else if (item.type === 'expense' && !isVault) {
+      const newAmount = prompt('New amount:', item.amount);
+      if (newAmount !== null && newAmount !== '') fields.amount = parseFloat(newAmount);
+      const newCategory = prompt('New category:', item.expense_category || '');
+      if (newCategory !== null) fields.expense_category = newCategory;
+    } else if (item.type === 'reminder' && !isVault) {
+      const newWhen = prompt('New date/time:', item.fire_at ? new Date(item.fire_at).toLocaleString() : '');
+      if (newWhen) {
+        const parsed = new Date(newWhen).getTime();
+        if (!isNaN(parsed)) fields.fire_at = parsed;
+        else alert('Could not parse that date/time — label saved, time unchanged.');
+      }
+    }
+
+    const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
+    await window.editEntry(item.id, fields, opts);
+  }
 
   document.getElementById('search-input').addEventListener('input', async (e) => {
     const term = e.target.value;

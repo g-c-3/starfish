@@ -236,7 +236,16 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
 
   const updates = { updated_at: Date.now() };
   if (fields.label !== undefined) updates.label = fields.label;
-  if (!row.is_private && fields.body_text !== undefined) updates.body_text = fields.body_text; // non-vault notes only
+  // Non-vault notes: accept the same `fields.text` name the vault side uses, mapped to the
+  // body_text column here — was previously only accepting `fields.body_text`, a mismatch that
+  // meant calling this consistently from one UI would silently no-op whichever side didn't match.
+  if (!row.is_private && cat === 'notes' && fields.text !== undefined) updates.body_text = fields.text;
+  // Expense/reminder-specific fields — these were previously never actually written to the row at
+  // all (only checked, further down, to decide whether to call rescheduleReminder), so editing a
+  // reminder's time or an expense's amount silently did nothing before this fix.
+  for (const key of ['amount', 'expense_category', 'fire_at', 'repeat_rule']) {
+    if (fields[key] !== undefined) updates[key] = fields[key];
+  }
 
   const setClause = Object.keys(updates).map((k) => `${k}=?`).join(', ');
   await db.run(`UPDATE entries SET ${setClause} WHERE id=?`, [...Object.values(updates), entryId]);
@@ -245,6 +254,9 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   // both deliberately skip them for is_private=1) — so only touch them for non-vault label edits.
   if (!row.is_private && updates.label !== undefined) {
     await db.run(`UPDATE entries_fts SET label=? WHERE id=?`, [updates.label, entryId]);
+  }
+  if (!row.is_private && updates.body_text !== undefined) {
+    await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [updates.body_text, entryId]);
   }
   if (cat === 'reminders' && (fields.fire_at !== undefined || fields.repeat_rule !== undefined) && rescheduleReminder) {
     await rescheduleReminder({ ...row, ...updates, id: entryId }); // caller supplies notifications.js's scheduleReminder
