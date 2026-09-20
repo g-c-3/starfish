@@ -26,6 +26,7 @@ const VAULT_TYPE_LABELS = { note: 'Text', voice: 'Voice', image: 'Image', pdf: '
 let db;
 let privateSessionKey = null; // set only after vault PIN unlock, cleared on vault lock/background
 let vaultAutoLockTimer = null;
+let appAutoLockTimer = null;
 
 // ---- Screen visibility — nothing wired this before now; every screen built across every
 // session has been unreachable until this existed. One helper, hides all .screen elements,
@@ -46,8 +47,23 @@ async function bootstrap() {
   await requestPermissions();
   await registerActionTypes();
   await purgeOldTrash(db); // purges BOTH bins — same 30-day rule, filtered by is_private only when listing
+  await registerBackgroundLock();
 
   await showLockScreen();
+}
+
+// Immediate lock on backgrounding, not just the idle timers below. privateSessionKey's own comment
+// has said "cleared on vault lock/background" since the pivot, but nothing ever actually listened
+// for backgrounding — the vault would stay unlocked indefinitely across app-switches, relying only
+// on the idle timer. Fixes that gap; also locks the app-level screen the same way, if a password exists.
+async function registerBackgroundLock() {
+  const { App } = await import('@capacitor/app');
+  App.addListener('appStateChange', async ({ isActive }) => {
+    if (isActive) return; // only act on going TO background, not returning from it
+    if (privateSessionKey) lockVault();
+    const cred = (await db.query(`SELECT app_password_hash FROM credentials WHERE id=1`)).values[0];
+    if (cred?.app_password_hash) { disarmAppAutoLock(); showScreen('lock-screen'); }
+  });
 }
 
 // ---- Auth gate — app-open password is optional ("quick access"); Vault PIN is separate and unaffected ----
@@ -103,6 +119,7 @@ async function removeAppPassword() {
 
 async function onUnlocked() {
   showScreen('main-screen');
+  await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
   const metaStore = {
     get: async (k) => {
       const r = await db.query(`SELECT value FROM meta WHERE key=?`, [k]);
@@ -312,6 +329,28 @@ async function armVaultAutoLock() {
 async function setVaultAutoLockMinutes(minutes) {
   await db.run(`UPDATE credentials SET vault_auto_lock_minutes=? WHERE id=1`, [minutes]);
   if (privateSessionKey) armVaultAutoLock(); // re-arm immediately with the new duration if already unlocked
+}
+
+// ---- App-level idle auto-lock (Phase 9 — the `auto_lock_minutes` column has existed since Session
+// 1 but was never actually enforced anywhere until now). No-op when quick access is enabled (no
+// app-open password) — there's nothing to lock back to. Reset on generic activity via a single
+// document-level listener (registered once in DOMContentLoaded) rather than manually calling this
+// from every capture/search/browse function — the vault's equivalent needed several follow-up
+// patches for exactly that reason; a delegated listener can't be missed the same way. ----
+async function armAppAutoLock() {
+  if (appAutoLockTimer) clearTimeout(appAutoLockTimer);
+  const cred = (await db.query(`SELECT app_password_hash, auto_lock_minutes FROM credentials WHERE id=1`)).values[0];
+  if (!cred?.app_password_hash) return; // quick access — nothing to arm
+  const minutes = cred.auto_lock_minutes ?? 5;
+  appAutoLockTimer = setTimeout(() => { disarmAppAutoLock(); showScreen('lock-screen'); }, minutes * 60 * 1000);
+}
+function disarmAppAutoLock() {
+  if (appAutoLockTimer) clearTimeout(appAutoLockTimer);
+  appAutoLockTimer = null;
+}
+async function setAutoLockMinutes(minutes) {
+  await db.run(`UPDATE credentials SET auto_lock_minutes=? WHERE id=1`, [minutes]);
+  await armAppAutoLock(); // re-arm immediately with the new duration if currently unlocked with a password set
 }
 
 async function showMainTimeline() {
@@ -690,7 +729,7 @@ window.Dumpzone = {
   softDelete: (id) => softDelete(db, id), restoreEntry, permanentlyDelete, showTrash,
   listAllTags: () => listAllTags(db),
   getAppearance, setDarkMode, setGradientMode,
-  setAppPassword, removeAppPassword,
+  setAppPassword, removeAppPassword, setAutoLockMinutes,
   // Private Vault — unlockVault/lockVault replace the old unlockPrivateNotes/lockPrivateNotes names
   // (this pivot generalized "private notes" into the full vault; nothing shipped yet to keep the old
   // names for, so a clean rename rather than an alias).
@@ -709,6 +748,11 @@ window.Dumpzone = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await bootstrap();
+
+  // Resets the app-level idle timer on any activity — a single delegated listener rather than
+  // calling armAppAutoLock() from every capture/search/browse function individually. Harmless
+  // no-op when quick access is enabled or the timer isn't currently armed (armAppAutoLock checks both).
+  ['click', 'keydown', 'input'].forEach((evt) => document.addEventListener(evt, () => armAppAutoLock()));
 
   // Appearance settings UI wiring — populate controls from stored state, then wire changes back.
   const appearance = await getAppearance();
@@ -904,6 +948,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderVaultTrash(); });
 
   document.getElementById('vault-auto-lock-select').addEventListener('change', (e) => setVaultAutoLockMinutes(Number(e.target.value)));
+  document.getElementById('app-auto-lock-select').addEventListener('change', (e) => setAutoLockMinutes(Number(e.target.value)));
 
   // ---- Select files (multi-select, shared by main + vault) ----
   let selectedIds = new Set();
