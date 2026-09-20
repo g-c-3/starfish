@@ -214,6 +214,26 @@ async function applyTags(entryId, tagNames) {
   }
 }
 
+// ---- Non-text capture (voice/image/pdf/file) — didn't exist at all until now; captureText/saveNote
+// only ever handled typed text. Mirrors vault.js's captureToVault() but unencrypted, matching the
+// file-storage convention (Directory.Data/files/<uuid>.<ext>) already established for backup/restore. ----
+async function captureFile(type, { label, tags = [], fileData, extension, autoCategory = null }) {
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const id = crypto.randomUUID();
+  const filePath = `files/${id}.${extension || 'bin'}`;
+  await Filesystem.writeFile({ path: filePath, directory: Directory.Data, data: fileData, recursive: true });
+
+  // OCR for image/pdf isn't implemented yet — Phase 5's native plugin wiring (ML Kit/Tesseract) is
+  // still just documented, not coded (android-notes/native-setup.md §6). body_text stays null until
+  // that lands rather than pretending OCR ran; searching by label/tags still works meanwhile.
+  await insertEntry(db, {
+    id, type, label: label || `${VAULT_TYPE_LABELS[type] || type} ${new Date().toLocaleDateString()}`,
+    file_path: filePath, extension, auto_category: autoCategory
+  });
+  await applyTags(id, tags);
+  return id;
+}
+
 // ---- Batch add: one common label + auto-numbering for multi-select Image/PDF/Generic File captures ----
 // files: array of { type, file_path, extension?, auto_category?, ocr_text? } already staged by the picker.
 // Numbering continues from label_history rather than restarting at 1, so a later batch with the same
@@ -295,11 +315,24 @@ async function setVaultAutoLockMinutes(minutes) {
 }
 
 async function showMainTimeline() {
-  // Hand off to your actual UI rendering — timeline query example:
   const rows = await db.query(
     `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0 ORDER BY created_at DESC LIMIT 100`
   );
-  return rows.values || [];
+  const entries = rows.values || [];
+  // One extra query for all tags at once (GROUP_CONCAT) rather than one per row — same bulk
+  // approach vault.js's buildVaultIndex already uses for its own index, just via SQL here instead
+  // of a loop since these rows aren't already being iterated for decryption like vault's are.
+  if (entries.length > 0) {
+    const tagRows = await db.query(
+      `SELECT et.entry_id, GROUP_CONCAT(t.name) AS tag_names FROM entry_tags et
+       JOIN tags t ON t.id = et.tag_id WHERE et.entry_id IN (${entries.map(() => '?').join(',')})
+       GROUP BY et.entry_id`,
+      entries.map((e) => e.id)
+    );
+    const tagMap = new Map((tagRows.values || []).map((r) => [r.entry_id, r.tag_names.split(',')]));
+    entries.forEach((e) => { e.tags = tagMap.get(e.id) || []; });
+  }
+  return entries;
 }
 
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
@@ -670,7 +703,8 @@ window.Dumpzone = {
   downloadPlain: (id) => downloadPlain(db, id, { privateSessionKey }),
   downloadForAppend: (id, opts) => downloadForAppend(db, id, opts),
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
-  getSelectableGroups, runBulkFileAction
+  getSelectableGroups, runBulkFileAction,
+  captureFile
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -795,7 +829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const items = browseVault(typeOrAll);
     document.getElementById('vault-list').innerHTML = items.map((e) => `
       <div class="drive-backup-row">
-        <span>${e.label} (${VAULT_TYPE_LABELS[e.type]}, ${formatBytes(e.sizeBytes)})</span>
+        <span>${e.label} (${VAULT_TYPE_LABELS[e.type]}, ${formatBytes(e.sizeBytes)})${e.tags.length ? ' — ' + e.tags.join(', ') : ''}</span>
         <span>
           <button class="vault-share-btn" data-id="${e.id}">Share</button>
           <button class="vault-download-btn" data-id="${e.id}">Download</button>
@@ -826,7 +860,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const type = btn.dataset.vaultType;
     if (type === 'note') {
       const text = prompt('Vault note text:');
-      if (text) { await captureToVault({ type: 'note', label: text.slice(0, 40), text }); await renderVaultList('all'); }
+      if (!text) return;
+      const tags = await promptForTags(); // declared below — hoisted within this same DOMContentLoaded scope
+      await captureToVault({ type: 'note', label: text.slice(0, 40), tags, text });
+      await renderVaultList('all');
     } else {
       const input = document.createElement('input');
       input.type = 'file';
@@ -834,7 +871,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const file = input.files[0];
         if (!file) return;
         const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-        await captureToVault({ type, label: file.name, fileData, extension: file.name.split('.').pop() });
+        const tags = await promptForTags();
+        await captureToVault({ type, label: file.name, tags, fileData, extension: file.name.split('.').pop() });
         await renderVaultList('all');
       };
       input.click();
@@ -917,4 +955,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('select-files-download-btn').addEventListener('click', () => runSelectedBulk('download'));
   document.getElementById('select-files-append-btn').addEventListener('click', () => runSelectedBulk('download_append'));
   document.getElementById('select-files-delete-btn').addEventListener('click', () => runSelectedBulk('delete'));
+
+  // ---- Shared tag picker (Phase 8) — same prompt()-based rough edge already flagged for Drive/
+  // vault one-offs (ROADMAP), not a new pattern. Shows existing tags as a pickable hint since a
+  // plain prompt() can't render real chips; typing a name not in that list creates it (existing
+  // applyTags()/entry_tags behavior — INSERT OR IGNORE already handles "new tag" for free). ----
+  async function promptForTags() {
+    const existing = await listAllTags(db);
+    const hint = existing.length ? ` Existing: ${existing.map((t) => t.name).join(', ')}.` : '';
+    const input = prompt(`Tags, comma-separated (optional).${hint}`);
+    if (!input) return [];
+    return input.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+
+  // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
+  document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', async () => {
+    const type = btn.dataset.type;
+    if (type === 'note') {
+      const text = prompt('Note text:');
+      if (!text) return;
+      const tags = await promptForTags();
+      await captureText(text, 'note', { tags });
+      await renderMainTimeline();
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+        const tags = await promptForTags();
+        await captureFile(type, { label: file.name, tags, fileData, extension: file.name.split('.').pop() });
+        await renderMainTimeline();
+      };
+      input.click();
+    }
+  }));
+
+  // ---- Main timeline — showMainTimeline() (app.js) only ever returned rows; nothing rendered
+  // them or attached the five per-file actions (built in Phase 7, two sessions ago) to anything.
+  // This is that missing render step, mirroring renderVaultList's already-working shape. ----
+  async function renderMainTimeline() {
+    const rows = await showMainTimeline();
+    document.getElementById('timeline').innerHTML = rows.map((row) => `
+      <div class="drive-backup-row">
+        <span>${row.label} (${row.type})${row.tags && row.tags.length ? ' — ' + row.tags.join(', ') : ''}</span>
+        <span>
+          <button class="main-share-btn" data-id="${row.id}">Share</button>
+          <button class="main-download-btn" data-id="${row.id}">Download</button>
+          <button class="main-append-btn" data-id="${row.id}">Download for append</button>
+          <button class="main-delete-btn warning-text" data-id="${row.id}">Delete</button>
+        </span>
+      </div>
+    `).join('') || 'Nothing captured yet.';
+
+    document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.shareEntry(b.dataset.id)));
+    document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.downloadPlain(b.dataset.id)));
+    document.querySelectorAll('.main-append-btn').forEach((b) => b.addEventListener('click', () => window.downloadForAppend(b.dataset.id, {})));
+    document.querySelectorAll('.main-delete-btn').forEach((b) => b.addEventListener('click', async () => {
+      await softDelete(db, b.dataset.id); await renderMainTimeline();
+    }));
+  }
+  await renderMainTimeline();
+
+  document.getElementById('search-input').addEventListener('input', async (e) => {
+    const term = e.target.value;
+    const rows = term ? await searchEntries(db, term) : await showMainTimeline();
+    document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
+  });
 });
