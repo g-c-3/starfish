@@ -160,3 +160,24 @@ passkey is never stored (existing credentials rule), so `checkAndRunAutoBackupIf
 across sessions — when the schedule says a backup is due, the app shows a small banner asking for the
 passkey once, with an explicit "Skip this time" option that leaves `last_drive_backup_at` untouched so
 it comes due again next open rather than silently waiting out the full interval.
+
+**33. Per-file zip export uses `@zip.js/zip.js`, not JSZip.** Checked both against current
+maintenance data before choosing: JSZip's last release was 2022 with a maintenance score of zero;
+zip.js ships regular releases, has zero dependencies, and is TypeScript-typed. Both work fine in a
+plain browser/WebView context — only one of them is still actually maintained.
+
+**34. Per-file "Download for append" reuses `backup.js`'s exact archive pipeline**
+(`buildBackupPayload`/`encryptBackup`/`decryptBackupPayload`/`restoreBackup`), scoped to one entry via
+an `entryIds` filter added to `buildBackupPayload`. The zip's single JSON entry carries an unencrypted
+`mode` field (`passkey`/`default`/`pin`) so import knows what to prompt for without guessing. This
+means a per-file export and a full backup are decrypted and deduped by the same code path — one
+engine, three destinations (local restore, Drive restore, per-file import) rather than three to keep
+in sync.
+
+**35. Fixed a real bug found while building the above:** `restoreBackup`'s cross-PIN append path
+referenced `entry._sourcePinSalt`, a field `buildBackupPayload` never actually set (Session 5).
+`buildBackupPayload` now captures the device's one `private_pin_salt` once per payload as
+`payload.privateNotesSalt` (not per-entry — one PIN, one salt, same for every private note on that
+device), and `restoreBackup` reads that instead. Cross-PIN private-notes append was non-functional
+until this fix; same-PIN append (the common case) was unaffected, since that path never touched the
+missing field.

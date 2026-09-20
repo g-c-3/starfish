@@ -16,3 +16,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-19 | Session 9 | Decisions 25–29 | Phase 13 added (Google Drive backup, opt-in) — design + manual-setup docs only, no runtime code yet; "fully offline" language updated to "offline-first" |
 | 2026-09-19 | Session 10 | Decisions 30–31 | gdrive.js built (Phase 13 core logic); auto-backup mechanism decided (check-on-open, not background-runner) |
 | 2026-09-19 | Session 11 | Decision 32 | UI wired for Phase 6 (local backup/restore) and Phase 13 (Drive settings); due auto-backup now prompts once for the passkey rather than trying to run silently |
+| 2026-09-19 | Session 12 | Decisions 33–35 | Phase 7 built (fileactions.js, all five actions + import screen); zip library chosen (@zip.js/zip.js over unmaintained JSZip); fixed Session 5's broken cross-PIN append (buildBackupPayload never set the field restoreBackup read) |

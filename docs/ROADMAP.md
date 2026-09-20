@@ -9,7 +9,7 @@
 - [ ] 4 — App shell & control flow
 - [ ] 5 — Native plugin wiring
 - [~] 6 — Backup & restore engine (core logic done, no UI, not device-tested)
-- [ ] 7 — Per-file actions
+- [~] 7 — Per-file actions (all five built, no timeline UI to attach buttons to yet)
 - [ ] 8 — Tags & label UX
 - [ ] 9 — Additional features
 - [ ] 10 — Security hardening
@@ -53,8 +53,21 @@
   written but especially untested (no way to exercise it without two real devices or a manually
   crafted second-PIN backup). Still plain/unstyled — matches Phase 4's current bare-skeleton look,
   not a finished visual design.
-- [ ] **7 — Per-file actions.** Share, Download-for-append (encrypted, optional passkey, shared
-  sidecar schema), plain Download, Edit, Delete. Depends on 6's sidecar schema.
+- [~] **7 — Per-file actions.** `fileactions.js` built, all five: Share (native share sheet, private
+  notes get Copy instead), Download-for-append (encrypted zip, reuses `backup.js`'s exact
+  payload/archive pipeline scoped to one entry — Decision 34, zip library is `@zip.js/zip.js` not
+  JSZip — Decision 33), plain Download (label as filename, not private notes), Edit (reminders
+  reschedule via a caller-supplied callback), Delete (re-exports `db.js`'s existing `softDelete`).
+  The "Append files from download" multi-select import screen is built and wired
+  (`index.html`/`app.js`, `importAppendZips()`). **Not run on a device.**
+  **Known rough edge:** the import screen's per-file passphrase/PIN prompts use `prompt()`, same
+  category of shortcut as the Drive flows' rough edge (Phase 13) — spec's "reuse last passkey for
+  a session" convenience isn't wired in yet, so a batch of same-passkey files each prompt separately.
+  **Only Share/Download/Edit/Delete have no UI buttons yet** — not a Phase 7 gap, a Phase 4 one:
+  `showMainTimeline()` doesn't render an entry list yet for buttons to attach to.
+  Along the way, fixed a real Session 5 bug: `restoreBackup`'s cross-PIN append path referenced a
+  field (`entry._sourcePinSalt`) that was never actually set anywhere — cross-PIN private-notes
+  append was non-functional until this session (Decision 35). Same-PIN append was unaffected.
 - [ ] **8 — Tags & label UX.** Shared tag picker (`listAllTags()` drafted), label autocomplete
   (`label_history`), batch add with auto-numbering (`batchAddWithCommonLabel()` drafted). No UI yet.
 - [ ] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,

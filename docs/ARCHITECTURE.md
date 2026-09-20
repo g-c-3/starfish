@@ -235,7 +235,17 @@ Phase 6 already has. One restore engine regardless of source, not two to keep in
 app's current Capacitor 6 pin — the newer, more actively-recommended Capawesome Google Sign-In plugin
 requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
-## 5. Per-file actions (every entry gets these five)
+## 5. Per-file actions (every entry gets these five — `fileactions.js`, Decisions 33–35)
+
+**Implementation note (differs slightly from the original zip-contents description below):**
+`downloadForAppend()` doesn't zip a raw file plus a separate sidecar as two entries — it wraps the
+entry in the exact same JSON payload shape `buildBackupPayload()` produces for a full backup (now
+scoped to one entry via an `entryIds` filter), encrypts that whole payload the same way
+`encryptBackup()` always has, and puts that single encrypted JSON file inside the zip. Net effect is
+the same (one file round-trips back in, same dedup handling as a full restore) but the mechanism is
+"one entry's worth of a full-backup payload" rather than a separately-designed sidecar format —
+simpler, and it means `decryptBackupPayload()`/`restoreBackup()` handle a per-file import with zero
+extra code, not a second decrypt/dedup path to maintain.
 
 1. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Private notes get
    no Share/Download at all — a Copy button instead**, which copies decrypted plaintext to the clipboard and
@@ -245,32 +255,40 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
    device, or after a reinstall). **Always encrypted, never plaintext** — the only thing optional is whether a
    user-supplied passkey is used:
    - **Passkey given:** standard AES-GCM via the same KDF as full backups. Session-only "reuse last passkey"
-     convenience for batch exports (never persisted to disk; clears when the app backgrounds/closes).
+     convenience for batch exports (never persisted to disk; clears when the app backgrounds/closes) — not yet
+     wired into the UI (`app.js` currently prompts per file; see ROADMAP's rough-edge note).
      Forgetting this passkey makes that specific export permanently unrecoverable, same as a full backup.
    - **Passkey skipped:** file is still encrypted, using a fixed **app-level default key** baked into the app
      itself (not user- or device-specific) — this keeps the file portable across installs but is honestly closer
      to obfuscation than real protection, since any Dumpzone install effectively holds that same default key.
      The UI must say so plainly: *"No passkey set — file will use default app-level encryption (not secured
-     against other Dumpzone users)."* The file's header records which mode was used so import doesn't have to
-     guess whether to prompt for a passkey.
+     against other Dumpzone users)."* The file's own `mode` field (`passkey`/`default`/`pin`) records which was
+     used so import doesn't have to guess whether to prompt for a passkey.
    - **Private notes exception:** no passkey prompt, no optional toggle — always encrypted with the note's own
-     PIN-derived key. Both the raw content and its metadata sidecar are encrypted together, since even the
-     label/tags could leak what a private note is about.
-   - Zip contents: raw file (named by internal UUID) + a metadata sidecar (`id`, `label`, `type`, `tags`,
-     `created_at`, category/amount where relevant) — **the same sidecar schema used by full backups**, so one
-     shared import/dedup engine (see Append-mode duplicate handling above) handles both a full-backup restore
+     PIN-derived key (the PIN itself is used as the passphrase into the same `encryptBackup()` call, with a
+     fresh random salt each export — self-contained, no need to carry the device's stored PIN salt along).
+   - Zip contents: one encrypted JSON file (see implementation note above) — **the same underlying schema used
+     by full backups**, so one shared import/dedup engine (`restoreBackup()`) handles both a full-backup restore
      and appending a handful of individually-downloaded zips.
-   - **"Append files from download" screen** — a dedicated multi-select import screen accepting any number of
-     these zips at once, running each through the same dedup logic and producing the same kind of summary report.
+   - **"Append files from download" screen** — built, in `index.html`/`app.js`: a multi-select import accepting
+     any number of these zips at once, running each through `importAppendZips()` (append mode only, no
+     overwrite option on this screen) and producing a combined summary report.
 3. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
    the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). Not private
-   notes (see #1).
+   notes (see #1). Built (`downloadPlain()`).
 4. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
    correcting misreads that hurt search; expense amount/category editable; reminder time/repeat editable and
    must reschedule its notification, not just silently update the DB row. Private note edits require the PIN
-   already unlocked for that session.
+   already unlocked for that session. Built (`editEntry()`), takes a caller-supplied reschedule callback for
+   reminders rather than importing `notifications.js` directly, to avoid a circular import with `app.js`.
 5. **Delete** — soft-delete into the 30-day trash bin (see Additional features → Trash below); consistent with
-   the append-mode philosophy of never silently destroying data.
+   the append-mode philosophy of never silently destroying data. Already existed as `db.js`'s `softDelete()`;
+   `fileactions.js` re-exports it so every per-file action is reachable from one module.
+
+**Not yet wired to a UI beyond the import screen** — the other four actions (`shareEntry`,
+`copyPrivateNote`, `downloadPlain`, `editEntry`) are implemented and callable but have no buttons
+attached to them yet, because there's nothing to attach them to: `showMainTimeline()` (Phase 4) still
+just returns rows, it doesn't render an entry list. That's a Phase 4 gap, not a Phase 7 one.
 
 ## 6. Additional features (all approved, part of v1 scope)
 
@@ -421,6 +439,8 @@ dumpzone/
       notifications.js  -> local notification scheduling (tone, snooze/done actions)
       ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
+      gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
+      fileactions.js    -> per-file actions: share, download-for-append (+ its zip import), plain download, edit
       app.js            -> app bootstrap / router / expense follow-up flow
   capacitor.config.json
   package.json

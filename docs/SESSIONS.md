@@ -4,6 +4,43 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 12**
+
+Built: `www/js/fileactions.js` — Phase 7, all five per-file actions. The substantial new piece is
+Download-for-append: rather than inventing a separate sidecar/encryption format, it wraps one entry
+in the exact same payload shape `buildBackupPayload()` already produces for full backups (added an
+`entryIds` filter to that function), encrypts it the same way `encryptBackup()` always has, and zips
+that single JSON file. A `mode` field (`passkey`/`default`/`pin`) travels unencrypted alongside it so
+import knows what to prompt for. The "Append files from download" multi-select screen
+(`importAppendZips()`) is built and wired into `index.html`/`app.js`; it hands each decrypted file
+straight to `backup.js`'s existing `restoreBackup()`, so import shares one dedup engine with local and
+Drive restore rather than a fourth implementation of the same logic.
+
+Resolved the standing zip-library choice with evidence, not habit: checked JSZip against `@zip.js/zip.js`
+on current maintenance data before picking — JSZip's last release was 2022, maintenance score zero;
+zip.js ships regularly, zero dependencies, TypeScript-typed. Added `@zip.js/zip.js` and
+`@capacitor/share` to `package.json`.
+
+Bug fixed, found while designing the private-notes export path (not by hunting for bugs — it fell out
+of actually tracing through the cross-PIN restore code to decide how private-note exports should
+work): Session 5's `restoreBackup` cross-PIN append branch referenced `entry._sourcePinSalt`, a field
+`buildBackupPayload` never set anywhere. Fixed by having `buildBackupPayload` capture the device's one
+`private_pin_salt` once per payload (`payload.privateNotesSalt` — one PIN, one salt, not per-entry)
+and having `restoreBackup` read that instead. Cross-PIN private-notes append was silently broken until
+this fix; ordinary same-PIN append was unaffected.
+
+Share/Download(plain)/Edit/Delete are implemented and callable but have no UI buttons — flagged as a
+Phase 4 gap (no rendered entry list exists yet to attach them to), not left ambiguous as a Phase 7 one.
+
+Decisions made: 33–35.
+
+Next session start point: same standing items — confirm the CI run is green; Phase 13 still blocked
+on the manual Google Cloud Console steps. Phase 7's per-file zip flow and Phase 6/13's UI are all
+testable together once a build succeeds and Phase 4 gets enough of a real timeline to attach
+Share/Download/Edit/Delete buttons to.
+
+---
+
 **Session 11**
 
 Built: the actual UI for both Phase 6 (local backup/restore) and Phase 13's settings (Drive connect,
