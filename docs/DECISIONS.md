@@ -292,3 +292,17 @@ This also means every existing `import` statement across every file (db.js, cryp
 notifications.js, ads.js, backup.js, gdrive.js, vault.js, fileactions.js, app.js) needed **no code
 changes at all** — they were always correct JavaScript, just missing the one build step that makes
 them resolvable in a real browser engine. The fix is entirely in the build pipeline, not the app code.
+
+---
+
+**47. `gdrive.js` never calls `GoogleAuth.signIn()` until `GOOGLE_DRIVE_CONFIGURED` is manually
+flipped to `true`.** Root cause of the actual "Dumpzone keeps stopping" crash, confirmed by a real
+device crash log (Session 21) — not the SQLite/bundling issues from Sessions 18–19, which were both
+real and correctly fixed. The plugin's native `signIn()` method has no null-check on its internal
+`GoogleSignInClient` before calling it; with no client ID configured, that's a guaranteed uncaught
+`NullPointerException` **inside the plugin's own compiled Java code**, which kills the whole app
+process before anything can reach JavaScript — confirmed no amount of JS-side try/catch could have
+caught this, since the crash happens on the native side of the bridge, before a promise resolution
+or rejection is even possible. The guard is a plain JS boolean, flipped manually alongside adding a
+real client ID (`android-notes/native-setup.md` §10) — simple, explicit, and impossible to forget
+since both steps are documented together in one place.

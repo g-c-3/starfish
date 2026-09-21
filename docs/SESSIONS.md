@@ -4,6 +4,49 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 21**
+
+Got the real crash log via ADB (`adb logcat -d`, after some detours — a third-party crash-viewer app
+couldn't read another app's logs at all, since that's an OS-level restriction on Android since 4.1,
+not a tool problem). Root cause, confirmed in the actual stack trace, not inferred:
+
+```
+Caused by: java.lang.NullPointerException: Attempt to invoke virtual method
+'android.content.Intent com.google.android.gms.auth.api.signin.GoogleSignInClient.getSignInIntent()'
+on a null object reference
+  at com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.signIn(GoogleAuth.java:81)
+```
+
+This is a narrower, later crash than the two from Sessions 18–19 — it only fires when
+`GoogleAuth.signIn()` is actually called (tapping "Connect Google Drive"), and confirms both earlier
+fixes (the SQLite import, the Vite bundling) were real and correct — the app is loading and running
+fine otherwise. The plugin's native `signIn()` has no null-check on its internal sign-in client;
+with no client ID configured (removed as a hedge last session), calling it throws an uncaught
+`NullPointerException` **inside the plugin's own compiled Java code**, which kills the whole app
+process before anything can reach JavaScript. Confirmed via the stack trace that no JS-side
+try/catch could have caught this regardless of how it was written — the crash happens on Capacitor's
+own "CapacitorPlugins" native thread, before a promise resolution/rejection is even possible.
+
+Fixed with a `GOOGLE_DRIVE_CONFIGURED` guard in `gdrive.js` (currently `false`) that stops the app
+from ever calling `GoogleAuth.signIn()` until it's manually flipped — documented alongside the
+real-client-ID setup step in `android-notes/native-setup.md` §10 so both are done together, not one
+forgotten. Also added try/catch around the two UI call sites (`drive-connect-btn`,
+`handleDriveBackupNow`) that previously had none, for clean error display generally, though the
+guard itself is what actually prevents the crash — a JS-side catch alone would not have been enough.
+
+Verified the same way as last session, not just asserted: ran the real Vite build again after these
+changes — still bundles cleanly, same benign warnings, zero errors.
+
+Decisions made: 47.
+
+Next session start point: back on the device for a fourth attempt. If this clears — three
+distinct, confirmed root causes fixed across three sessions (SQLite import, missing bundler, Google
+Auth null-check) — that's real, substantial forward motion after a long stretch of untested code.
+Standing items otherwise unchanged: CI status, Phase 13's actual OAuth setup (still not done, by
+design — the guard means that's fine to defer).
+
+---
+
 **Session 20**
 
 Third device test — no longer a blank screen (confirms Session 19's Vite fix actually worked), but

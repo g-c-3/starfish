@@ -74,8 +74,14 @@
   Fixed by adding Vite as a real build step — `src/` is now the actual source, `www/` is build
   output (§11/§12, ARCHITECTURE.md). Verified by actually running `npm install` + `vite build` in a
   sandbox before delivering, not just asserted: 82 modules bundled, zero unresolved imports remained
-  in the output. No app code changed — every existing import statement was always correct, just
-  missing the build step that makes it resolvable. Not yet re-tested on device.
+  in the output.
+  **Third device test: native crash instead of blank screen — confirmed the above fix worked.**
+  Got a real crash log via ADB this time (Session 21) rather than guessing further:
+  `GoogleAuth.signIn()`'s native code has no null-check on its internal sign-in client, so calling
+  it with no client ID configured is a guaranteed uncaught `NullPointerException` inside the
+  plugin's own compiled Java code — kills the whole process before JS ever sees it (Decision 47).
+  Fixed with a `GOOGLE_DRIVE_CONFIGURED` guard in `gdrive.js` that prevents the app from ever calling
+  that native method until a real client ID exists. Not yet re-tested on device.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
