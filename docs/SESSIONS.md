@@ -4,6 +4,32 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 22**
+
+**First successful device load, after three straight sessions of crashes (18–21).** Screenshots
+confirm: first-run setup renders correctly (both optional-credential fields, matching the spec
+exactly), the main screen shows digest/on-this-day/timeline/capture bar, "Select files" opens with
+correct empty-state text rather than erroring on empty data, and all eight settings sections render
+(Storage breakdown, Trash, App lock, Private Vault, Appearance, Backup & Restore, Google Drive
+Backup, Append files from download).
+
+This confirms the three fixes from the last three sessions weren't just individually correct but
+actually work together in a real build: the SQLite import fix (Session 18), the Vite bundler
+addition (Session 19), and the GoogleAuth null-check guard (Session 21). Nothing new built or fixed
+this session — just recording the milestone, since it's the first time in this project's history
+that anything has been confirmed running on an actual device.
+
+Decisions made: none.
+
+Next session start point: real functional testing, not crash-hunting. Priority order, cheapest and
+most foundational first: capture one of each type and confirm it appears with all five actions;
+search; tags; edit; local backup then restore (the one place a bug would be worst to discover late);
+Vault setup, capture, search, its own trash; auto-lock (idle and backgrounding). Skip Drive and ads
+for now — both still need manual setup that hasn't happened (OAuth client, AdMob unit), so failures
+there are expected, not bugs to report.
+
+---
+
 **Session 21**
 
 Got the real crash log via ADB (`adb logcat -d`, after some detours — a third-party crash-viewer app

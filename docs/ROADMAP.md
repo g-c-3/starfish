@@ -81,7 +81,16 @@
   it with no client ID configured is a guaranteed uncaught `NullPointerException` inside the
   plugin's own compiled Java code — kills the whole process before JS ever sees it (Decision 47).
   Fixed with a `GOOGLE_DRIVE_CONFIGURED` guard in `gdrive.js` that prevents the app from ever calling
-  that native method until a real client ID exists. Not yet re-tested on device.
+  that native method until a real client ID exists.
+  **Fourth device test (Session 22): the app actually loads and renders.** First real success after
+  three sessions of crashes. Confirmed working: first-run setup screen (both optional-credential
+  fields), the main screen with digest/on-this-day/timeline/capture bar all present, "Select files"
+  opening correctly with proper empty-state handling ("Nothing to select yet" rather than an error
+  on empty data), and all eight settings sections rendering (Storage breakdown, Trash, App lock,
+  Private Vault, Appearance, Backup & Restore, Google Drive Backup, Append files from download).
+  This confirms all three fixes (SQLite import, Vite bundling, GoogleAuth guard) actually work
+  together, not just in isolation. Real functional testing (capture, search, tags, edit/delete,
+  backup/restore, Vault) starts now.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
