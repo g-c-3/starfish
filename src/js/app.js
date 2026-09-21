@@ -705,14 +705,18 @@ async function handleDriveBackupNow() {
   const passphrase = prompt('Backup passkey (never stored — needed for this upload only):');
   if (!passphrase) return;
   statusEl.textContent = 'Checking Drive storage…';
-  const result = await backupToDrive(db, { passphrase, categories: ALL_CATEGORIES });
-  if (!result.ok && result.reason === 'insufficient_drive_storage') {
-    statusEl.textContent = `Not enough Drive space: needs ~${formatBytes(result.requiredBytes)}, ` +
-      `${formatBytes(result.availableBytes)} available.`;
-    return;
+  try {
+    const result = await backupToDrive(db, { passphrase, categories: ALL_CATEGORIES });
+    if (!result.ok && result.reason === 'insufficient_drive_storage') {
+      statusEl.textContent = `Not enough Drive space: needs ~${formatBytes(result.requiredBytes)}, ` +
+        `${formatBytes(result.availableBytes)} available.`;
+      return;
+    }
+    statusEl.textContent = result.ok ? `Uploaded ${result.name}.` : `Upload failed: ${result.reason}.`;
+    if (result.ok) await refreshDriveConnectionView();
+  } catch (err) {
+    statusEl.textContent = err.message; // e.g. "Google Drive isn't set up yet..." — same guard as connect
   }
-  statusEl.textContent = result.ok ? `Uploaded ${result.name}.` : `Upload failed: ${result.reason}.`;
-  if (result.ok) await refreshDriveConnectionView();
 }
 
 // Runs once per app open/resume, after unlock. Never silent about needing the passkey (Decision 32) —
@@ -840,8 +844,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Google Drive backup wiring — off by default, nothing here runs until the person opts in
   document.getElementById('drive-connect-btn').addEventListener('click', async () => {
-    await ensureSignedIn({ silent: false }); // shows Google's own sign-in UI on first connect
-    await refreshDriveConnectionView();
+    try {
+      await ensureSignedIn({ silent: false }); // shows Google's own sign-in UI on first connect
+      await refreshDriveConnectionView();
+    } catch (err) {
+      alert(err.message); // e.g. "Google Drive isn't set up yet..." — the guard in gdrive.js throws
+      // a clean JS error now instead of ever reaching the native call that used to crash the app.
+    }
   });
   document.getElementById('drive-disconnect-btn').addEventListener('click', async () => {
     await signOut();

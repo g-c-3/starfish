@@ -29,7 +29,20 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // ---------------------------------------------------------------------------
 // Auth — silent when already consented, prompts only the first time.
 // ---------------------------------------------------------------------------
+// Flip to true only once a real androidClientId is set in capacitor.config.json (see
+// android-notes/native-setup.md §10). This guard exists because of a confirmed crash (Session 21,
+// real device crash log): the plugin's native signIn() method has no null-check on its internal
+// GoogleSignInClient before calling it, so with no client ID configured, calling GoogleAuth.signIn()
+// throws an uncaught NullPointerException INSIDE the plugin's own compiled Java code — a native
+// crash that kills the whole app process before anything can reach JS, not something any amount of
+// JS-side try/catch can intercept. Never call GoogleAuth.signIn() while this is false.
+const GOOGLE_DRIVE_CONFIGURED = false;
+
 async function ensureSignedIn({ silent = false } = {}) {
+  if (!GOOGLE_DRIVE_CONFIGURED) {
+    if (silent) return { ok: false, reason: 'not_configured' };
+    throw new Error('Google Drive isn\'t set up yet — see android-notes/native-setup.md §10.');
+  }
   try {
     const user = await GoogleAuth.signIn(); // native SDK returns cached consent without UI if valid
     return { ok: true, accessToken: user.authentication.accessToken, email: user.email };
