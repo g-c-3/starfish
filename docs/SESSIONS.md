@@ -4,6 +4,39 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 20**
+
+Third device test — no longer a blank screen (confirms Session 19's Vite fix actually worked), but
+a native "Dumpzone keeps stopping" crash instead. This is a different failure class entirely: JS
+module loading now succeeds, and something is throwing at the native Android layer.
+
+**No confirmed root cause this session — being explicit about that rather than shipping another
+guess as if it were certain.** Investigated several plausible candidates against real documentation
+rather than assuming:
+- `@capacitor-community/sqlite`'s documented Android minimums (`minSdkVersion 22+`,
+  `compileSdkVersion 33+`) — checked Capacitor 6's actual default `variables.gradle` values and
+  confirmed they already satisfy this. Ruled out with reasonable confidence.
+- `@codetrix-studio/capacitor-google-auth` reads its client ID from `capacitor.config.json` at
+  native startup, and that file held a literal placeholder (`REPLACE_WITH_ANDROID_OAUTH_CLIENT_ID...`)
+  since the Google Cloud setup isn't done yet. Couldn't confirm whether this crashes at plugin load
+  or only fails later at sign-in time — but since Drive backup is unused until the OAuth setup is
+  complete regardless, removed the `GoogleAuth` config block entirely as a no-regret hedge rather
+  than carrying a guaranteed-invalid value for no benefit. Documented in
+  `android-notes/native-setup.md` §10 to re-add once real credentials exist.
+
+Recommended getting an actual stack trace via a free Play Store logcat-reader app (no root/computer
+needed) rather than continuing to guess through plugin documentation one at a time — a real
+exception trace will confirm which candidate (if either) is responsible, or reveal something not yet
+considered.
+
+Decisions made: none — investigation and one hedge, not a confirmed fix or a new design call.
+
+Next session start point: get the actual crash log. Everything else stands until then — confirming
+CI status, and now this native crash, are both blocking real verification of six-plus sessions of
+accumulated app logic that's never actually run.
+
+---
+
 **Session 19**
 
 Second device test, same blank screen. This time the cause went much deeper than a single fixable
