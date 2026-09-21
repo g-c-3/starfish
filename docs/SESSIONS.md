@@ -4,6 +4,27 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 23**
+
+Real functional testing began — file, image, and note capture all confirmed working, tags display
+correctly, and all five per-file actions render per entry. First real bug from actual usage rather
+than a crash: every action button rendered full-width and stacked instead of sitting compactly in a
+row. Cause: `.drive-backup-row`'s button-sizing CSS rule was scoped to `#drive-backup-list .drive-backup-row`
+from when it was first written (Session 11), before the same class got reused generically across the
+main timeline, vault list, and trash bins. Everywhere except the Drive list fell back to the
+universal `input, button { width: 100% }` default. Fixed by removing the `#drive-backup-list` scope
+so the rule applies everywhere the class is used, plus `flex-wrap` so a row of five buttons wraps
+onto multiple lines on narrow screens instead of overflowing.
+
+Verified the same way as the last several sessions: ran the actual Vite build after the fix, not
+just eyeballed the CSS — bundles clean.
+
+Decisions made: none — a scoping bug, not a design call.
+
+Next session start point: continue the test checklist — search, edit, local backup/restore, Vault.
+
+---
+
 **Session 22**
 
 **First successful device load, after three straight sessions of crashes (18–21).** Screenshots
