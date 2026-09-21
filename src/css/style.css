@@ -90,12 +90,19 @@ button { background: var(--accent); color: var(--accent-fg); border: none; curso
   padding: 20px; max-width: 420px; width: 100%;
 }
 
-#drive-backup-list .drive-backup-row {
+/* .drive-backup-row is a generic label+actions row, reused across the main timeline (#timeline),
+   the vault list (#vault-list), the trash bins, AND the Drive backup list — NOT scoped to
+   #drive-backup-list alone. It was originally written scoped to just that one container (Session 11,
+   before it got reused everywhere else), which meant every other list's buttons fell back to the
+   universal `input, button { width: 100% }` default and rendered full-width/stacked instead of
+   compact — confirmed on-device (Session 23). */
+.drive-backup-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 0; border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 14px; flex-wrap: wrap; gap: 4px;
 }
-#drive-backup-list .drive-backup-row button { width: auto; padding: 6px 10px; }
+.drive-backup-row button { width: auto; padding: 6px 10px; font-size: 13px; }
+.drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
 
 /* --- Private Vault (pivot) --- */
 .vault-banner {
