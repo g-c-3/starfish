@@ -2,6 +2,7 @@
 // This is a scaffold showing the control flow and key logic (expense follow-up timeout,
 // capture-to-intent pipeline, digest). Wire up to your actual DOM/UI framework of choice.
 
+import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
@@ -38,7 +39,9 @@ function showScreen(id) {
 }
 
 async function bootstrap() {
-  const { CapacitorSQLite, SQLiteConnection } = window.sqlitePlugin || {};
+  // Was reading a `window.sqlitePlugin` global that nothing anywhere ever set — a leftover from
+  // the original pre-existing scaffold, never caught because nothing had actually run the app
+  // until now. @capacitor-community/sqlite exports these directly; no global needed.
   const sqlite = new SQLiteConnection(CapacitorSQLite);
   db = await initDb(sqlite);
 
@@ -71,7 +74,7 @@ async function showLockScreen() {
   const row = await db.query(`SELECT app_password_hash, app_password_salt FROM credentials WHERE id=1`);
 
   if (!row.values || row.values.length === 0) {
-    window.needsFirstRunSetup = true; // UI renders the setup screen and calls completeFirstRunSetup()
+    window.needsFirstRunSetup = true; // informational only — showScreen() below is what actually does the work
     showScreen('first-run-setup');
     return { firstRun: true };
   }
@@ -879,10 +882,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `).join('') || 'Trash is empty.';
     document.querySelectorAll('#trash-list .restore-btn').forEach((b) => b.addEventListener('click', async () => {
-      await window.restoreEntry(b.dataset.id); await renderTrash();
+      await window.Dumpzone.restoreEntry(b.dataset.id); await renderTrash();
     }));
     document.querySelectorAll('#trash-list .perm-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-      if (confirm('Delete permanently? This cannot be undone.')) { await window.permanentlyDelete(b.dataset.id); await renderTrash(); }
+      if (confirm('Delete permanently? This cannot be undone.')) { await window.Dumpzone.permanentlyDelete(b.dataset.id); await renderTrash(); }
     }));
   }
   document.getElementById('trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderTrash(); });
@@ -931,8 +934,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `).join('') || 'Nothing here yet.';
 
-    document.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.shareEntry(b.dataset.id)));
-    document.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.downloadPlain(b.dataset.id)));
+    document.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
+    document.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
     document.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       const item = items.find((i) => i.id === b.dataset.id);
       await editEntryUI(item, true);
@@ -940,7 +943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }));
     document.querySelectorAll('.vault-append-btn').forEach((b) => b.addEventListener('click', async () => {
       const pin = prompt('Vault PIN (required for Download for append):');
-      if (pin) await window.downloadForAppend(b.dataset.id, { pin });
+      if (pin) await window.Dumpzone.downloadForAppend(b.dataset.id, { pin });
     }));
     document.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await deleteVaultEntry(b.dataset.id); await renderVaultList(typeOrAll);
@@ -1108,9 +1111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `).join('') || 'Nothing captured yet.';
 
-    document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.shareEntry(b.dataset.id)));
-    document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.downloadPlain(b.dataset.id)));
-    document.querySelectorAll('.main-append-btn').forEach((b) => b.addEventListener('click', () => window.downloadForAppend(b.dataset.id, {})));
+    document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
+    document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
+    document.querySelectorAll('.main-append-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadForAppend(b.dataset.id, {})));
     document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       const row = rows.find((r) => r.id === b.dataset.id);
       await editEntryUI(row, false);
@@ -1192,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
-    await window.editEntry(item.id, fields, opts);
+    await window.Dumpzone.editEntry(item.id, fields, opts);
   }
 
   document.getElementById('search-input').addEventListener('input', async (e) => {
