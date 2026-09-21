@@ -1,0 +1,8 @@
+node_modules/
+
+# www/ is now Vite's build OUTPUT (see vite.config.js) — src/ is the real source.
+# Not force-ignored here since CI doesn't require it absent; if you want a clean repo,
+# it's safe to delete the old committed www/* files whenever convenient — CI regenerates
+# www/ fresh on every run regardless of what's committed there.
+
+android/app/release.keystore
