@@ -4,6 +4,41 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 18**
+
+First real device test, first real device bug — screenshot showed a completely blank screen on
+launch. Cause: `bootstrap()` read `window.sqlitePlugin`, a global nothing anywhere ever set. It's a
+leftover from the original pre-existing scaffold (predates every session in this log), never caught
+because nothing had actually run the app on a device until this test. `SQLiteConnection` ended up
+`undefined`, `new SQLiteConnection(...)` threw immediately inside `bootstrap()`, and since
+`DOMContentLoaded` awaits `bootstrap()`, the whole script halted before any `showScreen()` call ever
+ran — every screen stays `hidden` by default, so the result is exactly a blank page in the
+background color. Fixed: import `CapacitorSQLite`/`SQLiteConnection` directly from
+`@capacitor-community/sqlite` (already a real dependency) instead of reading a global.
+
+Audited for the same bug shape before handing this back, rather than fixing only the one reported
+symptom: found a second, separate bug of the identical class. Every `window.Dumpzone.X` function is
+nested under that object, but several button handlers (Share/Download/Download-for-append/Edit,
+restore-from-trash, permanently-delete) called bare `window.X()` — none of which exist at that path.
+These would have thrown the moment anyone clicked past the (now-fixed) blank screen. Fixed all six
+call sites to go through `window.Dumpzone.X`.
+
+Also: `crypto.js` and `intents.js` had never been staged into the working sandbox across any prior
+session (only ever read, never modified, so never copied in) — meaning no session's syntax checks or
+audits had ever actually covered them. Staged and checked now: both clean, both have zero imports and
+zero `window.` references, so neither is at risk of this bug class at all.
+
+Checked `ads.js`'s `window.adSdk` reference too, since it's the same shape — confirmed safe, already
+wrapped in try/catch with the correct no-fill fallback (Decision 14), unlike the two that broke.
+
+Decisions made: none — bug fixes, not new design calls.
+
+Next session start point: get this rebuilt and back on the device. If the blank screen is gone and
+first-run setup renders, that's real progress — six sessions of untested surface just got its first
+actual signal. Standing items unchanged otherwise: CI status, Phase 13's OAuth setup.
+
+---
+
 **Session 17**
 
 Built the digest, on-this-day, and storage breakdown (ARCHITECTURE §6). `showDigest()` has had real

@@ -60,6 +60,13 @@
   that's now done too, with tags shown per entry (one bulk `GROUP_CONCAT` query, not N+1).
   OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
   yet — labels/tags still work for search. Still plain/unstyled, matching the rest of Phase 4.
+  **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
+  `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
+  scaffold that predates every session in this log, never caught because nothing had run the app on
+  a device until now. Fixed: import `CapacitorSQLite`/`SQLiteConnection` directly from
+  `@capacitor-community/sqlite` instead. Audit afterward found a second bug of the same shape: six
+  button handlers called bare `window.X()` for functions that only exist under `window.Dumpzone.X` —
+  fixed all six. Not yet re-tested on device — that's the very next step.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
