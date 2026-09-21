@@ -4,6 +4,53 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 19**
+
+Second device test, same blank screen. This time the cause went much deeper than a single fixable
+line: **the app has never been able to load, in any session, on any real device or browser** —
+`www/` had no bundler and no import map, and every file that imports a Capacitor plugin
+(`notifications.js`, `backup.js`, `fileactions.js`, `gdrive.js`, and `app.js` after last session's
+fix) uses `import { X } from '@capacitor/...'`, a bare specifier a browser's native ES module loader
+cannot resolve on its own. ES module resolution happens before any code runs, so one unresolvable
+import anywhere in the dependency graph blocks the whole script — exactly the blank-page symptom,
+both times. Last session's `window.sqlitePlugin` fix was a real, necessary fix for a real bug, but
+it replaced one crash with a normal `import` of the same package, which has the identical failure
+mode underneath. The reason 18 sessions of `node --check` never caught this: Node's module
+resolution *can* resolve bare specifiers from `node_modules`; a browser's cannot, without a bundler
+or an import map. Checking with the wrong tool gave false confidence the whole time.
+
+Fixed by adding Vite — the standard choice for exactly this situation. `src/` is now the real
+source directory (every file that used to live in `www/` moved there, unchanged); `www/` becomes
+Vite's build output (`vite.config.js`: `root: 'src'`, `outDir: '../www'`, so
+`capacitor.config.json`'s `webDir` needed no change at all). `build-android.yml` now runs `npm run
+build` before `cap sync`. Checked Vite's actual current version against npm data rather than
+assuming from memory — it's on major version 7 now (`^7.3.2`), not the 5.x a stale assumption would
+have produced.
+
+**Verified this actually works, rather than asserting it and handing back a third blank screen:**
+ran `npm install` and `npx vite build` for real in a sandbox before delivering anything. 82 modules
+transformed, build succeeded, and the output was grepped for any remaining unresolved
+`@capacitor`/`@zip`/`@codetrix` import statements — zero found. This is the first time in the
+project's history that the actual bundled output has been confirmed loadable rather than assumed to
+be, because it's the first time anything was actually built end-to-end outside of a GitHub Actions
+runner I can't inspect.
+
+No application code changed as part of this fix — every import statement across every file was
+always correct JavaScript; the only thing missing was the build step that makes bare specifiers
+resolvable in a real browser engine. Also added: `.gitignore` (didn't exist before — `node_modules/`
+was never excluded, though nothing had committed it yet since nothing had ever run `npm install`
+outside CI).
+
+Decisions made: 46.
+
+Next session start point: get this rebuilt and back on the device — third attempt, but the first one
+built on a verified, actually-tested fix rather than a fix that only looked correct on paper. If a
+screen finally renders, that's the real first signal after seven sessions of accumulated surface. Old
+`www/*` files remain committed in the repo but are now stale/vestigial — safe to delete whenever
+convenient, not urgent, since CI regenerates them fresh every run regardless of what's committed.
+
+---
+
 **Session 18**
 
 First real device test, first real device bug — screenshot showed a completely blank screen on

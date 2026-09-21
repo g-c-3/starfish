@@ -480,21 +480,36 @@ Flow on first open each day:
 3. Failed to load / no internet → skip gate entirely, no message shown.
 
 ## 11. Build pipeline (GitHub Actions, no local machine needed)
-See `.github/workflows/build-android.yml`. On push, it:
-1. Installs Node deps.
-2. Runs `npx cap sync android`.
-3. Builds a signed release APK using a keystore stored in GitHub Secrets.
-4. Uploads the APK as a workflow artifact / release asset.
+See `.github/workflows/build-android.yml`. On push to `main`, it:
+1. Installs Node deps (`npm install`).
+2. **Builds the web assets** (`npm run build` → Vite bundles `src/` into `www/`). Required, not
+   optional: browsers cannot resolve bare npm-package specifiers
+   (`import { X } from '@capacitor/filesystem'`) on their own — only a bundler or a hand-authored
+   import map can. Every file that imports a Capacitor plugin needs this step to have run first, or
+   the app fails to load at all (see the note below — this was the actual cause of the first two
+   device-test failures).
+3. Adds the Android platform if `android/` isn't committed yet, generates app icons, runs
+   `npx cap sync android` (copies the now-bundled `www/` into the native project).
+4. Builds a signed release APK using a keystore stored in GitHub Secrets.
+5. Uploads the APK as a workflow artifact.
+
+**`src/` is the real source now — `www/` is Vite's build output, not hand-edited.** This split
+didn't exist before the app was ever actually run on a device: everything lived directly in `www/`
+with no bundler, which worked fine for the pure-relative-path files but silently could never load
+anything that imported an actual npm package, since a browser's native ES module loader has no way
+to resolve a bare specifier like `'@capacitor/filesystem'` without one. `capacitor.config.json`'s
+`webDir` stays `"www"` unchanged — Vite just writes there instead of a person doing it by hand.
 
 ### One-time setup you need to do
-1. Generate a keystore (can be done via GitHub Actions itself in a one-off job, or ask me to generate the commands).
-2. Add these repo secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+1. Generate a keystore (done — Session 3).
+2. Add repo secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (done —
+   Session 3, CI success still unconfirmed).
 3. Push to `main` — Actions builds the APK automatically.
 
 ## 12. Folder structure
 ```
 dumpzone/
-  www/                  -> the actual app (HTML/JS/CSS), Capacitor's webview content
+  src/                  -> the REAL source (HTML/JS/CSS) — edit here, not www/
     index.html
     css/style.css
     js/
@@ -508,6 +523,9 @@ dumpzone/
       vault.js          -> Private Vault: content bundling, save/load, in-memory search index
       fileactions.js    -> per-file actions: share, download-for-append (+ its zip import), plain download, edit
       app.js            -> app bootstrap / router / expense follow-up flow
+  www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
+                            CI run; don't hand-edit, changes there get overwritten.
+  vite.config.js        -> root: 'src', outDir: '../www'
   capacitor.config.json
   package.json
   .github/workflows/build-android.yml

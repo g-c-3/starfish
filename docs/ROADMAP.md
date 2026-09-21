@@ -66,7 +66,16 @@
   a device until now. Fixed: import `CapacitorSQLite`/`SQLiteConnection` directly from
   `@capacitor-community/sqlite` instead. Audit afterward found a second bug of the same shape: six
   button handlers called bare `window.X()` for functions that only exist under `window.Dumpzone.X` —
-  fixed all six. Not yet re-tested on device — that's the very next step.
+  fixed all six.
+  **Second device test: still blank — root cause was much deeper (Decision 46).** The app has never
+  been able to load in any session: browsers can't resolve bare npm-package imports
+  (`'@capacitor/filesystem'`) without a bundler, and every plugin-importing file has always had this.
+  `node --check` never caught it because Node's module resolution isn't the same as a browser's.
+  Fixed by adding Vite as a real build step — `src/` is now the actual source, `www/` is build
+  output (§11/§12, ARCHITECTURE.md). Verified by actually running `npm install` + `vite build` in a
+  sandbox before delivering, not just asserted: 82 modules bundled, zero unresolved imports remained
+  in the output. No app code changed — every existing import statement was always correct, just
+  missing the build step that makes it resolvable. Not yet re-tested on device.
 - [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
   permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
   implemented. Requires `npx cap add android` run once, generated project committed.
@@ -141,7 +150,10 @@
 - [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
   not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
-  (Session 3). Live green run against the now-set secrets not yet confirmed — manual check pending.
+  (Session 3). **Now also runs `npm run build` (Vite) before `cap sync`** (Decision 46, Session 18)
+  — without it, the bundled app can never load in any WebView, verified as the actual root cause of
+  two consecutive blank-screen device tests. Live green run against the now-set secrets not yet
+  confirmed — manual check pending.
 - [ ] **12 — Ads integration.** Wire `ads.js`'s decision logic to a real AdMob plugin, rewarded unit
   only. Logic drafted; native plugin call not.
 - [~] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement

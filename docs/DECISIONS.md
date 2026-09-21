@@ -258,3 +258,37 @@ timer itself resets via one delegated document-level listener (click/keydown/inp
 manually calling `armAppAutoLock()` from every capture/search/browse function individually — the
 vault's own timer needed several follow-up patches for exactly that omission, so the app-level one
 was built to not repeat it. No-op when quick access is enabled — there's nothing to lock back to.
+
+---
+
+**46. Added Vite as a real build step — `src/` is now the source, `www/` is build output.**
+
+Root cause this fixes: the app has **never once been able to load, in any session**, because
+browsers cannot resolve bare npm-package specifiers (`import { X } from '@capacitor/filesystem'`)
+on their own — only a bundler or a hand-authored import map can, and ES module resolution happens
+before any code runs, so a single unresolvable import anywhere in the dependency graph blocks the
+entire script. Every file that imports a Capacitor plugin (`notifications.js`, `backup.js`,
+`fileactions.js`, `gdrive.js`, and `app.js` itself) has had this problem since before any of these
+sessions existed. The first device test's blank screen had two causes stacked on top of each other —
+a `window.sqlitePlugin` global that nothing set (fixed the prior session) and this bare-import
+problem underneath it, which the sqlitePlugin fix didn't touch since it introduced a normal ES
+import for the same package, which has the identical failure mode. The second device test's still-
+blank screen is what actually surfaced this.
+
+Why this wasn't caught by any earlier syntax check: `node --check` uses Node's module resolution,
+which *can* resolve bare specifiers from `node_modules` — completely different from a browser's
+native ES module loader, which has no such algorithm without an import map. Checking with the wrong
+tool gave false confidence for many sessions.
+
+**The fix, verified by actually running it, not just asserted:** added Vite (`^7.3.2` — checked
+against current npm data, not assumed from memory) as a devDependency, moved `src/` to be the real
+source directory, configured Vite to build `src/` → `../www` so `capacitor.config.json`'s `webDir`
+never has to change, and added a `npm run build` step to CI before `cap sync`. Ran `npm install` +
+`npx vite build` for real in a sandbox before delivering this — 82 modules bundled successfully, and
+the output was grepped to confirm zero unresolved `@capacitor`/`@zip`/`@codetrix` imports remain
+anywhere in the built JS.
+
+This also means every existing `import` statement across every file (db.js, crypto.js, intents.js,
+notifications.js, ads.js, backup.js, gdrive.js, vault.js, fileactions.js, app.js) needed **no code
+changes at all** — they were always correct JavaScript, just missing the one build step that makes
+them resolvable in a real browser engine. The fix is entirely in the build pipeline, not the app code.
