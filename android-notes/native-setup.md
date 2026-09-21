@@ -85,6 +85,18 @@ prove unreliable in testing on your actual device.
 This is the manual, one-time setup this feature needs before any code can talk to Drive. Everything
 here is web-UI on console.cloud.google.com — no terminal.
 
+**`capacitor.config.json`'s `GoogleAuth` plugin block was removed (Session 20)**, since it held a
+placeholder client ID that was one of several plausible causes investigated for a native crash on
+launch — not confirmed as the actual cause, but a guaranteed-invalid value with no upside to keeping
+while this feature is unused anyway. Once the steps below are done, add it back:
+```json
+"GoogleAuth": {
+  "scopes": ["https://www.googleapis.com/auth/drive.file"],
+  "grantOfflineAccess": false,
+  "androidClientId": "<your real client ID>.apps.googleusercontent.com"
+}
+```
+
 1. **Create a Google Cloud project** (or reuse one) at console.cloud.google.com. Free tier is enough.
 2. **Enable the Google Drive API**: APIs & Services → Library → search "Google Drive API" → Enable.
 3. **Configure the OAuth consent screen**: APIs & Services → OAuth consent screen.
