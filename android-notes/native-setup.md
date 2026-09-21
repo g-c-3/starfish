@@ -85,10 +85,15 @@ prove unreliable in testing on your actual device.
 This is the manual, one-time setup this feature needs before any code can talk to Drive. Everything
 here is web-UI on console.cloud.google.com — no terminal.
 
-**`capacitor.config.json`'s `GoogleAuth` plugin block was removed (Session 20)**, since it held a
-placeholder client ID that was one of several plausible causes investigated for a native crash on
-launch — not confirmed as the actual cause, but a guaranteed-invalid value with no upside to keeping
-while this feature is unused anyway. Once the steps below are done, add it back:
+**`capacitor.config.json`'s `GoogleAuth` plugin block was removed (Session 20)** as a hedge while
+investigating a device crash — turned out not to be that crash's cause (see below), but confirmed by
+a real crash log (Session 21) to be a genuine, separate crash risk: the plugin's native `signIn()`
+method has no null-check on its internal sign-in client, so calling it with no client ID configured
+throws an uncaught `NullPointerException` inside the plugin's own compiled Java code, killing the
+whole app process — not something any JS-side try/catch can intercept, since it never reaches JS.
+`gdrive.js` now has a `GOOGLE_DRIVE_CONFIGURED` guard (currently `false`) that prevents the app from
+ever calling `GoogleAuth.signIn()` while unconfigured. **Once the steps below are done, do both:**
+1. Add the config block back to `capacitor.config.json`:
 ```json
 "GoogleAuth": {
   "scopes": ["https://www.googleapis.com/auth/drive.file"],
@@ -96,6 +101,8 @@ while this feature is unused anyway. Once the steps below are done, add it back:
   "androidClientId": "<your real client ID>.apps.googleusercontent.com"
 }
 ```
+2. Flip `GOOGLE_DRIVE_CONFIGURED` to `true` in `src/js/gdrive.js` — without this, Drive stays
+   guarded off even with a real client ID configured.
 
 1. **Create a Google Cloud project** (or reuse one) at console.cloud.google.com. Free tier is enough.
 2. **Enable the Google Drive API**: APIs & Services → Library → search "Google Drive API" → Enable.
