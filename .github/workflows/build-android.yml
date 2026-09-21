@@ -25,6 +25,9 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
+      - name: Build web assets (Vite bundles src/ into www/)
+        run: npm run build
+
       - name: Add Android platform (if not committed)
         run: |
           if [ ! -d "android" ]; then
