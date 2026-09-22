@@ -334,3 +334,39 @@ filter on their file inputs, so either would accept literally any file type.
 Not done: the noise-reduction toggle from the original plan (`android-notes/native-setup.md` §5) —
 this plugin has no audio-source parameter to expose it. Still an open item, tracked separately from
 basic recording, which is what was actually broken and is now fixed.
+
+---
+
+**49. Manifest permissions are applied by a CI script (`scripts/patch-manifest.js`), never by hand-editing
+a manifest file.** Root cause this fixes, found while resolving Session 24's flagged "unverified"
+question about `cap-voice-rec` and `RECORD_AUDIO`: `android/` has never actually been committed to the
+repo — `build-android.yml`'s "add platform if not present" check has been true on every run across all
+24 prior sessions — so `android-notes/native-setup.md` §3's permission list, despite being documented
+since Session 1, had never actually been injected into any AndroidManifest.xml that reached a real build.
+A hand-edit would have been discarded the next CI run regardless of whether anyone remembered to make it.
+
+Confirmed by direct inspection, not assumption: downloaded `cap-voice-rec@6.0.1` from npm and read its
+shipped `android/src/main/AndroidManifest.xml`. It declares a `<service>` with
+`android:foregroundServiceType="microphone"` and zero `<uses-permission>` entries — so it does not
+self-declare `RECORD_AUDIO`, resolving Session 24's open question, and its foreground service has no
+permission of its own either, which is a second, previously unflagged gap. Cross-checked Capacitor's own
+5→6 upgrade documentation to confirm the project's default `targetSdkVersion` is **34**: Android 14 (API
+34) requires both `FOREGROUND_SERVICE` and a type-specific permission (`FOREGROUND_SERVICE_MICROPHONE`
+for a `microphone`-typed service) declared in the manifest, or the OS throws a `SecurityException`/
+`MissingForegroundServiceTypeException` at `startForeground()`, inside native code — unreachable by any
+JS-side try/catch, the same failure class as Decision 47. Untested until now only because Session 24
+built the recording UI but hadn't yet run it on a device.
+
+Fix: `scripts/patch-manifest.js`, run by CI (`build-android.yml`) immediately after `npx cap add android`
+and before `cap sync`/icon generation. Idempotent — checks for each permission before inserting, so it's
+harmless to run against an already-patched manifest and safe to keep even if `android/` is committed
+later. All eight permissions from `native-setup.md` §3 (the original six plus the two new
+foreground-service ones) now live in one place, `REQUIRED_PERMISSIONS` in that script, rather than a doc
+list with no mechanism to apply it. Verified by running the script against a representative sample
+manifest in a sandbox before delivering: inserted all eight on first run, correctly no-op'd on a second
+run against its own output.
+
+Also noted, not acted on: `package.json` lists `@capawesome-team/capacitor-android-foreground-service` as
+a dependency, but nothing in `src/js/` imports it — dead weight, likely a leftover from before
+`cap-voice-rec` was chosen. Flagged for later cleanup, not removed this session since it isn't the cause
+of anything currently broken.

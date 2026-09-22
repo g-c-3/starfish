@@ -4,6 +4,51 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 25**
+
+Followed up on Session 24's flagged-but-unverified question: does `cap-voice-rec` self-declare
+`RECORD_AUDIO`, or does the app's manifest need it added by hand? Answered by downloading the actual
+package and reading its shipped `AndroidManifest.xml` rather than inferring from its README — it
+self-declares neither `RECORD_AUDIO` nor any permission for the foreground service it does declare
+(`foregroundServiceType="microphone"`).
+
+That second half turned into the bigger finding. Capacitor 6's default `targetSdkVersion` is 34
+(checked against Capacitor's own upgrade docs), and Android 14 requires `FOREGROUND_SERVICE` +
+`FOREGROUND_SERVICE_MICROPHONE` declared for a microphone-typed foreground service or the OS throws a
+`SecurityException` at `startForeground()` — a native-side crash no JS try/catch can catch, same shape
+as Decision 47's GoogleAuth crash. Untested until now since Session 24 only built the recording UI.
+
+Checking where to actually add these permissions surfaced a deeper, structural gap: **`android/` has
+never been committed to the repo**, across all 24 prior sessions — `build-android.yml`'s "add platform
+if missing" branch has been true every single run. `android-notes/native-setup.md` §3's permission list
+has existed since Session 1 but had no mechanism to ever reach a real manifest; any hand-edit would be
+silently thrown away the next CI run. This means every permission in that list — not just the two new
+ones — has been documentation only, never actually built into any APK, including the ones already
+confirmed working on-device (Sessions 22–24 only exercised file/note capture, which doesn't need any of
+them; voice recording, reminders, and location would have been the first real test, and hadn't happened
+yet).
+
+Fix: `scripts/patch-manifest.js` (new), run by CI right after `npx cap add android` — inserts any of the
+eight required permissions not already present in the freshly-generated manifest, idempotently. Verified
+by running it against a representative sample manifest in a sandbox: correctly inserted all eight, then
+correctly no-op'd on a second run. `build-android.yml` updated with one new step calling it.
+
+Also noted, not removed: `package.json`'s `@capawesome-team/capacitor-android-foreground-service`
+dependency is unused anywhere in `src/js/` — likely left over from before `cap-voice-rec` was chosen.
+Flagged for a future cleanup pass, not urgent.
+
+Decisions made: 49.
+
+Next session start point: get a build through CI with this change and back on the device — this is the
+first real test of voice recording, and the first time *any* of the documented manifest permissions will
+have actually shipped in a built APK. If recording works end-to-end (permission prompt, record, stop,
+save, playback), continue the standing test checklist: search, edit, local backup/restore, Vault. Also
+worth a quick sanity check once on-device: confirm the permission *prompts* (not just presence in the
+manifest) actually appear for RECORD_AUDIO/location/notifications at the expected first-use moments,
+since a declared-but-never-requested permission is a different bug than what was just fixed here.
+
+---
+
 **Session 24**
 
 Two real bugs reported from continued testing:

@@ -7,7 +7,7 @@
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
 - [~] 4 — App shell & control flow (main capture + timeline now wired, still unstyled)
-- [~] 5 — Native plugin wiring (voice recorder done, OCR/noise-toggle/permissions/sound asset not)
+- [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
@@ -92,10 +92,13 @@
   together, not just in isolation. Real functional testing (capture, search, tags, edit/delete,
   backup/restore, Vault) starts now.
 - [~] **5 — Native plugin wiring.** **Voice recorder done** (Session 24, `cap-voice-rec`, real
-  device bug fix — see Decision 48) — record/stop UI wired into both capture bars. Noise-reduction
-  toggle still not done, this plugin has no audio-source parameter (`android-notes/native-setup.md`
-  §5). OCR (ML Kit or Tesseract), exact permissions, notification sound asset: documented, not
-  implemented.
+  device bug fix — see Decision 48) — record/stop UI wired into both capture bars. Required
+  permissions (including two newly-found foreground-service ones for this plugin's own recording
+  service) now applied automatically by CI via `scripts/patch-manifest.js`, not just documented —
+  see Decision 49; not yet confirmed against a real build/device, that's next session's first task.
+  Noise-reduction toggle still not done, this plugin has no audio-source parameter
+  (`android-notes/native-setup.md` §5). OCR (ML Kit or Tesseract), notification sound asset:
+  documented, not implemented.
 - [~] **6 — Backup & restore engine.** `backup.js` built: create/encrypt/write, open/decrypt/restore
   (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
   storage sanity checks (`navigator.storage.estimate()` — an estimate, no device free-space API
