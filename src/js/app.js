@@ -14,6 +14,7 @@ import {
   restoreFromDrive, checkAndRunAutoBackupIfDue
 } from './gdrive.js';
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
+import { VoiceRecorder } from 'cap-voice-rec';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
@@ -973,9 +974,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tags = await promptForTags(); // declared below — hoisted within this same DOMContentLoaded scope
       await captureToVault({ type: 'note', label: text.slice(0, 40), tags, text });
       await renderVaultList('all');
+    } else if (type === 'voice') {
+      await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
+        const tags = await promptForTags();
+        const label = prompt('Label for this recording:', `Voice ${new Date().toLocaleTimeString()}`) || 'Voice memo';
+        await captureToVault({ type: 'voice', label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+        await renderVaultList('all');
+      });
     } else {
       const input = document.createElement('input');
       input.type = 'file';
+      input.accept = acceptForType(type);
       input.onchange = async () => {
         const file = input.files[0];
         if (!file) return;
@@ -1078,6 +1087,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     return input.split(',').map((t) => t.trim()).filter(Boolean);
   }
 
+  // ---- Voice recording (cap-voice-rec) — was previously just a generic file picker for ALL
+  // non-text types including voice, meaning "record a voice memo" actually asked you to upload an
+  // existing audio file instead of recording one (confirmed real-device bug, Session 24). Now
+  // records live via the microphone; file/image/pdf still use a file picker, now with correct
+  // accept filters too (also missing before — pdf/image accepted literally any file type).
+  function acceptForType(type) {
+    if (type === 'image') return 'image/*';
+    if (type === 'pdf') return 'application/pdf,.pdf';
+    return ''; // 'file' (generic) is intentionally unrestricted
+  }
+  function extensionForMimeType(mimeType) {
+    const map = { 'audio/aac': 'aac', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
+    return map[mimeType] || map[mimeType?.split(';')[0]] || 'aac';
+  }
+  let activeRecordingTimer = null;
+  async function startVoiceRecordingUI(onStopped) {
+    const hasPerm = await VoiceRecorder.hasAudioRecordingPermission();
+    if (!hasPerm.value) {
+      const req = await VoiceRecorder.requestAudioRecordingPermission();
+      if (!req.value) { alert('Microphone permission denied.'); return; }
+    }
+    try {
+      const started = await VoiceRecorder.startRecording();
+      if (!started.value) { alert('Could not start recording.'); return; }
+    } catch (err) {
+      alert(`Could not start recording: ${err.message || err}`); // e.g. MICROPHONE_BEING_USED
+      return;
+    }
+
+    const banner = document.createElement('div');
+    banner.className = 'modal-overlay';
+    banner.innerHTML = `
+      <div class="modal-box">
+        <h3>🔴 Recording… <span id="recording-timer">0:00</span></h3>
+        <button id="recording-stop-btn">Stop</button>
+      </div>`;
+    document.body.appendChild(banner);
+    let seconds = 0;
+    activeRecordingTimer = setInterval(() => {
+      seconds += 1;
+      const el = document.getElementById('recording-timer');
+      if (el) el.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    }, 1000);
+
+    document.getElementById('recording-stop-btn').addEventListener('click', async () => {
+      clearInterval(activeRecordingTimer);
+      banner.remove();
+      try {
+        const result = await VoiceRecorder.stopRecording();
+        await onStopped(result.value); // { recordDataBase64, msDuration, mimeType } — verified against
+        // the plugin's actual shipped type definitions, not just its (inconsistent) README
+      } catch (err) {
+        alert(`Recording failed: ${err.message || err}`); // e.g. EMPTY_RECORDING if stopped instantly
+      }
+    }, { once: true });
+  }
+
   // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', async () => {
     const type = btn.dataset.type;
@@ -1087,9 +1153,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tags = await promptForTags();
       await captureText(text, 'note', { tags });
       await renderMainTimeline();
+    } else if (type === 'voice') {
+      await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
+        const tags = await promptForTags();
+        const label = prompt('Label for this recording:', `Voice ${new Date().toLocaleTimeString()}`) || 'Voice memo';
+        await captureFile('voice', { label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+        await renderMainTimeline();
+      });
     } else {
       const input = document.createElement('input');
       input.type = 'file';
+      input.accept = acceptForType(type);
       input.onchange = async () => {
         const file = input.files[0];
         if (!file) return;
