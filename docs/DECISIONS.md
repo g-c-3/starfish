@@ -306,3 +306,31 @@ caught this, since the crash happens on the native side of the bridge, before a 
 or rejection is even possible. The guard is a plain JS boolean, flipped manually alongside adding a
 real client ID (`android-notes/native-setup.md` §10) — simple, explicit, and impossible to forget
 since both steps are documented together in one place.
+
+---
+
+**48. Voice recording uses `cap-voice-rec` (v6.x), not the original `tchvu3/capacitor-voice-recorder`
+or its `@independo` fork.** Fixes a real, confirmed device bug (Session 24): the voice capture
+button was using the same generic file-picker as image/pdf/file, meaning "record a voice memo"
+actually asked the person to upload an existing audio file rather than record one.
+
+Chose `cap-voice-rec` specifically because its major version explicitly tracks Capacitor's own major
+version (named "For Capacitor 6"), avoiding the exact version-mismatch class of problem the Google
+Sign-In plugin caused earlier (Session 21) — the original `tchvu3` package is on major version 7,
+which by its own stated convention ("major versions of the plugin are compatible with major versions
+of Capacitor") likely targets Capacitor 7, not our Capacitor 6 pin. `@independo`'s actively-maintained
+fork was also considered — better long-term maintenance, but requires bumping `minSdkVersion` from
+Capacitor 6's default of 22 to 24, a native config change with no clear payoff given the API need
+here is simple record/stop, not the fork's more advanced continue/finalize controls.
+
+Verified before writing any code against it, not assumed: queried the npm registry directly for the
+real current version (`6.0.1`, not a guessed number), installed it for real in a sandbox, and read
+its actual shipped `definitions.d.ts` to confirm `stopRecording()`'s exact return shape
+(`{ value: { recordDataBase64, msDuration, mimeType } }`) — its own README had an inconsistency
+about this (one section mentioned a `path` field that doesn't exist in the actual type definitions).
+Also fixed two related bugs found in the same code path: `pdf` and `image` capture had no `accept`
+filter on their file inputs, so either would accept literally any file type.
+
+Not done: the noise-reduction toggle from the original plan (`android-notes/native-setup.md` §5) —
+this plugin has no audio-source parameter to expose it. Still an open item, tracked separately from
+basic recording, which is what was actually broken and is now fixed.

@@ -4,6 +4,45 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 24**
+
+Two real bugs reported from continued testing:
+
+1. **PDF/image capture accepted literally any file type.** The file `<input>` for both had no
+   `accept` attribute at all — same generic picker used for every non-text type. Fixed with a
+   per-type `acceptForType()` helper (`image/*`, `application/pdf,.pdf`; `file` stays intentionally
+   unrestricted).
+
+2. **"Record voice" actually asked to upload an existing audio file instead of recording one.**
+   Bigger gap: voice capture was routed through the exact same generic file-picker as image/pdf/file
+   — there was never any actual recording UI built, matching Phase 5's already-documented
+   "not implemented" status, but worth fixing now that it's blocking real testing. Added
+   `cap-voice-rec` (Decision 48) after real verification, not assumption: queried npm directly for
+   the actual current version (`6.0.1`, chosen specifically because its major version tracks
+   Capacitor's own — the same version-mismatch mistake that caused the Google Sign-In crash last
+   session was worth actively avoiding here), installed it in a sandbox, and read its actual shipped
+   type definitions rather than trust its README, which had a real inconsistency about its own
+   return shape (a `path` field mentioned in one section that doesn't exist in the actual types).
+   Built a record/stop UI with a live timer, wired into both the main and vault capture bars.
+
+Not done: the noise-reduction toggle from the original Phase 5 plan — `cap-voice-rec` has no
+audio-source parameter to expose it. Tracked separately in `android-notes/native-setup.md` §5;
+basic recording (what was actually broken) is fixed.
+
+Verified the same way as every session since the crash saga began: ran a real `npm install` +
+`vite build` after adding the new dependency, not just a syntax check — confirmed the plugin bundled
+correctly with zero unresolved imports.
+
+Decisions made: 48.
+
+Next session start point: continue the test checklist — confirm voice recording actually works
+end-to-end on-device (permission prompt, record, stop, save, playback), then search, edit, local
+backup/restore, Vault. Also worth confirming on the next device test: whether `cap-voice-rec` needs
+a manual `RECORD_AUDIO` manifest permission or self-declares it — flagged as unverified in
+`android-notes/native-setup.md` §5.
+
+---
+
 **Session 23**
 
 Real functional testing began — file, image, and note capture all confirmed working, tags display

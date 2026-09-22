@@ -7,7 +7,7 @@
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
 - [~] 4 — App shell & control flow (main capture + timeline now wired, still unstyled)
-- [ ] 5 — Native plugin wiring
+- [~] 5 — Native plugin wiring (voice recorder done, OCR/noise-toggle/permissions/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
@@ -91,9 +91,11 @@
   This confirms all three fixes (SQLite import, Vite bundling, GoogleAuth guard) actually work
   together, not just in isolation. Real functional testing (capture, search, tags, edit/delete,
   backup/restore, Vault) starts now.
-- [ ] **5 — Native plugin wiring.** Voice recorder + noise toggle, OCR (ML Kit or Tesseract),
-  permissions, notification sound asset. Documented in `android-notes/native-setup.md`, not
-  implemented. Requires `npx cap add android` run once, generated project committed.
+- [~] **5 — Native plugin wiring.** **Voice recorder done** (Session 24, `cap-voice-rec`, real
+  device bug fix — see Decision 48) — record/stop UI wired into both capture bars. Noise-reduction
+  toggle still not done, this plugin has no audio-source parameter (`android-notes/native-setup.md`
+  §5). OCR (ML Kit or Tesseract), exact permissions, notification sound asset: documented, not
+  implemented.
 - [~] **6 — Backup & restore engine.** `backup.js` built: create/encrypt/write, open/decrypt/restore
   (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
   storage sanity checks (`navigator.storage.estimate()` — an estimate, no device free-space API
