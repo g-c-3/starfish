@@ -1,8 +1,13 @@
 # Native Android notes
 
-These are steps/edits needed inside the generated `android/` folder (created by `npx cap add android`)
-that Capacitor doesn't handle automatically. Commit `android/` to the repo once generated so CI doesn't
-need to guess platform-specific config.
+These are steps/edits needed inside the generated `android/` folder (created by `npx cap add android`).
+**`android/` has never actually been committed** (confirmed Session 25 — build-android.yml's `if [ ! -d
+"android" ]` check has been true on every run so far), so anything that needs to land inside it — like
+the permissions in §3 — has to be applied by an automated CI step, not a manual edit, since a hand-edited
+manifest would be silently discarded the next run. `scripts/patch-manifest.js` is that step for
+permissions today; the same pattern (a small idempotent Node script run in CI right after `cap add
+android`, before `cap sync`) is the template for anything else future sessions find that needs to persist
+inside `android/` without committing the whole generated platform.
 
 ## 1. One-time keystore generation
 Run once, locally impossible without a machine — but you can do it in a throwaway GitHub Actions job,
@@ -32,7 +37,7 @@ room around the artwork, that's controlled by supplying a dedicated `resources/i
 (transparent background) at the size you want, not by padding the single combined `icon.png`.
 
 ## 3. Permissions (AndroidManifest.xml)
-Add:
+Required:
 ```xml
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 <uses-permission android:name="android.permission.CAMERA" />
@@ -40,9 +45,24 @@ Add:
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.INTERNET" /> <!-- ad SDK only -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 ```
 Note: we deliberately do NOT request `SCHEDULE_EXACT_ALARM` — we're using standard Local Notifications,
 not AlarmManager exact alarms (see main README: notification-with-tone, not a true alarm).
+
+**These are applied automatically by CI, not hand-edited — see Decision 49.** `android/` is never
+committed (build-android.yml runs `npx cap add android` fresh whenever the folder is missing, which
+is every run today), so a manifest edit made by hand in a checked-out `android/` folder would be
+discarded the next run anyway, whether or not anyone remembered to make it. `scripts/patch-manifest.js`
+runs in CI right after the platform is added and inserts any of the above eight permissions not already
+present — idempotent, so it's also safe on a future `android/` that does get committed. This list is the
+single source of truth for required permissions; if a new plugin needs one, add it to
+`REQUIRED_PERMISSIONS` in that script, not to a manifest file directly (there currently isn't one to edit
+between CI runs).
+
+**Two of these (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`) exist specifically for
+`cap-voice-rec`'s own declared foreground service** — see §5.
 
 ## 4. Notification sound file
 Place a `.wav` file at `android/app/src/main/res/raw/notify_tone.wav` — referenced by
@@ -61,13 +81,31 @@ enable the device's built-in AEC/NS/AGC suppression at the hardware/OS level, pe
 below). Getting that means either finding a plugin that exposes an audio-source option, or a small
 custom native plugin wrapping `MediaRecorder` directly.
 
-**Unverified, worth confirming on the next device test:** whether `cap-voice-rec`'s Android side
-self-declares `RECORD_AUDIO` in its own AAR manifest (normal, expected for a well-built plugin — no
-action needed if so) or whether `AndroidManifest.xml` needs an explicit
-`<uses-permission android:name="android.permission.RECORD_AUDIO" />` added by hand. The plugin's
-README didn't mention any Android-side manual step (only an iOS Info.plist entry), which suggests
-the former, but this wasn't found in anything I could directly verify — flagging rather than
-asserting.
+**Resolved (Session 25, Decision 49) — confirmed by downloading the actual package and reading its
+shipped `android/src/main/AndroidManifest.xml`, not by inference from its README:**
+`cap-voice-rec` does **not** self-declare `RECORD_AUDIO`. Its manifest contains exactly one entry — a
+`<service>` declaration for its own recording service, with `android:foregroundServiceType="microphone"`
+— and no `<uses-permission>` elements at all. So both things flagged as open here previously are real,
+confirmed requirements, not hedges:
+1. `RECORD_AUDIO` must be declared in the app's own manifest (§3) — confirmed necessary, not merged in
+   from the plugin.
+2. **A second, more serious gap found while checking the first:** that declared foreground service has
+   no matching permission of its own either. Capacitor 6's default `targetSdkVersion` is **34**
+   (confirmed against Capacitor's own 5→6 upgrade docs, not assumed) — and Android 14 (API 34) requires
+   both `FOREGROUND_SERVICE` and a type-specific permission (`FOREGROUND_SERVICE_MICROPHONE` for a
+   `microphone`-typed service) to be declared, or the OS throws a `SecurityException` /
+   `MissingForegroundServiceTypeException` **at `startForeground()`, inside native code** — the exact
+   same failure shape as Decision 47's GoogleAuth crash: unreachable from any JS-side try/catch, since it
+   happens before the bridge returns anything to JavaScript. Without this fix, tapping record on a real
+   Android 14+ device would very likely have crashed the app the moment `VoiceRecorder.startRecording()`
+   tried to start that service — untested until now only because Session 24 built the UI but hadn't yet
+   run it on-device.
+
+Both permissions added to §3's list and to `scripts/patch-manifest.js`'s `REQUIRED_PERMISSIONS`. Also
+worth noting: `package.json` carries `@capawesome-team/capacitor-android-foreground-service` as a
+dependency, but nothing in `src/js/` imports or references it — dead weight, likely left over from
+before `cap-voice-rec` was chosen. Safe to remove whenever convenient; not touched this session since
+removing a dependency isn't the fix for the bug at hand and doesn't need to block it.
 
 Original plan, still the reference for the eventual noise-reduction step:
 - Use a community plugin — check it supports choosing `MediaRecorder.AudioSource`.
