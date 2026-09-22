@@ -49,8 +49,28 @@ Place a `.wav` file at `android/app/src/main/res/raw/notify_tone.wav` — refere
 `capacitor.config.json`'s `LocalNotifications.sound` and by `notifications.js`'s channel setup.
 
 ## 5. Voice recorder with noise-reduction toggle
-Capacitor doesn't ship a recorder plugin by default. Options:
-- Use a community plugin (e.g. `capacitor-voice-recorder`) — check it supports choosing `MediaRecorder.AudioSource`.
+**Basic recording done (Session 24): `cap-voice-rec` (v6.x, explicitly built for Capacitor 6 —
+verified via direct npm registry query and its actual shipped type definitions, not just its
+README, which had an inconsistency about its own return shape). Wired into both the main and vault
+capture bars — tap the voice button, a record/stop UI appears with a live timer, stopping saves the
+recording.**
+
+**Not yet done: the noise-reduction toggle.** This plugin's `startRecording()` takes no parameters —
+no way to choose `AudioSource.MIC` vs `AudioSource.VOICE_COMMUNICATION` (the latter is what would
+enable the device's built-in AEC/NS/AGC suppression at the hardware/OS level, per the original plan
+below). Getting that means either finding a plugin that exposes an audio-source option, or a small
+custom native plugin wrapping `MediaRecorder` directly.
+
+**Unverified, worth confirming on the next device test:** whether `cap-voice-rec`'s Android side
+self-declares `RECORD_AUDIO` in its own AAR manifest (normal, expected for a well-built plugin — no
+action needed if so) or whether `AndroidManifest.xml` needs an explicit
+`<uses-permission android:name="android.permission.RECORD_AUDIO" />` added by hand. The plugin's
+README didn't mention any Android-side manual step (only an iOS Info.plist entry), which suggests
+the former, but this wasn't found in anything I could directly verify — flagging rather than
+asserting.
+
+Original plan, still the reference for the eventual noise-reduction step:
+- Use a community plugin — check it supports choosing `MediaRecorder.AudioSource`.
 - Or write a ~40-line custom native plugin wrapping `MediaRecorder`, exposing a `noiseReduction: boolean` param
   that switches `AudioSource.MIC` vs `AudioSource.VOICE_COMMUNICATION` (the latter enables the device's
   built-in AEC/NS/AGC noise suppression at the hardware/OS level — no custom DSP needed).
