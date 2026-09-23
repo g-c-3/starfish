@@ -214,3 +214,21 @@ ever calling `GoogleAuth.signIn()` while unconfigured. **Once the steps below ar
 
 Nothing else in Phase 13 can be wired up (`gdrive.js`, sign-in button, auto-backup scheduler) until
 this exists, the same way Phase 1's AdMob unit and signing secrets blocked their own downstream work.
+
+## 12. App version per build (Decision 51)
+Same root cause as §3 and §10: `android/app/build.gradle` comes from the Capacitor CLI's template
+every time `android/` is regenerated, which is every run (Decision 49) — and that template
+unconditionally ships `versionCode 1` / `versionName "1.0"`. Every build looked identical on-device
+regardless of what actually shipped, with no way to tell builds apart.
+
+`scripts/patch-version.js`, run by CI right after `scripts/patch-manifest.js`, fixes this:
+`versionCode` is set to the GitHub Actions run number (`github.run_number` — a strictly increasing
+integer, no manual step, always available), and `versionName` is `<package.json version>+<run number>`,
+e.g. `0.1.0+42`. Check **Settings > Apps > Dumpzone > App info** on-device to see the installed build's
+exact version. Bump `package.json`'s `"version"` by hand for anything worth calling a real release; the
+run-number suffix always changes regardless, so every CI build is distinguishable even between
+deliberate version bumps.
+
+Unlike `patch-manifest.js`, this script is **not** idempotent by design — it's meant to overwrite the
+version every run, not skip once set (there's nothing to "already be set" correctly on a freshly
+regenerated, always-1.0 template).
