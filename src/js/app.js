@@ -34,10 +34,34 @@ let appAutoLockTimer = null;
 // ---- Screen visibility — nothing wired this before now; every screen built across every
 // session has been unreachable until this existed. One helper, hides all .screen elements,
 // shows the one requested. ----
+const NAV_SCREENS = { 'main-screen': 'home', 'vault-screen': 'vault' }; // which screens the bottom nav covers, and which tab that maps to by default
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
+
+  // Bottom nav only makes sense once the app is unlocked (main-screen/vault-screen) — hidden for
+  // first-run, the lock screen, and the ad gate, which have nothing to navigate between yet.
+  const nav = document.getElementById('bottom-nav');
+  if (!nav) return;
+  const navKey = NAV_SCREENS[id];
+  nav.classList.toggle('hidden', !navKey);
+  if (id === 'main-screen') switchMainTab('home'); // always land on Home when (re-)entering main-screen
+  else setActiveNavTab(navKey);
+}
+
+// Home/Settings are two panels inside #main-screen (not separate .screen elements — switching
+// between them shouldn't re-run bootstrap-style setup) — see Decision 53, replacing the previous
+// single long scrolling page of stacked <details> settings sections.
+function switchMainTab(tab) {
+  document.getElementById('home-tab')?.classList.toggle('hidden', tab !== 'home');
+  document.getElementById('settings-tab')?.classList.toggle('hidden', tab !== 'settings');
+  setActiveNavTab(tab);
+}
+
+function setActiveNavTab(tab) {
+  document.querySelectorAll('#bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.nav === tab));
 }
 
 async function bootstrap() {
@@ -578,9 +602,11 @@ async function runBulkFileAction(action, entryIds, extraOpts = {}) {
   return results;
 }
 
-// ---- Appearance: dark mode + gradient mode (both stored in the generic `meta` table, no schema
-// change needed; both fall under the App Settings backup category). Purely cosmetic — never gates
-// any feature or data access. ----
+// ---- Appearance: dark mode only (stored in the generic `meta` table, no schema change needed;
+// falls under the App Settings backup category). Purely cosmetic — never gates any feature or
+// data access. Gradient mode removed (Decision 53) — old `gradient_mode`/`gradient_color_1`/
+// `gradient_color_2` meta rows from before this session are simply never read again; harmless to
+// leave in place, including inside any backup file made before this change. ----
 async function metaGet(key, fallback = null) {
   const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
   return (r.values && r.values[0]) ? r.values[0].value : fallback;
@@ -595,30 +621,16 @@ async function metaSet(key, value) {
 async function getAppearance() {
   return {
     darkMode: (await metaGet('dark_mode', 'off')) === 'on',
-    gradientMode: (await metaGet('gradient_mode', 'off')) === 'on',
-    gradientColor1: await metaGet('gradient_color_1', '#488AFF'),
-    gradientColor2: await metaGet('gradient_color_2', '#FF6B9D')
   };
 }
 
-function applyAppearance({ darkMode, gradientMode, gradientColor1, gradientColor2 }) {
+function applyAppearance({ darkMode }) {
   const root = document.documentElement;
   root.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-  root.setAttribute('data-gradient', gradientMode ? 'on' : 'off');
-  // Same color for both is valid — collapses to a single-tone glow, not an error case.
-  root.style.setProperty('--gradient-1', gradientColor1);
-  root.style.setProperty('--gradient-2', gradientColor2);
 }
 
 async function setDarkMode(on) {
   await metaSet('dark_mode', on ? 'on' : 'off');
-  applyAppearance(await getAppearance());
-}
-
-async function setGradientMode(on, color1 = null, color2 = null) {
-  await metaSet('gradient_mode', on ? 'on' : 'off');
-  if (color1) await metaSet('gradient_color_1', color1);
-  if (color2) await metaSet('gradient_color_2', color2); // color2 === color1 is a valid, supported choice
   applyAppearance(await getAppearance());
 }
 
@@ -857,7 +869,7 @@ window.Dumpzone = {
   search: (q) => searchEntries(db, q),
   softDelete: (id) => softDelete(db, id), restoreEntry, permanentlyDelete, showTrash,
   listAllTags: () => listAllTags(db),
-  getAppearance, setDarkMode, setGradientMode,
+  getAppearance, setDarkMode,
   setAppPassword, removeAppPassword, setAutoLockMinutes,
   getBiometricSettings, enableAppBiometric, disableAppBiometric,
   enableVaultBiometric, disableVaultBiometric, tryBiometricUnlockApp, tryBiometricUnlockVault,
@@ -889,29 +901,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Appearance settings UI wiring — populate controls from stored state, then wire changes back.
   const appearance = await getAppearance();
   const darkToggle = document.getElementById('dark-mode-toggle');
-  const gradToggle = document.getElementById('gradient-mode-toggle');
-  const gradPickers = document.getElementById('gradient-color-pickers');
-  const color1Input = document.getElementById('gradient-color-1');
-  const color2Input = document.getElementById('gradient-color-2');
-
   if (darkToggle) {
     darkToggle.checked = appearance.darkMode;
     darkToggle.addEventListener('change', (e) => setDarkMode(e.target.checked));
-  }
-  if (gradToggle && gradPickers) {
-    gradToggle.checked = appearance.gradientMode;
-    gradPickers.classList.toggle('hidden', !appearance.gradientMode);
-    gradToggle.addEventListener('change', (e) => {
-      gradPickers.classList.toggle('hidden', !e.target.checked);
-      setGradientMode(e.target.checked, color1Input.value, color2Input.value);
-    });
-  }
-  if (color1Input && color2Input) {
-    color1Input.value = appearance.gradientColor1;
-    color2Input.value = appearance.gradientColor2;
-    const onColorChange = () => setGradientMode(gradToggle.checked, color1Input.value, color2Input.value);
-    color1Input.addEventListener('input', onColorChange);
-    color2Input.addEventListener('input', onColorChange); // identical values to color1 are valid, not an error
   }
 
   // Backup & Restore (local) wiring
@@ -1072,6 +1064,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     showScreen('main-screen');
   });
   await refreshVaultGateView();
+
+  // ---- Bottom nav: Home / Vault / Settings — replaces navigating everything as one long
+  // scrolling page (Decision 53). Home and Settings are tabs within main-screen; Vault is its
+  // own screen, same as tapping it always was (unlock flow inside vault-screen is unchanged). ----
+  document.querySelectorAll('#bottom-nav button').forEach((btn) => btn.addEventListener('click', () => {
+    const tab = btn.dataset.nav;
+    if (tab === 'vault') showScreen('vault-screen');
+    else switchMainTab(tab);
+  }));
 
   document.querySelectorAll('#vault-tabs .vault-tab').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('#vault-tabs .vault-tab').forEach((t) => t.classList.remove('active'));
