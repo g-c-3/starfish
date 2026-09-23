@@ -37,6 +37,11 @@ jobs:
       - name: Patch AndroidManifest.xml with required permissions
         run: node scripts/patch-manifest.js
 
+      - name: Set version code/name for this build
+        run: node scripts/patch-version.js
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
       - name: Generate app icons from resources/icon.png
         run: npx @capacitor/assets generate --android
 
