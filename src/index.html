@@ -25,6 +25,7 @@
     <h1>Dumpzone</h1>
     <input id="password-input" type="password" placeholder="Password" />
     <button id="unlock-btn">Unlock</button>
+    <button id="biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
     <div id="password-hint"></div>
   </div>
 
@@ -70,6 +71,14 @@
         </select>
         of inactivity, or immediately when backgrounded.
       </label>
+      <div id="app-biometric-row" class="hidden">
+        <label><input type="checkbox" id="app-biometric-toggle" /> Unlock with fingerprint/face</label>
+        <p class="mode-description">A convenience alternative to typing your password — the password itself is unchanged and still works.</p>
+        <div id="app-biometric-confirm" class="hidden">
+          <input id="app-biometric-confirm-password" type="password" placeholder="Confirm current password" />
+          <button id="app-biometric-confirm-btn">Confirm</button>
+        </div>
+      </div>
     </details>
 
     <details id="vault-settings">
@@ -83,6 +92,15 @@
       <div id="vault-locked-view">
         <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
         <button id="vault-unlock-btn">Unlock Vault</button>
+        <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
+      </div>
+      <div id="vault-biometric-row" class="hidden">
+        <label><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
+        <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
+        <div id="vault-biometric-confirm" class="hidden">
+          <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
+          <button id="vault-biometric-confirm-btn">Confirm</button>
+        </div>
       </div>
     </details>
 
