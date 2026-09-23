@@ -172,10 +172,14 @@
   default, independent per lock; not yet confirmed on a real device. JS obfuscation, ProGuard/R8,
   startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
-  (Session 3). **Now also runs `npm run build` (Vite) before `cap sync`** (Decision 46, Session 18)
-  — without it, the bundled app can never load in any WebView, verified as the actual root cause of
-  two consecutive blank-screen device tests. Live green run against the now-set secrets not yet
-  confirmed — manual check pending.
+  (Session 3). Runs `npm run build` (Vite) before `cap sync` (Decision 46, Session 18) — without
+  it, the bundled app can never load in any WebView, verified as the actual root cause of two
+  consecutive blank-screen device tests. **Now also patches the freshly-generated `android/` platform
+  on every run** — required manifest permissions (Decision 49) and a real, always-incrementing
+  version (Decision 51), both via small idempotent-where-appropriate Node scripts in `scripts/`,
+  since `android/` itself is never committed and starts from the same unmodified template every
+  time. Live green run against the now-set secrets, with these patches applied, not yet confirmed —
+  manual check pending.
 - [ ] **12 — Ads integration.** Wire `ads.js`'s decision logic to a real AdMob plugin, rewarded unit
   only. Logic drafted; native plugin call not.
 - [~] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement

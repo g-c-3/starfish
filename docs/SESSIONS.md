@@ -4,6 +4,34 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 27**
+
+Two things this session. First, informational only: the app icon was replaced directly on GitHub by
+hand (`resources/icon.png`) — no code or doc change needed, that's exactly the one-file swap
+`native-setup.md` §2 already documents.
+
+Second, a real bug: every build still installed as version 1.0 no matter what changed. Same root cause
+as Decision 49, one layer over — extracted `@capacitor/cli`'s actual android template and confirmed
+`android/app/build.gradle` unconditionally ships `versionCode 1` / `versionName "1.0"`, and since
+`android/` is never committed (regenerated fresh every run), nothing had ever overridden that. Every
+build since Session 1 has been identically versioned.
+
+Fixed with the same pattern as `patch-manifest.js`: `scripts/patch-version.js` (new), run by CI right
+after it. `versionCode` comes from GitHub's own run number — always increasing, no manual step, nothing
+to forget. `versionName` is `package.json`'s version plus that same run number, so an installed build
+can be identified from Settings > Apps without checking CI logs. Tested against the real extracted
+Capacitor template in a sandbox: correct rewrite, correct overwrite on a second run with a different
+number, correct refusal (not a silent guess) when the run number isn't set.
+
+Decisions made: 51.
+
+Next session start point: unchanged from Session 26 — get a build through CI and onto the device. This
+build will be the first to carry a real version string, which should make it obvious at a glance
+whether the device actually picked up the new APK before testing anything else in it (voice recording
+permissions, biometric unlock, both locks independently).
+
+---
+
 **Session 26**
 
 Built biometric (fingerprint/face) unlock as an alternative to typing the app-open password or Vault

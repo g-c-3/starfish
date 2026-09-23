@@ -407,3 +407,32 @@ correct" a second time.
 
 Also removed this session: `@capawesome-team/capacitor-android-foreground-service` from `package.json`,
 flagged as dead weight in Decision 49 — nothing in `src/js/` ever imported it.
+
+---
+
+**51. Every build now gets a real, always-different version, automatically — `versionCode` from the CI
+run number, `versionName` from `package.json` plus that same number.** Same root cause as Decision 49,
+one layer over: `android/app/build.gradle` comes from the Capacitor CLI's template every time `android/`
+is regenerated (every run), and that template unconditionally ships `versionCode 1` / `versionName
+"1.0"` — confirmed by extracting `@capacitor/cli`'s actual `android-template.tar.gz` and reading it
+directly, not assumed from familiarity with Capacitor. Every build has shipped identically versioned
+since Session 1, with no way to tell installed builds apart.
+
+Fix: `scripts/patch-version.js` (new), run by CI immediately after `patch-manifest.js`.
+`versionCode = github.run_number` — a strictly increasing integer GitHub Actions already provides, so
+there's no manual counter to remember to bump and no risk of forgetting (the actual problem reported:
+"still builds with 1.0, need to bump version for every build" is solved by removing the manual step
+entirely, not by adding a reminder to do one). `versionName = "<package.json version>+<run number>"`,
+so a build installed on-device can be identified from Settings > Apps without checking CI logs, and
+`package.json`'s version field still means something (bump it by hand for a real release; the run-number
+suffix changes regardless).
+
+Verified by running the script against the actual extracted Capacitor template in a sandbox: correctly
+rewrote both fields, correctly overwrote them again on a second run with a different run number
+(deliberately not idempotent-skip like `patch-manifest.js` — there's nothing valid to skip on a
+template that's always "1.0"), and correctly refused to run (exit 1, clear error) when
+`GITHUB_RUN_NUMBER` isn't set, rather than silently guessing a version.
+
+Unrelated, noted for the record: the app icon was replaced directly on GitHub by hand this session
+(`resources/icon.png`) — exactly the documented single-file swap in `native-setup.md` §2, no code or
+doc change needed on this end.
