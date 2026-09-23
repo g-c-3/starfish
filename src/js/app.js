@@ -1016,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function renderTrash() {
     const items = await showTrash();
     document.getElementById('trash-list').innerHTML = items.map((row) => `
-      <div class="drive-backup-row">
+      <div class="drive-backup-row" data-type="${row.type}">
         <span>${row.label} (${row.type})</span>
         <span>
           <button class="restore-btn" data-id="${row.id}">Restore</button>
@@ -1082,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function renderVaultList(typeOrAll) {
     const items = browseVault(typeOrAll);
     document.getElementById('vault-list').innerHTML = items.map((e) => `
-      <div class="drive-backup-row">
+      <div class="drive-backup-row" data-type="${e.type}">
         <span>${e.label} (${VAULT_TYPE_LABELS[e.type]}, ${formatBytes(e.sizeBytes)})${e.tags.length ? ' — ' + e.tags.join(', ') : ''}</span>
         <span>
           <button class="vault-share-btn" data-id="${e.id}">Share</button>
@@ -1113,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-search-input').addEventListener('input', (e) => {
     const term = e.target.value;
     const items = term ? searchVault(term) : browseVault('all');
-    document.getElementById('vault-list').innerHTML = items.map((e2) => `<div class="drive-backup-row"><span>${e2.label} (${VAULT_TYPE_LABELS[e2.type]})</span></div>`).join('') || 'No matches.';
+    document.getElementById('vault-list').innerHTML = items.map((e2) => `<div class="drive-backup-row" data-type="${e2.type}"><span>${e2.label} (${VAULT_TYPE_LABELS[e2.type]})</span></div>`).join('') || 'No matches.';
   });
 
   document.querySelectorAll('#vault-capture-bar button').forEach((btn) => btn.addEventListener('click', async () => {
@@ -1150,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function renderVaultTrash() {
     const items = await showVaultTrash();
     document.getElementById('vault-trash-list').innerHTML = items.map((row) => `
-      <div class="drive-backup-row">
+      <div class="drive-backup-row" data-type="${row.type}">
         <span>${row.label} (${VAULT_TYPE_LABELS[row.type]})</span>
         <span>
           <button class="vault-restore-btn" data-id="${row.id}">Restore</button>
@@ -1332,7 +1332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function renderMainTimeline() {
     const rows = await showMainTimeline();
     document.getElementById('timeline').innerHTML = rows.map((row) => `
-      <div class="drive-backup-row">
+      <div class="drive-backup-row" data-type="${row.type}">
         <span>${row.label} (${row.type})${row.tags && row.tags.length ? ' — ' + row.tags.join(', ') : ''}</span>
         <span>
           <button class="main-share-btn" data-id="${row.id}">Share</button>
@@ -1434,6 +1434,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('search-input').addEventListener('input', async (e) => {
     const term = e.target.value;
     const rows = term ? await searchEntries(db, term) : await showMainTimeline();
-    document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
+    document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row" data-type="${row.type}"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
   });
 });
