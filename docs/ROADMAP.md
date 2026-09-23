@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (main capture + timeline wired, visual theme modernized — Session 28)
+- [~] 4 — App shell & control flow (main capture + timeline wired; bottom-nav layout + modern controls — Session 29)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
@@ -61,7 +61,9 @@
   OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
   yet — labels/tags still work for search. **Visual theme modernized (Session 28, Decision 52)** —
   colorful by default now (per-capture-type color coding across buttons/rows/tabs, one brand
-  accent, gradient masthead accent), not styled solely through the separate opt-in Gradient mode.
+  accent, gradient masthead accent). **Layout rebuilt (Session 29, Decision 53)**: bottom nav
+  (Home/Vault/Settings) instead of one long scrolling page; Gradient mode removed entirely (dark
+  mode kept); every on/off setting is a switch, not a checkbox.
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on

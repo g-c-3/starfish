@@ -4,6 +4,46 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 29**
+
+Second visual pass, requested directly: drop Gradient mode entirely (keep dark mode), replace the
+single long scrolling page with a proper modern layout, switches instead of checkboxes.
+
+Gradient mode: removed end to end — CSS custom properties and rules, the JS that wrote them, the
+toggle and two color pickers in Settings. Nothing to migrate; appearance was always stored as loose
+key-value rows in the generic `meta` table, not schema columns, so the old rows just sit there
+unread from now on, harmless, including inside any backup made before this session.
+
+Layout: main-screen split into a Home panel (capture bar, search, timeline) and a Settings panel
+(everything that used to be a wall of stacked `<details>` below the timeline on the same page), switched
+by a new fixed bottom nav — Home / Vault / Settings. Vault needed no restructuring, it was already
+its own screen; the nav button just calls the same `showScreen('vault-screen')` every existing
+unlock path already called. `showScreen()` itself now also drives the nav's visibility and active
+state, centrally, rather than leaving that to every call site.
+
+Every standalone on/off setting is now a sliding switch — a pure CSS restyle of the existing
+checkbox inputs (`appearance: none` + a `::before` thumb), no id or JS listener touched. Backup/
+restore's multi-select category checkboxes deliberately stayed compact checkboxes rather than
+switches — a different kind of choice (pick-several vs one on/off), and five switches in a row for
+that would have read wrong. `<details>` sections in Settings got a custom rotating chevron and card
+treatment instead of the browser's bare disclosure triangle, which was doing a lot of the "dated"
+work by itself.
+
+Checked contrast again before shipping, same as last time: found and fixed the bottom nav's active
+and inactive tab-label colors, both slightly under AA at small text size — added a dedicated
+per-theme active-color token and raised the inactive label's opacity rather than leaving either as a
+near-miss. Also swapped two newer CSS features (`color-mix()`, `:has()`) that would render fine on a
+recent Chrome for explicit per-theme tokens and an HTML class instead, given this app's minSdk 22
+means some real device could plausibly carry an older system WebView.
+
+Decisions made: 53.
+
+Next session start point: unchanged — still need a real CI build and device pass covering
+everything from Sessions 25 through this one before any of it moves from "reasoned through" to
+"confirmed."
+
+---
+
 **Session 28**
 
 Visual redesign, requested directly against two screenshots showing the actual on-device look — flat

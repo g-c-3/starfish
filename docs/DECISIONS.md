@@ -473,3 +473,54 @@ every resulting pairing with the actual WCAG contrast formula in a sandbox, not 
 System font stack kept as-is, deliberately: this is an offline app with no other network calls beyond
 the ads SDK, and a web font would be the first thing in the entire codebase that needs fetching
 anything to render text. Hierarchy comes from weight/scale instead of a second typeface.
+
+---
+
+**53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
+instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
+directly, alongside keeping dark mode.
+
+Gradient mode's full removal: `--gradient-1`/`--gradient-2` CSS custom properties, the
+`data-gradient` attribute and its `:root[data-gradient="on"]` rules, `setGradientMode()`,
+`gradientMode`/`gradientColor1`/`gradientColor2` from `getAppearance()`/`applyAppearance()`, and the
+toggle + two color-picker inputs from Settings. Old `gradient_mode`/`gradient_color_1`/
+`gradient_color_2` rows already written to the generic `meta` table (including inside any backup
+file made before this session) are simply never read again — harmless to leave, nothing left that
+reads them, no migration needed since appearance was always stored key-by-key rather than as
+dedicated schema columns.
+
+Layout: `#main-screen` split into two panels, `#home-tab` (capture bar, search, timeline — what used
+to be the whole screen) and `#settings-tab` (every `<details>` section that used to sit stacked below
+the timeline on the same page). A new fixed `#bottom-nav` (Home / Vault / Settings) switches between
+them, plus `#vault-screen`, which was already its own screen and needed no restructuring — tapping
+Vault calls the exact same `showScreen('vault-screen')` every existing unlock-success path already
+called, so there's no new code path for the Vault's own lock gate to go through. `showScreen()` now
+also drives the nav's visibility (hidden for first-run/lock-screen/ad-gate, which have nothing to
+navigate between yet) and active-tab state, in one place, rather than every call site managing that
+itself.
+
+Every standalone on/off setting (dark mode, both biometric toggles, Drive auto-backup, the
+safety-backup confirmation) is now a sliding switch, done as a pure CSS restyle of the existing
+`<input type="checkbox">` (`appearance: none` + a `::before` thumb) — no change to the underlying
+element, id, or `change` listener, so none of the JS that reads `.checked` needed touching. Backup/
+restore's category checkboxes deliberately stay compact checkboxes, not switches — picking several
+items from a list is a different kind of choice than flipping one setting on or off, and a row of
+five switches for that would read wrong. Restore-mode's radio buttons got the same modern-dot
+treatment.
+
+`<details>`/`<summary>` in the new Settings tab restyled as cards with a custom rotating chevron
+(`::-webkit-details-marker` hidden, `::after` chevron rotated via `[open]`) instead of the browser's
+default disclosure triangle — the single biggest contributor to the "1990s" complaint, by nature of
+being what a plain unstyled `<details>` list always looks like regardless of anything else on the
+page.
+
+Checked WCAG contrast for every new color pairing before finalizing, same discipline as Decision 52:
+found and fixed three real failures — the bottom nav's active-tab label (used `--brand` directly at
+first, landed at 4.06:1/4.34:1 in light/dark, just under the 4.5:1 small-text threshold; added a
+dedicated `--nav-active` token per theme instead, both now ≥5.4:1) and the inactive tab label (fg at
+55% opacity blended to 3.87:1 in light mode; raised to 70% opacity, ≥4.5:1 in both themes). Also
+swapped two newer CSS features (`color-mix()`, `:has()`) for explicit per-theme tokens and an added
+HTML class respectively — both are fine on current Chrome but this app's minSdk 22 (Decision — see
+Session 20) means some real devices may carry an older system WebView than whatever's on the
+development machine that would have "just worked" during a quick look; explicit fallback-free CSS
+costs nothing here and removes the question entirely rather than assuming.

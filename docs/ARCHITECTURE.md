@@ -410,15 +410,16 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   re-locks the app, so the password isn't only a one-time gate at cold launch.
 - **Dark mode** — on/off toggle, stored as `meta.dark_mode` (`'on'`/`'off'`). No system-theme auto-detection
   required for v1; the toggle is the single source of truth once set. Applies via a `data-theme` attribute on
-  `<html>` and CSS custom properties, not a full stylesheet swap.
-- **Gradient mode** — on/off toggle, independent of dark mode (all four combinations — light/flat,
-  light/gradient, dark/flat, dark/gradient — are valid). When on, exposes two color pickers
-  (`meta.gradient_color_1`, `meta.gradient_color_2`); picking the same color for both is explicitly allowed and
-  collapses the effect to a soft single-tone glow rather than a two-tone gradient. Rendered as a soft background
-  gradient plus a blurred "spillover/glow" layer behind cards/panels (large, blurred, semi-transparent color
-  blobs positioned behind content — pure CSS, no native plugin) — purely cosmetic, no effect on data, search, or
-  any other behavior. Both settings live under the App Settings backup category (see Backup & Restore above),
-  so they travel with a backup/restore like any other non-sensitive preference.
+  `<html>` and CSS custom properties, not a full stylesheet swap. Lives under the App Settings backup category
+  (see Backup & Restore above), so it travels with a backup/restore like any other non-sensitive preference.
+  A separate "Gradient mode" (full-screen blurred glow, user-picked colors) existed briefly and was removed
+  (Decision 53) — dark mode is the only Appearance setting now.
+- **Layout: bottom nav, not one long page (Decision 53)** — Home / Vault / Settings, fixed at the bottom of
+  the screen once the app is unlocked (hidden on first-run/lock-screen/the ad gate, which have nothing to
+  navigate between). Home and Settings are two panels inside the same main screen, toggled by the nav rather
+  than requiring a scroll past the entire timeline to reach settings; Vault keeps its own separate screen and
+  lock gate, unchanged by this — the nav's Vault button just triggers the same unlock flow that already
+  existed.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 
