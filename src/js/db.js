@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS credentials (
   private_pin_hint TEXT,
   auto_lock_minutes INTEGER DEFAULT 5,       -- app-level lock timeout
   vault_auto_lock_minutes INTEGER DEFAULT 5, -- Private Vault's own, independent timeout — separate lock, separate timer
+  biometric_app_enabled INTEGER DEFAULT 0,   -- fingerprint/face as an alternative to the app-open password (Decision 50)
+  biometric_vault_enabled INTEGER DEFAULT 0, -- same, for the Vault PIN — independent toggle, independent of the above
   last_backup_at INTEGER,
   last_drive_backup_at INTEGER
 );
@@ -104,11 +106,27 @@ async function initDb(sqlite) {
   await db.open();
   await db.execute(SCHEMA_SQL);
 
+  // First real migration this app has needed: CREATE TABLE IF NOT EXISTS only helps fresh
+  // installs — an existing on-device DB from before a column was added never gets it, since the
+  // table already exists and the whole CREATE statement is skipped. ensureColumn() checks first
+  // and ALTERs only if missing, so it's safe to call unconditionally on every boot, on both a
+  // fresh DB (columns already there from SCHEMA_SQL, no-ops) and an existing one (adds them
+  // once, then no-ops from then on). Reuse this for any future column addition instead of only
+  // editing SCHEMA_SQL — see Decision 50.
+  await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
+  await ensureColumn(db, 'credentials', 'biometric_vault_enabled', 'INTEGER DEFAULT 0');
+
   const versionRow = await db.query(`SELECT value FROM meta WHERE key='schema_version'`);
   if (!versionRow.values || versionRow.values.length === 0) {
     await db.run(`INSERT INTO meta (key, value) VALUES ('schema_version', ?)`, [String(SCHEMA_VERSION)]);
   }
   return db;
+}
+
+async function ensureColumn(db, table, column, columnDefSql) {
+  const info = await db.query(`PRAGMA table_info(${table})`);
+  const exists = (info.values || []).some((c) => c.name === column);
+  if (!exists) await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${columnDefSql}`);
 }
 
 // Insert an entry and keep the FTS index in sync.

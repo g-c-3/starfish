@@ -15,6 +15,7 @@ import {
 } from './gdrive.js';
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
 import { VoiceRecorder } from 'cap-voice-rec';
+import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
@@ -92,6 +93,14 @@ async function showLockScreen() {
     if (ok) { await onUnlocked(); return { success: true }; }
     return { success: false };
   };
+
+  // Biometric alternative — only offered if enabled for this lock AND actually available right
+  // now (checked fresh every time the lock screen shows, not cached: enrollment/hardware state
+  // can change between sessions). window.tryBiometricUnlockApp() reuses attemptUnlock() above
+  // rather than duplicating the verify step, so there's exactly one path that decides "correct
+  // password" either way.
+  const bioRow = (await db.query(`SELECT biometric_app_enabled FROM credentials WHERE id=1`)).values[0];
+  window.biometricUnlockAvailable = !!bioRow?.biometric_app_enabled && await isBiometricAvailable();
 }
 
 // appPassword/vaultPin: either or both may be null/empty — the app-open password is optional from
@@ -116,10 +125,75 @@ window.completeFirstRunSetup = async ({ appPassword = null, appPasswordHint = ''
 async function setAppPassword(newPassword, hint = '') {
   const { hash, salt } = await hashPassword(newPassword);
   await db.run(`UPDATE credentials SET app_password_hash=?, app_password_salt=?, app_password_hint=? WHERE id=1`, [hash, salt, hint]);
+  await disableAppBiometric(); // stored secret (if any) was the old password — stale now, must re-enable explicitly
 }
 async function removeAppPassword() {
   await db.run(`UPDATE credentials SET app_password_hash=NULL, app_password_salt=NULL, app_password_hint=NULL WHERE id=1`);
+  await disableAppBiometric(); // nothing left to unlock biometrically
 }
+
+// ---- Biometric unlock (optional, alternative to typing the app-open password or Vault PIN —
+// off by default, toggled independently per lock. See biometric.js for the plugin wrapper and
+// its security notes, and ARCHITECTURE §3/§3b — this never becomes a fourth credential: it only
+// ever stores/replays the same password or PIN the person already set, gated by a fresh
+// biometric prompt each time. Decision 50. ----
+async function getBiometricSettings() {
+  const row = (await db.query(`SELECT biometric_app_enabled, biometric_vault_enabled FROM credentials WHERE id=1`)).values[0] || {};
+  return {
+    available: await isBiometricAvailable(),
+    appEnabled: !!row.biometric_app_enabled,
+    vaultEnabled: !!row.biometric_vault_enabled,
+  };
+}
+
+async function enableAppBiometric(currentPassword) {
+  const row = (await db.query(`SELECT app_password_hash, app_password_salt FROM credentials WHERE id=1`)).values[0];
+  if (!row?.app_password_hash) return { success: false, reason: 'no-password-set' };
+  const ok = await verifyPassword(currentPassword, row.app_password_hash, row.app_password_salt);
+  if (!ok) return { success: false, reason: 'wrong-password' };
+  await enableBiometric('app', currentPassword); // shows the biometric prompt itself, throws on cancel/failure
+  await db.run(`UPDATE credentials SET biometric_app_enabled=1 WHERE id=1`);
+  return { success: true };
+}
+async function disableAppBiometric() {
+  await disableBiometric('app');
+  await db.run(`UPDATE credentials SET biometric_app_enabled=0 WHERE id=1`);
+}
+
+async function enableVaultBiometric(currentPin) {
+  const row = (await db.query(`SELECT private_pin_hash, private_pin_salt FROM credentials WHERE id=1`)).values[0];
+  if (!row?.private_pin_hash) return { success: false, reason: 'no-pin-set' };
+  const ok = await verifyPassword(currentPin, row.private_pin_hash, row.private_pin_salt);
+  if (!ok) return { success: false, reason: 'wrong-pin' };
+  await enableBiometric('vault', currentPin);
+  await db.run(`UPDATE credentials SET biometric_vault_enabled=1 WHERE id=1`);
+  return { success: true };
+}
+async function disableVaultBiometric() {
+  await disableBiometric('vault');
+  await db.run(`UPDATE credentials SET biometric_vault_enabled=0 WHERE id=1`);
+}
+
+// Reuse the exact same verify paths as manual entry (attemptUnlock / unlockVault) rather than a
+// second copy of "what counts as correct" — biometric only ever supplies the same input a typed
+// entry would have.
+async function tryBiometricUnlockApp() {
+  const password = await unlockWithBiometric('app');
+  if (!password) return { success: false };
+  return window.attemptUnlock(password);
+}
+async function tryBiometricUnlockVault() {
+  const pin = await unlockWithBiometric('vault');
+  if (!pin) return { success: false };
+  return unlockVault(pin);
+}
+window.getBiometricSettings = getBiometricSettings;
+window.enableAppBiometric = enableAppBiometric;
+window.disableAppBiometric = disableAppBiometric;
+window.enableVaultBiometric = enableVaultBiometric;
+window.disableVaultBiometric = disableVaultBiometric;
+window.tryBiometricUnlockApp = tryBiometricUnlockApp;
+window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 
 async function onUnlocked() {
   showScreen('main-screen');
@@ -344,6 +418,7 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = []) {
 async function setupVaultPin(pin, hint = '') {
   const { hash, salt } = await hashPassword(pin);
   await db.run(`UPDATE credentials SET private_pin_hash=?, private_pin_salt=?, private_pin_hint=? WHERE id=1`, [hash, salt, hint]);
+  await disableVaultBiometric(); // stored secret (if any) was the old PIN — stale now, must re-enable explicitly
 }
 
 async function unlockVault(pin) {
@@ -784,6 +859,8 @@ window.Dumpzone = {
   listAllTags: () => listAllTags(db),
   getAppearance, setDarkMode, setGradientMode,
   setAppPassword, removeAppPassword, setAutoLockMinutes,
+  getBiometricSettings, enableAppBiometric, disableAppBiometric,
+  enableVaultBiometric, disableVaultBiometric, tryBiometricUnlockApp, tryBiometricUnlockVault,
   // Private Vault — unlockVault/lockVault replace the old unlockPrivateNotes/lockPrivateNotes names
   // (this pivot generalized "private notes" into the full vault; nothing shipped yet to keep the old
   // names for, so a clean rename rather than an alias).
@@ -878,6 +955,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     const result = await window.attemptUnlock(document.getElementById('password-input').value);
     if (!result.success) document.getElementById('password-hint').textContent = 'Wrong password.';
   });
+  const bioUnlockBtn = document.getElementById('biometric-unlock-btn');
+  if (bioUnlockBtn) {
+    bioUnlockBtn.classList.toggle('hidden', !window.biometricUnlockAvailable);
+    bioUnlockBtn.addEventListener('click', async () => {
+      const result = await window.tryBiometricUnlockApp();
+      if (!result.success) document.getElementById('password-hint').textContent = 'Biometric unlock failed — enter your password.';
+    });
+  }
+
+  // ---- Biometric settings toggles (App lock + Vault sections) — off by default, each requires
+  // confirming the real password/PIN once before the plugin will store it (see enableAppBiometric/
+  // enableVaultBiometric — this module never trusts a checkbox alone to prove the person knows
+  // the credential). ----
+  const appBioRow = document.getElementById('app-biometric-row');
+  const appBioToggle = document.getElementById('app-biometric-toggle');
+  const appBioConfirm = document.getElementById('app-biometric-confirm');
+  if (appBioRow) {
+    const settings = await getBiometricSettings();
+    appBioRow.classList.toggle('hidden', !settings.available);
+    appBioToggle.checked = settings.appEnabled;
+    appBioToggle.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        e.target.checked = false; // only actually flips true once the password below is confirmed
+        appBioConfirm.classList.remove('hidden');
+      } else {
+        await window.disableAppBiometric();
+      }
+    });
+    document.getElementById('app-biometric-confirm-btn').addEventListener('click', async () => {
+      const pwInput = document.getElementById('app-biometric-confirm-password');
+      const result = await window.enableAppBiometric(pwInput.value);
+      pwInput.value = '';
+      if (result.success) { appBioToggle.checked = true; appBioConfirm.classList.add('hidden'); }
+      else alert('Wrong password.');
+    });
+  }
+  const vaultBioConfirm = document.getElementById('vault-biometric-confirm');
+  const vaultBioToggleEl = document.getElementById('vault-biometric-toggle');
+  if (vaultBioToggleEl) {
+    vaultBioToggleEl.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        e.target.checked = false; // only actually flips true once the PIN below is confirmed
+        vaultBioConfirm.classList.remove('hidden');
+      } else {
+        await window.disableVaultBiometric();
+        await refreshVaultGateView();
+      }
+    });
+    document.getElementById('vault-biometric-confirm-btn').addEventListener('click', async () => {
+      const pinInput = document.getElementById('vault-biometric-confirm-pin');
+      const result = await window.enableVaultBiometric(pinInput.value);
+      pinInput.value = '';
+      if (result.success) { vaultBioConfirm.classList.add('hidden'); await refreshVaultGateView(); }
+      else alert('Wrong PIN.');
+    });
+  }
 
   // ---- Trash (main) ----
   async function renderTrash() {
@@ -906,6 +1039,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const needsSetup = !cred.values[0]?.private_pin_hash;
     document.getElementById('vault-pin-setup-view').classList.toggle('hidden', !needsSetup);
     document.getElementById('vault-locked-view').classList.toggle('hidden', needsSetup);
+
+    // Biometric row/button for the Vault — only meaningful once a PIN exists, and only shown at
+    // all if the hardware/enrollment is actually available right now.
+    const settings = await getBiometricSettings();
+    const vaultBioUnlockBtn = document.getElementById('vault-biometric-unlock-btn');
+    if (vaultBioUnlockBtn) vaultBioUnlockBtn.classList.toggle('hidden', needsSetup || !settings.vaultEnabled || !settings.available);
+    const vaultBioRow = document.getElementById('vault-biometric-row');
+    const vaultBioToggle = document.getElementById('vault-biometric-toggle');
+    if (vaultBioRow && vaultBioToggle) {
+      vaultBioRow.classList.toggle('hidden', needsSetup || !settings.available);
+      vaultBioToggle.checked = settings.vaultEnabled;
+    }
   }
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
     await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
@@ -916,6 +1061,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (result.success) { showScreen('vault-screen'); await renderVaultList('all'); }
     else if (result.setupNeeded) await refreshVaultGateView();
     else alert('Wrong PIN.');
+  });
+  document.getElementById('vault-biometric-unlock-btn')?.addEventListener('click', async () => {
+    const result = await window.tryBiometricUnlockVault();
+    if (result.success) { showScreen('vault-screen'); await renderVaultList('all'); }
+    else alert('Biometric unlock failed — enter your Vault PIN.');
   });
   document.getElementById('vault-lock-btn').addEventListener('click', () => {
     lockVault();
