@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (main capture + timeline now wired, still unstyled)
+- [~] 4 — App shell & control flow (main capture + timeline wired, visual theme modernized — Session 28)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
@@ -59,7 +59,9 @@
   attached the five per-file actions (built in Phase 7, sitting unused ever since) to anything —
   that's now done too, with tags shown per entry (one bulk `GROUP_CONCAT` query, not N+1).
   OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
-  yet — labels/tags still work for search. Still plain/unstyled, matching the rest of Phase 4.
+  yet — labels/tags still work for search. **Visual theme modernized (Session 28, Decision 52)** —
+  colorful by default now (per-capture-type color coding across buttons/rows/tabs, one brand
+  accent, gradient masthead accent), not styled solely through the separate opt-in Gradient mode.
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on

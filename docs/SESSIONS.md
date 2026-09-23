@@ -4,6 +4,36 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 28**
+
+Visual redesign, requested directly against two screenshots showing the actual on-device look — flat
+grey/white, one blue accent, described accurately as dated. Rebuilt `style.css` around a colorful
+default theme, kept fully separate from the existing opt-in Gradient mode (untouched, still exactly
+what it was).
+
+Design: one brand accent (indigo/violet) for primary actions, plus five category colors — one per
+capture type (Text/Voice/Image/PDF/Files) — applied everywhere that type shows up: capture-bar
+buttons, every list row's left edge, the Vault's filter tabs. Same five hues, same meaning, everywhere
+they appear, so the color coding only has to be learned once. `app.js` gained `data-type="..."` on six
+row-render call sites that previously only put the type in text, so the new CSS selectors have
+something to match against — additive only, checked the type vocabulary already lined up with the
+capture buttons' own `data-type` values before relying on it.
+
+Checked accessibility before shipping, not after: computed real WCAG contrast ratios for every
+text-on-color pairing in a sandbox rather than eyeballing it. Found and fixed two real failures —
+white button-label text on the lighter category colors (amber/teal/green) in the Vault's capture bar,
+and the primary-button gradient's lighter end in both light and dark theme. Fixed by separating
+button-fill colors from brand-as-text colors (different contrast requirements: white-on-fill vs
+text-on-page-background) rather than trying to satisfy both with one token.
+
+Decisions made: 52.
+
+Next session start point: unchanged — still need a real CI build and device pass covering Sessions
+25–28 together (voice-recording permissions, biometric unlock, real per-build versioning, and now
+this visual pass) before any of it can be called confirmed rather than reasoned-through.
+
+---
+
 **Session 27**
 
 Two things this session. First, informational only: the app icon was replaced directly on GitHub by

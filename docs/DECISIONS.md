@@ -436,3 +436,40 @@ template that's always "1.0"), and correctly refused to run (exit 1, clear error
 Unrelated, noted for the record: the app icon was replaced directly on GitHub by hand this session
 (`resources/icon.png`) — exactly the documented single-file swap in `native-setup.md` §2, no code or
 doc change needed on this end.
+
+---
+
+**52. Default theme is colorful, not just the opt-in Gradient mode — one color per capture type
+(Text/Voice/Image/PDF/Files), used consistently everywhere that type appears.** Requested directly:
+the previous theme (flat grey/white, single blue accent) read as dated, confirmed by the attached
+screenshots. Gradient mode (the existing full-screen blurred-glow, user-picked-color effect) stays
+exactly as it was — untouched mechanism, still opt-in, still separate — this decision is about what
+the app looks like *without* it turned on.
+
+Palette: one brand accent (indigo/violet, `#6C5CE7`) for primary actions and the wordmark, plus five
+category colors — amber (note), teal (voice), pink (image), blue (pdf), green (file) — applied to the
+capture-bar buttons, every list row's left edge (`.drive-backup-row[data-type=...]`), and the Vault's
+filter tabs and capture bar. The color carries real information (which type something is, scannable
+down a long list) rather than sitting on top as decoration — the same five hues appear in the same
+places whether you're in the main timeline or the Vault, so the mapping only has to be learned once.
+
+`src/js/app.js` gained `data-type="..."` on six render call sites that previously only put the type in
+the row's text (`renderMainTimeline`, its search-input counterpart, `renderTrash`, `renderVaultList`,
+its search-input counterpart, `renderVaultTrash`) — additive only, nothing removed, verified the type
+vocabulary already matched the capture buttons' `data-type`/`data-vault-type` values exactly
+(`note`/`voice`/`image`/`pdf`/`file`) before relying on it. Two render sites (`renderDriveBackupList`,
+`renderStorageBreakdown`) weren't touched — their rows represent whole backups or storage categories,
+not a single capture type, so there's no matching color to apply.
+
+Checked contrast before finalizing, not after a complaint: white text on the lighter category colors
+(amber/teal/green) failed WCAG AA on the Vault's capture-bar button labels — fixed by giving those
+buttons dark, per-color text (same values already used for the Vault tabs' active state, which were
+fine). The primary-button gradient had the same problem at its lighter end in both themes — fixed by
+splitting button-fill color (`--btn-1`/`--btn-2`, kept dark enough for white text in both themes) from
+brand-as-text color (`--brand`, used for the wordmark, secondary-button text/border, and the focus
+ring — needs to read well as text on the page background instead, a different constraint). Verified
+every resulting pairing with the actual WCAG contrast formula in a sandbox, not by eye.
+
+System font stack kept as-is, deliberately: this is an offline app with no other network calls beyond
+the ads SDK, and a web font would be the first thing in the entire codebase that needs fetching
+anything to render text. Hierarchy comes from weight/scale instead of a second typeface.
