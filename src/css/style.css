@@ -1,19 +1,21 @@
-/* Dumpzone visual identity (Decision 52). Design plan, kept here so a future pass doesn't
-   re-derive it from scratch or drift into a generic look by accident:
+/* Dumpzone visual identity. Design plan, kept here so a future pass doesn't re-derive it from
+   scratch or drift into a generic look by accident:
    - Color: a neutral violet-tinted surface (not flat grey) + one brand accent (indigo/violet,
      #6C5CE7) for primary actions, PLUS a five-color category set — one hue per capture type
      (Text/Voice/Image/PDF/Files) — used consistently on capture buttons, filter tabs, and every
-     list row. The color IS information here (which type something is, at a glance across a long
-     list), not decoration layered on top.
+     list row (Decision 52). The color IS information here (which type something is, at a glance
+     across a long list), not decoration layered on top.
    - Type: system font stack, kept deliberately (this is an offline app — no web font to fetch,
      nothing to embed, consistent with the no-network-except-ads rule). Weight and scale carry
      hierarchy instead of a second typeface.
-   - Layout: rows read as quiet cards with a colored left edge (type), not the identical
-     drop-shadowed tile grid every generic dashboard defaults to. One deliberate colorful moment —
-     a gradient rule under the "Today" masthead — rather than gradients scattered everywhere.
-   - The existing opt-in "Gradient mode" (full-screen blurred glow, user-picked colors) is a
-     separate, more intense effect layered on top of this default theme, not a replacement for it —
-     untouched here besides the color tokens it already reads from. */
+   - Layout (Decision 53): a bottom nav (Home / Vault / Settings) replaces the previous single
+     long scrolling page — settings used to sit as a wall of stacked <details> below the timeline
+     on the same screen; now they're their own tab. The opt-in "Gradient mode" full-screen glow
+     effect was removed entirely (Decision 53) — dark mode is the only remaining Appearance
+     option. Rows read as quiet cards with a colored left edge (type), not the identical
+     drop-shadowed tile grid every generic dashboard defaults to. Toggles are switches, not
+     checkboxes — a single on/off setting reads as a switch; a multi-select-from-a-list (backup
+     categories) stays a compact checkbox, since that's a different kind of choice. */
 
 :root {
   --bg: #f6f4ff;
@@ -33,9 +35,10 @@
   --type-file: #10b981;
 
   --danger: #d9534f;
-
-  --gradient-1: transparent;
-  --gradient-2: transparent;
+  --vault: #1a1030;
+  --vault-fg: #e8d9ff;
+  --brand-tint: #ece8ff;
+  --nav-active: #5b4bc4;
 }
 
 :root[data-theme="dark"] {
@@ -48,6 +51,8 @@
   --btn-1: #6c5ce7;
   --btn-2: #4c3db0;
   --brand-fg: #ffffff;
+  --brand-tint: #2a2350;
+  --nav-active: #a599f9;
 }
 
 * { box-sizing: border-box; }
@@ -70,12 +75,16 @@ h4 { font-size: 14px; font-weight: 700; opacity: 0.85; }
 .screen { min-height: 100vh; padding: 20px; position: relative; z-index: 1; }
 .hidden { display: none; }
 
-input, button {
+/* Screens that show the bottom nav need room at the bottom so the last list item/button isn't
+   hidden behind it — first-run/lock/ad-gate don't show the nav, so they keep plain padding. */
+#main-screen, #vault-screen { padding-bottom: 96px; }
+
+input, button, select {
   font-size: 16px; padding: 12px 14px; margin: 6px 0; width: 100%;
   border-radius: 12px; border: 1px solid var(--border);
   background: var(--card-bg); color: var(--fg);
 }
-input:focus-visible, button:focus-visible {
+input:focus-visible, button:focus-visible, select:focus-visible {
   outline: 2px solid var(--brand); outline-offset: 2px;
 }
 button {
@@ -95,12 +104,12 @@ button {
 .warning-text { color: var(--danger); opacity: 1; }
 
 /* ---- Masthead — the one deliberate colorful flourish, not repeated elsewhere ---- */
-#main-screen > header {
+#home-tab > header {
   padding-bottom: 14px; margin-bottom: 8px;
   border-bottom: 3px solid transparent;
   border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-file)) 1;
 }
-#main-screen > header h2 { font-size: 24px; }
+#home-tab > header h2 { font-size: 24px; }
 
 /* ---- Capture bar: one color per capture type, the app's most-used surface ---- */
 #capture-bar { display: flex; gap: 8px; margin: 12px 0; }
@@ -116,35 +125,31 @@ button {
 
 #timeline { margin-top: 12px; }
 
-/* --- Gradient mode: soft background gradient + blurred glow/spillover layer ---
-   Toggled by adding data-gradient="on" to <html>. Colors set via --gradient-1/--gradient-2
-   CSS custom properties, written at runtime from the two color pickers (app.js).
-   Purely cosmetic: sits behind all content (z-index: 0), never intercepts input.
-   Independent of the default colorful theme above — this is a stronger, opt-in effect layered
-   on top, not what makes the app colorful by default. */
-:root[data-gradient="on"] body {
-  background: var(--bg);
+/* ---- Bottom nav (Decision 53) — fixed, shown only for main-screen/vault-screen (app.js
+   toggles its .hidden class from showScreen()). Three tabs; each gets its own active color so
+   which section you're in stays legible even glanced at quickly: Home/Settings use the brand
+   accent, Vault uses its own deep-violet identity (matching .vault-banner) rather than brand,
+   since the Vault is deliberately visually distinct everywhere else too. ---- */
+#bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; background: var(--card-bg); border-top: 1px solid var(--border);
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
 }
-
-:root[data-gradient="on"] body::before {
-  content: "";
-  position: fixed;
-  inset: -10%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 20% 20%, var(--gradient-1) 0%, transparent 45%),
-    radial-gradient(circle at 80% 75%, var(--gradient-2) 0%, transparent 45%);
-  filter: blur(60px);
-  opacity: 0.55;
+#bottom-nav.hidden { display: none; }
+#bottom-nav button {
+  flex: 1; width: auto; background: none; box-shadow: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; margin: 0; border-radius: 12px;
+  color: var(--fg); opacity: 0.7; font-weight: 600;
 }
-
-/* If both gradient colors are set identical, the two radial blobs overlap into one soft
-   single-tone glow rather than a visible two-tone blend — this is intentional, not a bug. */
+#bottom-nav .nav-icon { font-size: 20px; line-height: 1; }
+#bottom-nav .nav-label { font-size: 11px; }
+#bottom-nav button.active { opacity: 1; color: var(--nav-active); background: var(--brand-tint); }
+#bottom-nav button[data-nav="vault"].active { color: var(--vault-fg); background: var(--vault); }
 
 /* --- Backup/restore & Drive settings (Phase 6/13) --- */
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
-.category-checkboxes label { width: auto; display: flex; align-items: center; gap: 4px; font-size: 14px; }
+.category-checkboxes label { width: auto; display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .status-line { font-size: 13px; opacity: 0.85; min-height: 1.2em; margin: 4px 0 12px; }
 .mode-description { font-size: 12px; opacity: 0.7; margin: 0 0 10px 24px; }
 
@@ -184,15 +189,14 @@ button {
 .drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
 
 /* --- Private Vault (pivot) — keeps its own deep-violet identity, distinct from the rest of the
-   app's category colors, so "you are in the Vault" stays legible at a glance. Untouched besides
-   matching the new border-radius scale. --- */
+   app's category colors, so "you are in the Vault" stays legible at a glance. --- */
 .vault-banner {
-  background: #1a1030; color: #e8d9ff;
+  background: var(--vault); color: var(--vault-fg);
   padding: 14px 16px; border-radius: 14px;
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
 }
-.vault-banner h2 { margin: 0; font-size: 16px; letter-spacing: 0.05em; color: #e8d9ff; }
+.vault-banner h2 { margin: 0; font-size: 16px; letter-spacing: 0.05em; color: var(--vault-fg); }
 .vault-banner button { width: auto; }
 #vault-capture-bar { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
 #vault-capture-bar button { width: auto; padding: 10px 14px; border-radius: 14px; }
@@ -207,7 +211,7 @@ button {
   width: auto; padding: 7px 14px; border-radius: 18px;
   border: 1.5px solid var(--border); background: var(--card-bg); color: var(--fg); font-weight: 600;
 }
-.vault-tab.active { background: #1a1030; color: #e8d9ff; border-color: #1a1030; }
+.vault-tab.active { background: var(--vault); color: var(--vault-fg); border-color: var(--vault); }
 .vault-tab[data-vault-tab="note"].active  { background: var(--type-note);  color: #2a1c00; border-color: var(--type-note); }
 .vault-tab[data-vault-tab="voice"].active { background: var(--type-voice); color: #00332c; border-color: var(--type-voice); }
 .vault-tab[data-vault-tab="image"].active { background: var(--type-image); color: #3a0020; border-color: var(--type-image); }
@@ -218,3 +222,80 @@ button {
 .select-files-category-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
 .select-files-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 4px 20px; font-size: 14px; }
 .select-files-item .file-size { opacity: 0.6; font-size: 12px; }
+
+/* ---- Settings tab (Decision 53) — modern expandable cards, not the browser-default disclosure
+   triangle list this replaced. Each <details> is its own card; the marker is a custom chevron
+   that rotates on open rather than the default ▶/▼ glyph. ---- */
+#settings-tab details {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 4px 16px; margin-bottom: 10px; overflow: hidden;
+}
+#settings-tab summary {
+  list-style: none; cursor: pointer;
+  padding: 14px 0; font-weight: 700; font-size: 15px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#settings-tab summary::-webkit-details-marker { display: none; }
+#settings-tab summary::after {
+  content: "›"; font-size: 22px; font-weight: 400; opacity: 0.5;
+  transform: rotate(90deg); display: inline-block;
+}
+#settings-tab details[open] summary::after { transform: rotate(270deg); }
+@media (prefers-reduced-motion: no-preference) {
+  #settings-tab summary::after { transition: transform 0.15s ease; }
+}
+#settings-tab details > *:not(summary) { margin-top: 0; }
+#settings-tab details[open] { padding-bottom: 16px; }
+
+/* ---- Modern switches: a single on/off setting (dark mode, biometric unlock, auto-backup, the
+   safety-backup confirmation) reads as a sliding switch rather than a checkbox — marked with
+   class="switch-row" on the wrapping <label> in index.html. A multi-select-from-a-list
+   (.category-checkboxes) is a different kind of choice and keeps a compact checkbox instead;
+   styled separately below rather than making every checkbox in the app a switch regardless of
+   what it means. ---- */
+.switch-row { display: flex; align-items: center; gap: 10px; width: auto; cursor: pointer; }
+.switch-row input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 44px; height: 26px; min-width: 44px;
+  border-radius: 999px; background: var(--border);
+  position: relative; margin: 0; padding: 0; border: none; flex-shrink: 0; cursor: pointer;
+}
+.switch-row input[type="checkbox"]::before {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch-row input[type="checkbox"]:checked { background: linear-gradient(135deg, var(--btn-1), var(--btn-2)); }
+.switch-row input[type="checkbox"]:checked::before { transform: translateX(18px); }
+@media (prefers-reduced-motion: no-preference) {
+  .switch-row input[type="checkbox"]::before { transition: transform 0.15s ease; }
+  .switch-row input[type="checkbox"] { transition: background 0.15s ease; }
+}
+
+/* Compact modern checkbox for multi-select lists (backup/restore categories) — a small rounded
+   square with a checkmark, not a switch; switches imply on/off, this is pick-any-of-these. */
+.category-checkboxes input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; min-width: 20px;
+  border-radius: 6px; border: 1.5px solid var(--border);
+  background: var(--card-bg); margin: 0; padding: 0; flex-shrink: 0; cursor: pointer;
+  position: relative;
+}
+.category-checkboxes input[type="checkbox"]:checked {
+  background: var(--brand); border-color: var(--brand);
+}
+.category-checkboxes input[type="checkbox"]:checked::after {
+  content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 700;
+}
+
+/* Modern radio dots for restore-mode (append/overwrite) */
+input[type="radio"] {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; min-width: 20px;
+  border-radius: 50%; border: 1.5px solid var(--border);
+  background: var(--card-bg); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
+  display: inline-block; vertical-align: middle;
+}
+input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
+.radio-row { display: flex; align-items: center; width: auto; }
