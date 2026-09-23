@@ -139,7 +139,35 @@ foreground service keeps the process alive for scheduled reminders. Adds a persi
 tradeoff between reliability and being unobtrusive. Treat as a v2 addition if standard Local Notifications
 prove unreliable in testing on your actual device.
 
-## 10. Google Drive backup — Google Cloud Console setup (Phase 13, optional/opt-in)
+## 10. Biometric unlock (Decision 50)
+Plugin: `@capgo/capacitor-native-biometric@6.0.4` (Capgo's actively-maintained fork of the older
+`capacitor-native-biometric`). **Not the original package** — checked first and rejected: it declares a
+`@capacitor/core: ^3.4.3` peer dependency (Capacitor 3, three major versions behind ours) and its
+`build.gradle` points at `jcenter()`, which has been shut down since 2021 — using it would likely have
+broken the CI build the moment Gradle tried to resolve a dependency from there. The Capgo fork's `6.0.4`
+release pins `@capacitor/core: ^6.0.0` exactly, and its `build.gradle` uses `google()`/`mavenCentral()`
+only, AGP 8.2.1, compileSdk/targetSdk 34 — matches this project's setup. Verified by downloading both
+packages directly and reading their manifests/gradle files, not by trusting either README.
+
+No manifest permission added to `scripts/patch-manifest.js` for this: `androidx.biometric:biometric:1.1.0`
+(the plugin's own dependency) self-declares `android.permission.USE_BIOMETRIC` in its own AAR manifest —
+standard for that library since its first release, and it's a normal-protection permission (no runtime
+prompt either way). Not verified by unpacking the AAR directly the way `cap-voice-rec`'s manifest was in
+Session 25 — that package comes via Maven/Gradle, not npm, so there's nothing to `npm pack` and inspect
+in this sandbox. Flagging the difference in verification depth honestly; worth a first-principles check
+if a real build ever surfaces a missing-permission crash specifically tied to biometric.
+
+Security note (see also ARCHITECTURE.md §3): this plugin's Keystore key uses
+`setUnlockedDeviceRequired(true)` but not `setUserAuthenticationRequired(true)` — confirmed by reading
+`NativeBiometric.java` directly. Decrypting the stored secret only requires the device to be unlocked, not
+a fresh biometric check on every read; the biometric prompt is enforced by always calling
+`verifyIdentity()` before `getCredentials()` in `src/js/biometric.js`, not by the hardware itself. Also:
+the key isn't invalidated when biometric enrollment changes (no `setInvalidatedByBiometricEnrollment`), so
+adding a new fingerprint on the device doesn't automatically revoke this feature's access the way some
+other apps' equivalent does. Neither is fixable without forking the plugin's native code — both flagged,
+neither blocking, since manual password/PIN entry remains the real security boundary regardless.
+
+## 11. Google Drive backup — Google Cloud Console setup (Phase 13, optional/opt-in)
 This is the manual, one-time setup this feature needs before any code can talk to Drive. Everything
 here is web-UI on console.cloud.google.com — no terminal.
 
