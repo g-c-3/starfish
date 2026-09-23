@@ -75,6 +75,30 @@ require a new backup; changing the PIN only re-encrypts vault entries under a fr
 backup only ever uses whatever passkey is typed in at that moment — an older backup keeps working with whatever
 passkey was used when *it* was made.
 
+### Biometric unlock (optional, alternative entry — Decision 50)
+Fingerprint/face can be enabled as an alternative way to unlock either the app-open password or the Vault
+PIN — never both at once by a single toggle, and never the backup passkey (that one is never stored on
+the device at all, biometric or otherwise, by design — nothing to gate). Off by default, toggled
+independently per lock in Settings, and only offered when enabling it: the real credential is confirmed
+(hash-compared against what's already stored) before anything is handed to the biometric layer.
+
+This is **not a fourth credential** — it never creates a new secret. What it stores, natively, is the
+exact password or PIN the person already set, gated behind a biometric prompt at the point of both
+storing and retrieving it. Turning it on doesn't change what "forgot password" or "forgot PIN" do (see
+below) — those flows are untouched, and a forgotten password/PIN is exactly as unrecoverable/recoverable
+as it always was, biometric or not. Changing or removing the underlying password/PIN immediately clears
+whatever was stored for biometric unlock — a stale cached value would otherwise unlock with (or derive a
+vault key from) the *old* credential, silently wrong the moment it changed. Re-enabling after a change
+requires confirming the new credential again, same as first-time setup.
+
+Security model, stated plainly: the stored secret sits behind an Android Keystore key that requires the
+device to be unlocked to use, but that key does not itself demand a fresh biometric check to decrypt —
+the biometric prompt is enforced in the app's own call sequence (always prompt, only read the stored
+secret after the prompt succeeds), not by the hardware on every read. This matches how most consumer
+apps' "unlock with fingerprint" works, but it's a convenience layer on top of the real credential, not an
+independent hardware guarantee — manual password/PIN entry remains the actual security boundary and
+always stays available as a fallback.
+
 ### Forgot password
 - **App-open password:** recoverable via backup-passkey proof — see flow below. Moot if quick access is
   enabled (no password exists to forget).
@@ -248,7 +272,7 @@ Testing status with an external audience gets refresh tokens that expire after 7
 beyond basic profile/email — which would silently break time-based auto-backup about a week after
 setup, with no obvious symptom beyond backups quietly stopping. Publishing to Production removes that
 limit; because the scope stays non-sensitive, this does not trigger Google's full manual verification
-queue. See `android-notes/native-setup.md` §10 for the exact console steps.
+queue. See `android-notes/native-setup.md` §11 for the exact console steps.
 
 **Storage check before every upload, same pattern as local (Decision 8).** Drive's `about.get` API
 returns quota (`storageQuota.limit`/`usageInDrive`); the same "required vs. available, block if it

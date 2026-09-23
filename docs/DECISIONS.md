@@ -304,7 +304,7 @@ real and correctly fixed. The plugin's native `signIn()` method has no null-chec
 process before anything can reach JavaScript — confirmed no amount of JS-side try/catch could have
 caught this, since the crash happens on the native side of the bridge, before a promise resolution
 or rejection is even possible. The guard is a plain JS boolean, flipped manually alongside adding a
-real client ID (`android-notes/native-setup.md` §10) — simple, explicit, and impossible to forget
+real client ID (`android-notes/native-setup.md` §11) — simple, explicit, and impossible to forget
 since both steps are documented together in one place.
 
 ---
@@ -370,3 +370,40 @@ Also noted, not acted on: `package.json` lists `@capawesome-team/capacitor-andro
 a dependency, but nothing in `src/js/` imports it — dead weight, likely a leftover from before
 `cap-voice-rec` was chosen. Flagged for later cleanup, not removed this session since it isn't the cause
 of anything currently broken.
+
+---
+
+**50. Biometric unlock is a convenience alternative to typing the app-open password or Vault PIN — never
+a fourth credential, never both locks via one toggle.** Off by default; each lock's toggle requires
+confirming the real password/PIN (hash-compared against what's stored) before anything reaches the
+biometric layer, and changing or removing that password/PIN immediately clears the biometric secret for
+it, forcing re-confirmation — a stale cached value would otherwise unlock with, or derive a vault key
+from, a credential that no longer matches.
+
+Plugin: `@capgo/capacitor-native-biometric@6.0.4`, chosen over the original (unscoped)
+`capacitor-native-biometric` after checking both directly: the original's peer dependency is
+`@capacitor/core@^3.4.3` and its `build.gradle` points at `jcenter()`, dead since 2021 — using it risked
+breaking the CI build outright. The Capgo fork's `6.0.4` pins `@capacitor/core@^6.0.0` and uses
+`google()`/`mavenCentral()` with AGP 8.2.1, compileSdk/targetSdk 34 — matches this project. No manifest
+permission needed in `scripts/patch-manifest.js`: `androidx.biometric:biometric:1.1.0` (the plugin's own
+dependency) self-declares `USE_BIOMETRIC` in its own manifest, standard for that library.
+
+Security model, read from the plugin's native source rather than assumed from its README: its Keystore
+key is configured with `setUnlockedDeviceRequired(true)` but not `setUserAuthenticationRequired(true)` —
+so decrypting the stored secret only requires the device to be unlocked, not a fresh biometric check on
+every read. The actual biometric gate is enforced by this app's own call sequence in `src/js/biometric.js`
+(always `verifyIdentity()`, only `getCredentials()` after it resolves), not by the hardware on every
+access. Documented plainly in `android-notes/native-setup.md` §10 and `ARCHITECTURE.md` §3 rather than
+oversold — this is the same model most consumer apps' "unlock with fingerprint" uses, and manual
+password/PIN entry remains the actual security boundary underneath it.
+
+Implementation: `src/js/biometric.js` (new, thin wrapper around the plugin); two new `credentials`
+columns (`biometric_app_enabled`, `biometric_vault_enabled`); `src/js/db.js` gained its first real schema
+migration (`ensureColumn()`, since `CREATE TABLE IF NOT EXISTS` never retrofits a column onto an existing
+on-device install — the same class of gap Decision 49 found for manifest permissions, different layer).
+`unlockVault()`/`attemptUnlock()` are reused as-is for the biometric path (the retrieved secret is just
+handed to the same verify function a typed entry would use) rather than duplicating "what counts as
+correct" a second time.
+
+Also removed this session: `@capawesome-team/capacitor-android-foreground-service` from `package.json`,
+flagged as dead weight in Decision 49 — nothing in `src/js/` ever imported it.

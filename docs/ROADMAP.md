@@ -12,7 +12,7 @@
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown done; rest not started)
-- [ ] 10 — Security hardening
+- [~] 10 — Security hardening (biometric unlock done, needs device confirm; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
@@ -167,8 +167,10 @@
   way, and its "clear items older than 30 days" action reuses the existing bulk-delete (soft-delete,
   30-day trash, not permanent). Remaining items (data-transparency screen, quick-capture widget,
   expense charts, backup-reminder nudge, map view, confidence-confirmation chip) not started.
-- [ ] **10 — Security hardening.** JS obfuscation, ProGuard/R8, startup signature check. Documented,
-  not implemented.
+- [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
+  Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
+  default, independent per lock; not yet confirmed on a real device. JS obfuscation, ProGuard/R8,
+  startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
   (Session 3). **Now also runs `npm run build` (Vite) before `cap sync`** (Decision 46, Session 18)
   — without it, the bundled app can never load in any WebView, verified as the actual root cause of
@@ -180,7 +182,7 @@
   (Decision 25). Sub-items, roughly in dependency order:
   - [ ] Manual: Google Cloud project, enable Drive API, OAuth consent screen scoped to `drive.file`
     only (Decision 26), **published to Production** before relying on auto-backup (Decision 27) —
-    walkthrough in `android-notes/native-setup.md` §10. **Still blocking** — nothing below can be
+    walkthrough in `android-notes/native-setup.md` §11. **Still blocking** — nothing below can be
     device-tested until the real OAuth client ID replaces the placeholder in `capacitor.config.json`.
   - [ ] Manual: Android-type OAuth client (package `com.dumpzone.app` + release keystore's SHA-1).
   - [x] Google Sign-In plugin wired (`@codetrix-studio/capacitor-google-auth`, Capacitor 6

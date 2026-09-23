@@ -4,6 +4,53 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 26**
+
+Built biometric (fingerprint/face) unlock as an alternative to typing the app-open password or Vault
+PIN, requested explicitly — off by default, toggled independently per lock, never a fourth credential.
+
+Plugin choice took real checking, not just picking the first match: the obvious package
+(`capacitor-native-biometric`) turned out to target Capacitor 3 and depend on `jcenter()`, dead since
+2021 — would likely have broken the CI build. Found and verified `@capgo/capacitor-native-biometric@6.0.4`
+instead by downloading both packages and reading their manifests/gradle directly: peer dep
+`@capacitor/core@^6.0.0`, modern `google()`/`mavenCentral()`-only gradle, matches this project exactly.
+
+Also read the chosen plugin's native Java source before trusting its security model: its Keystore key
+requires the device to be unlocked but does not require a fresh biometric check to decrypt — the actual
+gate is enforced in `src/js/biometric.js`'s own call order (verify, then read), not by hardware on every
+access. Documented this plainly rather than overselling it (`native-setup.md` §10, `ARCHITECTURE.md` §3).
+
+Built: `src/js/biometric.js` (new — thin plugin wrapper); two new `credentials` columns plus `db.js`'s
+first real migration helper (`ensureColumn()`, needed since the existing on-device test install's DB
+predates these columns and `CREATE TABLE IF NOT EXISTS` doesn't retrofit them — same class of gap as
+Decision 49, different layer); enable/disable/unlock wiring in `app.js`, reusing `attemptUnlock()` and
+`unlockVault()` as-is rather than a second copy of "what counts as correct"; settings UI (toggle +
+confirm-password/PIN sub-form) in both the App lock and Vault sections, plus a biometric button on the
+lock screen and the Vault gate. Changing or removing either password/PIN now also clears its stored
+biometric secret automatically, so a stale cached value can never unlock (or derive a vault key from)
+a credential that's no longer correct.
+
+Also removed `@capawesome-team/capacitor-android-foreground-service` from `package.json` — the dead
+dependency flagged in Session 25, confirmed unused anywhere in `src/js/`.
+
+Decisions made: 50. Fixed three stale `native-setup.md §10` cross-references (ARCHITECTURE.md,
+DECISIONS.md, ROADMAP.md) left over from inserting the new §10 ahead of the old Google Drive section,
+which shifted to §11.
+
+Not done: no device test yet — this is new code on top of Session 25's not-yet-built permission fix, so
+neither has been run through CI or a real device at this point. Native biometric prompts in particular
+can't be meaningfully verified any other way (no emulated fingerprint sensor in this sandbox).
+
+Next session start point: get a build through CI and onto the device. Three things need confirming
+together, in order — (1) Session 25's manifest-permission fix (voice recording end-to-end), (2) this
+session's biometric enable/unlock flow for both locks, (3) that enabling biometric for one lock doesn't
+interfere with the other (they use separate `server` keys in the plugin's storage, but that's reasoning
+from the code, not something confirmed on a real device yet). If biometric enrollment isn't available on
+the test device, the settings rows should simply stay hidden (`isBiometricAvailable()` returning false) —
+worth checking that path too, not just the happy one.
+
+---
+
 **Session 25**
 
 Followed up on Session 24's flagged-but-unverified question: does `cap-voice-rec` self-declare
