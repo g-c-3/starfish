@@ -32,6 +32,7 @@
   --type-voice: #14b8a6;
   --type-image: #ec4899;
   --type-pdf: #3b82f6;
+  --type-money: #ef4444;
   --type-file: #10b981;
 
   --danger: #d9534f;
@@ -107,21 +108,38 @@ button {
 #home-tab > header {
   padding-bottom: 14px; margin-bottom: 8px;
   border-bottom: 3px solid transparent;
-  border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-file)) 1;
+  border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-money), var(--type-file)) 1;
 }
 #home-tab > header h2 { font-size: 24px; }
 
-/* ---- Capture bar: one color per capture type, the app's most-used surface ---- */
-#capture-bar { display: flex; gap: 8px; margin: 12px 0; }
-#capture-bar button {
-  font-size: 22px; width: auto; flex: 1; padding: 14px 8px;
-  border-radius: 16px; background: var(--card-bg);
+/* ---- Capture cards: one per capture type, the app's most-used surface, shared markup/class
+   between Home (#capture-bar) and the Vault (#vault-capture-bar) — Decision 55. Three columns by
+   default so six cards form a neat 3x2 grid; each carries its own type color, same vocabulary as
+   list rows and filter tabs elsewhere. ---- */
+.capture-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.capture-cards button {
+  width: auto; flex: none; box-shadow: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 16px 4px; border-radius: 16px; background: var(--card-bg); color: var(--fg);
 }
-#capture-bar button[data-type="note"]  { background: var(--type-note); }
-#capture-bar button[data-type="voice"] { background: var(--type-voice); }
-#capture-bar button[data-type="image"] { background: var(--type-image); }
-#capture-bar button[data-type="pdf"]   { background: var(--type-pdf); }
-#capture-bar button[data-type="file"]  { background: var(--type-file); }
+.capture-cards .card-icon { font-size: 26px; line-height: 1; }
+.capture-cards .card-label { font-size: 12px; font-weight: 700; }
+
+#capture-bar button[data-type="note"],   #vault-capture-bar button[data-vault-type="note"]  { background: var(--type-note); }
+#capture-bar button[data-type="voice"],  #vault-capture-bar button[data-vault-type="voice"] { background: var(--type-voice); }
+#capture-bar button[data-type="image"],  #vault-capture-bar button[data-vault-type="image"] { background: var(--type-image); }
+#capture-bar button[data-type="pdf"],    #vault-capture-bar button[data-vault-type="pdf"]   { background: var(--type-pdf); }
+#capture-bar button[data-type="money"],  #vault-capture-bar button[data-vault-type="money"] { background: var(--type-money); color: #3a0000; }
+#capture-bar button[data-type="file"],   #vault-capture-bar button[data-vault-type="file"]  { background: var(--type-file); }
+
+/* Capture-card labels need dark text on the lighter type colors — same contrast-driven choice as
+   the tabs/rows elsewhere (checked with the actual WCAG formula, not eyeballed). Applies to both
+   Home and Vault now that Home's cards carry visible labels too, not just icons. */
+#capture-bar button[data-type="note"],   #vault-capture-bar button[data-vault-type="note"]  { color: #2a1c00; }
+#capture-bar button[data-type="voice"],  #vault-capture-bar button[data-vault-type="voice"] { color: #00332c; }
+#capture-bar button[data-type="image"],  #vault-capture-bar button[data-vault-type="image"] { color: #3a0020; }
+#capture-bar button[data-type="pdf"],    #vault-capture-bar button[data-vault-type="pdf"]   { color: #001b3a; }
+#capture-bar button[data-type="file"],   #vault-capture-bar button[data-vault-type="file"]  { color: #00301f; }
 
 #timeline { margin-top: 12px; }
 
@@ -184,6 +202,7 @@ button {
 .drive-backup-row[data-type="voice"] { border-left-color: var(--type-voice); }
 .drive-backup-row[data-type="image"] { border-left-color: var(--type-image); }
 .drive-backup-row[data-type="pdf"]   { border-left-color: var(--type-pdf); }
+.drive-backup-row[data-type="money"] { border-left-color: var(--type-money); }
 .drive-backup-row[data-type="file"]  { border-left-color: var(--type-file); }
 .drive-backup-row button { width: auto; padding: 6px 12px; font-size: 13px; }
 .drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
@@ -216,6 +235,7 @@ button {
 .vault-tab[data-vault-tab="voice"].active { background: var(--type-voice); color: #00332c; border-color: var(--type-voice); }
 .vault-tab[data-vault-tab="image"].active { background: var(--type-image); color: #3a0020; border-color: var(--type-image); }
 .vault-tab[data-vault-tab="pdf"].active   { background: var(--type-pdf);   color: #001b3a; border-color: var(--type-pdf); }
+.vault-tab[data-vault-tab="money"].active { background: var(--type-money); color: #3a0000; border-color: var(--type-money); }
 .vault-tab[data-vault-tab="file"].active  { background: var(--type-file); color: #00301f; border-color: var(--type-file); }
 
 .select-files-category { margin-bottom: 12px; }
