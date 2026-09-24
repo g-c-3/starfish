@@ -22,20 +22,50 @@ const ENTRY_CATEGORIES = {
   voice: (e) => e.type === 'voice' && !e.is_private,
   images: (e) => e.type === 'image' && !e.is_private,
   pdfs: (e) => e.type === 'pdf' && !e.is_private,
+  money: (e) => e.type === 'money' && !e.is_private,
   files: (e) => e.type === 'file' && !e.is_private,
   expenses: (e) => e.type === 'expense',
   reminders: (e) => e.type === 'reminder',
-  private_vault: (e) => e.is_private === 1 // any type — Text/Voice/Image/PDF/Files, unified
+  private_vault: (e) => e.is_private === 1 // any type — Text/Voice/Image/PDF/Money/Files, unified
 };
 // Non-vault file-bearing categories only — buildBackupPayload reads file_path for these. Vault
 // entries (any type) keep file_path NULL; their bytes already travel inside encrypted_body, which
-// every category's row spread already carries, so private_vault needs no entry here.
+// every category's row spread already carries, so private_vault needs no entry here. Money isn't
+// listed — no defined content shape yet (Decision 55), so nothing to read a file_path for.
 const FILE_BEARING_CATEGORIES = new Set(['voice', 'images', 'pdfs', 'files']);
 const ALL_CATEGORIES = [...Object.keys(ENTRY_CATEGORIES), 'tags', 'app_settings'];
 
-const APP_SETTINGS_KEYS = [
-  'dark_mode', 'gradient_mode', 'gradient_color_1', 'gradient_color_2'
-]; // non-sensitive only — never credential hashes/salts/hints (Decision 8)
+const APP_SETTINGS_KEYS = ['dark_mode']; // non-sensitive only — never credential hashes/salts/hints (Decision 8).
+// gradient_mode/gradient_color_1/gradient_color_2 removed here (Decision 53 removed the feature
+// itself; this list just hadn't been updated to match until now) — any old backup still carrying
+// those keys restores them as harmless, unread meta rows, same as explained in app.js.
+
+// ---------------------------------------------------------------------------
+// Filenames — backup_<letters>_<timestamp>.dz / append_<letters>_<timestamp>.dz (Decision 55).
+// <letters> is a fixed-order subset of "tvipmf" (Text/Voice/Image/PDF/Money/Files) — only the
+// letters for categories actually included, in that order regardless of the order they were
+// selected in. Categories with no letter (private_vault/expenses/reminders/tags/app_settings)
+// don't contribute one; if none of the six lettered categories are present at all, "x" is used
+// so the filename is never left with an empty, malformed segment.
+// ---------------------------------------------------------------------------
+const CATEGORY_LETTERS = { notes: 't', voice: 'v', images: 'i', pdfs: 'p', money: 'm', files: 'f' };
+const LETTER_ORDER = ['notes', 'voice', 'images', 'pdfs', 'money', 'files'];
+
+function categoryLetters(categories) {
+  const letters = LETTER_ORDER.filter((c) => categories.includes(c)).map((c) => CATEGORY_LETTERS[c]).join('');
+  return letters || 'x';
+}
+
+function backupTimestamp(date = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
+}
+
+// prefix: 'backup' (full Backup & Restore export) or 'append' (per-entry Download-for-append) —
+// same shape either way, just the leading word, per spec.
+function backupFileName(prefix, categories) {
+  return `${prefix}_${categoryLetters(categories)}_${backupTimestamp()}.dz`;
+}
 
 // ---------------------------------------------------------------------------
 // Storage sanity checks — navigator.storage.estimate() is the practical in-webview substitute
@@ -129,7 +159,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
 
   const payload = await buildBackupPayload(db, categories);
   const archive = await encryptBackup(passphrase, JSON.stringify(payload), hint);
-  const name = fileName || `dumpzone-backup-${Date.now()}.dzbackup`;
+  const name = fileName || backupFileName('backup', categories);
 
   await Filesystem.writeFile({
     path: name,
@@ -328,5 +358,5 @@ export {
   ALL_CATEGORIES, ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
   buildBackupPayload, estimateBackupSize, createBackup,
   openBackupFile, decryptBackupPayload, estimateRestoreSize, restoreBackup,
-  extractCategoryToStorage, getStorageEstimate
+  extractCategoryToStorage, getStorageEstimate, backupFileName
 };

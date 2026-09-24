@@ -11,21 +11,24 @@
 import { insertEntry } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 
-const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'file']; // Text/Voice/Image/PDF/Files — mirrors
+const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'money', 'file']; // Text/Voice/Image/PDF/Money/Files — mirrors
 // the home screen's capture types minus expense/reminder, which stay out of vault scope (per spec).
 
 // ---------------------------------------------------------------------------
 // Content bundling — what actually goes inside encrypted_body, by type.
 // ---------------------------------------------------------------------------
 function buildVaultPlaintext(type, { text, fileData, ocrText } = {}) {
-  if (type === 'note') return text || ''; // unchanged shape — same as pre-vault private notes
+  // 'money' has no defined content shape yet — placeholder text-only, same as 'note', until its
+  // actual capture flow is specified. Trivial to change later since nothing has been captured
+  // under this type yet.
+  if (type === 'note' || type === 'money') return text || '';
   if (type === 'voice' || type === 'file') return JSON.stringify({ fileData });
   if (type === 'image' || type === 'pdf') return JSON.stringify({ fileData, ocrText: ocrText || '' });
   throw new Error(`Type not supported in Private Vault: ${type}`);
 }
 
 function parseVaultPlaintext(type, plaintext) {
-  if (type === 'note') return { text: plaintext };
+  if (type === 'note' || type === 'money') return { text: plaintext };
   return JSON.parse(plaintext); // {fileData} or {fileData, ocrText}
 }
 

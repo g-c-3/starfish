@@ -17,7 +17,7 @@
 
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import {
-  buildBackupPayload, estimateBackupSize, decryptBackupPayload, restoreBackup
+  buildBackupPayload, estimateBackupSize, decryptBackupPayload, restoreBackup, backupFileName
 } from './backup.js';
 import { encryptBackup } from './crypto.js';
 
@@ -106,7 +106,7 @@ async function backupToDrive(db, { passphrase, hint = '', categories, fileName, 
 
   const payload = await buildBackupPayload(db, categories);
   const archive = await encryptBackup(passphrase, JSON.stringify(payload), hint);
-  const name = fileName || `dumpzone-backup-${Date.now()}.dzbackup`;
+  const name = fileName || backupFileName('backup', categories);
   const folderId = await getOrCreateBackupFolder(auth.accessToken);
 
   const boundary = 'dumpzone-boundary';

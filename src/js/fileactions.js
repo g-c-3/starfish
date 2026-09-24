@@ -13,7 +13,7 @@ import { Share } from '@capacitor/share';
 import { BlobReader, BlobWriter, TextReader, TextWriter, ZipReader, ZipWriter } from '@zip.js/zip.js';
 import {
   ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
-  buildBackupPayload, decryptBackupPayload, restoreBackup
+  buildBackupPayload, decryptBackupPayload, restoreBackup, backupFileName
 } from './backup.js';
 import { encryptBackup } from './crypto.js';
 import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
@@ -68,8 +68,12 @@ async function downloadForAppend(db, entryId, opts = {}) {
   await zipWriter.add(ZIP_ENTRY_NAME, new TextReader(JSON.stringify(archive)));
   const blob = await zipWriter.close();
 
-  const label = payload.entries[0]?.label || 'entry';
-  const fileName = `${sanitizeFilename(label)}.zip`;
+  // Uses the same backup_/append_<letters>_<timestamp>.dz naming as full backups (Decision 55),
+  // scoped to this one entry's category — trades the old label-based filename (which made two
+  // exports of the same entry, or two entries with the same label, unambiguous at a glance) for a
+  // consistent, predictable format across every exported file. Two exports of the same category
+  // within the same second would collide on name; accepted as a rare edge case, not solved here.
+  const fileName = backupFileName('append', [cat]);
   const base64 = await blobToBase64(blob);
   await Filesystem.writeFile({ path: fileName, directory: Directory.Cache, data: base64, recursive: true });
   const { uri } = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
@@ -92,7 +96,7 @@ function blobToBase64(blob) {
 // Always append mode — this screen has no overwrite option, matching its "additive" framing in
 // ARCHITECTURE.md §5; overwrite stays exclusive to the dedicated local/Drive restore flows.
 // ---------------------------------------------------------------------------
-// files: FileList/array of browser File objects (from <input type="file" multiple accept=".zip">)
+// files: FileList/array of browser File objects (from <input type="file" multiple accept=".dz,.zip">)
 // getters: { passphraseGetter(hint), pinGetter() } — called only for zips whose mode needs them;
 // a 'default'-mode zip never prompts. Both may return null to skip that one file.
 async function importAppendZips(db, files, getters) {
