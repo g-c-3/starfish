@@ -37,12 +37,13 @@
         <div id="on-this-day"></div>
       </header>
 
-      <div id="capture-bar">
-        <button data-type="note">📝</button>
-        <button data-type="voice">🎙️</button>
-        <button data-type="image">📷</button>
-        <button data-type="pdf">📄</button>
-        <button data-type="file">📁</button>
+      <div id="capture-bar" class="capture-cards">
+        <button data-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
+        <button data-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
+        <button data-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
+        <button data-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
+        <button data-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
+        <button data-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
       </div>
 
       <input id="search-input" placeholder="Search everything..." />
@@ -86,29 +87,6 @@
         </div>
       </details>
 
-      <details id="vault-settings">
-        <summary>Private Vault</summary>
-        <p class="mode-description">Its own PIN, its own encryption, its own auto-lock — separate from the app-open password above.</p>
-        <div id="vault-pin-setup-view" class="hidden">
-          <input id="vault-setup-pin-input" type="password" placeholder="Set a Vault PIN" />
-          <input id="vault-setup-pin-hint-input" type="text" placeholder="Optional hint" />
-          <button id="vault-setup-pin-btn">Set up Vault</button>
-        </div>
-        <div id="vault-locked-view">
-          <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
-          <button id="vault-unlock-btn">Unlock Vault</button>
-          <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
-        </div>
-        <div id="vault-biometric-row" class="hidden">
-          <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
-          <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
-          <div id="vault-biometric-confirm" class="hidden">
-            <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
-            <button id="vault-biometric-confirm-btn">Confirm</button>
-          </div>
-        </div>
-      </details>
-
       <details id="appearance-settings">
         <summary>Appearance</summary>
         <label class="switch-row"><input type="checkbox" id="dark-mode-toggle" /> Dark mode</label>
@@ -125,7 +103,7 @@
         <div id="backup-status" class="status-line"></div>
 
         <h4>Restore</h4>
-        <input id="restore-file-input" type="file" accept=".dzbackup,application/json" />
+        <input id="restore-file-input" type="file" accept=".dz,.dzbackup,application/json" />
         <input id="restore-passphrase" type="password" placeholder="Backup passkey" />
         <div id="restore-categories" class="category-checkboxes"></div>
         <label class="radio-row"><input type="radio" name="restore-mode" value="append" checked /> Append (default, non-destructive)</label>
@@ -163,7 +141,7 @@
         <p style="font-size:12px; opacity:0.8;">Import one or more files someone downloaded via an
           entry's "Download for append" action. Always adds to what's already here — same duplicate
           handling as a regular append restore. Not for full backup files (use Backup &amp; Restore above).</p>
-        <input id="append-import-input" type="file" accept=".zip" multiple />
+        <input id="append-import-input" type="file" accept=".dz,.zip" multiple />
         <button id="append-import-btn">Import selected files</button>
         <div id="append-import-status" class="status-line"></div>
       </details>
@@ -176,38 +154,61 @@
       <button id="vault-lock-btn" class="secondary-btn">Lock</button>
     </header>
 
-    <div id="vault-capture-bar">
-      <button data-vault-type="note">📝 Text</button>
-      <button data-vault-type="voice">🎙️ Voice</button>
-      <button data-vault-type="image">📷 Image</button>
-      <button data-vault-type="pdf">📄 PDF</button>
-      <button data-vault-type="file">📁 Files</button>
+    <div id="vault-pin-setup-view" class="hidden">
+      <p class="mode-description">Set a PIN to create your Private Vault — its own encryption, its own auto-lock, separate from the app-open password.</p>
+      <input id="vault-setup-pin-input" type="password" placeholder="Set a Vault PIN" />
+      <input id="vault-setup-pin-hint-input" type="text" placeholder="Optional hint" />
+      <button id="vault-setup-pin-btn">Set up Vault</button>
+    </div>
+    <div id="vault-locked-view">
+      <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
+      <button id="vault-unlock-btn">Unlock Vault</button>
+      <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
+    </div>
+    <div id="vault-biometric-row" class="hidden">
+      <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
+      <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
+      <div id="vault-biometric-confirm" class="hidden">
+        <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
+        <button id="vault-biometric-confirm-btn">Confirm</button>
+      </div>
     </div>
 
-    <input id="vault-search-input" placeholder="Search the vault..." />
-    <button id="vault-select-files-btn" class="secondary-btn">Select files</button>
+    <div id="vault-content" class="hidden">
+      <div id="vault-capture-bar" class="capture-cards">
+        <button data-vault-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
+        <button data-vault-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
+        <button data-vault-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
+        <button data-vault-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
+        <button data-vault-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
+        <button data-vault-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
+      </div>
 
-    <div id="vault-tabs">
-      <button class="vault-tab active" data-vault-tab="all">All</button>
-      <button class="vault-tab" data-vault-tab="note">Text</button>
-      <button class="vault-tab" data-vault-tab="voice">Voice</button>
-      <button class="vault-tab" data-vault-tab="image">Image</button>
-      <button class="vault-tab" data-vault-tab="pdf">PDF</button>
-      <button class="vault-tab" data-vault-tab="file">Files</button>
-    </div>
-    <div id="vault-list"></div>
+      <input id="vault-search-input" placeholder="Search the vault..." />
+      <button id="vault-select-files-btn" class="secondary-btn">Select files</button>
 
-    <details id="vault-trash-settings">
-      <summary>Vault Trash</summary>
-      <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
-      <div id="vault-trash-list"></div>
-    </details>
+      <div id="vault-tabs">
+        <button class="vault-tab active" data-vault-tab="all">All</button>
+        <button class="vault-tab" data-vault-tab="note">Text</button>
+        <button class="vault-tab" data-vault-tab="voice">Voice</button>
+        <button class="vault-tab" data-vault-tab="image">Image</button>
+        <button class="vault-tab" data-vault-tab="pdf">PDF</button>
+        <button class="vault-tab" data-vault-tab="money">Money</button>
+        <button class="vault-tab" data-vault-tab="file">Files</button>
+      </div>
+      <div id="vault-list"></div>
 
-    <details id="vault-lock-settings">
-      <summary>Vault auto-lock</summary>
-      <label>Lock the Vault after
-        <select id="vault-auto-lock-select">
-          <option value="1">1 minute</option>
+      <details id="vault-trash-settings">
+        <summary>Vault Trash</summary>
+        <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
+        <div id="vault-trash-list"></div>
+      </details>
+
+      <details id="vault-lock-settings">
+        <summary>Vault auto-lock</summary>
+        <label>Lock the Vault after
+          <select id="vault-auto-lock-select">
+            <option value="1">1 minute</option>
           <option value="5" selected>5 minutes</option>
           <option value="15">15 minutes</option>
           <option value="30">30 minutes</option>
@@ -215,6 +216,7 @@
         of inactivity — independent of the app-open lock timing.
       </label>
     </details>
+    </div>
   </div>
 
   <nav id="bottom-nav" class="hidden">
