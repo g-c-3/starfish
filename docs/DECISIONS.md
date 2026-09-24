@@ -476,6 +476,91 @@ anything to render text. Hierarchy comes from weight/scale instead of a second t
 
 ---
 
+**54. Fixed a real security bug: the Vault's PIN gate was never actually connected to `vault-screen`,
+so the bottom-nav Vault button opened straight into vault content with no gate at all. Also: both
+locks now default to attempting biometric immediately rather than waiting for a button tap.**
+
+Root cause, found by reading the actual current HTML rather than assuming Session 29's refactor had
+kept things wired correctly: Session 29 moved `vault-pin-setup-view`/`vault-locked-view` (and the
+Session 26 biometric toggle) into Settings' `#vault-settings` accordion, while `#vault-content`
+(capture bar, search, tabs, list, trash) stayed in `#vault-screen` with nothing above it to gate on.
+The bottom nav's Vault button always called `showScreen('vault-screen')` directly — a screen that,
+after that refactor, had never had a lock gate of its own to begin with, only content. A second,
+compounding bug in the same area: `lockVault()` cleared the in-memory session key but never cleared
+`#vault-list`/`#vault-trash-list`'s already-rendered HTML, so even reaching the gate correctly
+wouldn't have hidden content a previous unlock had already rendered into the page.
+
+Fixed by moving the gate elements back into `vault-screen` itself (before `#vault-content`, where
+they were originally before Session 29), and rewriting `refreshVaultGateView()` to be the one
+function that decides all three states — needs-setup / locked / unlocked — based on whether a PIN
+exists and whether `privateSessionKey` is currently set, toggling `#vault-content`'s visibility as
+part of that instead of leaving it permanently visible. Every unlock success path (PIN, biometric)
+and the Lock button now route through this function rather than assuming the caller already knows
+which view should be showing. `lockVault()` now also clears both list containers' `innerHTML`
+directly — defense in depth on top of the container being hidden, not a substitute for it.
+
+Biometric defaults: both the app-open lock screen and the Vault gate now call their respective
+`tryBiometricUnlock*()` automatically as soon as they're shown, when enabled — fire-and-forget,
+reusing the exact same success/failure paths a manual button tap already used, so cancelling or
+failing just leaves the password/PIN field available same as before. The Vault's version is guarded
+by a module-level flag (`vaultBioAutoPrompted`, reset in `lockVault()`) so it fires once per fresh
+"locked" state rather than re-prompting on every re-render while still locked — the app lock screen
+needs no equivalent guard since `showLockScreen()` itself only ever runs when freshly (re)locking.
+
+---
+
+**55. Added Money as a sixth capture type (card only — its actual capture flow is intentionally not
+built yet, by request); redesigned both capture bars as a 6-card grid; renamed backup/append
+filenames to `<prefix>_<letters>_<timestamp>.dz`.**
+
+Money: added everywhere the existing five types are threaded through, deliberately as its own new
+type rather than reusing the existing auto-detected `expense` type (which stays exactly as it was,
+untouched, still populated only via `intents.js`'s text parsing, not manual capture) — the two are
+different mechanisms and conflating them without being asked to felt like the wrong call; easy to
+unify later if that turns out to be wanted instead. Touched: `VAULT_TYPES` (vault.js), `buildBackup-
+Plaintext`/`parseVaultPlaintext` (given a placeholder text-only shape, same as 'note', since no real
+shape has been specified yet), `CATEGORY_LABELS`/`VAULT_TYPE_LABELS` (app.js), `ENTRY_CATEGORIES` in
+backup.js (a `money` backup category, letter `m`), and a new `--type-money` color (red — the only
+one of the six hues not already in use, and a deliberate, not incidental, choice for a money
+category). Tapping the Money card shows a plain "coming soon" message rather than falling into the
+generic file-picker branch the other non-special-cased types use, which would have been actively
+wrong for a type with no defined shape yet.
+
+Capture UI: both `#capture-bar` and `#vault-capture-bar` are now a 3-column grid of cards (icon
+above a text label, larger tap target) instead of a thin row of icon-only buttons — Home's capture
+bar gains labels it never had before ("Text", "Voice", etc.), matching what the Vault's bar already
+showed. Checked contrast again before finalizing: Home's cards now carry real label text on the
+category colors for the first time, so they needed the same dark-text treatment already computed for
+the Vault's equivalents (Decision 52) — applied to both via one shared selector rather than
+duplicating the color values.
+
+Filenames: `backup_<letters>_<yyyymmdd_hhmmss>.dz` for a full Backup & Restore export,
+`append_<letters>_<yyyymmdd_hhmmss>.dz` for a single entry's "Download for append" export — same
+shape, different leading word, exactly as specified. `<letters>` is a fixed-order subset of `tvipmf`
+(Text/Voice/Image/PDF/Money/Files, only the ones actually included, in that order regardless of
+selection order); categories with no letter of their own (Private Vault, Expenses, Reminders, Tags,
+App Settings) simply don't contribute one, and `x` is used if none of the six lettered categories
+are present at all, so the filename is never left with an empty segment — neither case was specified,
+both are reasoned-through defaults, flagged rather than silently assumed. Read the timestamp format
+in the request as a likely typo (`yyyymmddh_hhmmss` — an extra "h" before the underscore) and built
+the standard `yyyymmdd_hhmmss` instead; flagged rather than guessed silently. Extension changed from
+`.dzbackup`/`.zip` to `.dz` for both — the two file types remain internally different (one's a plain
+encrypted JSON blob, the other's an actual zip archive), which stays fine since nothing in the code
+ever branched on file extension to begin with, only on which `<input>` the file came through; file
+pickers still accept the old extensions so previously-made backups keep working. One accepted
+tradeoff: the per-entry append filename lost its old label-based naming (which made two exports
+distinguishable at a glance even with identical timestamps) in favor of the uniform format — two
+exports of the same category within the same second would now collide on name. Not solved, since the
+spec was explicit about the format and this felt like a real but rare edge case worth flagging rather
+than deviating to handle unasked.
+
+Found and cleaned up in passing: `APP_SETTINGS_KEYS` in backup.js still listed the three
+`gradient_mode`/`gradient_color_1`/`gradient_color_2` meta keys removed in Decision 53 — a stale
+leftover from that removal, not something new. Old backups containing those keys still restore fine
+(harmless, unread rows); just stopped being an active part of what a new backup writes.
+
+---
+
 **53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
 instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
 directly, alongside keeping dark mode.

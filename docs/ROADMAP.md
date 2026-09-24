@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (main capture + timeline wired; bottom-nav layout + modern controls — Session 29)
+- [~] 4 — App shell & control flow (bottom-nav layout; Vault gate bug fixed — Session 30; Money card added, capture flow open)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
@@ -63,7 +63,12 @@
   colorful by default now (per-capture-type color coding across buttons/rows/tabs, one brand
   accent, gradient masthead accent). **Layout rebuilt (Session 29, Decision 53)**: bottom nav
   (Home/Vault/Settings) instead of one long scrolling page; Gradient mode removed entirely (dark
-  mode kept); every on/off setting is a switch, not a checkbox.
+  mode kept); every on/off setting is a switch, not a checkbox. **Session 30 (Decisions 54/55):**
+  fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
+  Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
+  now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a
+  sixth capture type (card only — its actual capture flow, and whether it reuses the existing
+  Expense machinery or stays separate, is still open for a future session).
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on

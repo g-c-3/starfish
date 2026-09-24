@@ -4,6 +4,56 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 30**
+
+A reported bug turned out to be a real one: tapping the bottom-nav Vault button opened straight into
+Vault content with no PIN prompt. Traced it to Session 29's refactor — the actual gate elements
+(`vault-pin-setup-view`/`vault-locked-view`, plus Session 26's biometric toggle) had been moved into
+Settings' Private Vault accordion, disconnected entirely from `vault-screen`, which was left holding
+only the content with nothing above it to gate on. A second bug in the same area: `lockVault()`
+cleared the in-memory key but never cleared the vault list's already-rendered HTML, so even a
+reconnected gate wouldn't have hidden content from a previous unlock.
+
+Fixed by moving the gate back into `vault-screen` itself and rewriting `refreshVaultGateView()` as
+the single function deciding all three states (needs-setup/locked/unlocked) and toggling the
+content's visibility as part of that, rather than the content being permanently shown. Every unlock
+path now routes through it. `lockVault()` now also clears the rendered lists directly.
+
+Also: both the app lock screen and the Vault gate now auto-attempt biometric unlock as soon as they
+show, when enabled, instead of waiting for a button tap — requested directly. Fire-and-forget, same
+success/failure paths a manual tap already used; the Vault's version is guarded against re-prompting
+on every re-render while still locked.
+
+Added Money as a sixth capture type — card only, its real capture flow deliberately not built yet.
+Kept it separate from the existing auto-detected `expense` type rather than reusing that machinery
+without being asked to. Threaded through everywhere the other five types are: vault support, backup
+category (letter `m`), labels, a new red accent color (the one hue not already in use). Tapping it
+shows a plain "coming soon" rather than falling into the generic file-picker path, which would have
+been wrong for an undefined type.
+
+Redesigned both capture bars as a 3-column card grid (icon + label) instead of a thin icon-only row —
+Home's bar gains text labels it never had. Checked contrast again for the newly-visible labels on
+the category colors, same discipline as Sessions 28–29.
+
+Renamed backup/append output files to `backup_<letters>_<timestamp>.dz` /
+`append_<letters>_<timestamp>.dz`, exactly as specified, with two flagged (not silently assumed)
+defaults: an "x" placeholder if none of the six lettered categories are selected, and the standard
+`yyyymmdd_hhmmss` timestamp shape (read the request's extra "h" as a likely typo rather than building
+it literally). Old `.dzbackup`/`.zip` extensions still accepted on import so existing backups keep
+working; nothing is written with them going forward. Found and cleaned up a stale leftover from
+Decision 53 while in this file: backup.js's App Settings category still listed the removed gradient
+meta keys.
+
+Decisions made: 54, 55.
+
+Next session start point: unchanged in spirit, more urgent in practice — this session touched the
+Vault's actual security gate, which makes an on-device pass non-optional before trusting any of
+Sessions 25 through this one further. Priority order if only some of it can be tested: (1) the Vault
+gate fix — confirm tapping the Vault tab always asks for the PIN/biometric when locked and never
+shows stale content, (2) biometric auto-prompt on both locks, (3) everything else already queued.
+
+---
+
 **Session 29**
 
 Second visual pass, requested directly: drop Gradient mode entirely (keep dark mode), replace the

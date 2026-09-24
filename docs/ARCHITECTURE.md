@@ -35,8 +35,8 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Expense | amount + category | label/category | amount, category, replied (bool) |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until |
 
-`is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Files — Private Vault, §3b)
-turns ANY of the five into a vault entry: AES-encrypted at rest under the vault PIN's derived key,
+`is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Money/Files — Private Vault, §3b)
+turns ANY of the six into a vault entry: AES-encrypted at rest under the vault PIN's derived key,
 excluded from both `entries_fts` and `label_history` entirely (not just the body — see §3b), and
 findable only through the vault's own in-memory search once unlocked. Expenses/Reminders have no
 private variant — out of vault scope.
@@ -165,6 +165,17 @@ per-item size shown, selectable individually or as a whole category, with bulk S
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
 ## 4. Backup & Restore (full design)
+
+### Filenames (Decision 55)
+`<prefix>_<letters>_<yyyymmdd_hhmmss>.dz` — `prefix` is `backup` (a full Backup & Restore export) or
+`append` (a single entry's "Download for append" export); `letters` is a fixed-order subset of
+`tvipmf` (Text/Voice/Image/PDF/Money/Files — only the letters for categories actually included,
+regardless of the order they were selected in; a backup with only Text and PDF is `tp`, not `pt`).
+Categories with no letter of their own (Private Vault, Expenses, Reminders, Tags, App Settings)
+don't contribute one; a backup containing none of the six lettered categories at all uses `x` rather
+than leaving that segment empty. `.dz` replaced the previous `.dzbackup`/`.zip` extensions — file
+pickers still accept the old extensions for anything backed up before this change, but nothing is
+written with them anymore.
 
 ### Two restore modes — always shown together, always described in plain language
 - **Append (default-selected):** *"Adds this backup's entries to what you already have. Nothing existing is
