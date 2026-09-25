@@ -1,8 +1,8 @@
 /* Dumpzone visual identity. Design plan, kept here so a future pass doesn't re-derive it from
    scratch or drift into a generic look by accident:
    - Color: a neutral violet-tinted surface (not flat grey) + one brand accent (indigo/violet,
-     #6C5CE7) for primary actions, PLUS a five-color category set — one hue per capture type
-     (Text/Voice/Image/PDF/Files) — used consistently on capture buttons, filter tabs, and every
+     #6C5CE7) for primary actions, PLUS an eight-color category set — one hue per capture type
+     (Text/Voice/Image/PDF/Reminder/Location/Money/Files) — used consistently on capture buttons, filter tabs, and every
      list row (Decision 52). The color IS information here (which type something is, at a glance
      across a long list), not decoration layered on top.
    - Type: system font stack, kept deliberately (this is an offline app — no web font to fetch,
@@ -32,6 +32,8 @@
   --type-voice: #14b8a6;
   --type-image: #ec4899;
   --type-pdf: #3b82f6;
+  --type-reminder: #f97316;
+  --type-location: #06b6d4;
   --type-money: #ef4444;
   --type-file: #10b981;
 
@@ -108,38 +110,42 @@ button {
 #home-tab > header {
   padding-bottom: 14px; margin-bottom: 8px;
   border-bottom: 3px solid transparent;
-  border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-money), var(--type-file)) 1;
+  border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-reminder), var(--type-location), var(--type-money), var(--type-file)) 1;
 }
 #home-tab > header h2 { font-size: 24px; }
 
 /* ---- Capture cards: one per capture type, the app's most-used surface, shared markup/class
-   between Home (#capture-bar) and the Vault (#vault-capture-bar) — Decision 55. Three columns by
-   default so six cards form a neat 3x2 grid; each carries its own type color, same vocabulary as
-   list rows and filter tabs elsewhere. ---- */
-.capture-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+   between Home (#capture-bar) and the Vault (#vault-capture-bar) — Decision 55, extended to eight
+   cards in Decision 57. Four columns so eight cards form a neat 4x2 grid; each carries its own
+   type color, same vocabulary as list rows and filter tabs elsewhere. ---- */
+.capture-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
 .capture-cards button {
   width: auto; flex: none; box-shadow: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 16px 4px; border-radius: 16px; background: var(--card-bg); color: var(--fg);
+  padding: 14px 4px; border-radius: 16px; background: var(--card-bg); color: var(--fg);
 }
-.capture-cards .card-icon { font-size: 26px; line-height: 1; }
-.capture-cards .card-label { font-size: 12px; font-weight: 700; }
+.capture-cards .card-icon { font-size: 24px; line-height: 1; }
+.capture-cards .card-label { font-size: 11px; font-weight: 700; }
 
-#capture-bar button[data-type="note"],   #vault-capture-bar button[data-vault-type="note"]  { background: var(--type-note); }
-#capture-bar button[data-type="voice"],  #vault-capture-bar button[data-vault-type="voice"] { background: var(--type-voice); }
-#capture-bar button[data-type="image"],  #vault-capture-bar button[data-vault-type="image"] { background: var(--type-image); }
-#capture-bar button[data-type="pdf"],    #vault-capture-bar button[data-vault-type="pdf"]   { background: var(--type-pdf); }
-#capture-bar button[data-type="money"],  #vault-capture-bar button[data-vault-type="money"] { background: var(--type-money); color: #3a0000; }
-#capture-bar button[data-type="file"],   #vault-capture-bar button[data-vault-type="file"]  { background: var(--type-file); }
+#capture-bar button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { background: var(--type-note); }
+#capture-bar button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { background: var(--type-voice); }
+#capture-bar button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { background: var(--type-image); }
+#capture-bar button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { background: var(--type-pdf); }
+#capture-bar button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { background: var(--type-reminder); }
+#capture-bar button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { background: var(--type-location); }
+#capture-bar button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { background: var(--type-money); }
+#capture-bar button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { background: var(--type-file); }
 
-/* Capture-card labels need dark text on the lighter type colors — same contrast-driven choice as
-   the tabs/rows elsewhere (checked with the actual WCAG formula, not eyeballed). Applies to both
-   Home and Vault now that Home's cards carry visible labels too, not just icons. */
-#capture-bar button[data-type="note"],   #vault-capture-bar button[data-vault-type="note"]  { color: #2a1c00; }
-#capture-bar button[data-type="voice"],  #vault-capture-bar button[data-vault-type="voice"] { color: #00332c; }
-#capture-bar button[data-type="image"],  #vault-capture-bar button[data-vault-type="image"] { color: #3a0020; }
-#capture-bar button[data-type="pdf"],    #vault-capture-bar button[data-vault-type="pdf"]   { color: #001b3a; }
-#capture-bar button[data-type="file"],   #vault-capture-bar button[data-vault-type="file"]  { color: #00301f; }
+/* Capture-card labels need dark text on the lighter type colors — checked with the actual WCAG
+   formula, not eyeballed. Applies to both Home and Vault, since both carry visible labels. */
+#capture-bar button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { color: #2a1c00; }
+#capture-bar button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { color: #00332c; }
+#capture-bar button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { color: #3a0020; }
+#capture-bar button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { color: #001b3a; }
+#capture-bar button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { color: #3a1400; }
+#capture-bar button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { color: #002733; }
+#capture-bar button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { color: #3a0000; }
+#capture-bar button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { color: #00301f; }
 
 #timeline { margin-top: 12px; }
 
@@ -198,12 +204,14 @@ button {
   border-radius: 10px;
   font-size: 14px; flex-wrap: wrap; gap: 4px;
 }
-.drive-backup-row[data-type="note"]  { border-left-color: var(--type-note); }
-.drive-backup-row[data-type="voice"] { border-left-color: var(--type-voice); }
-.drive-backup-row[data-type="image"] { border-left-color: var(--type-image); }
-.drive-backup-row[data-type="pdf"]   { border-left-color: var(--type-pdf); }
-.drive-backup-row[data-type="money"] { border-left-color: var(--type-money); }
-.drive-backup-row[data-type="file"]  { border-left-color: var(--type-file); }
+.drive-backup-row[data-type="note"]     { border-left-color: var(--type-note); }
+.drive-backup-row[data-type="voice"]    { border-left-color: var(--type-voice); }
+.drive-backup-row[data-type="image"]    { border-left-color: var(--type-image); }
+.drive-backup-row[data-type="pdf"]      { border-left-color: var(--type-pdf); }
+.drive-backup-row[data-type="reminder"] { border-left-color: var(--type-reminder); }
+.drive-backup-row[data-type="location"] { border-left-color: var(--type-location); }
+.drive-backup-row[data-type="money"]    { border-left-color: var(--type-money); }
+.drive-backup-row[data-type="file"]     { border-left-color: var(--type-file); }
 .drive-backup-row button { width: auto; padding: 6px 12px; font-size: 13px; }
 .drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
 
@@ -231,12 +239,14 @@ button {
   border: 1.5px solid var(--border); background: var(--card-bg); color: var(--fg); font-weight: 600;
 }
 .vault-tab.active { background: var(--vault); color: var(--vault-fg); border-color: var(--vault); }
-.vault-tab[data-vault-tab="note"].active  { background: var(--type-note);  color: #2a1c00; border-color: var(--type-note); }
-.vault-tab[data-vault-tab="voice"].active { background: var(--type-voice); color: #00332c; border-color: var(--type-voice); }
-.vault-tab[data-vault-tab="image"].active { background: var(--type-image); color: #3a0020; border-color: var(--type-image); }
-.vault-tab[data-vault-tab="pdf"].active   { background: var(--type-pdf);   color: #001b3a; border-color: var(--type-pdf); }
-.vault-tab[data-vault-tab="money"].active { background: var(--type-money); color: #3a0000; border-color: var(--type-money); }
-.vault-tab[data-vault-tab="file"].active  { background: var(--type-file); color: #00301f; border-color: var(--type-file); }
+.vault-tab[data-vault-tab="note"].active     { background: var(--type-note);     color: #2a1c00; border-color: var(--type-note); }
+.vault-tab[data-vault-tab="voice"].active    { background: var(--type-voice);    color: #00332c; border-color: var(--type-voice); }
+.vault-tab[data-vault-tab="image"].active    { background: var(--type-image);    color: #3a0020; border-color: var(--type-image); }
+.vault-tab[data-vault-tab="pdf"].active      { background: var(--type-pdf);      color: #001b3a; border-color: var(--type-pdf); }
+.vault-tab[data-vault-tab="reminder"].active { background: var(--type-reminder); color: #3a1400; border-color: var(--type-reminder); }
+.vault-tab[data-vault-tab="location"].active { background: var(--type-location); color: #002733; border-color: var(--type-location); }
+.vault-tab[data-vault-tab="money"].active    { background: var(--type-money);    color: #3a0000; border-color: var(--type-money); }
+.vault-tab[data-vault-tab="file"].active     { background: var(--type-file);     color: #00301f; border-color: var(--type-file); }
 
 .select-files-category { margin-bottom: 12px; }
 .select-files-category-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
