@@ -32,11 +32,14 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Image | OCR'd | label + OCR text | ocr_text |
 | PDF | OCR'd | label + OCR text | ocr_text |
 | Generic file | none | label only | extension, auto_category |
-| Expense | amount + category | label/category | amount, category, replied (bool) |
-| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until |
+| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card added Decision 57, same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
+| Location | none yet | label only | placeholder — capture flow not yet defined (Decision 57) |
+| Money | none yet | label only | placeholder — capture flow not yet defined (Decision 55); deliberately a separate type from Expense below, not a reuse of it |
+| Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
 
-`is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Money/Files — Private Vault, §3b)
-turns ANY of the six into a vault entry: AES-encrypted at rest under the vault PIN's derived key,
+`is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Reminder/Location/Money/Files
+— Private Vault, §3b) turns ANY of these eight into a vault entry: AES-encrypted at rest under the
+vault PIN's derived key,
 excluded from both `entries_fts` and `label_history` entirely (not just the body — see §3b), and
 findable only through the vault's own in-memory search once unlocked. Expenses/Reminders have no
 private variant — out of vault scope.
@@ -166,15 +169,16 @@ append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixe
 
 ## 4. Backup & Restore (full design)
 
-### Filenames (Decision 55)
+### Filenames (Decision 55, letters extended in Decision 57)
 `<prefix>_<letters>_<yyyymmdd_hhmmss>.dz` — `prefix` is `backup` (a full Backup & Restore export) or
 `append` (a single entry's "Download for append" export); `letters` is a fixed-order subset of
-`tvipmf` (Text/Voice/Image/PDF/Money/Files — only the letters for categories actually included,
-regardless of the order they were selected in; a backup with only Text and PDF is `tp`, not `pt`).
-Categories with no letter of their own (Private Vault, Expenses, Reminders, Tags, App Settings)
-don't contribute one; a backup containing none of the six lettered categories at all uses `x` rather
-than leaving that segment empty. `.dz` replaced the previous `.dzbackup`/`.zip` extensions — file
-pickers still accept the old extensions for anything backed up before this change, but nothing is
+`tviprlmf` (Text/Voice/Image/PDF/Reminder/Location/Money/Files — only the letters for categories
+actually included, regardless of the order they were selected in; a backup with only Text and PDF
+is `tp`, not `pt`). Categories with no letter of their own (Private Vault, Expenses, Tags, App
+Settings) don't contribute one; a backup containing none of the eight lettered categories at all
+uses `x` rather than leaving that segment empty. `.dz` replaced the previous `.dzbackup`/`.zip`
+extensions — file pickers still accept the old extensions for anything backed up before this
+change, but nothing is
 written with them anymore.
 
 ### Two restore modes — always shown together, always described in plain language

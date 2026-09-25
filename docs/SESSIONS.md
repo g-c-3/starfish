@@ -4,6 +4,46 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 31**
+
+Five bugs reported directly against real device screenshots, all fixed:
+
+1. Auto-biometric on the app lock screen needed two attempts (worked, stayed on the same page,
+   worked again on a second explicit tap). Reasoned cause: triggering the OS prompt immediately on
+   cold start, before the Activity has window focus, is a known timing issue. Added a 400ms delay
+   before the automatic attempt — an estimate, not a measured fix, worth revisiting after a real
+   device check.
+2. Bottom-nav Home/Settings did nothing while viewing the Vault — the handler changed which
+   sub-tab main-screen would show without ever actually showing main-screen. Gave `showScreen()` an
+   optional tab parameter so navigating there from anywhere can land on a specific tab.
+3. The Vault's Lock button stayed visible even when already locked. Now hidden unless genuinely
+   unlocked.
+4. The biometric enable/disable toggle showed on the locked landing page, not just once inside —
+   requested directly. Moved it into the unlocked content area; the actual unlock button correctly
+   stays on the locked gate.
+5. Locking the Vault didn't return Home immediately — the handler awaited an unnecessary async
+   refresh before navigating. Now synchronous, right after lock.
+
+Also added two more capture cards, Reminder and Location, positioned before Money — eight cards now
+(Text/Voice/Image/PDF/Reminder/Location/Money/Files). Reminder reuses the existing auto-detected
+`reminder` type (a reminder is a reminder, unlike Money's deliberately-kept-separate relationship to
+Expense); Location is entirely new, same placeholder treatment as Money. Extended the backup
+filename letters from `tvipmf` to `tviprlmf` to match — flagged as a judgment call, not something
+explicitly re-specified, since the request added cards to the same set the letters were drawn from.
+Capture-card grid moved from 3 to 4 columns for a clean 4x2 layout. Two new type colors (orange,
+cyan) picked and contrast-checked the same way as every color since Decision 52.
+
+Decisions made: 56, 57.
+
+Next session start point: still the same real-device pass owed since Session 30, now covering five
+more fixes on top — none of tonight's changes have been confirmed on a device either, only reasoned
+through and checked for internal consistency (syntax, no duplicate IDs, contrast math). Priority if
+only some of it can be tested: the Vault gate states (setup/locked/unlocked, and the Lock button's
+visibility in each) and the nav fix, since those are the two that were reported as actually broken
+rather than requested-and-built-fresh.
+
+---
+
 **Session 30**
 
 A reported bug turned out to be a real one: tapping the bottom-nav Vault button opened straight into

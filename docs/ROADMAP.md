@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (bottom-nav layout; Vault gate bug fixed — Session 30; Money card added, capture flow open)
+- [~] 4 — App shell & control flow (5 reported bugs fixed — Session 31; 8 capture cards, 3 still placeholder: Reminder/Location/Money)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
@@ -68,7 +68,13 @@
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a
   sixth capture type (card only — its actual capture flow, and whether it reuses the existing
-  Expense machinery or stays separate, is still open for a future session).
+  Expense machinery or stays separate, is still open for a future session). **Session 31 (Decisions
+  56/57):** fixed five reported bugs — biometric double-tap on cold start (mitigated with a delay,
+  not confirmed fixed on-device), bottom-nav Home/Settings not working from the Vault screen, the
+  Vault's Lock button showing while already locked, the biometric toggle showing on the locked
+  gate instead of only once unlocked, and Lock not returning Home immediately. Added Reminder and
+  Location as two more cards (eight total: Text/Voice/Image/PDF/Reminder/Location/Money/Files) —
+  Reminder reuses the existing auto-detected type, Location is new; both placeholder like Money.
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on

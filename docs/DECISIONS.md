@@ -561,6 +561,83 @@ leftover from that removal, not something new. Old backups containing those keys
 
 ---
 
+**56. Fixed five real bugs reported directly against a device, all in the areas Sessions 29/30
+touched — the app lock screen's auto-biometric, the bottom nav, and the Vault gate.**
+
+*Auto-biometric required two attempts on cold start.* Reasoned root cause (not confirmed by
+instrumented logging, since that's not available here): triggering the OS BiometricPrompt
+immediately on cold start, before the Android Activity has actually settled/gained window focus, is
+a known class of timing issue — the prompt can visually appear and accept the fingerprint without
+the result reliably reaching the app, so a second, later attempt (once focus has settled) works.
+Mitigated with a 400ms delay before the automatic attempt in `showLockScreen()` — a reasoned
+estimate, not a measured value; worth tightening, or replacing with an actual focus/resume signal,
+if a real device check shows it's still flaky. The Vault gate's equivalent auto-attempt wasn't given
+the same delay — it's reached by navigating there, not by a cold start, so Activity focus should
+already be established by the time it fires.
+
+*Bottom-nav Home/Settings did nothing while on the Vault screen.* Root cause: the nav handler called
+`switchMainTab(tab)` directly, which only toggles `#home-tab`/`#settings-tab` inside `#main-screen` —
+it never actually showed `#main-screen` itself. If `#vault-screen` was the currently visible screen,
+tapping Home or Settings just silently changed which sub-tab main-screen would show *the next time
+it became visible*, with no visible effect. Fixed by giving `showScreen()` an optional `tab`
+parameter (defaulting to Home, preserving every existing `showScreen('main-screen')` call site's
+behavior unchanged) and having the nav handler call `showScreen('main-screen', { tab })` instead of
+touching the sub-tab directly.
+
+*The Lock button stayed visible on the Vault's locked/setup gate, where there's nothing to lock.*
+Fixed: `refreshVaultGateView()` now hides `#vault-lock-btn` unless genuinely unlocked.
+
+*The biometric enable/disable toggle showed on the locked landing gate, not just once inside.*
+Requested directly: the toggle (and its confirm-PIN sub-form) is a Vault *setting*, not part of
+getting into the Vault — the "Unlock with fingerprint/face" *button* correctly stays on the locked
+gate (that's the actual unlock mechanism), but the toggle now only renders once truly unlocked.
+Moved the markup from beside `vault-locked-view` into `#vault-content`, and changed
+`refreshVaultGateView()`'s visibility condition on the row from "a PIN exists" to "currently
+unlocked."
+
+*Locking the Vault didn't return to Home immediately.* The handler was awaiting an async gate
+refresh before navigating away. Reordered: `showScreen('main-screen')` now runs synchronously,
+right after `lockVault()`, with no await in between — the gate refresh that used to happen here
+isn't needed anyway, since the bottom nav's Vault handler already calls `refreshVaultGateView()`
+fresh on every visit.
+
+---
+
+**57. Added Reminder and Location as two more capture cards (placeholder, same as Money in Decision
+55), positioned before Money — Text/Voice/Image/PDF/Reminder/Location/Money/Files, eight cards now.
+Backup filename letters extended from `tvipmf` to `tviprlmf` to match.**
+
+Reminder reuses the *existing* `type: 'reminder'` / `reminders` category rather than introducing a
+parallel type, unlike Money's relationship to Expense — the two situations aren't actually
+analogous. `intents.js` already auto-detects reminders from typed text ("remind me..."), and a
+reminder is a reminder regardless of how it was created; there's no real ambiguity the way "money"
+could mean several different things, which is what motivated keeping Money and Expense apart. One
+real consequence of this reuse: Reminder is now vault-capable (it's one of the eight manual capture
+cards, all of which support Private Vault), so `reminders` in `ENTRY_CATEGORIES` gained the same
+`&& !e.is_private` guard every other vault-capable category already has — a no-op for any reminder
+that exists today (all auto-detected, never private), only relevant once a private one becomes
+possible. Location is genuinely new — no prior type, schema, or auto-detection to reuse — added
+exactly like Money: its own category (`locations`), its own color, placeholder "coming soon" on tap,
+no defined content shape yet.
+
+Colors: red was already taken by Money, so Reminder is orange (`#F97316`) and Location is cyan
+(`#06B6D4`) — the two remaining hues distinct from all six already in use. Checked contrast the same
+way as every color added since Decision 52: both need dark text over their background (white fails
+AA at this saturation/lightness, same as five of the other six type colors already did).
+
+Filenames: `tvipmf` → `tviprlmf`, in card order (Text/Voice/Image/PDF/Reminder/Location/Money/Files).
+`CATEGORY_LETTERS`/`LETTER_ORDER` in backup.js updated together, plus the design-plan comment at the
+top of `style.css` and the filename convention section in `ARCHITECTURE.md` §4 — all three needed to
+stay in sync or the documentation would have drifted from the code the moment this shipped. This
+extension wasn't explicitly requested in so many words — the request added two cards to the same
+visual set the filename letters were built from, and extending the acronym to match felt like the
+faithful reading of "these letters represent the cards," but it's a judgment call, flagged rather
+than silently assumed, same as the other filename defaults in Decision 55.
+
+Capture-card grid: 3 columns → 4, for a clean 4x2 layout instead of 3+3+2.
+
+---
+
 **53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
 instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
 directly, alongside keeping dark mode.
