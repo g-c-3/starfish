@@ -11,24 +11,24 @@
 import { insertEntry } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 
-const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'money', 'file']; // Text/Voice/Image/PDF/Money/Files — mirrors
+const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // Text/Voice/Image/PDF/Reminder/Location/Money/Files — mirrors
 // the home screen's capture types minus expense/reminder, which stay out of vault scope (per spec).
 
 // ---------------------------------------------------------------------------
 // Content bundling — what actually goes inside encrypted_body, by type.
 // ---------------------------------------------------------------------------
 function buildVaultPlaintext(type, { text, fileData, ocrText } = {}) {
-  // 'money' has no defined content shape yet — placeholder text-only, same as 'note', until its
-  // actual capture flow is specified. Trivial to change later since nothing has been captured
-  // under this type yet.
-  if (type === 'note' || type === 'money') return text || '';
+  // 'money'/'reminder'/'location' have no defined content shape yet — placeholder text-only, same
+  // as 'note', until each one's actual capture flow is specified. Trivial to change later since
+  // nothing has been captured under any of these three types yet.
+  if (type === 'note' || type === 'money' || type === 'reminder' || type === 'location') return text || '';
   if (type === 'voice' || type === 'file') return JSON.stringify({ fileData });
   if (type === 'image' || type === 'pdf') return JSON.stringify({ fileData, ocrText: ocrText || '' });
   throw new Error(`Type not supported in Private Vault: ${type}`);
 }
 
 function parseVaultPlaintext(type, plaintext) {
-  if (type === 'note' || type === 'money') return { text: plaintext };
+  if (type === 'note' || type === 'money' || type === 'reminder' || type === 'location') return { text: plaintext };
   return JSON.parse(plaintext); // {fileData} or {fileData, ocrText}
 }
 

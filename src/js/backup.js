@@ -16,22 +16,27 @@ const FILES_DIR = 'files'; // Directory.Data/files/<uuid>.<ext> — where captur
 // Categories are independent selectable units. Voice/Images/PDFs/Files exclude private ones —
 // EVERY private entry, regardless of underlying type, falls under the one unified private_vault
 // category instead (Private Vault pivot — was notes-only "private_notes" before). Tags and App
-// Settings have no per-entry rows. Expenses/Reminders have no private variant (out of vault scope).
+// Settings have no per-entry rows. Expenses have no private variant (out of vault scope) — Reminders
+// used to be the same, but now that Reminder is also one of the eight manual capture cards
+// (Decision 57) and therefore vault-capable, it needs the same private-exclusion guard as the rest;
+// existing (currently always non-private, auto-detected-only) reminder entries are unaffected.
 const ENTRY_CATEGORIES = {
   notes: (e) => e.type === 'note' && !e.is_private,
   voice: (e) => e.type === 'voice' && !e.is_private,
   images: (e) => e.type === 'image' && !e.is_private,
   pdfs: (e) => e.type === 'pdf' && !e.is_private,
+  reminders: (e) => e.type === 'reminder' && !e.is_private,
+  locations: (e) => e.type === 'location' && !e.is_private,
   money: (e) => e.type === 'money' && !e.is_private,
   files: (e) => e.type === 'file' && !e.is_private,
   expenses: (e) => e.type === 'expense',
-  reminders: (e) => e.type === 'reminder',
-  private_vault: (e) => e.is_private === 1 // any type — Text/Voice/Image/PDF/Money/Files, unified
+  private_vault: (e) => e.is_private === 1 // any type — Text/Voice/Image/PDF/Reminder/Location/Money/Files, unified
 };
 // Non-vault file-bearing categories only — buildBackupPayload reads file_path for these. Vault
 // entries (any type) keep file_path NULL; their bytes already travel inside encrypted_body, which
-// every category's row spread already carries, so private_vault needs no entry here. Money isn't
-// listed — no defined content shape yet (Decision 55), so nothing to read a file_path for.
+// every category's row spread already carries, so private_vault needs no entry here. Reminder/
+// Location/Money aren't listed — none has a defined content shape yet (Decision 55/56), so nothing
+// to read a file_path for.
 const FILE_BEARING_CATEGORIES = new Set(['voice', 'images', 'pdfs', 'files']);
 const ALL_CATEGORIES = [...Object.keys(ENTRY_CATEGORIES), 'tags', 'app_settings'];
 
@@ -41,15 +46,16 @@ const APP_SETTINGS_KEYS = ['dark_mode']; // non-sensitive only — never credent
 // those keys restores them as harmless, unread meta rows, same as explained in app.js.
 
 // ---------------------------------------------------------------------------
-// Filenames — backup_<letters>_<timestamp>.dz / append_<letters>_<timestamp>.dz (Decision 55).
-// <letters> is a fixed-order subset of "tvipmf" (Text/Voice/Image/PDF/Money/Files) — only the
-// letters for categories actually included, in that order regardless of the order they were
-// selected in. Categories with no letter (private_vault/expenses/reminders/tags/app_settings)
-// don't contribute one; if none of the six lettered categories are present at all, "x" is used
-// so the filename is never left with an empty, malformed segment.
+// Filenames — backup_<letters>_<timestamp>.dz / append_<letters>_<timestamp>.dz (Decision 55,
+// letters extended in Decision 57 when Reminder and Location joined the card set).
+// <letters> is a fixed-order subset of "tviprlmf" (Text/Voice/Image/PDF/Reminder/Location/Money/
+// Files) — only the letters for categories actually included, in that order regardless of the
+// order they were selected in. Categories with no letter (private_vault/expenses/tags/
+// app_settings) don't contribute one; if none of the eight lettered categories are present at
+// all, "x" is used so the filename is never left with an empty, malformed segment.
 // ---------------------------------------------------------------------------
-const CATEGORY_LETTERS = { notes: 't', voice: 'v', images: 'i', pdfs: 'p', money: 'm', files: 'f' };
-const LETTER_ORDER = ['notes', 'voice', 'images', 'pdfs', 'money', 'files'];
+const CATEGORY_LETTERS = { notes: 't', voice: 'v', images: 'i', pdfs: 'p', reminders: 'r', locations: 'l', money: 'm', files: 'f' };
+const LETTER_ORDER = ['notes', 'voice', 'images', 'pdfs', 'reminders', 'locations', 'money', 'files'];
 
 function categoryLetters(categories) {
   const letters = LETTER_ORDER.filter((c) => categories.includes(c)).map((c) => CATEGORY_LETTERS[c]).join('');

@@ -22,9 +22,9 @@ const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto
 
 const CATEGORY_LABELS = {
   notes: 'Notes', private_vault: 'Private Vault', voice: 'Voice', images: 'Images', pdfs: 'PDFs',
-  money: 'Money', files: 'Files', expenses: 'Expenses', reminders: 'Reminders', tags: 'Tags', app_settings: 'App Settings'
+  reminders: 'Reminders', locations: 'Locations', money: 'Money', files: 'Files', expenses: 'Expenses', tags: 'Tags', app_settings: 'App Settings'
 };
-const VAULT_TYPE_LABELS = { note: 'Text', voice: 'Voice', image: 'Image', pdf: 'PDF', money: 'Money', file: 'Files' };
+const VAULT_TYPE_LABELS = { note: 'Text', voice: 'Voice', image: 'Image', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
 
 let db;
 let privateSessionKey = null; // set only after vault PIN unlock, cleared on vault lock/background
@@ -37,7 +37,7 @@ let appAutoLockTimer = null;
 // shows the one requested. ----
 const NAV_SCREENS = { 'main-screen': 'home', 'vault-screen': 'vault' }; // which screens the bottom nav covers, and which tab that maps to by default
 
-function showScreen(id) {
+function showScreen(id, { tab } = {}) {
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
@@ -48,7 +48,9 @@ function showScreen(id) {
   if (!nav) return;
   const navKey = NAV_SCREENS[id];
   nav.classList.toggle('hidden', !navKey);
-  if (id === 'main-screen') switchMainTab('home'); // always land on Home when (re-)entering main-screen
+  // Defaults to Home (e.g. every unlock-success call site just says showScreen('main-screen'), and
+  // expects Home) — an explicit tab (from the bottom nav) overrides that default.
+  if (id === 'main-screen') switchMainTab(tab || 'home');
   else setActiveNavTab(navKey);
 }
 
@@ -130,7 +132,15 @@ async function showLockScreen() {
   // fire-and-forget: success unlocks via attemptUnlock() above (which calls onUnlocked()) same as
   // if the person had tapped the button themselves; cancel/failure just leaves the password field
   // available, no different from before this existed.
-  if (window.biometricUnlockAvailable) window.tryBiometricUnlockApp();
+  //
+  // The short delay is a fix, not decoration: triggering the OS biometric prompt immediately on
+  // cold start — before the Android Activity has actually settled/gained window focus — is a
+  // known class of timing issue where the prompt can visually appear and accept the fingerprint,
+  // but the result doesn't reliably reach the app, requiring a second manual attempt once focus
+  // has settled (reported behavior: works once tapped explicitly, not on the automatic first try).
+  // 400ms is a reasoned, untested-on-device estimate, not a measured value — worth tightening or
+  // replacing with an actual focus/resume signal if this is still flaky after a real device check.
+  if (window.biometricUnlockAvailable) setTimeout(() => window.tryBiometricUnlockApp(), 400);
 }
 
 // appPassword/vaultPin: either or both may be null/empty — the app-open password is optional from
@@ -1053,16 +1063,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // shows once genuinely unlocked (privateSessionKey set). This is the fix for the reported
     // bug: previously nothing gated this on lock state at all (see Decision 54).
     document.getElementById('vault-content').classList.toggle('hidden', !unlocked);
+    // Lock button only makes sense once there's something to lock — hidden on the setup/locked
+    // gate entirely, not just inert (Session 31 bug: it stayed visible in every state before this).
+    document.getElementById('vault-lock-btn').classList.toggle('hidden', !unlocked);
 
-    // Biometric row/button — only meaningful once a PIN exists, and only shown at all if the
-    // hardware/enrollment is actually available right now.
     const settings = await getBiometricSettings();
+    // The unlock button belongs on the locked gate (it's how you get in); the enable/disable
+    // toggle belongs only once you're actually inside — it configures the vault, it isn't part of
+    // getting into it (Session 31 bug: both were shown together on the locked page before this).
     const vaultBioUnlockBtn = document.getElementById('vault-biometric-unlock-btn');
     if (vaultBioUnlockBtn) vaultBioUnlockBtn.classList.toggle('hidden', !locked || !settings.vaultEnabled || !settings.available);
     const vaultBioRow = document.getElementById('vault-biometric-row');
     const vaultBioToggle = document.getElementById('vault-biometric-toggle');
     if (vaultBioRow && vaultBioToggle) {
-      vaultBioRow.classList.toggle('hidden', needsSetup || !settings.available);
+      vaultBioRow.classList.toggle('hidden', !unlocked || !settings.available);
       vaultBioToggle.checked = settings.vaultEnabled;
     }
 
@@ -1090,9 +1104,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (result.success) { await refreshVaultGateView(); await renderVaultList('all'); }
     else alert('Biometric unlock failed — enter your Vault PIN.');
   });
-  document.getElementById('vault-lock-btn').addEventListener('click', async () => {
+  document.getElementById('vault-lock-btn').addEventListener('click', () => {
     lockVault();
-    await refreshVaultGateView(); // re-show the gate immediately, not just next time vault-screen opens
+    // Immediate, synchronous navigation — "should go to home page immediately" (Session 31 bug:
+    // this previously awaited an async gate refresh first, delaying the actual screen switch).
+    // vault-screen's own gate state gets refreshed the next time the Vault tab is tapped anyway
+    // (the nav handler below already calls refreshVaultGateView() on every visit).
     showScreen('main-screen');
   });
   await refreshVaultGateView();
@@ -1104,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#bottom-nav button').forEach((btn) => btn.addEventListener('click', async () => {
     const tab = btn.dataset.nav;
     if (tab === 'vault') { showScreen('vault-screen'); await refreshVaultGateView(); }
-    else switchMainTab(tab);
+    else showScreen('main-screen', { tab });
   }));
 
   document.querySelectorAll('#vault-tabs .vault-tab').forEach((tab) => tab.addEventListener('click', () => {
@@ -1165,8 +1182,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureToVault({ type: 'voice', label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderVaultList('all');
       });
-    } else if (type === 'money') {
-      alert('Money capture — coming soon.'); // same placeholder as the main capture bar
+    } else if (type === 'reminder' || type === 'location' || type === 'money') {
+      alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
     } else {
       const input = document.createElement('input');
       input.type = 'file';
@@ -1346,10 +1363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureFile('voice', { label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
       });
-    } else if (type === 'money') {
-      // Placeholder — card added now, capture flow not yet defined. Explicit branch so this
-      // doesn't silently fall into the generic file-picker case below, which would be wrong.
-      alert('Money capture — coming soon.');
+    } else if (type === 'reminder' || type === 'location' || type === 'money') {
+      // Placeholder — cards added now, capture flow not yet defined for any of the three. Explicit
+      // branch so these don't silently fall into the generic file-picker case below, which would
+      // be wrong for all of them.
+      alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
     } else {
       const input = document.createElement('input');
       input.type = 'file';
