@@ -42,6 +42,8 @@
         <button data-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
         <button data-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
         <button data-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
+        <button data-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span></button>
+        <button data-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span></button>
         <button data-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
         <button data-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
       </div>
@@ -165,21 +167,24 @@
       <button id="vault-unlock-btn">Unlock Vault</button>
       <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
     </div>
-    <div id="vault-biometric-row" class="hidden">
-      <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
-      <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
-      <div id="vault-biometric-confirm" class="hidden">
-        <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
-        <button id="vault-biometric-confirm-btn">Confirm</button>
-      </div>
-    </div>
 
     <div id="vault-content" class="hidden">
+      <div id="vault-biometric-row" class="hidden">
+        <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
+        <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
+        <div id="vault-biometric-confirm" class="hidden">
+          <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
+          <button id="vault-biometric-confirm-btn">Confirm</button>
+        </div>
+      </div>
+
       <div id="vault-capture-bar" class="capture-cards">
         <button data-vault-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
         <button data-vault-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
         <button data-vault-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
         <button data-vault-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
+        <button data-vault-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span></button>
+        <button data-vault-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span></button>
         <button data-vault-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
         <button data-vault-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
       </div>
@@ -193,6 +198,8 @@
         <button class="vault-tab" data-vault-tab="voice">Voice</button>
         <button class="vault-tab" data-vault-tab="image">Image</button>
         <button class="vault-tab" data-vault-tab="pdf">PDF</button>
+        <button class="vault-tab" data-vault-tab="reminder">Reminder</button>
+        <button class="vault-tab" data-vault-tab="location">Location</button>
         <button class="vault-tab" data-vault-tab="money">Money</button>
         <button class="vault-tab" data-vault-tab="file">Files</button>
       </div>
