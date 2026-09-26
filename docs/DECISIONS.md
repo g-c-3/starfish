@@ -476,6 +476,57 @@ anything to render text. Hierarchy comes from weight/scale instead of a second t
 
 ---
 
+**53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
+instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
+directly, alongside keeping dark mode.
+
+Gradient mode's full removal: `--gradient-1`/`--gradient-2` CSS custom properties, the
+`data-gradient` attribute and its `:root[data-gradient="on"]` rules, `setGradientMode()`,
+`gradientMode`/`gradientColor1`/`gradientColor2` from `getAppearance()`/`applyAppearance()`, and the
+toggle + two color-picker inputs from Settings. Old `gradient_mode`/`gradient_color_1`/
+`gradient_color_2` rows already written to the generic `meta` table (including inside any backup
+file made before this session) are simply never read again — harmless to leave, nothing left that
+reads them, no migration needed since appearance was always stored key-by-key rather than as
+dedicated schema columns.
+
+Layout: `#main-screen` split into two panels, `#home-tab` (capture bar, search, timeline — what used
+to be the whole screen) and `#settings-tab` (every `<details>` section that used to sit stacked below
+the timeline on the same page). A new fixed `#bottom-nav` (Home / Vault / Settings) switches between
+them, plus `#vault-screen`, which was already its own screen and needed no restructuring — tapping
+Vault calls the exact same `showScreen('vault-screen')` every existing unlock-success path already
+called, so there's no new code path for the Vault's own lock gate to go through. `showScreen()` now
+also drives the nav's visibility (hidden for first-run/lock-screen/ad-gate, which have nothing to
+navigate between yet) and active-tab state, in one place, rather than every call site managing that
+itself.
+
+Every standalone on/off setting (dark mode, both biometric toggles, Drive auto-backup, the
+safety-backup confirmation) is now a sliding switch, done as a pure CSS restyle of the existing
+`<input type="checkbox">` (`appearance: none` + a `::before` thumb) — no change to the underlying
+element, id, or `change` listener, so none of the JS that reads `.checked` needed touching. Backup/
+restore's category checkboxes deliberately stay compact checkboxes, not switches — picking several
+items from a list is a different kind of choice than flipping one setting on or off, and a row of
+five switches for that would read wrong. Restore-mode's radio buttons got the same modern-dot
+treatment.
+
+`<details>`/`<summary>` in the new Settings tab restyled as cards with a custom rotating chevron
+(`::-webkit-details-marker` hidden, `::after` chevron rotated via `[open]`) instead of the browser's
+default disclosure triangle — the single biggest contributor to the "1990s" complaint, by nature of
+being what a plain unstyled `<details>` list always looks like regardless of anything else on the
+page.
+
+Checked WCAG contrast for every new color pairing before finalizing, same discipline as Decision 52:
+found and fixed three real failures — the bottom nav's active-tab label (used `--brand` directly at
+first, landed at 4.06:1/4.34:1 in light/dark, just under the 4.5:1 small-text threshold; added a
+dedicated `--nav-active` token per theme instead, both now ≥5.4:1) and the inactive tab label (fg at
+55% opacity blended to 3.87:1 in light mode; raised to 70% opacity, ≥4.5:1 in both themes). Also
+swapped two newer CSS features (`color-mix()`, `:has()`) for explicit per-theme tokens and an added
+HTML class respectively — both are fine on current Chrome but this app's minSdk 22 (Decision — see
+Session 20) means some real devices may carry an older system WebView than whatever's on the
+development machine that would have "just worked" during a quick look; explicit fallback-free CSS
+costs nothing here and removes the question entirely rather than assuming.
+
+---
+
 **54. Fixed a real security bug: the Vault's PIN gate was never actually connected to `vault-screen`,
 so the bottom-nav Vault button opened straight into vault content with no gate at all. Also: both
 locks now default to attempting biometric immediately rather than waiting for a button tap.**
@@ -701,51 +752,26 @@ should be here" is exactly the kind of assumption that put it there in the first
 
 ---
 
-**53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
-instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
-directly, alongside keeping dark mode.
+**60. Fixed the Select files screen's scattered layout — a checkbox sizing bug, not a one-off
+styling gap.** Reported directly against a screenshot: category and item checkboxes floated
+disconnected from their labels, labels pushed to odd positions. Root cause: `.cat-select-all` and
+`.item-select` (the Select files screen's checkboxes) had never been given a rule of their own —
+every checkbox styled so far (Decisions 52/53) was scoped to a specific class
+(`.switch-row`/`.category-checkboxes`), so anything outside those fell through to the general
+`input, button, select { width: 100% }` rule, stretching the checkbox and scattering whatever sat
+next to it in its flex row.
 
-Gradient mode's full removal: `--gradient-1`/`--gradient-2` CSS custom properties, the
-`data-gradient` attribute and its `:root[data-gradient="on"]` rules, `setGradientMode()`,
-`gradientMode`/`gradientColor1`/`gradientColor2` from `getAppearance()`/`applyAppearance()`, and the
-toggle + two color-picker inputs from Settings. Old `gradient_mode`/`gradient_color_1`/
-`gradient_color_2` rows already written to the generic `meta` table (including inside any backup
-file made before this session) are simply never read again — harmless to leave, nothing left that
-reads them, no migration needed since appearance was always stored key-by-key rather than as
-dedicated schema columns.
+Fixed at the root rather than adding a third one-off class-scoped rule (the same gap that caused
+this): the compact square-checkmark checkbox is now the *default* for any plain `input[type=
+checkbox]`, and `.switch-row` overrides it to the sliding-switch look for the handful of single
+on/off settings that want that instead. A checkbox with no specific class now still gets sane
+sizing rather than silently inheriting `width: 100%` — closes this category of bug for any checkbox
+added later, not just the one reported. Also caught while consolidating: the switch needed an
+explicit `content: none` on its `:checked::after` to suppress the new default checkmark glyph,
+which would otherwise have shown up inside the sliding thumb.
 
-Layout: `#main-screen` split into two panels, `#home-tab` (capture bar, search, timeline — what used
-to be the whole screen) and `#settings-tab` (every `<details>` section that used to sit stacked below
-the timeline on the same page). A new fixed `#bottom-nav` (Home / Vault / Settings) switches between
-them, plus `#vault-screen`, which was already its own screen and needed no restructuring — tapping
-Vault calls the exact same `showScreen('vault-screen')` every existing unlock-success path already
-called, so there's no new code path for the Vault's own lock gate to go through. `showScreen()` now
-also drives the nav's visibility (hidden for first-run/lock-screen/ad-gate, which have nothing to
-navigate between yet) and active-tab state, in one place, rather than every call site managing that
-itself.
+Also fixed while in this file, unrelated to the report but found during review: Decision 53's own
+entry had ended up out of chronological order, sitting after Decision 59 instead of after Decision
+52 — an artifact of an earlier edit anchoring to non-unique matching text. Moved back into place;
+no content was lost or changed, only its position in the file.
 
-Every standalone on/off setting (dark mode, both biometric toggles, Drive auto-backup, the
-safety-backup confirmation) is now a sliding switch, done as a pure CSS restyle of the existing
-`<input type="checkbox">` (`appearance: none` + a `::before` thumb) — no change to the underlying
-element, id, or `change` listener, so none of the JS that reads `.checked` needed touching. Backup/
-restore's category checkboxes deliberately stay compact checkboxes, not switches — picking several
-items from a list is a different kind of choice than flipping one setting on or off, and a row of
-five switches for that would read wrong. Restore-mode's radio buttons got the same modern-dot
-treatment.
-
-`<details>`/`<summary>` in the new Settings tab restyled as cards with a custom rotating chevron
-(`::-webkit-details-marker` hidden, `::after` chevron rotated via `[open]`) instead of the browser's
-default disclosure triangle — the single biggest contributor to the "1990s" complaint, by nature of
-being what a plain unstyled `<details>` list always looks like regardless of anything else on the
-page.
-
-Checked WCAG contrast for every new color pairing before finalizing, same discipline as Decision 52:
-found and fixed three real failures — the bottom nav's active-tab label (used `--brand` directly at
-first, landed at 4.06:1/4.34:1 in light/dark, just under the 4.5:1 small-text threshold; added a
-dedicated `--nav-active` token per theme instead, both now ≥5.4:1) and the inactive tab label (fg at
-55% opacity blended to 3.87:1 in light mode; raised to 70% opacity, ≥4.5:1 in both themes). Also
-swapped two newer CSS features (`color-mix()`, `:has()`) for explicit per-theme tokens and an added
-HTML class respectively — both are fine on current Chrome but this app's minSdk 22 (Decision — see
-Session 20) means some real devices may carry an older system WebView than whatever's on the
-development machine that would have "just worked" during a quick look; explicit fallback-free CSS
-costs nothing here and removes the question entirely rather than assuming.

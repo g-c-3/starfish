@@ -4,6 +4,30 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 34**
+
+Fixed the Select files screen's scattered layout, reported against a screenshot — checkboxes
+floating disconnected from their labels. Root cause: those checkboxes (`.cat-select-all`,
+`.item-select`) had never been given a rule of their own, so they fell through to the general
+`input { width: 100% }` rule and stretched, scattering their flex row. Every checkbox styled so far
+had been scoped to a specific class (`.switch-row`/`.category-checkboxes`) — anything outside those
+was unprotected.
+
+Fixed at the root instead of adding a third class-scoped patch: the compact checkbox is now the
+default for any plain checkbox, with `.switch-row` overriding it to the sliding-switch look where
+that's wanted. Closes this category of bug for any checkbox added later, not just this one.
+
+Also found and fixed while reviewing this file: Decision 53's entry had ended up out of
+chronological order in `DECISIONS.md`, sitting after Decision 59 instead of after 52 — an artifact
+of an earlier edit anchoring to non-unique text. Moved back into place, no content changed.
+
+Decisions made: 60.
+
+Next session start point: unchanged — the device-pass debt from Sessions 25 onward still stands.
+This session's fix is CSS-only and low-risk by nature, but still unconfirmed visually on a device.
+
+---
+
 **Session 33**
 
 Two bugs reported together, both traced to the same single line: a double biometric prompt on every
