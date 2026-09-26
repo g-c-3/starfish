@@ -80,7 +80,11 @@
   delay-based biometric mitigation was itself the cause of a worse bug (reported freeze, full
   second unlock needed) — the delay raced against `DOMContentLoaded`'s own setup. Fixed by moving
   the trigger to run only after that setup fully completes. Also removed the ad gate from the
-  unlock path entirely (ads deferred to a future build — see Phase 12).
+  unlock path entirely (ads deferred to a future build — see Phase 12). **Session 33 (Decision
+  59):** found the real cause of a double biometric prompt on open and the Vault sometimes
+  appearing already unlocked — an unconditional, redundant `refreshVaultGateView()` call at cold
+  start that also fired the Vault's own auto-biometric attempt before the app itself was even
+  unlocked. Removed; the nav handler already covers it correctly.
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on

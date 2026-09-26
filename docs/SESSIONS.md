@@ -4,6 +4,31 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 33**
+
+Two bugs reported together, both traced to the same single line: a double biometric prompt on every
+app open (with the app's own unlock behaving inconsistently depending on which prompt got completed
+or ignored), and the Vault sometimes showing up already unlocked with no prompt at all.
+
+Cause: `DOMContentLoaded`'s initial setup called `refreshVaultGateView()` once, unconditionally,
+immediately after wiring the Vault's buttons — before the person had reached or tapped the Vault tab
+at all. That function auto-triggers a Vault biometric attempt when enabled (Decision 56), so this
+fired a second prompt on cold start racing against the app lock screen's own one, and could silently
+set the Vault's unlock state in the background while the person was still on the app's lock screen —
+so by the time they actually opened the Vault tab, it was already unlocked with nothing asked.
+
+This call had been redundant since Session 30 (the bottom-nav Vault button already calls it fresh on
+every real visit) but harmless on its own; it only became actively wrong once Decision 56 gave the
+function it was calling a side effect. Removed the line entirely.
+
+Decisions made: 59.
+
+Next session start point: unchanged — still the same device pass owed since Session 25, now with
+one more thing this session should make easier to verify (only one biometric prompt should ever
+appear at app open; the Vault should never be reachable without its own prompt first).
+
+---
+
 **Session 32**
 
 Product decision, not a bug: ads are deliberately not part of this build — no AdMob account, no

@@ -677,6 +677,30 @@ area, both fixed together:
 
 ---
 
+**59. Fixed the actual cause of two more reported bugs: two biometric prompts firing on every app
+open, and the Vault sometimes ending up already unlocked with no PIN/biometric prompt at all.**
+
+Root cause: `DOMContentLoaded`'s initial setup called `refreshVaultGateView()` once, unconditionally,
+right after wiring the Vault's buttons — before the person had done anything, let alone reached or
+tapped the Vault tab. `refreshVaultGateView()` auto-triggers a biometric attempt for the Vault when
+it's enabled (Decision 56), so this fired a **second** biometric prompt on cold start, independent of
+and racing against the app lock screen's own auto-attempt (Decision 56/58) — matching exactly what
+was reported: two prompts, and which one "wins" (or whether both are needed) depending on timing.
+Worse: if that Vault-side attempt succeeded, `privateSessionKey` got set and the Vault's content
+silently became available — while the person was still looking at the *app's* lock screen, having
+authenticated for the app, not the Vault. Reaching the Vault tab afterward would then show it already
+unlocked, no prompt at all, because it already was.
+
+This line had been redundant since the moment the bottom-nav Vault button was written (Session 30) —
+that handler already calls `refreshVaultGateView()` fresh on every actual visit, and vault-screen
+starts hidden regardless, so nothing needed the state pre-computed at cold start. It went unnoticed
+because on its own it was harmless (just redundant); it only became actively wrong once Decision 56
+added an auto-biometric side effect to the function it was redundantly calling. Removed entirely,
+with the reasoning left in a comment at the call site it used to occupy, since "this looks like it
+should be here" is exactly the kind of assumption that put it there in the first place.
+
+---
+
 **53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
 instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
 directly, alongside keeping dark mode.
