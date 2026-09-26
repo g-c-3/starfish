@@ -7,7 +7,8 @@ import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromT
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { scheduleReminder, requestPermissions, registerActionTypes } from './notifications.js';
-import { runDailyAdGateIfDue } from './ads.js';
+// ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
+// itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
 import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
@@ -126,21 +127,17 @@ async function showLockScreen() {
   // can change between sessions). window.tryBiometricUnlockApp() reuses attemptUnlock() above
   // rather than duplicating the verify step, so there's exactly one path that decides "correct
   // password" either way.
+  //
+  // The actual auto-trigger does NOT happen here — see the end of the DOMContentLoaded handler
+  // below. Session 31 first tried a bare `setTimeout(..., 400)` right at this point, reasoning
+  // about Android's window-focus timing; that fix was itself the cause of a worse bug reported
+  // after shipping it (app freeze, biometric needing two attempts): the timeout fired
+  // independently of — and could land in the middle of — the rest of DOMContentLoaded's own
+  // async setup (populating settings from the database, etc.), racing two chains of SQLite calls
+  // against each other. Firing only after that setup has fully finished removes the race
+  // entirely, which matters more here than the exact delay length.
   const bioRow = (await db.query(`SELECT biometric_app_enabled FROM credentials WHERE id=1`)).values[0];
   window.biometricUnlockAvailable = !!bioRow?.biometric_app_enabled && await isBiometricAvailable();
-  // Default to biometric when it's enabled, rather than waiting for the button to be tapped —
-  // fire-and-forget: success unlocks via attemptUnlock() above (which calls onUnlocked()) same as
-  // if the person had tapped the button themselves; cancel/failure just leaves the password field
-  // available, no different from before this existed.
-  //
-  // The short delay is a fix, not decoration: triggering the OS biometric prompt immediately on
-  // cold start — before the Android Activity has actually settled/gained window focus — is a
-  // known class of timing issue where the prompt can visually appear and accept the fingerprint,
-  // but the result doesn't reliably reach the app, requiring a second manual attempt once focus
-  // has settled (reported behavior: works once tapped explicitly, not on the automatic first try).
-  // 400ms is a reasoned, untested-on-device estimate, not a measured value — worth tightening or
-  // replacing with an actual focus/resume signal if this is still flaky after a real device check.
-  if (window.biometricUnlockAvailable) setTimeout(() => window.tryBiometricUnlockApp(), 400);
 }
 
 // appPassword/vaultPin: either or both may be null/empty — the app-open password is optional from
@@ -238,19 +235,14 @@ window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 async function onUnlocked() {
   showScreen('main-screen');
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
-  const metaStore = {
-    get: async (k) => {
-      const r = await db.query(`SELECT value FROM meta WHERE key=?`, [k]);
-      return r.values && r.values[0] ? r.values[0].value : null;
-    },
-    set: async (k, v) => db.run(
-      `INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-      [k, v]
-    )
-  };
 
-  // Ad gate BEFORE main UI — but never blocks if no ad available (see ads.js).
-  await runDailyAdGateIfDue(window.adSdk, metaStore);
+  // Ads deliberately NOT wired in this build (explicit product decision — deferred to a future
+  // build, Phase 12 stays unstarted in ROADMAP.md). Previously called runDailyAdGateIfDue() here
+  // with window.adSdk, which has never actually been set anywhere (no AdMob plugin has been added
+  // to package.json) — ads.js's own try/catch handled that undefined reference safely on its own,
+  // so removing this isn't fixing a confirmed hang by itself, but it was extra async work sitting
+  // in the exact unlock path a freeze was reported on, and it served no purpose with nothing to
+  // gate. Removed rather than left calling into a module with nothing behind it.
   await checkAutoBackupOnOpen(); // never blocks getting into the app
   // Actual rendering (digest, on-this-day, timeline) happens via DOMContentLoaded's render*()
   // functions, called once right after bootstrap() resolves — showDigest()/showMainTimeline()
@@ -1494,4 +1486,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rows = term ? await searchEntries(db, term) : await showMainTimeline();
     document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row" data-type="${row.type}"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
   });
+
+  // Auto-biometric on the app-open lock screen (Decision 56/58) — deliberately the very last
+  // thing in this handler. Everything above (settings population, all button/tab wiring) is fully
+  // done by the time this line runs, so there is no remaining DOMContentLoaded work left for the
+  // biometric flow's own database calls to race against. The short delay on top is a buffer for
+  // Android's window-focus timing (the original concern) — an estimate, not a measured value.
+  if (window.biometricUnlockAvailable) setTimeout(() => window.tryBiometricUnlockApp(), 300);
 });
