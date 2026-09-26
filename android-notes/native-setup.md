@@ -253,3 +253,7 @@ thumbnail instead of a live screenshot (requested directly — same behavior as 
 screenshots/screen recording of the app are blocked system-wide as a side effect of the same flag.
 Runs in CI right after `cap add android`, alongside the manifest patch — order between the two
 doesn't matter, they touch different files.
+
+**Currently disabled (Decision 63)** — the screenshot-blocking side effect got in the way of taking
+screenshots during active development. `build-android.yml`'s step calling this script is commented
+out, not removed; this script is untouched and still correct. Re-enable by uncommenting that step.
