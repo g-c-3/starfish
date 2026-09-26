@@ -57,11 +57,15 @@ function showScreen(id, { tab } = {}) {
 
 // Home/Settings are two panels inside #main-screen (not separate .screen elements — switching
 // between them shouldn't re-run bootstrap-style setup) — see Decision 53, replacing the previous
-// single long scrolling page of stacked <details> settings sections.
+// single long scrolling page of stacked <details> settings sections. Settings stopped being a
+// third bottom-nav tab itself (Decision 61) — it's reached via the "App Settings" tile inside Home
+// instead, so the nav only ever needs to distinguish Home vs Vault.
 function switchMainTab(tab) {
   document.getElementById('home-tab')?.classList.toggle('hidden', tab !== 'home');
   document.getElementById('settings-tab')?.classList.toggle('hidden', tab !== 'settings');
-  setActiveNavTab(tab);
+  // Settings is conceptually part of Home now (reached via its tile, not its own nav destination),
+  // so the Home nav icon stays highlighted while viewing it rather than nothing being highlighted.
+  setActiveNavTab(tab === 'settings' ? 'home' : tab);
 }
 
 function setActiveNavTab(tab) {
@@ -1132,8 +1136,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // handler below already calls this fresh every time the Vault tab is actually tapped; nothing
   // needs it to run any earlier than that, since vault-screen itself starts hidden regardless.
 
-  // ---- Bottom nav: Home / Vault / Settings — replaces navigating everything as one long
-  // scrolling page (Decision 53). Home and Settings are tabs within main-screen; Vault is its own
+  // ---- Bottom nav: Home / Vault — Decision 61 dropped Settings as a third tab; it's reached via
+  // the "App Settings" tile inside Home instead (below), same screens/gates otherwise unchanged.
+  // Home and Settings are tabs within main-screen; Vault is its own
   // screen with its own gate (Decision 54 — that gate previously lived in Settings, disconnected
   // from vault-screen entirely, so this button skipped it and opened straight into the content). ----
   document.querySelectorAll('#bottom-nav button').forEach((btn) => btn.addEventListener('click', async () => {
@@ -1141,6 +1146,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tab === 'vault') { showScreen('vault-screen'); await refreshVaultGateView(); }
     else showScreen('main-screen', { tab });
   }));
+
+  // "App Settings" tile (Decision 61) — the settings-tab panel itself is unchanged, only its entry
+  // point moved from a bottom-nav button to this tile; the back link below is the way out again
+  // (the bottom nav's Home button also works, since settings-tab is still a sub-panel of main-screen).
+  document.getElementById('open-settings-tile').addEventListener('click', () => switchMainTab('settings'));
+  document.getElementById('settings-back-btn').addEventListener('click', () => switchMainTab('home'));
+
+  // Power button (Decision 61) — small, fixed, present on every screen since it lives outside any
+  // .screen element rather than being duplicated into each one. Confirms first since this is a hard
+  // process kill, not a lock/background — @capacitor/app's own exitApp(), native-Android-only (no
+  // equivalent close action exists for a plain web view, so it's a no-op there with a clear message
+  // rather than a silent failure). Locking on backgrounding (Decision 45) already covers what happens
+  // on next open; this button doesn't need to duplicate that.
+  document.getElementById('power-close-btn').addEventListener('click', async () => {
+    if (!confirm('Close Dumpzone?')) return;
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) { alert('Closing only works in the installed app, not this preview.'); return; }
+    const { App } = await import('@capacitor/app');
+    App.exitApp();
+  });
 
   document.querySelectorAll('#vault-tabs .vault-tab').forEach((tab) => tab.addEventListener('click', () => {
     document.querySelectorAll('#vault-tabs .vault-tab').forEach((t) => t.classList.remove('active'));
