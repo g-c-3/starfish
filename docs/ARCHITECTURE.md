@@ -133,13 +133,17 @@ app-open password was changed *after* the backup was made, restoring reverts it 
 worth a one-time notice at restore time: "This will restore your data as of [backup date] — password and notes
 will match that point in time."
 
-### Recents-preview blanking + screenshot blocking (Decision 62)
+### Recents-preview blanking + screenshot blocking (Decision 62, currently disabled — Decision 63)
 `MainActivity` sets Android's `FLAG_SECURE` on its window (applied by `scripts/patch-mainactivity.js` in CI —
 see `android-notes/native-setup.md` §13, `android/` isn't committed so this can't be a hand-edited file). Two
 effects from the one flag, not independently toggleable: the recent-apps/task-switcher preview shows a blank
 thumbnail instead of a live screenshot of the last screen (matching Opera Incognito's behavior — requested
 directly), and screenshots/screen recording of the app are blocked system-wide. The second is a side effect
 of the first, not a separate feature, but fits the app's own privacy premise regardless.
+
+**Currently disabled** (Decision 63) — the screenshot-blocking side effect got in the way of taking
+screenshots during active development. The CI step calling the script is commented out in
+`build-android.yml`; the script itself is untouched. Re-enable by uncommenting that one step.
 
 ## 3b. Private Vault (pivot — was notes-only "private notes," now spans five types)
 

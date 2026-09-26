@@ -4,6 +4,29 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 38**
+
+Reported: `FLAG_SECURE` (Decision 62) was getting in the way of taking screenshots during active
+development — expected, since screenshot-blocking is an inherent side effect of the same flag that
+blanks the recents preview, not a separate switch. Asked whether deleting `scripts/patch-mainactivity.js`
+was the right way to turn it off — no: `build-android.yml` still calls it, so deleting the file
+would have turned a clean disable into a CI failure (missing file) instead.
+
+Disabled by commenting out the one CI step that calls the script, not deleting anything — the
+script stays, untouched and still correct, so re-enabling later is a one-line uncomment rather than
+rebuilding the feature. Updated ARCHITECTURE.md, `android-notes/native-setup.md` §13, and ROADMAP.md
+to say clearly that this is built-but-disabled, not built-and-live, so a future session doesn't
+assume recents actually blanks on a real device right now.
+
+Decisions made: 63 (disable, not delete — reasoning above).
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward
+still stands. When development is far enough along that screenshots aren't needed as often,
+re-enabling Decision 62 is uncommenting the step in `build-android.yml` — worth doing before any
+build meant to be used for real, since the feature was requested for exactly that use case.
+
+---
+
 **Session 37**
 
 Two requests: recents-preview should go dark/blank like Opera Incognito's task-switcher behavior;

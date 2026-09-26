@@ -867,3 +867,14 @@ Requested directly, all four in one session:
    the button. Flagged as an assumption, not confirmed; easy to extend to the Vault gate too if
    that's what was meant.
 
+---
+
+**63. Recents-preview blanking (Decision 62) disabled for now.**
+
+`FLAG_SECURE`'s screenshot-blocking side effect got in the way of taking screenshots during active
+development — reported directly. The CI step calling `scripts/patch-mainactivity.js` in
+`build-android.yml` is commented out, not deleted; the script itself is untouched and still correct
+(confirmed working in Decision 62's own sandbox test). Re-enabling later is a one-line uncomment,
+not a rebuild of the feature. Deleting the script file instead, as briefly considered, would have
+left the workflow calling a file that no longer exists — a build failure, not a clean disable.
+

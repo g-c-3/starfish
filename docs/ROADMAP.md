@@ -12,7 +12,7 @@
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen done; rest not started)
-- [~] 10 — Security hardening (biometric unlock done, needs device confirm; recents-preview blanking/screenshot block done; obfuscation/ProGuard/signature check not)
+- [~] 10 — Security hardening (biometric unlock done, needs device confirm; recents-preview blanking/screenshot block built but currently disabled — Decision 63; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
@@ -208,18 +208,22 @@
 - [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
   Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
   default, independent per lock; not yet confirmed on a real device. **Recents-preview blanking +
-  screenshot blocking done** (Session 37, Decision 62) — `FLAG_SECURE` set via
-  `scripts/patch-mainactivity.js`, same never-committed-`android/` pattern as the manifest permissions.
-  JS obfuscation, ProGuard/R8, startup signature check: still documented, not implemented.
+  screenshot blocking built** (Session 37, Decision 62) — `FLAG_SECURE` set via
+  `scripts/patch-mainactivity.js`, same never-committed-`android/` pattern as the manifest permissions —
+  **but currently disabled** (Session 38, Decision 63): the screenshot block got in the way of
+  development itself, so the CI step calling the script is commented out in `build-android.yml`
+  (the script stays, untouched — re-enable is a one-line uncomment). JS obfuscation, ProGuard/R8,
+  startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
   (Session 3). Runs `npm run build` (Vite) before `cap sync` (Decision 46, Session 18) — without
   it, the bundled app can never load in any WebView, verified as the actual root cause of two
   consecutive blank-screen device tests. **Now also patches the freshly-generated `android/` platform
-  on every run** — required manifest permissions (Decision 49), `FLAG_SECURE` on `MainActivity`
-  (Decision 62), and a real, always-incrementing
+  on every run** — required manifest permissions (Decision 49) and a real, always-incrementing
   version (Decision 51), both via small idempotent-where-appropriate Node scripts in `scripts/`,
   since `android/` itself is never committed and starts from the same unmodified template every
-  time. Live green run against the now-set secrets, with these patches applied, not yet confirmed —
+  time. A third such script, `FLAG_SECURE` on `MainActivity` (Decision 62), exists but its CI step
+  is currently commented out (Decision 63 — blocked screenshots during development). Live green run
+  against the now-set secrets, with the active patches applied, not yet confirmed —
   manual check pending.
 - [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
   drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
