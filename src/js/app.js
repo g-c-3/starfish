@@ -43,6 +43,11 @@ function showScreen(id, { tab } = {}) {
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
 
+  // Power button (Decision 61) is present on every screen except the app-open lock screen
+  // (Decision 62) — removed there on request; every other screen, including first-run and the
+  // Vault's own PIN gate, still shows it.
+  document.getElementById('power-close-btn')?.classList.toggle('hidden', id === 'lock-screen');
+
   // Bottom nav only makes sense once the app is unlocked (main-screen/vault-screen) — hidden for
   // first-run, the lock screen, and the ad gate, which have nothing to navigate between yet.
   const nav = document.getElementById('bottom-nav');
@@ -1153,14 +1158,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('open-settings-tile').addEventListener('click', () => switchMainTab('settings'));
   document.getElementById('settings-back-btn').addEventListener('click', () => switchMainTab('home'));
 
-  // Power button (Decision 61) — small, fixed, present on every screen since it lives outside any
-  // .screen element rather than being duplicated into each one. Confirms first since this is a hard
-  // process kill, not a lock/background — @capacitor/app's own exitApp(), native-Android-only (no
-  // equivalent close action exists for a plain web view, so it's a no-op there with a clear message
-  // rather than a silent failure). Locking on backgrounding (Decision 45) already covers what happens
-  // on next open; this button doesn't need to duplicate that.
+  // Power button (Decision 61, confirmation removed in Decision 62) — small, fixed, present on
+  // every screen except the app-open lock screen (handled in showScreen() above) since it lives
+  // outside any .screen element rather than being duplicated into each one. @capacitor/app's own
+  // exitApp(), native-Android-only (no equivalent close action exists for a plain web view, so
+  // it's a no-op there with a clear message rather than a silent failure). Locking on
+  // backgrounding (Decision 45) already covers what happens on next open; this button doesn't
+  // need to duplicate that. No confirmation dialog — removed on request; a mistaken tap just
+  // re-opens the app same as a mistaken tap of the OS back button would.
   document.getElementById('power-close-btn').addEventListener('click', async () => {
-    if (!confirm('Close Dumpzone?')) return;
     const { Capacitor } = await import('@capacitor/core');
     if (!Capacitor.isNativePlatform()) { alert('Closing only works in the installed app, not this preview.'); return; }
     const { App } = await import('@capacitor/app');
