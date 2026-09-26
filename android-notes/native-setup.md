@@ -232,3 +232,24 @@ deliberate version bumps.
 Unlike `patch-manifest.js`, this script is **not** idempotent by design — it's meant to overwrite the
 version every run, not skip once set (there's nothing to "already be set" correctly on a freshly
 regenerated, always-1.0 template).
+
+## 13. Recents-preview blanking + screenshot blocking (Decision 62)
+`MainActivity.java`'s stock template (from `npx cap add android`) has no `onCreate()` override at
+all — just `public class MainActivity extends BridgeActivity {}`. `scripts/patch-mainactivity.js`
+inserts one that sets `FLAG_SECURE` on the window, same idempotent-CI-script pattern as
+`patch-manifest.js` (§3) and for the same reason: `android/` is never committed, so a hand edit to
+a real `MainActivity.java` would be silently discarded the next CI run.
+
+```java
+@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+}
+```
+
+One flag, two effects, not separable: the Android recent-apps/task-switcher preview shows a blank
+thumbnail instead of a live screenshot (requested directly — same behavior as Opera Incognito), and
+screenshots/screen recording of the app are blocked system-wide as a side effect of the same flag.
+Runs in CI right after `cap add android`, alongside the manifest patch — order between the two
+doesn't matter, they touch different files.
