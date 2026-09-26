@@ -4,6 +4,41 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 35**
+
+Picked up an unblocked Phase 9 item rather than waiting further on the standing device-pass debt
+(Sessions 25–34), same pattern as Sessions 16/17 — nothing here needed a device to build or verify.
+
+Built the "Your Data" transparency screen (ARCHITECTURE §7), specified but not yet coded: a Settings
+section showing total entry count and an on-device storage estimate, plus an Export Now button.
+`yourDataSummary()` (app.js) counts non-deleted, non-vault entries — vault entries excluded for the
+same reason `showDigest()`/`onThisDay()` already exclude them (Decision 40): this screen sits behind
+the app-open password, not the Vault PIN, so a count that included vault items would leak the vault's
+size to anyone with app access but not the PIN. Storage size has no such split available —
+`navigator.storage.estimate()` reports the whole origin's usage, not per-category — so it's shown as
+one on-device total (files + vault content + the database itself), labeled as an estimate, same
+caveat already used for the backup/restore storage checks. Export Now opens the existing Backup &
+Restore settings section and scrolls it into view rather than building a second export path.
+
+New `<details id="your-data-settings">` added to Settings, positioned above Storage breakdown (the
+higher-level, "is my data actually local" summary, vs. the per-category breakdown below it). Verified
+with a real `npm install` + `vite build` before delivering, not just syntax-checked: 99 modules
+transformed, zero errors, only the same pre-existing benign dynamic-import warnings prior sessions
+have already seen. Also fixed a stale line in ARCHITECTURE.md §13 while touching it — the Status
+section still listed the on-this-day/storage-breakdown screens as "not yet coded," though Session 17
+built both; corrected to reflect what's actually implemented.
+
+Decisions made: none — implementing an already-specified, already-scoped feature, not a new design
+call.
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward still
+stands, now with one more built-but-unverified-on-device screen added to it (low risk: read-only
+display plus a settings-open call, no data mutation). If picking up more Phase 9 work instead of the
+device pass: quick-capture widget, expense charts, backup-reminder nudge, map view, and the
+confidence-confirmation chip are all unblocked and unstarted.
+
+---
+
 **Session 34**
 
 Fixed the Select files screen's scattered layout, reported against a screenshot — checkboxes

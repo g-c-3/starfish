@@ -589,11 +589,15 @@ device testing), all five per-file actions (`fileactions.js`) including the "Sel
 the Private Vault (`vault.js` + its `app.js`/`index.html` wiring — capture/browse/search across all five types,
 its own trash bin, its own auto-lock). Screen show/hide wiring (`showScreen()`) was itself missing until the
 Vault pivot surfaced it — every UI section built in every prior session was technically unreachable before that.
-**None of this has been run on an actual device or through CI yet** — that remains the standing risk flagged
-at the end of every session since Phase 1.
+Also implemented: the digest/on-this-day/storage-breakdown screens (§6), and now the "Your Data" transparency
+screen (§7, Session 35) — total entry count plus an on-device storage estimate, with an Export Now button that opens
+the existing Backup & Restore section rather than a second export path. Entry count excludes Vault entries,
+same reasoning as the digest/on-this-day fix (Decision 40) — this screen sits behind the app-open password,
+not the Vault PIN. **None of this has been run on an actual device or through CI yet** — that remains the
+standing risk flagged at the end of every session since Phase 1.
 
 Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the map view,
-the confidence-confirmation chip UI, and the on-this-day/storage-breakdown screens. These are the
-next implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
+the confidence-confirmation chip UI, and the recurring backup-reminder nudge. These are the next
+implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.

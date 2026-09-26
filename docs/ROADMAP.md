@@ -11,7 +11,7 @@
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
-- [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown done; rest not started)
+- [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen done; rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
@@ -190,8 +190,13 @@
   `storageBreakdown()` are new, both excluding vault entries for the same reason; storage breakdown
   reuses `fileactions.js`'s `getSelectableEntries()` for sizes rather than computing them a second
   way, and its "clear items older than 30 days" action reuses the existing bulk-delete (soft-delete,
-  30-day trash, not permanent). Remaining items (data-transparency screen, quick-capture widget,
-  expense charts, backup-reminder nudge, map view, confidence-confirmation chip) not started.
+  30-day trash, not permanent). **"Your Data" transparency screen done (Session 35):** total entry
+  count (vault excluded, same reasoning as digest/on-this-day above — this screen sits behind the
+  app-open password, not the Vault PIN) plus an on-device storage estimate
+  (`navigator.storage.estimate()`, same estimate-only caveat as the backup/restore storage checks),
+  and an Export Now button that opens the existing Backup & Restore section rather than a second
+  export path. Remaining items (quick-capture widget, expense charts, backup-reminder nudge, map
+  view, confidence-confirmation chip) not started.
 - [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
   Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
   default, independent per lock; not yet confirmed on a real device. JS obfuscation, ProGuard/R8,
