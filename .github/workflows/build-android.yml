@@ -37,6 +37,9 @@ jobs:
       - name: Patch AndroidManifest.xml with required permissions
         run: node scripts/patch-manifest.js
 
+      - name: Patch MainActivity.java (FLAG_SECURE — blank recents preview, block screenshots)
+        run: node scripts/patch-mainactivity.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
