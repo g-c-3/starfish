@@ -289,6 +289,25 @@ async function storageBreakdown() {
   }));
 }
 
+// "Your Data" transparency screen (ARCHITECTURE §7) — total entry count + on-device storage
+// footprint, distinct from the per-category storage breakdown above (this is about making local-only
+// ownership visible/concrete, not about managing space). Excludes Vault entries from the count for
+// the same reason showDigest()/onThisDay() do (Decision 40) — the app-open password gates this
+// screen, but not the Vault PIN, so a count that included vault items would leak the vault's size to
+// anyone with app access but not the PIN. Storage size has no such split available: navigator.storage.
+// estimate() reports the whole origin's usage, not per-category, so it's shown as one on-device total
+// (files + vault content + the database itself) rather than a false non-vault-only figure.
+async function yourDataSummary() {
+  const rows = await db.query(`SELECT COUNT(*) as cnt FROM entries WHERE deleted_at IS NULL AND is_private=0`);
+  const entryCount = (rows.values && rows.values[0] && rows.values[0].cnt) || 0;
+  let storageBytes = null; // null = unknown, e.g. no Storage API in this WebView — caller shows "unknown", not 0
+  if (navigator.storage && navigator.storage.estimate) {
+    const { usage = 0 } = await navigator.storage.estimate();
+    storageBytes = usage;
+  }
+  return { entryCount, storageBytes };
+}
+
 // "Clear items older than X days" per category (ARCHITECTURE §6) — soft-deletes, same as any other
 // Delete (30-day trash, not permanent), reusing the existing bulk-delete path rather than a new one.
 async function clearOldInCategory(category, olderThanDays) {
@@ -903,7 +922,7 @@ window.Dumpzone = {
   downloadForAppend: (id, opts) => downloadForAppend(db, id, opts),
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
   getSelectableGroups, runBulkFileAction,
-  onThisDay, storageBreakdown, clearOldInCategory,
+  onThisDay, storageBreakdown, clearOldInCategory, yourDataSummary,
   captureFile
 };
 
@@ -1454,6 +1473,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }));
   }
   document.getElementById('storage-breakdown-settings').addEventListener('toggle', (e) => { if (e.target.open) renderStorageBreakdown(); });
+
+  // "Your Data" transparency screen (ARCHITECTURE §7) — recomputed on open, same lazy pattern as
+  // storage breakdown above, not on every settings render.
+  async function renderYourData() {
+    const { entryCount, storageBytes } = await yourDataSummary();
+    document.getElementById('your-data-summary').textContent =
+      `${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} · ` +
+      (storageBytes === null ? 'on-device storage: unknown' : `~${formatBytes(storageBytes)} used on this device (estimate)`);
+  }
+  document.getElementById('your-data-settings').addEventListener('toggle', (e) => { if (e.target.open) renderYourData(); });
+  // Export Now jumps straight into the existing Backup & Restore flow (ARCHITECTURE §7) rather than
+  // duplicating it — opens that section and scrolls it into view; nothing here builds a second export path.
+  document.getElementById('your-data-export-btn').addEventListener('click', () => {
+    const backupSection = document.getElementById('backup-settings');
+    backupSection.open = true;
+    backupSection.scrollIntoView({ behavior: 'smooth' });
+  });
 
   // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).
   // isVault: main-timeline rows carry real columns (amount, expense_category, fire_at, body_text);
