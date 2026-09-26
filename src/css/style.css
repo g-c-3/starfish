@@ -277,46 +277,47 @@ button {
 #settings-tab details > *:not(summary) { margin-top: 0; }
 #settings-tab details[open] { padding-bottom: 16px; }
 
+/* ---- Checkbox/radio base (Decision 60) — fixes a real bug: any checkbox with no more specific
+   rule fell through to the general `input, button, select { width: 100% }` rule above, stretching
+   it and scattering whatever sat next to it in a flex row (reported: Select files' category/item
+   checkboxes, which had never been given a rule of their own — .category-checkboxes was the only
+   checkbox context explicitly styled before this). Making the compact square-checkmark look the
+   default for every plain checkbox, rather than opt-in per class, closes that gap for good: a
+   checkbox with no specific styling now still gets sane sizing instead of silently inheriting
+   width:100% from the general rule. .switch-row below overrides this to the sliding-switch look
+   for the handful of single on/off settings that want it. ---- */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; min-width: 20px;
+  border-radius: 6px; border: 1.5px solid var(--border);
+  background: var(--card-bg); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
+  position: relative; display: inline-block; vertical-align: middle;
+}
+input[type="checkbox"]:checked { background: var(--brand); border-color: var(--brand); }
+input[type="checkbox"]:checked::after {
+  content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 700;
+}
+
 /* ---- Modern switches: a single on/off setting (dark mode, biometric unlock, auto-backup, the
-   safety-backup confirmation) reads as a sliding switch rather than a checkbox — marked with
-   class="switch-row" on the wrapping <label> in index.html. A multi-select-from-a-list
-   (.category-checkboxes) is a different kind of choice and keeps a compact checkbox instead;
-   styled separately below rather than making every checkbox in the app a switch regardless of
-   what it means. ---- */
+   safety-backup confirmation) reads as a sliding switch rather than the compact checkbox above —
+   marked with class="switch-row" on the wrapping <label> in index.html. ---- */
 .switch-row { display: flex; align-items: center; gap: 10px; width: auto; cursor: pointer; }
 .switch-row input[type="checkbox"] {
-  appearance: none; -webkit-appearance: none;
   width: 44px; height: 26px; min-width: 44px;
-  border-radius: 999px; background: var(--border);
-  position: relative; margin: 0; padding: 0; border: none; flex-shrink: 0; cursor: pointer;
+  border-radius: 999px; background: var(--border); border: none;
 }
 .switch-row input[type="checkbox"]::before {
   content: ""; position: absolute; top: 3px; left: 3px;
   width: 20px; height: 20px; border-radius: 50%;
   background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
-.switch-row input[type="checkbox"]:checked { background: linear-gradient(135deg, var(--btn-1), var(--btn-2)); }
+.switch-row input[type="checkbox"]:checked { background: linear-gradient(135deg, var(--btn-1), var(--btn-2)); border-color: transparent; }
 .switch-row input[type="checkbox"]:checked::before { transform: translateX(18px); }
+.switch-row input[type="checkbox"]:checked::after { content: none; } /* no checkmark glyph on the switch thumb */
 @media (prefers-reduced-motion: no-preference) {
   .switch-row input[type="checkbox"]::before { transition: transform 0.15s ease; }
   .switch-row input[type="checkbox"] { transition: background 0.15s ease; }
-}
-
-/* Compact modern checkbox for multi-select lists (backup/restore categories) — a small rounded
-   square with a checkmark, not a switch; switches imply on/off, this is pick-any-of-these. */
-.category-checkboxes input[type="checkbox"] {
-  appearance: none; -webkit-appearance: none;
-  width: 20px; height: 20px; min-width: 20px;
-  border-radius: 6px; border: 1.5px solid var(--border);
-  background: var(--card-bg); margin: 0; padding: 0; flex-shrink: 0; cursor: pointer;
-  position: relative;
-}
-.category-checkboxes input[type="checkbox"]:checked {
-  background: var(--brand); border-color: var(--brand);
-}
-.category-checkboxes input[type="checkbox"]:checked::after {
-  content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 13px; font-weight: 700;
 }
 
 /* Modern radio dots for restore-mode (append/overwrite) */
