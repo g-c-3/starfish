@@ -1104,7 +1104,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // (the nav handler below already calls refreshVaultGateView() on every visit).
     showScreen('main-screen');
   });
-  await refreshVaultGateView();
+  // NOTE: no unconditional refreshVaultGateView() call here at initial setup — that used to be a
+  // line right here, and it was a real bug (Decision 59): refreshVaultGateView() auto-triggers a
+  // biometric attempt for the Vault when enabled (Decision 56), so calling it during cold-start
+  // setup — before the user has even reached, let alone tapped, the Vault tab — fired a SECOND
+  // biometric prompt racing against the app-lock screen's own one, and could silently unlock the
+  // Vault in the background while the person was still looking at the app's lock screen. The nav
+  // handler below already calls this fresh every time the Vault tab is actually tapped; nothing
+  // needs it to run any earlier than that, since vault-screen itself starts hidden regardless.
 
   // ---- Bottom nav: Home / Vault / Settings — replaces navigating everything as one long
   // scrolling page (Decision 53). Home and Settings are tabs within main-screen; Vault is its own
