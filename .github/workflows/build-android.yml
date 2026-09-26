@@ -37,8 +37,11 @@ jobs:
       - name: Patch AndroidManifest.xml with required permissions
         run: node scripts/patch-manifest.js
 
-      - name: Patch MainActivity.java (FLAG_SECURE — blank recents preview, block screenshots)
-        run: node scripts/patch-mainactivity.js
+      # Disabled for now (Decision 63) — FLAG_SECURE blocks screenshots app-wide, which got in the
+      # way of taking screenshots during active development. Re-enable by uncommenting this step;
+      # scripts/patch-mainactivity.js itself is untouched and still correct.
+      # - name: Patch MainActivity.java (FLAG_SECURE — blank recents preview, block screenshots)
+      #   run: node scripts/patch-mainactivity.js
 
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
