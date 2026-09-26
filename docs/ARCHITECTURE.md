@@ -133,6 +133,14 @@ app-open password was changed *after* the backup was made, restoring reverts it 
 worth a one-time notice at restore time: "This will restore your data as of [backup date] — password and notes
 will match that point in time."
 
+### Recents-preview blanking + screenshot blocking (Decision 62)
+`MainActivity` sets Android's `FLAG_SECURE` on its window (applied by `scripts/patch-mainactivity.js` in CI —
+see `android-notes/native-setup.md` §13, `android/` isn't committed so this can't be a hand-edited file). Two
+effects from the one flag, not independently toggleable: the recent-apps/task-switcher preview shows a blank
+thumbnail instead of a live screenshot of the last screen (matching Opera Incognito's behavior — requested
+directly), and screenshots/screen recording of the app are blocked system-wide. The second is a side effect
+of the first, not a separate feature, but fits the app's own privacy premise regardless.
+
 ## 3b. Private Vault (pivot — was notes-only "private notes," now spans five types)
 
 Text, Voice, Image, PDF, and Files can all be private now, gated by the one Vault PIN (§3). The Vault is meant
@@ -443,11 +451,12 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   its own separate screen and lock gate, unchanged by this — the nav's Vault button just triggers the same
   unlock flow that already existed. The Vault's own settings (biometric toggle, auto-lock, Vault Trash) are
   similarly consolidated into one tile (`#vault-settings-card`) inside the Vault screen rather than three
-  separate always-visible sections. A small red power button, fixed top-right and present on every screen
-  (lives outside the screens themselves, not duplicated into each), force-closes the app via
-  `@capacitor/app`'s `exitApp()` — native-platform only, with a confirmation prompt first since it's a hard
-  process kill rather than the existing lock-on-background behavior (unaffected by this, still covers what's
-  seen on next open).
+  separate always-visible sections. A small red power icon (transparent background, only the icon stroke
+  colored — Decision 62 restyled this from an earlier solid-circle version), fixed top-right and present on
+  every screen except the app-open lock screen (removed there on request, Decision 62), force-closes the app
+  via `@capacitor/app`'s `exitApp()` — native-platform only. No confirmation dialog (removed in Decision 62;
+  present briefly when the button first shipped in Decision 61). Lock-on-background (Decision 45) is
+  unaffected by any of this and still covers what's seen on next open regardless of how the app was closed.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 

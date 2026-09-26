@@ -825,3 +825,45 @@ left visible underneath them (z-index below `.modal-overlay`'s 10, above the bot
 than layered on top, so an open modal still has full visual priority and the button can't be tapped
 through it by accident.
 
+---
+
+**62. Recents-preview blanking to match Opera Incognito. Power icon restyled to a
+transparent-background red-outline glyph. Confirmation dialog removed from the power button. Power
+button removed from the app-open lock screen.**
+
+Requested directly, all four in one session:
+
+1. **Recents-preview blanking:** `MainActivity` needs `FLAG_SECURE` set on its window — no
+   JS/Capacitor-layer equivalent exists; this is native-only. Since `android/` is never committed
+   (Decision 49), a hand-edited `MainActivity.java` would be silently discarded the next CI run —
+   same root problem `patch-manifest.js` solves for the manifest. `scripts/patch-mainactivity.js`
+   follows the identical pattern: finds the stock, override-free `MainActivity.java` Capacitor's
+   template generates, inserts an `onCreate()` that sets the flag, aborts loudly (rather than
+   silently no-op'ing) if the stock file's shape doesn't match what it expects to edit, and skips
+   cleanly if already patched. Wired into `build-android.yml` right after the manifest patch step.
+   Tested directly in this session's sandbox against a reconstructed stock `MainActivity.java` —
+   confirmed correct output on first run and a clean idempotent no-op on a second run — since there's
+   no real `android/` folder to test against outside actual CI. **One flag, two effects, not
+   separable:** the recents/task-switcher preview goes blank instead of showing a live screenshot
+   (the actual ask), and screenshots/screen recording of the app are blocked system-wide as an
+   inherent side effect of the same flag. Documented as a feature of the same piece, not a bug, so
+   it isn't mistaken for one later — a legitimate build/test risk regardless, since this specific
+   native behavior has never run on a device (same standing gap as everything since Session 25).
+2. **Power icon restyle:** replaced the solid red circle + white "⏻" glyph (Decision 61) with an
+   inline SVG power glyph (line + open-top arc, the standard "power" icon shape) — transparent
+   background, `stroke="currentColor"`, button `color: var(--danger)`. Reads correctly in both
+   light and dark mode without a separate dark-mode override, since `--danger` (unlike `--bg`/`--fg`/
+   `--card-bg`) is the same red in both themes already — nothing new needed there.
+3. **Confirmation removed:** the `confirm('Close Dumpzone?')` gate is gone — tapping the button now
+   calls `exitApp()` immediately (still guarded by the same `Capacitor.isNativePlatform()` check as
+   before, for the browser-preview case). Removed on request; flagged as the accepted tradeoff — a
+   mistaken tap now closes the app with no chance to cancel, same as a mistaken tap of the device's
+   own back/recents gesture would.
+4. **Hidden on the lock screen:** `showScreen()` now toggles `#power-close-btn`'s `.hidden` class
+   based on which screen id is being shown — hidden only for `'lock-screen'` (the app-open password
+   gate), present everywhere else including first-run and the Vault's own PIN gate. "Unlock screen"
+   in the request read as this one specifically, since it's the one screen whose actual purpose and
+   button label is "unlock" the app itself — the Vault's separate PIN gate wasn't named and keeps
+   the button. Flagged as an assumption, not confirmed; easy to extend to the Vault gate too if
+   that's what was meant.
+

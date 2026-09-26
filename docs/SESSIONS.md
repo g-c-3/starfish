@@ -4,6 +4,56 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 37**
+
+Two requests: recents-preview should go dark/blank like Opera Incognito's task-switcher behavior;
+the power button should be restyled to a transparent-background red-outline icon (matching a
+supplied reference image) instead of a solid red circle, with its confirmation dialog removed and
+the button itself removed from the app-open lock screen.
+
+**Recents-preview blanking** needs Android's `FLAG_SECURE` on `MainActivity`'s window — no
+Capacitor-layer or JS equivalent exists. Since `android/` is never committed (Decision 49), a hand
+edit to a real `MainActivity.java` would be discarded the next CI run, so this follows
+`patch-manifest.js`'s exact pattern: a new `scripts/patch-mainactivity.js`, run in CI right after the
+manifest patch, that finds the stock override-free `MainActivity.java` Capacitor's template
+generates and inserts an `onCreate()` setting the flag — idempotent (skips if already patched),
+aborts loudly rather than guessing if the stock file's shape doesn't match what it expects. Tested
+in this session's sandbox against a reconstructed stock file (real `android/` doesn't exist outside
+actual CI): correct output on first run, clean no-op on a second run, braces balanced. One flag, two
+effects, not separable — the recents preview goes blank (the actual ask) and screenshots/screen
+recording are blocked system-wide as a side effect; documented in ARCHITECTURE.md and
+`android-notes/native-setup.md` §13 as a feature of the same piece, not a bug, so it isn't mistaken
+for one later. This specific native behavior hasn't run on a device yet — same standing gap as
+everything since Session 25, called out again here since it's a new native code path, not just UI.
+
+**Power button restyle:** replaced the emoji-on-solid-circle button with an inline SVG (line + open
+arc, the standard power-icon shape), transparent background, `stroke="currentColor"` tied to
+`color: var(--danger)` — reads correctly in both themes with no dark-mode override needed, since
+`--danger` doesn't change between themes the way `--bg`/`--fg`/`--card-bg` do. Confirmation dialog
+removed — tapping now calls `exitApp()` immediately (still guarded by the existing
+`Capacitor.isNativePlatform()` check for the browser-preview case). Hidden specifically on
+`#lock-screen` via one line in `showScreen()`; every other screen, including first-run and the
+Vault's own PIN gate, keeps it — "the unlock screen" wasn't fully unambiguous (the Vault's gate says
+"Unlock Vault" too), read as `#lock-screen` since that's the one whose actual purpose is unlocking
+the app itself; flagged in Decision 62 as an assumption in case that's not what was meant.
+
+Verified with a real `npm install` + `vite build`: 99 modules, zero errors. All ids cross-checked
+between `app.js` and `index.html` — clean except the same two pre-existing dynamically-created ids
+(`recording-stop-btn`, `recording-timer`) flagged in every prior session's check.
+
+Decisions made: 62 (all four changes this session, one decision, all UI/native-config, no
+schema/credential/backup-format change).
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward
+still stands, now also covering whether `FLAG_SECURE` actually blanks recents and doesn't break
+anything else (camera preview, screenshots for support requests, etc. — worth knowing about before
+relying on it). If picking up more unblocked work instead: quick-capture widget, expense charts,
+backup-reminder nudge, map view, and the confidence-confirmation chip remain open from Phase 9;
+label autocomplete UI/batch-add wiring remains open from Phase 8; obfuscation/ProGuard/signature
+check remain open from Phase 10.
+
+---
+
 **Session 36**
 
 Requested UI restructure: bottom nav reduced from three tabs to two (Home, Vault); the main app's

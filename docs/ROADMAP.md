@@ -12,7 +12,7 @@
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen done; rest not started)
-- [~] 10 — Security hardening (biometric unlock done, needs device confirm; obfuscation/ProGuard/signature check not)
+- [~] 10 — Security hardening (biometric unlock done, needs device confirm; recents-preview blanking/screenshot block done; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
@@ -69,7 +69,10 @@
   tile that opens the same `#settings-tab` panel, and the Vault's scattered biometric/auto-lock/
   Trash settings are consolidated into one `#vault-settings-card` tile inside the Vault screen. A
   small red power button, fixed top-right on every screen, force-closes the app
-  (`@capacitor/app`'s `App.exitApp()`). **Session 30 (Decisions 54/55):**
+  (`@capacitor/app`'s `App.exitApp()`). **Restyled (Session 37, Decision 62):** transparent
+  background, only the icon stroke red (was a solid filled circle); confirmation dialog removed;
+  hidden on the app-open lock screen specifically (present everywhere else, including the Vault's
+  own PIN gate). **Session 30 (Decisions 54/55):**
   fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a
@@ -204,13 +207,16 @@
   view, confidence-confirmation chip) not started.
 - [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
   Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
-  default, independent per lock; not yet confirmed on a real device. JS obfuscation, ProGuard/R8,
-  startup signature check: still documented, not implemented.
+  default, independent per lock; not yet confirmed on a real device. **Recents-preview blanking +
+  screenshot blocking done** (Session 37, Decision 62) — `FLAG_SECURE` set via
+  `scripts/patch-mainactivity.js`, same never-committed-`android/` pattern as the manifest permissions.
+  JS obfuscation, ProGuard/R8, startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
   (Session 3). Runs `npm run build` (Vite) before `cap sync` (Decision 46, Session 18) — without
   it, the bundled app can never load in any WebView, verified as the actual root cause of two
   consecutive blank-screen device tests. **Now also patches the freshly-generated `android/` platform
-  on every run** — required manifest permissions (Decision 49) and a real, always-incrementing
+  on every run** — required manifest permissions (Decision 49), `FLAG_SECURE` on `MainActivity`
+  (Decision 62), and a real, always-incrementing
   version (Decision 51), both via small idempotent-where-appropriate Node scripts in `scripts/`,
   since `android/` itself is never committed and starts from the same unmodified template every
   time. Live green run against the now-set secrets, with these patches applied, not yet confirmed —
