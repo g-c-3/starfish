@@ -775,3 +775,53 @@ entry had ended up out of chronological order, sitting after Decision 59 instead
 52 — an artifact of an earlier edit anchoring to non-unique matching text. Moved back into place;
 no content was lost or changed, only its position in the file.
 
+---
+
+**61. Bottom nav reduced from three tabs to two — Home and Vault only. Settings (both the main app's
+and the Vault's) moved from being a nav destination to being a card/tile reached from within the
+screen it belongs to. A small red circular power button, present on every screen, force-closes the
+app.**
+
+Requested directly. Three changes, all UI-only — no schema, no credential, no backup-format change:
+
+1. **Home:** `#settings-tab` itself is unchanged (same accordion of Your Data/Storage breakdown/
+   Trash/App lock/Appearance/Backup & Restore/Google Drive/Append-from-download) — only its entry
+   point moved, from the bottom nav's third button to an "⚙️ App Settings" tile inside Home, below
+   the capture cards. `switchMainTab()` (already the function that shows/hides `#home-tab`/
+   `#settings-tab`) is unchanged in what it does, just no longer driven by a nav button for the
+   `'settings'` case — the tile and a new "← Back to Home" link at the top of `#settings-tab` call
+   it directly. Settings is treated as part of Home for nav-highlighting purposes: viewing it keeps
+   the Home icon active in the (now two-button) nav, rather than nothing being highlighted.
+2. **Vault:** the three previously scattered settings surfaces — the biometric toggle row, the
+   auto-lock timeout select (previously its own `<details id="vault-lock-settings">`, now flattened
+   to a plain subsection since nothing needed its own collapse/expand), and Vault Trash — are now
+   nested inside one `<details id="vault-settings-card">`, matching the "one settings card/tile"
+   request the same way Home's tile does. Vault Trash stays its own nested `<details>` (unlike the
+   auto-lock select) because `renderVaultTrash()` is lazily triggered by its own `toggle` event —
+   collapsing it into a flat subsection would mean it renders every time Vault Settings opens,
+   whether or not Trash is what's being checked. No element id changed, so no JS wiring needed
+   touching beyond the two new entry-point listeners above — everything else was a pure markup
+   relocation. Extended the existing `#settings-tab details` chevron-card CSS treatment (Decision
+   53) to `#vault-settings-card` and its nested `#vault-trash-settings`, so Vault's settings read as
+   the same design language Home's already do, rather than the plain unstyled `<details>` they were
+   using before (a pre-existing, never-previously-flagged gap — only `#settings-tab` had ever gotten
+   that treatment).
+3. **Power button:** a single `#power-close-btn` element, fixed top-right, living directly under
+   `<body>` rather than inside any `.screen` div — so it's present regardless of which screen
+   `showScreen()` currently shows, without duplicating it into first-run/lock/main/vault/ad-gate
+   individually. Confirms (`confirm('Close Dumpzone?')`) before acting, since this is a hard process
+   kill, not the existing lock-on-background behavior (Decision 45) — that's unaffected and still
+   covers what the person sees on next open regardless of whether they used this button or the OS's
+   own back/recents gesture. Calls `@capacitor/app`'s `App.exitApp()` (already a project dependency,
+   already used for `appStateChange` — Decision 45), guarded by `@capacitor/core`'s
+   `Capacitor.isNativePlatform()` so a browser preview shows a plain message instead of a silent
+   no-op or a thrown error — `exitApp()` has no meaning outside a native Android/iOS shell. Both
+   imported dynamically, matching how the rest of the codebase already brings in plugins only where
+   used rather than at module load.
+
+Not done, flagged rather than assumed: whether the power button should also appear inside modal
+overlays (Select files, the overwrite-confirm dialog, the auto-backup-due banner) wasn't specified —
+left visible underneath them (z-index below `.modal-overlay`'s 10, above the bottom nav's 5) rather
+than layered on top, so an open modal still has full visual priority and the button can't be tapped
+through it by accident.
+

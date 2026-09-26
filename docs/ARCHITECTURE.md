@@ -435,12 +435,19 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   (see Backup & Restore above), so it travels with a backup/restore like any other non-sensitive preference.
   A separate "Gradient mode" (full-screen blurred glow, user-picked colors) existed briefly and was removed
   (Decision 53) — dark mode is the only Appearance setting now.
-- **Layout: bottom nav, not one long page (Decision 53)** — Home / Vault / Settings, fixed at the bottom of
-  the screen once the app is unlocked (hidden on first-run/lock-screen/the ad gate, which have nothing to
-  navigate between). Home and Settings are two panels inside the same main screen, toggled by the nav rather
-  than requiring a scroll past the entire timeline to reach settings; Vault keeps its own separate screen and
-  lock gate, unchanged by this — the nav's Vault button just triggers the same unlock flow that already
-  existed.
+- **Layout: bottom nav, not one long page (Decision 53; reduced to two tabs in Decision 61)** — Home / Vault,
+  fixed at the bottom of the screen once the app is unlocked (hidden on first-run/lock-screen/the ad gate,
+  which have nothing to navigate between). Home and Settings are two panels inside the same main screen,
+  toggled together (no longer by the nav directly — Settings is reached via an "App Settings" tile inside
+  Home, Decision 61) rather than requiring a scroll past the entire timeline to reach settings; Vault keeps
+  its own separate screen and lock gate, unchanged by this — the nav's Vault button just triggers the same
+  unlock flow that already existed. The Vault's own settings (biometric toggle, auto-lock, Vault Trash) are
+  similarly consolidated into one tile (`#vault-settings-card`) inside the Vault screen rather than three
+  separate always-visible sections. A small red power button, fixed top-right and present on every screen
+  (lives outside the screens themselves, not duplicated into each), force-closes the app via
+  `@capacitor/app`'s `exitApp()` — native-platform only, with a confirmation prompt first since it's a hard
+  process kill rather than the existing lock-on-background behavior (unaffected by this, still covers what's
+  seen on next open).
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 

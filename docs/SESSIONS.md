@@ -4,6 +4,57 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 36**
+
+Requested UI restructure: bottom nav reduced from three tabs to two (Home, Vault); the main app's
+Settings moved from a nav destination to an "App Settings" tile inside Home; the Vault's three
+scattered settings sections (biometric toggle, auto-lock, Vault Trash) consolidated into one
+"Vault Settings" tile inside the Vault screen; a small red circular power button added, fixed
+top-right, present on every screen, force-closing the app.
+
+`#settings-tab` itself is untouched — same accordion of settings sections, same lazy-render-on-open
+listeners — only its entry point changed, from the nav's third button to the new tile plus a
+"← Back to Home" link at the top of the panel. `switchMainTab()` picked up one line: viewing
+Settings now keeps the Home nav icon highlighted (Settings is conceptually part of Home, not a
+destination of its own) instead of leaving nothing highlighted.
+
+Vault's three sections moved into one `<details id="vault-settings-card">`: the biometric row and
+the auto-lock select flattened to plain subsections (no id changes, so no JS wiring needed beyond
+what already existed); Vault Trash stayed its own nested `<details>` since `renderVaultTrash()` is
+lazily triggered by its own `toggle` event, and flattening it would mean it re-renders every time
+Vault Settings opens rather than only when Trash itself does. Extended the existing `#settings-tab`
+chevron-card CSS (Decision 53) to also cover `#vault-settings-card` and its nested details, fixing
+a pre-existing, never-flagged gap where Vault's settings had always rendered as plain unstyled
+`<details>` — only Home's had ever gotten the card treatment.
+
+Power button: `#power-close-btn`, fixed `top`/`right`, living directly under `<body>` rather than
+inside any `.screen` div, so it's present regardless of which screen `showScreen()` shows — no
+duplication needed across first-run/lock/main/vault/ad-gate. Confirms before acting, then calls
+`@capacitor/app`'s `App.exitApp()` (already a dependency, already used for `appStateChange` —
+Decision 45), guarded by `@capacitor/core`'s `Capacitor.isNativePlatform()` so a browser preview
+gets a plain message instead of a silent no-op. z-index sits above the bottom nav but below modal
+overlays, so an open modal keeps visual priority and the button can't be tapped through it.
+
+Verified with a real `npm install` + `vite build` before delivering: 99 modules, zero errors, same
+class of pre-existing benign dynamic-import warnings as prior sessions (one new one for
+`@capacitor/core`, harmless for the same reason the others are — it's already statically imported
+by nearly every Capacitor plugin in the project regardless of this change).
+
+Decisions made: 61 (this session's three changes, one decision — all UI-only, no schema/credential/
+backup-format change). Also fixed in passing: DECISIONS.md had Decision 53's entry sitting out of
+chronological order (after 59 instead of after 52) from an earlier edit — moved back into place,
+content unchanged.
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward
+still stands, now covering this session's changes too. Flagged but not resolved: whether the power
+button should appear inside modal overlays wasn't specified — left underneath them (visible, not
+tappable-through) rather than assuming either way. If picking up more unblocked work instead:
+quick-capture widget, expense charts, backup-reminder nudge, map view, and the
+confidence-confirmation chip remain open from Phase 9; label autocomplete UI/batch-add wiring
+remains open from Phase 8.
+
+---
+
 **Session 35**
 
 Picked up an unblocked Phase 9 item rather than waiting further on the standing device-pass debt

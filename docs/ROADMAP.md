@@ -64,7 +64,12 @@
   colorful by default now (per-capture-type color coding across buttons/rows/tabs, one brand
   accent, gradient masthead accent). **Layout rebuilt (Session 29, Decision 53)**: bottom nav
   (Home/Vault/Settings) instead of one long scrolling page; Gradient mode removed entirely (dark
-  mode kept); every on/off setting is a switch, not a checkbox. **Session 30 (Decisions 54/55):**
+  mode kept); every on/off setting is a switch, not a checkbox. **Nav reduced to two tabs (Session
+  36, Decision 61):** Settings dropped as a bottom-nav destination — Home now has an "App Settings"
+  tile that opens the same `#settings-tab` panel, and the Vault's scattered biometric/auto-lock/
+  Trash settings are consolidated into one `#vault-settings-card` tile inside the Vault screen. A
+  small red power button, fixed top-right on every screen, force-closes the app
+  (`@capacitor/app`'s `App.exitApp()`). **Session 30 (Decisions 54/55):**
   fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a
