@@ -4,6 +4,38 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 32**
+
+Product decision, not a bug: ads are deliberately not part of this build — no AdMob account, no
+plugin, no gate, no ad format of any kind, notifications included. Phase 12 marked as an explicit
+deferral in ROADMAP.md rather than left looking like ordinary unfinished work.
+
+Removing the one place that called into `ads.js` turned out to matter for two bugs reported in the
+same message: a full app freeze after entering, and a worse version of Session 31's biometric-timing
+issue (needing a whole second unlock, not just a second tap). Two things found together:
+
+`onUnlocked()` called the ad gate with `window.adSdk`, which has never been set anywhere (confirmed
+by checking `package.json` and `capacitor.config.json` directly — no AdMob plugin has ever been
+added). `ads.js`'s own try/catch already handled that safely, so this wasn't a confirmed crash by
+itself, but it was real, pointless work sitting on the unlock path.
+
+More likely the actual cause: Session 31's biometric-timing fix used a bare `setTimeout` fired from
+inside `showLockScreen()`, independent of the rest of `DOMContentLoaded`'s own setup — which does
+its own sequence of awaited database calls. On a slower device, the timeout could land mid-setup,
+racing two chains of SQLite calls against the same connection. Reasoned from the code, not confirmed
+via device logging. Fixed by moving the actual biometric trigger to the very last line of
+`DOMContentLoaded`, after everything else has finished — nothing left to race against. The
+window-focus delay from Session 31 stayed, just layered on top of that instead of standing alone.
+
+Decisions made: 58.
+
+Next session start point: unchanged in substance — a real device pass is owed for all of Sessions
+25 through this one. This session specifically should make that pass easier, not harder: fewer
+things happening on the unlock path, one less untested integration point (ads) removed from the
+critical path entirely.
+
+---
+
 **Session 31**
 
 Five bugs reported directly against real device screenshots, all fixed:

@@ -27,7 +27,8 @@
   - [x] Package name: `com.dumpzone.app` (set in `capacitor.config.json`).
   - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. CI
     run against the live secrets not yet confirmed green — pending manual check.
-  - [ ] AdMob account, one Rewarded ad unit (not Interstitial).
+  - [ ] AdMob account, one Rewarded ad unit (not Interstitial). **Deliberately not doing this yet
+    (Decision 58)** — ads deferred to a future build, not this one.
   - [x] App icon — source artwork at `resources/icon.png`; CI generates all densities via
     `@capacitor/assets`. Confirmed on-device (Session 7): initial version rendered visibly smaller
     than sibling icons (double safe-zone padding — see Decision 24); re-cropped full-bleed and fixed.
@@ -69,12 +70,17 @@
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a
   sixth capture type (card only — its actual capture flow, and whether it reuses the existing
   Expense machinery or stays separate, is still open for a future session). **Session 31 (Decisions
-  56/57):** fixed five reported bugs — biometric double-tap on cold start (mitigated with a delay,
-  not confirmed fixed on-device), bottom-nav Home/Settings not working from the Vault screen, the
-  Vault's Lock button showing while already locked, the biometric toggle showing on the locked
-  gate instead of only once unlocked, and Lock not returning Home immediately. Added Reminder and
-  Location as two more cards (eight total: Text/Voice/Image/PDF/Reminder/Location/Money/Files) —
-  Reminder reuses the existing auto-detected type, Location is new; both placeholder like Money.
+  56/57):** fixed five reported bugs — biometric double-tap on cold start (mitigated with a delay;
+  Session 32 found the real cause and fixed it properly, see below), bottom-nav Home/Settings not
+  working from the Vault screen, the Vault's Lock button showing while already locked, the
+  biometric toggle showing on the locked gate instead of only once unlocked, and Lock not returning
+  Home immediately. Added Reminder and Location as two more cards (eight total:
+  Text/Voice/Image/PDF/Reminder/Location/Money/Files) — Reminder reuses the existing auto-detected
+  type, Location is new; both placeholder like Money. **Session 32 (Decision 58):** Session 31's
+  delay-based biometric mitigation was itself the cause of a worse bug (reported freeze, full
+  second unlock needed) — the delay raced against `DOMContentLoaded`'s own setup. Fixed by moving
+  the trigger to run only after that setup fully completes. Also removed the ad gate from the
+  unlock path entirely (ads deferred to a future build — see Phase 12).
   **First real device test (Session 18): blank screen on launch.** `bootstrap()` read
   `window.sqlitePlugin`, a global nothing ever set — a leftover from the original pre-existing
   scaffold that predates every session in this log, never caught because nothing had run the app on
@@ -195,8 +201,12 @@
   since `android/` itself is never committed and starts from the same unmodified template every
   time. Live green run against the now-set secrets, with these patches applied, not yet confirmed —
   manual check pending.
-- [ ] **12 — Ads integration.** Wire `ads.js`'s decision logic to a real AdMob plugin, rewarded unit
-  only. Logic drafted; native plugin call not.
+- [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
+  drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
+  Session 32 removed the one call site that invoked it (`onUnlocked()`) — it was calling
+  `runDailyAdGateIfDue()` with `window.adSdk` always undefined (nothing had ever set it), adding
+  needless work to the unlock path for a gate with nothing behind it to open. `ads.js` itself is
+  untouched, left as scaffolding for whenever this phase is actually picked up.
 - [~] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement
   (Decision 25). Sub-items, roughly in dependency order:
   - [ ] Manual: Google Cloud project, enable Drive API, OAuth consent screen scoped to `drive.file`

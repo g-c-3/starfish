@@ -638,6 +638,45 @@ Capture-card grid: 3 columns → 4, for a clean 4x2 layout instead of 3+3+2.
 
 ---
 
+**58. Ads deferred to a future build — explicit product decision, not a technical default.** No
+AdMob account, no plugin, no gate shown, not even a notification-based ad format — nothing ad-related
+ships in this build. Phase 12 in ROADMAP.md stays unstarted and now says so explicitly rather than
+just sitting unchecked; `ads.js`'s gate-decision logic is untouched and stays in the repo as
+scaffolding for whenever this is actually picked up, since deleting working, self-contained logic
+that isn't the cause of anything broken isn't warranted here — only its one caller was removed.
+
+That caller turned out to matter more than expected. Investigating a reported freeze ("once entering
+the app completely froze, nothing works") plus a worse version of Session 31's biometric-timing bug
+(now needing a full second unlock, not just a second tap) surfaced two compounding issues in the same
+area, both fixed together:
+
+1. `onUnlocked()` called `runDailyAdGateIfDue(window.adSdk, metaStore)` every single unlock.
+   `window.adSdk` has never been set anywhere — confirmed by checking `package.json` and
+   `capacitor.config.json` directly, neither has ever referenced an AdMob plugin, matching what
+   ROADMAP.md's Phase 12 already said. `ads.js`'s own `try/catch` handled the resulting
+   `TypeError` safely on its own — this was extra, pointless async work on the unlock path, not a
+   confirmed hang by itself, but real complexity with nothing behind it, removed along with the ads
+   decision above rather than left in place calling into nothing.
+
+2. The actual likely cause of the freeze/double-unlock: Session 31's fix for the biometric
+   cold-start timing bug used a bare `setTimeout(..., 400)` called from inside `showLockScreen()`,
+   independent of the rest of `DOMContentLoaded`'s own setup. That setup does its own sequence of
+   awaited database calls (populating Settings' toggles, biometric availability, etc.), and the
+   timeout's 400ms could land in the middle of it on a slower device — two separate chains of
+   SQLite calls running concurrently against the single connection, which is a plausible, common
+   cause of exactly this symptom (an unlock that appears to succeed but the app never actually
+   finishes initializing). Reasoned from the code and the timing involved, not confirmed via
+   device-side logging, which isn't available here.
+
+   Fixed by moving the actual trigger to the last line of the `DOMContentLoaded` handler, after
+   every other setup step has fully run — there's nothing left for it to race against at that
+   point. `showLockScreen()` still computes `window.biometricUnlockAvailable`, it just no longer
+   schedules anything itself. Kept a smaller delay (300ms) on top for the original window-focus
+   concern Session 31 was trying to address, now layered on top of "wait for our own setup to
+   finish" rather than substituting for it.
+
+---
+
 **53. Gradient mode removed entirely; layout rebuilt around a bottom nav (Home / Vault / Settings)
 instead of one long scrolling page; every single-setting checkbox restyled as a switch.** Requested
 directly, alongside keeping dark mode.
