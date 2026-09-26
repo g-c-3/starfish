@@ -149,11 +149,36 @@ button {
 
 #timeline { margin-top: 12px; }
 
-/* ---- Bottom nav (Decision 53) — fixed, shown only for main-screen/vault-screen (app.js
-   toggles its .hidden class from showScreen()). Three tabs; each gets its own active color so
-   which section you're in stays legible even glanced at quickly: Home/Settings use the brand
-   accent, Vault uses its own deep-violet identity (matching .vault-banner) rather than brand,
-   since the Vault is deliberately visually distinct everywhere else too. ---- */
+/* "App Settings" tile (Decision 61) — Home's single entry point into settings-tab, replacing the
+   bottom nav's old Settings button. Deliberately neutral (not a capture-type color, since it isn't
+   a capture type) and full-width so it reads as a distinct row, not an extra capture card. */
+.settings-tile {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--card-bg); color: var(--fg); border: 1.5px solid var(--border);
+  font-weight: 700;
+}
+.settings-tile .card-icon { font-size: 18px; }
+
+/* Small fixed power/close button (Decision 61) — lives outside every .screen element so it's
+   present regardless of which screen showScreen() has visible ("all pages"), rather than being
+   duplicated into first-run/lock/main/vault/ad-gate individually. Sits above the bottom nav
+   (z-index 5) but below modal dialogs (z-index 10), so an open modal still takes visual priority. */
+#power-close-btn {
+  position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 6;
+  width: 36px; height: 36px; min-width: 0; padding: 0; margin: 0;
+  border-radius: 50%; border: none;
+  background: var(--danger); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* ---- Bottom nav (Decision 53, tabs reduced to two in Decision 61) — fixed, shown only for
+   main-screen/vault-screen (app.js toggles its .hidden class from showScreen()). Settings is no
+   longer a nav destination of its own — it's a sub-panel of Home, reached via the "App Settings"
+   tile below — so the nav only ever needs to distinguish Home vs Vault, each with its own active
+   color: Home uses the brand accent, Vault keeps its own deep-violet identity (matching
+   .vault-banner) rather than brand, since the Vault is deliberately visually distinct everywhere
+   else too. ---- */
 #bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
   display: flex; background: var(--card-bg); border-top: 1px solid var(--border);
@@ -253,29 +278,32 @@ button {
 .select-files-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 4px 20px; font-size: 14px; }
 .select-files-item .file-size { opacity: 0.6; font-size: 12px; }
 
-/* ---- Settings tab (Decision 53) — modern expandable cards, not the browser-default disclosure
-   triangle list this replaced. Each <details> is its own card; the marker is a custom chevron
-   that rotates on open rather than the default ▶/▼ glyph. ---- */
-#settings-tab details {
+/* ---- Settings cards (Decision 53; extended to Vault's own settings card in Decision 61) —
+   modern expandable cards, not the browser-default disclosure triangle list this replaced. Each
+   <details> is its own card; the marker is a custom chevron that rotates on open rather than the
+   default ▶/▼ glyph. Shared between #settings-tab (Home) and #vault-settings-card (Vault, which
+   nests its own Vault Trash <details> the same way) so both read as the same design language. ---- */
+#settings-tab details, #vault-settings-card, #vault-settings-card details {
   background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
   padding: 4px 16px; margin-bottom: 10px; overflow: hidden;
 }
-#settings-tab summary {
+#settings-tab summary, #vault-settings-card summary {
   list-style: none; cursor: pointer;
   padding: 14px 0; font-weight: 700; font-size: 15px;
   display: flex; align-items: center; justify-content: space-between;
 }
-#settings-tab summary::-webkit-details-marker { display: none; }
-#settings-tab summary::after {
+#settings-tab summary::-webkit-details-marker, #vault-settings-card summary::-webkit-details-marker { display: none; }
+#settings-tab summary::after, #vault-settings-card summary::after {
   content: "›"; font-size: 22px; font-weight: 400; opacity: 0.5;
   transform: rotate(90deg); display: inline-block;
 }
-#settings-tab details[open] summary::after { transform: rotate(270deg); }
+#settings-tab details[open] > summary::after, #vault-settings-card[open] > summary::after,
+#vault-settings-card details[open] > summary::after { transform: rotate(270deg); }
 @media (prefers-reduced-motion: no-preference) {
-  #settings-tab summary::after { transition: transform 0.15s ease; }
+  #settings-tab summary::after, #vault-settings-card summary::after { transition: transform 0.15s ease; }
 }
-#settings-tab details > *:not(summary) { margin-top: 0; }
-#settings-tab details[open] { padding-bottom: 16px; }
+#settings-tab details > *:not(summary), #vault-settings-card > *:not(summary) { margin-top: 0; }
+#settings-tab details[open], #vault-settings-card[open] { padding-bottom: 16px; }
 
 /* ---- Checkbox/radio base (Decision 60) — fixes a real bug: any checkbox with no more specific
    rule fell through to the general `input, button, select { width: 100% }` rule above, stretching
