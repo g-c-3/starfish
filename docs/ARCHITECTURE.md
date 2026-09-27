@@ -467,6 +467,19 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   via `@capacitor/app`'s `exitApp()` — native-platform only. No confirmation dialog (removed in Decision 62;
   present briefly when the button first shipped in Decision 61). Lock-on-background (Decision 45) is
   unaffected by any of this and still covers what's seen on next open regardless of how the app was closed.
+- **Lock/unlock toggle + universal Back button (Decision 65).** `#lock-toggle-btn` sits fixed top-right,
+  immediately left of the power icon, on every screen except the app-open lock screen and the Vault's own
+  locked gate — context-aware at click time (checks whether `#vault-content` is visible) rather than tracking
+  a separate flag, so it can't drift out of sync with what's on screen. Locks the Vault (`lockVault()` +
+  synchronous `showScreen('main-screen')`) or the main app (reuses `showLockScreen()` wholesale) depending
+  on which is current; `#vault-lock-btn` (the Vault banner's own former "Lock" button) is gone, fully
+  replaced. A third bottom-nav slot, `#nav-back-btn`, sits between Home and Vault — styled as a plain
+  rounded square, not a third tab (no label, no active state). Backed by a deliberately simple two-slot
+  toggle (`currentLocation`/`lastLocation`, one of `'home'`/`'settings'`/`'vault'`), not a full history
+  stack — this app's actual navigation depth is only ever one level deep, so a stack has no case that could
+  use the extra depth. Pressing Back swaps which location is "current" the same way any other navigation
+  does, so it toggles back and forth rather than getting stuck. Every dedicated "back to home" element
+  (e.g. Decision 61's `#settings-back-btn`) is removed in favor of this one universal control.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 

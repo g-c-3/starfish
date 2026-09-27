@@ -878,3 +878,110 @@ development — reported directly. The CI step calling `scripts/patch-mainactivi
 not a rebuild of the feature. Deleting the script file instead, as briefly considered, would have
 left the workflow calling a file that no longer exists — a build failure, not a clean disable.
 
+---
+
+**64. Privacy Screen made a real, in-app, user-toggleable setting — replacing Decisions 62/63's
+native MainActivity patch entirely.**
+
+Requested directly: rather than a build-time flag that could only be turned off by editing CI
+(Decision 63's disable), make it a Settings switch the person can flip themselves, any time.
+
+Decision 62's approach (`scripts/patch-mainactivity.js` hand-inserting `FLAG_SECURE` into
+`MainActivity.java`'s `onCreate()`) was fundamentally build-time — the flag got set once, at
+process start, with no way for JS to change it afterward short of a full rebuild. That's why
+Decision 63 could only ever *disable it entirely* for development, not offer a real toggle.
+
+Replaced with `@capacitor-community/privacy-screen`, pinned to **`5.2.0`** specifically — its
+`peerDependencies` is `@capacitor/core ^6.0.0`, the only version line of this plugin that matches
+this project's Capacitor 6 (the plugin's own newer major versions, 6.x and 8.x, require Capacitor
+7/8; unrelated numbering coincidence that its own version happens to also say "6"). Verified before
+adopting by downloading the actual `5.2.0` tarball and reading its shipped Android source directly,
+not just its README (same discipline as Decisions 49/50) — `PrivacyScreen.java`'s `enable()`/
+`disable()` do exactly `window.addFlags`/`clearFlags(WindowManager.LayoutParams.FLAG_SECURE)` on
+the current Activity, nothing more, callable from JS at any time. `capacitor.config.json`'s
+`PrivacyScreen.enable` is set to `false` so native startup itself never turns it on — a new
+`src/js/privacy-screen.js` wrapper (mirroring `biometric.js`'s shape) applies whatever's actually
+stored, at the same point in `bootstrap()` that `applyAppearance()` already runs (before the lock
+screen even renders — so the setting, when on, also covers the lock screen, not just the unlocked
+app). Persisted via `metaGet`/`metaSet` under `privacy_screen_enabled`, same mechanism as
+`dark_mode`/`auto_backup_enabled` — off by default. New `#privacy-screen-settings` card in Settings,
+same populate-then-wire pattern as the dark-mode toggle right below it.
+
+One known gap, stated rather than glossed over: on a cold launch there are one or two frames
+between the WebView first painting and this module's `enable()` call resolving, during which the
+setting (if on) isn't in effect yet. Fixing that would need native code reading a persisted
+native-side flag before `onCreate()` finishes — out of scope for what's otherwise a plain web-layer
+toggle, and a narrower gap than Decision 62's version had at cold start too (that one had the same
+kind of native/JS timing gap, just for a different reason — Capacitor's own bridge init time).
+
+`scripts/patch-mainactivity.js` is superseded, not merely paused this time — delete it from the
+repo (see this session's file list). `build-android.yml`'s already-commented-out step calling it is
+removed outright rather than left commented, since there's nothing left to re-enable that way.
+`android-notes/native-setup.md` §13 is removed for the same reason — it was the last section in
+the file, so nothing needs renumbering.
+
+---
+
+**65. Universal lock/unlock button (fixed top-right, left of the power button); vault's own
+"Lock" button removed as redundant; universal Back button added as the middle slot of the bottom
+nav; every dedicated "back to home" element removed in favor of it.**
+
+Requested directly, three related changes in one session:
+
+1. **Lock/unlock toggle:** new `#lock-toggle-btn`, same fixed-position pattern as the power
+   button (Decision 61) — outside every `.screen` element, same z-index layering — positioned
+   immediately to its left. Neutral foreground color (`var(--fg)`, not red or brand), since it's
+   neither destructive (the power button) nor a primary action, just a status/utility icon.
+   Context-aware at click time rather than tracking a separate "which context" flag: checks whether
+   `#vault-content` is currently visible to decide whether to lock the Vault or the main app, so it
+   can never drift out of sync with what's actually on screen. Locking the Vault is the exact same
+   two calls the old `#vault-lock-btn` made (`lockVault()` then a synchronous `showScreen('main-
+   screen')`, preserving the Session 31 fix that made that navigation synchronous rather than
+   awaiting an async gate refresh first); locking the main app reuses `showLockScreen()` wholesale
+   rather than re-implementing its branching — it already correctly handles "password set" (shows
+   the real lock screen), "quick access" (no-ops back to Home, since there's nothing to lock), and
+   would even handle "no credentials row yet" safely, though that path is additionally guarded by
+   checking `#first-run-setup` isn't currently showing, so tapping it mid-setup does nothing rather
+   than something undefined.
+
+   Always rendered in its "unlocked" appearance, never "locked" — both places it's shown are
+   themselves already-unlocked states by construction (the two exclusions below), so there's no
+   case where a "locked" appearance would ever be needed. Hidden on the app-open lock screen (same
+   condition as the power button, in `showScreen()`) and on the Vault's own locked/setup gate
+   (a second, separate exclusion in `refreshVaultGateView()`, since `vault-screen` doesn't change
+   screen id when its internal gate/content substate toggles — the same reason the old
+   `#vault-lock-btn`'s visibility rule lived in that same function). `#vault-lock-btn` itself is
+   removed from the Vault banner entirely — genuinely redundant now, not kept as a second way to do
+   the same thing.
+
+2. **Universal Back button:** middle slot of the three-slot bottom nav (`#nav-back-btn`, between
+   Home and Vault), styled as a plain rounded square rather than a third tab — no label, no active
+   state, since it isn't a destination. Backed by a deliberately simple two-slot toggle, not a full
+   history stack: `currentLocation`/`lastLocation` (one of `'home'`/`'settings'`/`'vault'`),
+   updated by `recordLocation()` calls placed inside `showScreen()`/`switchMainTab()` themselves —
+   every existing caller of those two functions gets Back-button support for free, without needing
+   to touch each call site individually. Pressing Back swaps which location is "current" vs "last"
+   the same way any other navigation does, so pressing it again toggles right back to where you
+   just left, rather than getting stuck unable to return. A deeper stack was deliberately not built:
+   this app's actual navigation depth is only ever one level (Home ⇄ Settings ⇄ Vault), so a stack
+   would add complexity with no case that could ever use the extra depth.
+
+   Lives physically inside `#bottom-nav`, so it's hidden together with it for free on screens where
+   the nav itself is hidden (lock screen, first-run, ad gate) — no separate visibility rule needed,
+   unlike the power/lock buttons which live outside any screen and need their own.
+   `refreshVaultGateView` (Vault's gate-render function) had to be exposed as `window.
+   refreshVaultGateView` for `goBack()` to call it — `goBack()` lives at module top level alongside
+   `showScreen()`/`switchMainTab()`, but `refreshVaultGateView` is itself only ever defined inside
+   the `DOMContentLoaded` closure; same cross-closure pattern already used for `window.
+   tryBiometricUnlockVault`/`window.attemptUnlock`, not a new one.
+
+3. **Every dedicated back element removed:** `#settings-back-btn` ("← Back to Home", added in
+   Decision 61) is gone — the universal Back button replaces it. Nothing else in the app had a
+   comparable element.
+
+Not done, flagged rather than assumed: whether the lock/unlock button should also show during
+first-run-setup was ambiguous in the request (only two exclusions were named: the two biometric
+unlock pages) — left visible there per the literal instruction, with the click handler itself
+guarding against acting on it before setup completes, rather than silently adding a third exclusion
+that wasn't asked for.
+

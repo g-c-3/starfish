@@ -72,7 +72,12 @@
   (`@capacitor/app`'s `App.exitApp()`). **Restyled (Session 37, Decision 62):** transparent
   background, only the icon stroke red (was a solid filled circle); confirmation dialog removed;
   hidden on the app-open lock screen specifically (present everywhere else, including the Vault's
-  own PIN gate). **Session 30 (Decisions 54/55):**
+  own PIN gate). **Lock/unlock toggle + universal Back button added (Session 43, Decision 65):**
+  a second small icon button, left of the power button, locks whichever of the app or the Vault is
+  currently open (context-aware, checked at click time); the Vault's own former "Lock" button is
+  gone, replaced by it. A third bottom-nav slot between Home and Vault is a universal Back button
+  (a simple two-slot last-location toggle, not a full history stack) — every dedicated "back to
+  home" element from earlier sessions is removed in favor of it. **Session 30 (Decisions 54/55):**
   fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a

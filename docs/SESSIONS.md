@@ -4,6 +4,49 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 43**
+
+Screenshots showed the app actually running on-device for the first time (CI is producing installable
+builds now) — three related UI requests off the back of seeing it live:
+
+1. **Lock/unlock toggle**, fixed top-right left of the power button, on every screen except the two
+   biometric/PIN unlock pages (app-open lock screen, Vault's locked gate). Context-aware at click
+   time — checks whether `#vault-content` is visible to decide whether to lock the Vault or the main
+   app, rather than tracking a separate flag that could drift out of sync. Vault path is the exact
+   same two calls the old `#vault-lock-btn` made; main-app path reuses `showLockScreen()` wholesale
+   (already handles password-set / quick-access / no-credentials-yet correctly) rather than
+   re-implementing that branching. `#vault-lock-btn` removed from the Vault banner — genuinely
+   redundant now.
+2. **Universal Back button** — third bottom-nav slot, between Home and Vault, styled as a plain
+   rounded square rather than a third tab. Backed by a deliberately simple two-slot toggle
+   (`currentLocation`/`lastLocation`), not a full history stack — recorded inside `showScreen()`/
+   `switchMainTab()` themselves, so every existing caller gets Back support for free without
+   touching individual call sites. Lives physically inside `#bottom-nav`, so it's hidden together
+   with it for free wherever the nav itself is hidden.
+3. **Every dedicated "back" element removed** — `#settings-back-btn` ("← Back to Home") is gone,
+   replaced by the universal button.
+
+One real cross-closure wrinkle: `goBack()` needed to call `refreshVaultGateView()`, but that
+function only ever existed inside the `DOMContentLoaded` closure, not at module top level where
+`goBack()`/`showScreen()`/`switchMainTab()` live. Exposed it as `window.refreshVaultGateView`,
+same pattern already used for `window.tryBiometricUnlockVault`/`window.attemptUnlock` — not a new
+mechanism, just applied to a third function.
+
+Verified with a real `npm install` + `vite build`: 264 KB main bundle, zero errors. All ids
+cross-checked between `app.js` and `index.html` — clean except the same class of pre-existing
+dynamically-created ids flagged every session (recording timer/stop, backup-reminder's two buttons).
+
+Decisions made: 65.
+
+Next session start point: whether the lock/unlock button should also show during first-run-setup
+was ambiguous in the request — left visible there per the literal instruction (only two exclusions
+were named), with the click handler guarding against acting on it before setup completes. Flagged,
+not assumed either way — worth confirming once seen on device. Device-pass debt from Sessions
+25 onward is now partially resolved (CI produces a real APK — that's new progress), but this
+session's three changes haven't themselves been tapped on a real device yet.
+
+---
+
 **Session 42**
 
 Second CI log upload. Progress from Session 41's fix — `src/js/privacy-screen.js` now resolves (20
