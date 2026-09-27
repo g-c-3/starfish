@@ -38,6 +38,7 @@
   --type-file: #10b981;
 
   --danger: #d9534f;
+  --gold: #d4af37;
   --vault: #1a1030;
   --vault-fg: #e8d9ff;
   --brand-tint: #ece8ff;
@@ -184,31 +185,37 @@ button {
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
   border-radius: 50%; border: none; background: transparent; color: var(--danger);
   display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 0 4px var(--danger)); /* persistent red glow, requested directly */
 }
 #power-close-btn svg { width: 20px; height: 20px; }
 #power-close-btn.hidden { display: none; } /* ID+class beats the plain #power-close-btn rule above */
 
-/* Lock/unlock toggle (Decision 65) — sits immediately left of the power button, same fixed-position
-   pattern (see that button's own comment above for the shared reasoning: outside every .screen
-   element, same z-index layering). Neutral foreground color rather than red or brand — this isn't
-   destructive (power button) or a primary action (brand-colored elsewhere), just a status/utility
-   icon, so it shouldn't visually compete with either of those established meanings. */
+/* Lock/unlock toggle (Decision 65; golden + glow + disabled state added in Decision 66) — sits
+   immediately left of the power button, same fixed-position pattern (see that button's own comment
+   above). --gold (like --danger) is the same color in both light and dark mode, so this reads
+   correctly in both without a separate dark-mode variant, same reasoning as the power button's red. */
 #lock-toggle-btn {
   position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 62px; z-index: 6;
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
-  border-radius: 50%; border: none; background: transparent; color: var(--fg); opacity: 0.75;
+  border-radius: 50%; border: none; background: transparent; color: var(--gold);
   display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 0 4px var(--gold));
 }
 #lock-toggle-btn svg { width: 20px; height: 20px; }
 #lock-toggle-btn.hidden { display: none; }
+/* Disabled (Decision 66) — quick access has nothing for this button to lock. No color, no glow,
+   not tappable — ID+class (200) beats the plain #lock-toggle-btn rule above (100) for the
+   properties that need to change; layout properties not overridden here are simply inherited. */
+#lock-toggle-btn.disabled { filter: grayscale(1); opacity: 0.35; pointer-events: none; }
 
 /* ---- Bottom nav (Decision 53, tabs reduced to two in Decision 61) — fixed, shown only for
    main-screen/vault-screen (app.js toggles its .hidden class from showScreen()). Settings is no
    longer a nav destination of its own — it's a sub-panel of Home, reached via the "App Settings"
    tile below — so the nav only ever needs to distinguish Home vs Vault, each with its own active
-   color: Home uses the brand accent, Vault keeps its own deep-violet identity (matching
-   .vault-banner) rather than brand, since the Vault is deliberately visually distinct everywhere
-   else too. ---- */
+   color: Home uses the brand accent tint, Vault its own light lavender tint (--vault-fg used as a
+   background here, --vault as the text/icon color — swapped from the dark title-bar pairing below,
+   since a dark active-tab background reads as a second "black bar" the same way the banner did;
+   removed in Decision 66 for the same reason). ---- */
 #bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
   display: flex; background: var(--card-bg); border-top: 1px solid var(--border);
@@ -224,7 +231,7 @@ button {
 #bottom-nav .nav-icon { font-size: 20px; line-height: 1; }
 #bottom-nav .nav-label { font-size: 11px; }
 #bottom-nav button.active { opacity: 1; color: var(--nav-active); background: var(--brand-tint); }
-#bottom-nav button[data-nav="vault"].active { color: var(--vault-fg); background: var(--vault); }
+#bottom-nav button[data-nav="vault"].active { color: var(--vault); background: var(--vault-fg); }
 
 /* Universal Back button (Decision 65) — the middle of the three slots, deliberately not styled
    like the two real tabs either side of it (no stretched flex:1, no icon+label column, no active
@@ -238,6 +245,15 @@ button {
   border-radius: 14px; background: var(--bg); color: var(--fg); opacity: 0.85;
   padding: 0; margin: 0 2px;
 }
+/* Soft glow on tap (Decision 66) — 0.5s, applied/removed by app.js's click handler (adds "glow",
+   removes it again on animationend so it doesn't linger as dead state on the element). Brand color,
+   not gold/red — this is plain interactive feedback, not a status color like the two buttons above. */
+@keyframes nav-back-glow {
+  0% { box-shadow: 0 0 0 0 transparent; }
+  30% { box-shadow: 0 0 10px 3px var(--brand); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+#bottom-nav #nav-back-btn.glow { animation: nav-back-glow 0.5s ease-out; }
 
 /* --- Backup/restore & Drive settings (Phase 6/13) --- */
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
@@ -283,15 +299,18 @@ button {
 .drive-backup-row button { width: auto; padding: 6px 12px; font-size: 13px; }
 .drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
 
-/* --- Private Vault (pivot) — keeps its own deep-violet identity, distinct from the rest of the
-   app's category colors, so "you are in the Vault" stays legible at a glance. --- */
+/* --- Private Vault (pivot) — the title bar's dark background (matching .vault-banner's own
+   deep-violet identity) was removed in Decision 66: it doubled as an unintended contrast bug, since
+   the fixed lock-toggle-btn icon (--fg, dark in light mode) sits visually on top of this bar and
+   was nearly invisible against a near-black backdrop. "You are in the Vault" now comes from the
+   lock emoji + letter-spaced heading alone, plus the bottom nav's own light-lavender Vault tint. --- */
 .vault-banner {
-  background: var(--vault); color: var(--vault-fg);
+  background: var(--card-bg); color: var(--fg); border: 1px solid var(--border);
   padding: 14px 16px; border-radius: 14px;
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
 }
-.vault-banner h2 { margin: 0; font-size: 16px; letter-spacing: 0.05em; color: var(--vault-fg); }
+.vault-banner h2 { margin: 0; font-size: 16px; letter-spacing: 0.05em; color: var(--fg); }
 .vault-banner button { width: auto; }
 #vault-capture-bar { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
 #vault-capture-bar button { width: auto; padding: 10px 14px; border-radius: 14px; }
