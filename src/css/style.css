@@ -106,6 +106,18 @@ button {
 .link-btn { width: auto; background: none; color: var(--brand); text-decoration: underline; padding: 0; font-weight: 500; }
 .warning-text { color: var(--danger); opacity: 1; }
 
+/* Recurring backup reminder (Session 40) — a soft, dismissible banner, not a modal (unlike
+   #auto-backup-due-banner, which gates an actual due auto-backup and needs a decision from the
+   person; this is just a nudge, so it never blocks anything). */
+#backup-reminder-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 14px; margin: 8px 0; font-size: 13px;
+}
+#backup-reminder-banner span { flex: 1 1 auto; }
+#backup-reminder-banner .secondary-btn { width: auto; margin: 0; padding: 8px 12px; font-size: 13px; }
+#backup-reminder-banner .link-btn { font-size: 15px; text-decoration: none; opacity: 0.6; }
+
 /* ---- Masthead — the one deliberate colorful flourish, not repeated elsewhere ---- */
 #home-tab > header {
   padding-bottom: 14px; margin-bottom: 8px;
