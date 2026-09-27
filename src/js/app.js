@@ -34,6 +34,22 @@ let vaultBioAutoPrompted = false; // avoids re-triggering the OS biometric promp
 let vaultAutoLockTimer = null;
 let appAutoLockTimer = null;
 
+// ---- Universal back button (Decision 65) — a simple two-slot toggle, not a full history stack.
+// "Location" is one of 'home' | 'settings' | 'vault'; recordLocation() is called from inside
+// showScreen()/switchMainTab() themselves (not from each individual call site), so every existing
+// caller gets Back-button support for free. Back always returns to wherever you were immediately
+// before the current location — tapping it again toggles right back to where you just left,
+// rather than getting stuck unable to return. Deliberately not a deeper stack: this app's actual
+// navigation depth is only ever one level (Home ⇄ Settings ⇄ Vault), so a stack would add
+// complexity with no case that could ever use it.
+let currentLocation = 'home';
+let lastLocation = 'home';
+function recordLocation(loc) {
+  if (loc === currentLocation) return; // re-visiting where you already are isn't a navigation
+  lastLocation = currentLocation;
+  currentLocation = loc;
+}
+
 // ---- Screen visibility — nothing wired this before now; every screen built across every
 // session has been unreachable until this existed. One helper, hides all .screen elements,
 // shows the one requested. ----
@@ -48,6 +64,14 @@ function showScreen(id, { tab } = {}) {
   // (Decision 62) — removed there on request; every other screen, including first-run and the
   // Vault's own PIN gate, still shows it.
   document.getElementById('power-close-btn')?.classList.toggle('hidden', id === 'lock-screen');
+
+  // Lock/unlock toggle (Decision 65) — same exclusion as the power button at this level
+  // (app-open lock screen); the Vault's own locked-gate substate is a second, separate exclusion
+  // handled inside refreshVaultGateView() below, since vault-screen doesn't change id when its
+  // internal gate/content view toggles.
+  document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', id === 'lock-screen');
+
+  if (id === 'vault-screen') recordLocation('vault');
 
   // Bottom nav only makes sense once the app is unlocked (main-screen/vault-screen) — hidden for
   // first-run, the lock screen, and the ad gate, which have nothing to navigate between yet.
@@ -72,6 +96,16 @@ function switchMainTab(tab) {
   // Settings is conceptually part of Home now (reached via its tile, not its own nav destination),
   // so the Home nav icon stays highlighted while viewing it rather than nothing being highlighted.
   setActiveNavTab(tab === 'settings' ? 'home' : tab);
+  recordLocation(tab === 'settings' ? 'settings' : 'home');
+}
+
+// Universal back button (Decision 65) — navigates to lastLocation using the same functions every
+// other caller uses (showScreen/switchMainTab), so recordLocation()'s own bookkeeping inside those
+// functions naturally produces the toggle-back-and-forth behavior described above; nothing extra
+// needs to happen here beyond picking where to go.
+function goBack() {
+  if (lastLocation === 'vault') { showScreen('vault-screen'); window.refreshVaultGateView(); }
+  else showScreen('main-screen', { tab: lastLocation }); // 'home' or 'settings'
 }
 
 function setActiveNavTab(tab) {
@@ -1119,9 +1153,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // shows once genuinely unlocked (privateSessionKey set). This is the fix for the reported
     // bug: previously nothing gated this on lock state at all (see Decision 54).
     document.getElementById('vault-content').classList.toggle('hidden', !unlocked);
-    // Lock button only makes sense once there's something to lock — hidden on the setup/locked
-    // gate entirely, not just inert (Session 31 bug: it stayed visible in every state before this).
-    document.getElementById('vault-lock-btn').classList.toggle('hidden', !unlocked);
+    // Lock/unlock toggle (Decision 65) — replaces the old #vault-lock-btn entirely (removed from
+    // the vault banner as redundant). Same visibility rule that button had: only makes sense once
+    // there's something to lock, hidden on the setup/locked gate. This is the second of the two
+    // exclusions the universal button needs — the first (the app-open lock screen) is handled once
+    // in showScreen(), but vault-screen doesn't change screen id when its internal gate/content
+    // substate toggles, so that exclusion has to live here instead.
+    document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', !unlocked);
 
     const settings = await getBiometricSettings();
     // The unlock button belongs on the locked gate (it's how you get in); the enable/disable
@@ -1145,6 +1183,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (result.success) await refreshVaultGateView();
     }
   }
+  // Exposed the same way window.attemptUnlock/tryBiometricUnlockVault already are — goBack()
+  // (top-level, outside this DOMContentLoaded closure) needs to call this when returning to Vault.
+  window.refreshVaultGateView = refreshVaultGateView;
+
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
     await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
     await refreshVaultGateView();
@@ -1160,14 +1202,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (result.success) { await refreshVaultGateView(); await renderVaultList('all'); }
     else alert('Biometric unlock failed — enter your Vault PIN.');
   });
-  document.getElementById('vault-lock-btn').addEventListener('click', () => {
-    lockVault();
-    // Immediate, synchronous navigation — "should go to home page immediately" (Session 31 bug:
-    // this previously awaited an async gate refresh first, delaying the actual screen switch).
-    // vault-screen's own gate state gets refreshed the next time the Vault tab is tapped anyway
-    // (the nav handler below already calls refreshVaultGateView() on every visit).
-    showScreen('main-screen');
-  });
+  // vault-lock-btn removed (Decision 65) — replaced by the universal #lock-toggle-btn, wired
+  // further down near the power button, which does exactly what this used to: lockVault() then
+  // an immediate synchronous showScreen('main-screen') (Session 31 bug fix preserved — no
+  // awaiting an async gate refresh first, which used to delay the actual screen switch).
   // NOTE: no unconditional refreshVaultGateView() call here at initial setup — that used to be a
   // line right here, and it was a real bug (Decision 59): refreshVaultGateView() auto-triggers a
   // biometric attempt for the Vault when enabled (Decision 56), so calling it during cold-start
@@ -1182,17 +1220,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Home and Settings are tabs within main-screen; Vault is its own
   // screen with its own gate (Decision 54 — that gate previously lived in Settings, disconnected
   // from vault-screen entirely, so this button skipped it and opened straight into the content). ----
-  document.querySelectorAll('#bottom-nav button').forEach((btn) => btn.addEventListener('click', async () => {
+  // Only buttons with a data-nav attribute (Home/Vault) — the universal Back button living in the
+  // middle nav slot (Decision 65) is also a <button> inside #bottom-nav but has no data-nav, and
+  // is wired separately below with its own, different behavior (goBack(), not "jump to this tab").
+  document.querySelectorAll('#bottom-nav button[data-nav]').forEach((btn) => btn.addEventListener('click', async () => {
     const tab = btn.dataset.nav;
     if (tab === 'vault') { showScreen('vault-screen'); await refreshVaultGateView(); }
     else showScreen('main-screen', { tab });
   }));
 
   // "App Settings" tile (Decision 61) — the settings-tab panel itself is unchanged, only its entry
-  // point moved from a bottom-nav button to this tile; the back link below is the way out again
-  // (the bottom nav's Home button also works, since settings-tab is still a sub-panel of main-screen).
+  // point moved from a bottom-nav button to this tile. Getting back out again is the universal
+  // Back button (Decision 65) — the old dedicated "← Back to Home" link is gone, replaced by it.
   document.getElementById('open-settings-tile').addEventListener('click', () => switchMainTab('settings'));
-  document.getElementById('settings-back-btn').addEventListener('click', () => switchMainTab('home'));
+
+  // Universal Back button (Decision 65) — middle slot of the bottom nav, present wherever the nav
+  // itself is (main-screen/vault-screen; hidden together with it elsewhere, for free, since it's
+  // physically inside #bottom-nav rather than a separate always-present element like the power
+  // button). Replaces every dedicated "back"/"back to home" element that existed before this.
+  document.getElementById('nav-back-btn').addEventListener('click', goBack);
 
   // Power button (Decision 61, confirmation removed in Decision 62) — small, fixed, present on
   // every screen except the app-open lock screen (handled in showScreen() above) since it lives
@@ -1207,6 +1253,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!Capacitor.isNativePlatform()) { alert('Closing only works in the installed app, not this preview.'); return; }
     const { App } = await import('@capacitor/app');
     App.exitApp();
+  });
+
+  // Lock/unlock toggle (Decision 65) — same fixed-position pattern as the power button, but
+  // context-aware rather than doing one fixed thing: it locks whichever of the app or the Vault is
+  // currently what's on screen, decided at click time by checking which is actually visible rather
+  // than tracking a separate "which context" flag that could drift out of sync with the DOM.
+  // Always shown in its "unlocked" appearance because both places it's visible (Decision 65's two
+  // exclusions, in showScreen() and refreshVaultGateView() above) are themselves already-unlocked
+  // states — there's no case where this button needs to show a "locked" appearance.
+  document.getElementById('lock-toggle-btn').addEventListener('click', async () => {
+    const vaultUnlocked = !document.getElementById('vault-content').classList.contains('hidden');
+    if (vaultUnlocked) {
+      lockVault();
+      // Immediate, synchronous navigation, same fix Session 31 made for the old vault-lock-btn —
+      // no awaiting an async gate refresh first, which would delay the actual screen switch.
+      showScreen('main-screen');
+      return;
+    }
+    // Main app: showLockScreen() already contains all the right logic for this (checks whether a
+    // password is even set, shows the real lock screen if so, or is a harmless no-op re-entry to
+    // Home if it's quick access with nothing to lock) — reusing it here instead of duplicating
+    // that branching. First-run setup (no credentials row yet) safely no-ops via the same guard.
+    if (document.getElementById('first-run-setup').classList.contains('hidden')) {
+      disarmAppAutoLock();
+      await showLockScreen();
+    }
   });
 
   document.querySelectorAll('#vault-tabs .vault-tab').forEach((tab) => tab.addEventListener('click', () => {
