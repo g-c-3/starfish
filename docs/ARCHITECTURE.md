@@ -133,17 +133,19 @@ app-open password was changed *after* the backup was made, restoring reverts it 
 worth a one-time notice at restore time: "This will restore your data as of [backup date] — password and notes
 will match that point in time."
 
-### Recents-preview blanking + screenshot blocking (Decision 62, currently disabled — Decision 63)
-`MainActivity` sets Android's `FLAG_SECURE` on its window (applied by `scripts/patch-mainactivity.js` in CI —
-see `android-notes/native-setup.md` §13, `android/` isn't committed so this can't be a hand-edited file). Two
-effects from the one flag, not independently toggleable: the recent-apps/task-switcher preview shows a blank
-thumbnail instead of a live screenshot of the last screen (matching Opera Incognito's behavior — requested
-directly), and screenshots/screen recording of the app are blocked system-wide. The second is a side effect
-of the first, not a separate feature, but fits the app's own privacy premise regardless.
-
-**Currently disabled** (Decision 63) — the screenshot-blocking side effect got in the way of taking
-screenshots during active development. The CI step calling the script is commented out in
-`build-android.yml`; the script itself is untouched. Re-enable by uncommenting that one step.
+### Privacy Screen (Decision 64 — a real user-toggleable setting, not a build-time flag)
+A Settings switch (`#privacy-screen-settings`, off by default) backed by `@capacitor-community/privacy-screen`
+(pinned to `5.2.0` — the only version line whose `peerDependencies` matches this project's Capacitor 6).
+Two effects from one Android setting (`FLAG_SECURE`), not independently toggleable: the recent-apps/
+task-switcher preview shows a blank thumbnail instead of a live screenshot of the last screen (matching
+Opera Incognito's behavior — requested directly), and screenshots/screen recording of the app are blocked
+system-wide. The second is a side effect of the first, not a separate feature, but fits the app's own
+privacy premise regardless. Applied via `src/js/privacy-screen.js`'s `setPrivacyScreen()`, called at the
+same point in `bootstrap()` as `applyAppearance()` — before the lock screen renders, so the setting (when
+on) covers the lock screen too, not just the unlocked app. Persisted via `metaGet`/`metaSet`
+(`privacy_screen_enabled`), same mechanism as `dark_mode`. Replaces an earlier build-time-only version
+(Decisions 62/63) that hand-patched `MainActivity.java` in CI and could only be turned off by editing the
+workflow — this version is a real runtime toggle instead.
 
 ## 3b. Private Vault (pivot — was notes-only "private notes," now spans five types)
 
@@ -436,9 +438,13 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   data). Treated as the highest-leverage retention feature discussed — reduces the friction that normally kills
   daily use of note-taking apps.
 - **Expense charts** — simple bar/line charts (weekly/monthly) built on the same aggregation used for the digest.
-- **Recurring backup reminder** — a soft local notification/banner if it's been 30+ days since the last backup,
-  tied to `credentials.last_backup_at`. Doubles as a nudge that keeps the "forgot app password" recovery path
-  (see above) actually usable, since that recovery flow depends on a recent backup existing.
+- **Recurring backup reminder — done (Session 40).** A soft, dismissible in-app banner (not a push
+  notification — simpler, and "soft" only requires never blocking anything) shown on Home when it's been
+  30+ days since the more recent of `credentials.last_backup_at`/`last_drive_backup_at` — either backup path
+  keeps the "forgot app password" recovery flow (see above) usable, so whichever is more recent is what's
+  checked, not local specifically. Suppressed when there are zero entries (nothing yet worth losing) so a
+  fresh install isn't nagged on day one. Dismiss is in-memory only, not persisted — reappears at the next
+  cold launch rather than going silent for weeks if forgotten.
 - **App auto-lock timeout** — configurable inactivity timeout (`credentials.auto_lock_minutes`, default 5) that
   re-locks the app, so the password isn't only a one-time gate at cold launch.
 - **Dark mode** — on/off toggle, stored as `meta.dark_mode` (`'on'`/`'off'`). No system-theme auto-detection
@@ -613,11 +619,13 @@ Also implemented: the digest/on-this-day/storage-breakdown screens (§6), and no
 screen (§7, Session 35) — total entry count plus an on-device storage estimate, with an Export Now button that opens
 the existing Backup & Restore section rather than a second export path. Entry count excludes Vault entries,
 same reasoning as the digest/on-this-day fix (Decision 40) — this screen sits behind the app-open password,
-not the Vault PIN. **None of this has been run on an actual device or through CI yet** — that remains the
-standing risk flagged at the end of every session since Phase 1.
+not the Vault PIN. Also implemented: the recurring backup-reminder banner (Session 40), a soft
+dismissible nudge on Home when 30+ days have passed since the more recent local/Drive backup. **None
+of this has been run on an actual device or through CI yet** — that remains the standing risk
+flagged at the end of every session since Phase 1.
 
-Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the map view,
-the confidence-confirmation chip UI, and the recurring backup-reminder nudge. These are the next
+Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the
+map view, and the confidence-confirmation chip UI. These are the next
 implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.

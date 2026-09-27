@@ -11,8 +11,8 @@
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
 - [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
-- [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen done; rest not started)
-- [~] 10 — Security hardening (biometric unlock done, needs device confirm; recents-preview blanking/screenshot block built but currently disabled — Decision 63; obfuscation/ProGuard/signature check not)
+- [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; rest not started)
+- [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
@@ -181,9 +181,8 @@
   design pass, not built here. Label autocomplete (`label_history`) and batch add with
   auto-numbering (`batchAddWithCommonLabel()`) are drafted but not wired into any UI yet.
 - [~] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
-  quick-capture widget, expense charts, backup-reminder nudge, map view,
-  confidence-confirmation chip, dark mode toggle (done), gradient mode toggle (done, 2 color pickers,
-  same-color allowed). **Auto-lock timeout done** — `credentials.auto_lock_minutes` has existed since
+  recurring backup reminder (done — see detail below), quick-capture widget, expense charts, map view,
+  confidence-confirmation chip, dark mode toggle (done, gradient mode removed — Decision 53). **Auto-lock timeout done** — `credentials.auto_lock_minutes` has existed since
   Session 1 but was never actually enforced anywhere until now (Decision 45). Also fixed while
   building it: `privateSessionKey`'s own comment has said "cleared on vault lock/background" since
   the Vault pivot, but nothing ever listened for backgrounding — the vault would stay unlocked
@@ -203,17 +202,20 @@
   app-open password, not the Vault PIN) plus an on-device storage estimate
   (`navigator.storage.estimate()`, same estimate-only caveat as the backup/restore storage checks),
   and an Export Now button that opens the existing Backup & Restore section rather than a second
-  export path. Remaining items (quick-capture widget, expense charts, backup-reminder nudge, map
-  view, confidence-confirmation chip) not started.
+  export path. **Recurring backup-reminder banner done (Session 40):** a soft, dismissible nudge on
+  Home when 30+ days have passed since the more recent of the local/Google Drive backup timestamps
+  (`credentials.last_backup_at`/`last_drive_backup_at`) — suppressed on an essentially-empty
+  install so a fresh setup isn't nagged immediately; dismiss is in-memory only, reappears next cold
+  launch. Remaining items (quick-capture widget, expense charts, map view, confidence-confirmation
+  chip) not started.
 - [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
   Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
-  default, independent per lock; not yet confirmed on a real device. **Recents-preview blanking +
-  screenshot blocking built** (Session 37, Decision 62) — `FLAG_SECURE` set via
-  `scripts/patch-mainactivity.js`, same never-committed-`android/` pattern as the manifest permissions —
-  **but currently disabled** (Session 38, Decision 63): the screenshot block got in the way of
-  development itself, so the CI step calling the script is commented out in `build-android.yml`
-  (the script stays, untouched — re-enable is a one-line uncomment). JS obfuscation, ProGuard/R8,
-  startup signature check: still documented, not implemented.
+  default, independent per lock; not yet confirmed on a real device. **Privacy Screen done** (Session
+  39, Decision 64) — a real Settings toggle (off by default), `@capacitor-community/privacy-screen`
+  (pinned `5.2.0` for Capacitor 6 compatibility) blanking the recents preview and blocking screenshots
+  together, replacing Session 37/38's build-time-only `MainActivity` patch (Decisions 62/63) entirely
+  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. JS
+  obfuscation, ProGuard/R8, startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied
   (Session 3). Runs `npm run build` (Vite) before `cap sync` (Decision 46, Session 18) — without
   it, the bundled app can never load in any WebView, verified as the actual root cause of two
@@ -221,9 +223,9 @@
   on every run** — required manifest permissions (Decision 49) and a real, always-incrementing
   version (Decision 51), both via small idempotent-where-appropriate Node scripts in `scripts/`,
   since `android/` itself is never committed and starts from the same unmodified template every
-  time. A third such script, `FLAG_SECURE` on `MainActivity` (Decision 62), exists but its CI step
-  is currently commented out (Decision 63 — blocked screenshots during development). Live green run
-  against the now-set secrets, with the active patches applied, not yet confirmed —
+  time. (A third such script, for `FLAG_SECURE`, existed briefly in Sessions 37–38 and is gone as of
+  Session 39 — Privacy Screen is a real plugin now, not a native patch; nothing left to run in CI
+  for it.) Live green run against the now-set secrets, with the active patches applied, not yet confirmed —
   manual check pending.
 - [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
   drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.

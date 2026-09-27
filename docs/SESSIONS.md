@@ -4,6 +4,101 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 40**
+
+No new request pending, so continued down the standing list of unblocked Phase 9 items (same
+pattern as Sessions 16/17/35) — built the recurring backup-reminder banner (ARCHITECTURE §9).
+
+New `backupReminderDue()` (app.js) checks whichever of `credentials.last_backup_at`/
+`last_drive_backup_at` is more recent — either backup path keeps the "forgot app password"
+recovery flow usable, so only the most recent of the two matters, not local specifically. Due at
+30+ days, same threshold the spec named. Suppressed when there are zero entries (nothing yet worth
+losing) so a brand-new install isn't nagged on day one — without that check, `last_backup_at` being
+unset (`0`) would always read as "over 30 days," which is true but misleading for an install with
+nothing in it yet.
+
+Rendered as `renderBackupReminder()`, following the exact populate-then-wire shape already used for
+digest/on-this-day right above it in the same DOMContentLoaded block. New `#backup-reminder-banner`
+in Home's header, hidden unless due. Two buttons, built dynamically (same as the recording-timer
+UI elsewhere) rather than static markup: "Back up now" jumps into Settings' Backup & Restore
+section (`switchMainTab('settings')` + `.open = true` + `scrollIntoView`), "✕" dismisses — in-memory
+only, not persisted, so it reappears at the next cold launch rather than going silently snoozed for
+weeks if forgotten. Deliberately a plain in-app banner, not a push notification — simpler, and
+"soft" in the spec only requires never blocking anything, which this doesn't either way.
+
+Fixed in passing while updating ROADMAP.md's Phase 9 intro line: it still listed "gradient mode
+toggle (done, 2 color pickers, same-color allowed)" as a current feature, though Decision 53 (Session
+29) removed gradient mode entirely — a stale line left over from before that removal. Corrected to
+say removed, not done.
+
+Verified with a real `npm install` + `vite build`: builds clean. All ids cross-checked between
+`app.js` and `index.html` — clean except the same two pre-existing dynamically-created ids
+(`recording-stop-btn`, `recording-timer`) flagged every session, plus this session's own two new
+dynamically-created ids (`backup-reminder-btn`, `backup-reminder-dismiss-btn`), same non-issue for
+the same reason.
+
+Decisions made: none — implementing an already-specified feature, not a new design call.
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward
+still stands, now also covering whether the banner's `scrollIntoView` actually lands correctly and
+whether the 30-day threshold feels right in practice. If picking up more unblocked work instead:
+quick-capture widget, expense charts, map view, and the confidence-confirmation chip remain open
+from Phase 9; label autocomplete UI/batch-add wiring remains open from Phase 8; obfuscation/
+ProGuard/signature check remain open from Phase 10.
+
+---
+
+**Session 39**
+
+Idea from last session's screenshot-blocking complaint: make Privacy Screen a real Settings toggle
+the person can flip themselves, instead of something only adjustable by editing CI.
+
+Session 37/38's approach (`scripts/patch-mainactivity.js` hand-patching `MainActivity.java`) was
+fundamentally build-time — the flag got set once at process start, no way for JS to change it
+afterward short of a rebuild, which is exactly why Session 38 could only disable it entirely rather
+than offer a real switch. Replaced it outright with `@capacitor-community/privacy-screen`, after
+checking npm for a real, compatible, maintained option first rather than writing more native code —
+found one. Pinned to `5.2.0` specifically: its `peerDependencies` is `@capacitor/core ^6.0.0`, the
+only version line of this plugin that matches this project's Capacitor 6 (its own newer major
+versions, 6.x/8.x, need Capacitor 7/8 — an unrelated numbering coincidence). Verified by downloading
+the actual `5.2.0` tarball and reading its shipped `PrivacyScreenPlugin.java`/`PrivacyScreen.java`
+directly rather than trusting the README: `enable()`/`disable()` do exactly `window.addFlags`/
+`clearFlags(FLAG_SECURE)` on the current Activity, real runtime toggles, nothing more.
+
+`capacitor.config.json`'s `PrivacyScreen.enable` set to `false` so native startup never turns it on
+by itself. New `src/js/privacy-screen.js` (mirrors `biometric.js`'s shape) applies whatever's
+actually stored, called at the same point in `bootstrap()` as `applyAppearance()` — before the lock
+screen renders, so the setting also covers the lock screen when on. Persisted via `metaGet`/
+`metaSet` under `privacy_screen_enabled`, same mechanism as `dark_mode`/`auto_backup_enabled` — off
+by default. New `#privacy-screen-settings` card in Settings, same populate-then-wire pattern as the
+dark-mode toggle right below it.
+
+Retired the old approach rather than leaving it as dead weight: `scripts/patch-mainactivity.js`
+deleted, `build-android.yml`'s already-commented-out step calling it removed outright,
+`android-notes/native-setup.md` §13 rewritten to describe the new plugin instead of the old patch.
+
+One known gap stated plainly: a cold launch has one or two frames between the WebView painting and
+`setPrivacyScreen()`'s call resolving, during which an "on" setting isn't in effect yet — no fix
+without native code reading a persisted native-side flag before `onCreate()` finishes, out of scope
+for what's otherwise a plain web-layer setting.
+
+Verified with a real `npm install` + `vite build`: 99 modules (plus the new dependency), zero
+errors, same class of pre-existing benign warnings as always. All ids cross-checked between `app.js`
+and `index.html` — clean except the same two pre-existing dynamically-created ids flagged every
+session. `capacitor.config.json`, `package.json`, and the YAML workflow all parse cleanly.
+
+Decisions made: 64 (replaces 62/63's approach entirely, doesn't just amend it).
+
+Next session start point: unchanged in substance — the device-pass debt from Sessions 25 onward
+still stands, now also covering whether this plugin's `enable()`/`disable()` actually work as
+expected on a real device (the sandbox could verify the source and the build, not runtime behavior
+on Android). If picking up more unblocked work instead: quick-capture widget, expense charts,
+backup-reminder nudge, map view, and the confidence-confirmation chip remain open from Phase 9;
+label autocomplete UI/batch-add wiring remains open from Phase 8; obfuscation/ProGuard/signature
+check remain open from Phase 10.
+
+---
+
 **Session 38**
 
 Reported: `FLAG_SECURE` (Decision 62) was getting in the way of taking screenshots during active
