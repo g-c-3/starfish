@@ -4,6 +4,47 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 42**
+
+Second CI log upload. Progress from Session 41's fix — `src/js/privacy-screen.js` now resolves (20
+modules transformed, up from 19 before it existed), but the build failed one step further in:
+
+```
+[vite]: Rollup failed to resolve import "@capacitor-community/privacy-screen" from
+".../src/js/privacy-screen.js"
+```
+
+**Cause:** the npm package itself isn't in `node_modules` at build time, which only happens if
+`package.json` in the actual committed repo doesn't list it — i.e. Session 39's `package.json`
+(and likely `capacitor.config.json`, delivered alongside it, though a missing config wouldn't itself
+break the build) never got committed, even though this session's earlier file
+(`privacy-screen.js`) now has. Confirmed by the error message directly — `npm install` (the step
+right before) completed without error, so it simply had nothing named `@capacitor-community/
+privacy-screen` to install.
+
+**Fix:** re-delivered `package.json` and `capacitor.config.json` unchanged, re-confirmed against
+the sandbox (clean `npm install` + `vite build`, 99 modules, zero errors). **Why correct:** the
+error names the exact unresolvable package, and it's the one dependency line unique to Session 39
+that a prior session's `package.json` wouldn't have — every other file this build step touches
+(`privacy-screen.js`, `app.js`) is already confirmed present from Session 41's diagnosis.
+
+No code changed this session either — two sessions in a row now have been "which of Session 39's
+several files actually landed," not a code defect. Worth naming as a pattern: **Session 39
+delivered 6 files in one message** (2 NEW: `privacy-screen.js`; REPLACE: `package.json`,
+`capacitor.config.json`, `app.js`, `index.html`) — it looks like they're landing one or two per
+push rather than all at once. Flagged for the person, not assumed silently: double-check all of a
+multi-file session's outputs got applied before the next push, rather than re-uploading logs
+one gap at a time.
+
+Decisions made: none.
+
+Next session start point: unchanged — once `package.json`/`capacitor.config.json` are actually
+committed, the workflow should get past step 6 for the first time. If it fails again, check whether
+anything else from Session 39 (or any earlier multi-file session) is still missing before assuming
+new code is at fault.
+
+---
+
 **Session 41**
 
 Uploaded a GitHub Actions log bundle from a real CI run — the first actual CI feedback since the
