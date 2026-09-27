@@ -17,6 +17,7 @@ import {
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
+import { setPrivacyScreen } from './privacy-screen.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
@@ -85,6 +86,11 @@ async function bootstrap() {
   db = await initDb(sqlite);
 
   applyAppearance(await getAppearance()); // apply theme before rendering the lock screen
+
+  // Privacy Screen (Decision 64) — applied this early, same as appearance above, so it also
+  // covers the lock screen itself, not just the unlocked app. Off by default; persisted the same
+  // way as every other on/off setting (metaGet/metaSet).
+  setPrivacyScreen((await metaGet('privacy_screen_enabled', 'false')) === 'true');
 
   await requestPermissions();
   await registerActionTypes();
@@ -283,6 +289,24 @@ async function onThisDay() {
     [now.getMonth() + 1, now.getDate(), new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()]
   );
   return rows.values || [];
+}
+
+// Recurring backup reminder (ARCHITECTURE §9/§13, Session 40) — a soft in-app nudge, not a push
+// notification (kept simple; "soft" in the spec is satisfied by a dismissible banner that never
+// blocks anything, same restraint already used for the auto-backup-due banner). Counts whichever
+// backup path (local or Google Drive) is more recent — either one produces a usable .dzbackup for
+// the "forgot app password" recovery flow this is meant to keep viable (ARCHITECTURE §3), so only
+// the most recent of the two matters, not local specifically. Suppressed on an essentially-empty
+// install (zero entries, vault included) — a never-backed-up fresh install would otherwise always
+// read as "30+ days since last backup" (last = 0) despite having nothing worth losing yet.
+const BACKUP_REMINDER_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+async function backupReminderDue() {
+  const cred = (await db.query(`SELECT last_backup_at, last_drive_backup_at FROM credentials WHERE id=1`)).values[0] || {};
+  const lastAny = Math.max(cred.last_backup_at || 0, cred.last_drive_backup_at || 0);
+  const dueByAge = Date.now() - lastAny > BACKUP_REMINDER_THRESHOLD_MS;
+  if (!dueByAge) return { due: false, lastAny };
+  const countRow = (await db.query(`SELECT COUNT(*) as cnt FROM entries WHERE deleted_at IS NULL`)).values[0];
+  return { due: (countRow?.cnt || 0) > 0, lastAny };
 }
 
 // Storage usage per category (ARCHITECTURE §6) — reuses fileactions.js's getSelectableEntries()
@@ -951,6 +975,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     darkToggle.addEventListener('change', (e) => setDarkMode(e.target.checked));
   }
 
+  // Privacy Screen settings UI wiring (Decision 64) — same populate-then-wire shape as dark mode
+  // above. bootstrap() already applied whatever was stored before the lock screen even rendered;
+  // this only needs to reflect that in the switch and react to future changes.
+  const privacyScreenToggle = document.getElementById('privacy-screen-toggle');
+  if (privacyScreenToggle) {
+    privacyScreenToggle.checked = (await metaGet('privacy_screen_enabled', 'false')) === 'true';
+    privacyScreenToggle.addEventListener('change', async (e) => {
+      await metaSet('privacy_screen_enabled', e.target.checked ? 'true' : 'false');
+      setPrivacyScreen(e.target.checked);
+    });
+  }
+
   // Backup & Restore (local) wiring
   renderCategoryCheckboxes('backup-categories', 'backup');
   renderCategoryCheckboxes('restore-categories', 'restore');
@@ -1487,6 +1523,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
   await renderOnThisDay();
+
+  // Recurring backup reminder (Session 40) — dismiss is in-memory only (a plain click handler
+  // hiding the element), not persisted; reappears at the next cold launch same as before, which is
+  // the intended "soft nudge" behavior rather than a permanent snooze that could go unnoticed for
+  // months.
+  async function renderBackupReminder() {
+    const banner = document.getElementById('backup-reminder-banner');
+    const { due } = await backupReminderDue();
+    banner.classList.toggle('hidden', !due);
+    if (!due) return;
+    banner.innerHTML = `
+      <span>It's been over 30 days since your last backup.</span>
+      <button id="backup-reminder-btn" class="secondary-btn">Back up now</button>
+      <button id="backup-reminder-dismiss-btn" class="link-btn" aria-label="Dismiss">✕</button>
+    `;
+    document.getElementById('backup-reminder-btn').addEventListener('click', () => {
+      const backupSection = document.getElementById('backup-settings');
+      switchMainTab('settings');
+      backupSection.open = true;
+      backupSection.scrollIntoView({ behavior: 'smooth' });
+    });
+    document.getElementById('backup-reminder-dismiss-btn').addEventListener('click', () => banner.classList.add('hidden'));
+  }
+  await renderBackupReminder();
 
   async function renderStorageBreakdown() {
     const breakdown = await storageBreakdown();
