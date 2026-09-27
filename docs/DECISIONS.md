@@ -985,3 +985,58 @@ unlock pages) — left visible there per the literal instruction, with the click
 guarding against acting on it before setup completes, rather than silently adding a third exclusion
 that wasn't asked for.
 
+---
+
+**66. Back button restyled (new icon, tap-glow); lock button restyled (golden, thicker, persistent
+glow) and given a disabled state; power button given a persistent red glow; the Vault's lock button
+— reportedly missing — traced to a contrast bug and fixed by removing the Vault's dark title bar and
+the bottom nav's dark active-Vault-tab background; lock button hidden on first-run setup.**
+
+Six related changes, requested together after seeing the app running on-device for the first time:
+
+1. **Back button icon** replaced with a "curved return arrow" (chevron + a hooking curve, no
+   enclosing circle), matching a supplied reference image minus its outer ring. Soft glow on tap:
+   a `.glow` class triggers a 0.5s `box-shadow` keyframe animation in `var(--brand)`, added and force-
+   reflowed before re-adding (so a rapid second tap restarts the animation rather than no-op'ing
+   since the class is already present) and removed again on `animationend` so it doesn't linger as
+   dead state on the element.
+2. **Lock button restyled:** color changed from neutral `var(--fg)` to a new `--gold` (`#d4af37`,
+   fixed across both themes, same reasoning as `--danger` already being theme-invariant), stroke
+   width increased (2 → 2.6, "thickish"), and a persistent `drop-shadow` glow added — unlike the
+   back button's tap-triggered animation, this one is always on, describing the button's resting
+   state rather than a feedback gesture.
+3. **Power button given a persistent red glow** too (`drop-shadow` in `var(--danger)`) — requested
+   as permissive ("can"), added for visual parity with the lock button now that it has one.
+4. **Disabled state:** on the main-app screens (Home/Settings), the lock button now visually
+   disables itself (`filter: grayscale(1); opacity: 0.35; pointer-events: none`) whenever no
+   app-open password is set — quick access has nothing for it to lock into, so this makes that
+   fact visible on the button itself rather than only in Settings' own copy ("quick access has
+   nothing to lock back to"). Computed fresh on every entry into Home/Settings
+   (`updateLockButtonDisabledState()`, called from `switchMainTab()`) rather than cached, so it
+   stays correct if a future session adds a UI to actually change the app-open password after
+   first-run (no such UI exists yet — `setAppPassword()`/`removeAppPassword()` are only ever called
+   from first-run-setup today). Never disabled in the Vault context — the Vault always has a PIN by
+   the time this button is shown for it at all (hidden otherwise, on its own locked/setup gate).
+5. **Vault's lock button, reportedly missing:** it was never actually missing from the DOM — the
+   real cause was a contrast bug. `.vault-banner`'s background was `var(--vault)`, a near-black
+   deep violet (`#1a1030`), and the fixed lock-toggle-btn icon sitting visually on top of it used
+   `var(--fg)` — dark in light theme, nearly the same near-black tone as the banner behind it, so
+   the icon was there but effectively invisible. Restyling the icon gold (change 2, this session)
+   already fixes the contrast on its own, but the banner's dark background is also removed outright
+   (see next point), which was the direct, separately requested fix.
+6. **Vault's dark title bar removed** (`.vault-banner` background changed from `var(--vault)` to
+   `var(--card-bg)`, with a plain border instead), and the bottom nav's active-Vault-tab background
+   changed from `var(--vault)` (dark) to `var(--vault-fg)` (a light lavender tint), with its text/
+   icon color swapped to `var(--vault)` so it stays legible — the same "black bar" look, just in the
+   bottom nav instead of the top. The Vault's own visual identity (deliberately distinct from the
+   rest of the app, per Decision 52/original design notes) now comes from the lock emoji, the
+   letter-spaced heading, and the nav tab's lavender tint, rather than a solid dark panel. The inner
+   filter chips (`.vault-tab.active` — All/Text/Voice/etc.) were **not** touched — they weren't
+   named in the request, and unlike the icon-on-banner case, light-lavender text on that same dark
+   background there is genuinely readable, not a contrast bug.
+7. **Lock button hidden on first-run setup** (`showScreen()`'s hide condition extended from just
+   `'lock-screen'` to `'lock-screen' || 'first-run-setup'`) — there's no password to lock yet at
+   that point, so showing it would be actively misleading, not just redundant. This replaces the
+   assumption flagged at the end of Decision 65 (left visible there at the time, pending
+   confirmation) — now resolved by this direct instruction.
+

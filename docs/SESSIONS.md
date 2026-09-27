@@ -4,6 +4,49 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 44**
+
+Follow-up screenshots after Session 43's changes went live — several restyle requests plus one
+reported bug (Vault's lock button "missing").
+
+**Restyles:** back button got a new icon (curved-return arrow, no enclosing circle, matching a
+supplied reference minus its ring) and a 0.5s tap-glow (`.glow` class, force-reflowed before
+re-adding so rapid taps restart the animation, removed again on `animationend`). Lock button
+restyled gold (`--gold`, new CSS variable, fixed across both themes like `--danger`), thicker
+stroke, persistent glow. Power button given a matching persistent red glow.
+
+**Disabled state:** the lock button now visually disables itself on Home/Settings whenever no
+app-open password is set (grayscale, dimmed, not tappable) — quick access has nothing for it to
+lock into. Computed fresh on every entry into those tabs (`updateLockButtonDisabledState()`,
+called from `switchMainTab()`), not cached, so it stays correct if a future session ever adds a UI
+to change the app-open password after first-run (none exists today — confirmed by checking:
+`setAppPassword()`/`removeAppPassword()` are only ever called from first-run-setup). Also now
+hidden entirely on first-run setup, resolving the assumption flagged at the end of Decision 65.
+
+**Vault's lock button bug:** reported as missing, actually a contrast bug, not a logic bug —
+`.vault-banner`'s background was `var(--vault)` (near-black), and the icon sitting on top of it was
+`var(--fg)` (dark in light theme) — present in the DOM, just nearly invisible against a near-black
+backdrop. Fixed at the root: removed `.vault-banner`'s dark background entirely (now
+`var(--card-bg)` with a border) and the bottom nav's matching dark active-Vault-tab background (now
+`var(--vault-fg)`, a light tint, with `var(--vault)` as the legible text/icon color) — both were the
+same "black bar" look, requested separately, and removing them fixes the contrast bug as a side
+effect (on top of the lock icon's own restyle to gold, which would have fixed it either way).
+Left the inner filter chips (`.vault-tab.active`) untouched — not named in the request, and
+light-lavender text on that same dark background is genuinely legible there, unlike an icon
+matching its backdrop almost exactly.
+
+Verified with a real `npm install` + `vite build`: zero errors, CSS brace-balanced (137/137). All
+ids cross-checked between `app.js` and `index.html` — clean except the same class of pre-existing
+dynamically-created ids flagged every session.
+
+Decisions made: 66.
+
+Next session start point: this session's changes haven't been seen on the actual device yet —
+worth confirming the glow effects render as expected (drop-shadow support, animation timing) and
+that the Vault banner's new lighter look reads correctly in both light and dark mode.
+
+---
+
 **Session 43**
 
 Screenshots showed the app actually running on-device for the first time (CI is producing installable

@@ -77,7 +77,14 @@
   currently open (context-aware, checked at click time); the Vault's own former "Lock" button is
   gone, replaced by it. A third bottom-nav slot between Home and Vault is a universal Back button
   (a simple two-slot last-location toggle, not a full history stack) — every dedicated "back to
-  home" element from earlier sessions is removed in favor of it. **Session 30 (Decisions 54/55):**
+  home" element from earlier sessions is removed in favor of it. **Restyled + Vault contrast bug
+  fixed (Session 44, Decision 66):** lock button now golden, thicker, persistent glow, and disabled
+  (grayed out, not tappable) on Home/Settings whenever no app-open password is set; power button
+  given a matching persistent red glow; back button given a new icon and a 0.5s tap-glow animation;
+  lock button also now hidden on first-run setup. The Vault's lock button had been reported missing
+  — actually a contrast bug (a near-black icon on the Vault's own near-black title bar), fixed by
+  removing that dark bar and the bottom nav's matching dark active-Vault-tab background entirely.
+  **Session 30 (Decisions 54/55):**
   fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
   now default to biometric on open; capture bars redesigned as a 6-card grid; Money added as a

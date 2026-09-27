@@ -480,6 +480,21 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   use the extra depth. Pressing Back swaps which location is "current" the same way any other navigation
   does, so it toggles back and forth rather than getting stuck. Every dedicated "back to home" element
   (e.g. Decision 61's `#settings-back-btn`) is removed in favor of this one universal control.
+- **Restyle + disabled state + Vault contrast fix (Decision 66).** Lock button: `--gold` (`#d4af37`, fixed
+  across both themes), thicker stroke, persistent glow (`drop-shadow`); disabled (grayscale, dimmed,
+  `pointer-events: none`) on Home/Settings whenever no app-open password is set (quick access has nothing
+  for it to lock into), recomputed on every entry into those tabs rather than cached; never disabled in the
+  Vault, which always has a PIN by the time the button is shown for it. Power button: persistent red glow
+  added for parity. Back button: new curved-return-arrow icon (no enclosing circle), plus a 0.5s tap-glow
+  animation in `var(--brand)`. Hidden on first-run setup too now, not just the lock screen — no password
+  exists yet at that point. Separately, the Vault's own lock button was reported missing; root cause was a
+  contrast bug, not a logic bug — `.vault-banner`'s near-black background (`var(--vault)`) made the
+  (previously `var(--fg)`-colored) icon sitting on top of it nearly invisible in light mode. Fixed by
+  removing that dark title bar entirely (`.vault-banner` now uses `var(--card-bg)`) and the bottom nav's
+  matching dark active-Vault-tab background (now `var(--vault-fg)`, a light tint, with `var(--vault)` as
+  the now-legible text/icon color) — the Vault's visual identity now comes from the lock emoji, heading,
+  and nav tint rather than a solid dark panel. The inner filter chips (`.vault-tab.active`) keep their dark
+  background — text-on-dark is legible there, not the same bug.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 
