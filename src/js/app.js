@@ -65,11 +65,13 @@ function showScreen(id, { tab } = {}) {
   // Vault's own PIN gate, still shows it.
   document.getElementById('power-close-btn')?.classList.toggle('hidden', id === 'lock-screen');
 
-  // Lock/unlock toggle (Decision 65) — same exclusion as the power button at this level
-  // (app-open lock screen); the Vault's own locked-gate substate is a second, separate exclusion
-  // handled inside refreshVaultGateView() below, since vault-screen doesn't change id when its
-  // internal gate/content view toggles.
-  document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', id === 'lock-screen');
+  // Lock/unlock toggle (Decision 65; disabled-state + first-run exclusion added in Decision 66) —
+  // hidden on the app-open lock screen (same as the power button) and on first-run setup — there's
+  // no password to lock yet at that point, so showing it there would be actively misleading, not
+  // just redundant. The Vault's own locked-gate substate is a third, separate exclusion handled
+  // inside refreshVaultGateView() below, since vault-screen doesn't change id when its internal
+  // gate/content view toggles.
+  document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', id === 'lock-screen' || id === 'first-run-setup');
 
   if (id === 'vault-screen') recordLocation('vault');
 
@@ -85,6 +87,23 @@ function showScreen(id, { tab } = {}) {
   else setActiveNavTab(navKey);
 }
 
+// Lock/unlock toggle's "disabled" appearance (Decision 66) — only meaningful in the main-app
+// context; the Vault always has its own PIN by the time this button is ever shown for it (it's
+// hidden on the Vault's own locked/setup gate — see refreshVaultGateView()), so there vaultContext
+// just clears any stale disabled state unconditionally rather than re-checking anything. Fired
+// without awaiting at each call site (switchMainTab()/refreshVaultGateView()) — this only updates
+// a visual/interactive class, nothing downstream depends on it having finished.
+async function updateLockButtonDisabledState(vaultContext) {
+  const btn = document.getElementById('lock-toggle-btn');
+  if (!btn) return;
+  if (vaultContext) { btn.classList.remove('disabled'); return; }
+  const cred = (await db.query(`SELECT app_password_hash FROM credentials WHERE id=1`)).values[0];
+  // Quick access (no app-open password) has nothing for this button to lock — same reasoning
+  // app-lock-settings' own description already states ("quick access has nothing to lock back
+  // to"), just made visible on the button itself now instead of only in Settings' copy.
+  btn.classList.toggle('disabled', !cred?.app_password_hash);
+}
+
 // Home/Settings are two panels inside #main-screen (not separate .screen elements — switching
 // between them shouldn't re-run bootstrap-style setup) — see Decision 53, replacing the previous
 // single long scrolling page of stacked <details> settings sections. Settings stopped being a
@@ -97,6 +116,7 @@ function switchMainTab(tab) {
   // so the Home nav icon stays highlighted while viewing it rather than nothing being highlighted.
   setActiveNavTab(tab === 'settings' ? 'home' : tab);
   recordLocation(tab === 'settings' ? 'settings' : 'home');
+  updateLockButtonDisabledState(false);
 }
 
 // Universal back button (Decision 65) — navigates to lastLocation using the same functions every
@@ -1160,6 +1180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // in showScreen(), but vault-screen doesn't change screen id when its internal gate/content
     // substate toggles, so that exclusion has to live here instead.
     document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', !unlocked);
+    updateLockButtonDisabledState(true); // vault context never shows "disabled" — always has a PIN by the time it's shown
 
     const settings = await getBiometricSettings();
     // The unlock button belongs on the locked gate (it's how you get in); the enable/disable
@@ -1238,7 +1259,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // itself is (main-screen/vault-screen; hidden together with it elsewhere, for free, since it's
   // physically inside #bottom-nav rather than a separate always-present element like the power
   // button). Replaces every dedicated "back"/"back to home" element that existed before this.
-  document.getElementById('nav-back-btn').addEventListener('click', goBack);
+  // Soft glow on tap (Decision 66): re-added and forced to reflow before re-adding so a rapid
+  // second tap restarts the animation rather than the class-already-present no-op it would
+  // otherwise be; removed again on animationend so the class doesn't linger as dead state.
+  const navBackBtn = document.getElementById('nav-back-btn');
+  navBackBtn.addEventListener('click', () => {
+    navBackBtn.classList.remove('glow');
+    void navBackBtn.offsetWidth; // forces a reflow, so the animation restarts on back-to-back taps
+    navBackBtn.classList.add('glow');
+    goBack();
+  });
+  navBackBtn.addEventListener('animationend', () => navBackBtn.classList.remove('glow'));
 
   // Power button (Decision 61, confirmation removed in Decision 62) — small, fixed, present on
   // every screen except the app-open lock screen (handled in showScreen() above) since it lives
