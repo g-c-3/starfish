@@ -188,6 +188,20 @@ button {
 #power-close-btn svg { width: 20px; height: 20px; }
 #power-close-btn.hidden { display: none; } /* ID+class beats the plain #power-close-btn rule above */
 
+/* Lock/unlock toggle (Decision 65) — sits immediately left of the power button, same fixed-position
+   pattern (see that button's own comment above for the shared reasoning: outside every .screen
+   element, same z-index layering). Neutral foreground color rather than red or brand — this isn't
+   destructive (power button) or a primary action (brand-colored elsewhere), just a status/utility
+   icon, so it shouldn't visually compete with either of those established meanings. */
+#lock-toggle-btn {
+  position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 62px; z-index: 6;
+  width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
+  border-radius: 50%; border: none; background: transparent; color: var(--fg); opacity: 0.75;
+  display: flex; align-items: center; justify-content: center;
+}
+#lock-toggle-btn svg { width: 20px; height: 20px; }
+#lock-toggle-btn.hidden { display: none; }
+
 /* ---- Bottom nav (Decision 53, tabs reduced to two in Decision 61) — fixed, shown only for
    main-screen/vault-screen (app.js toggles its .hidden class from showScreen()). Settings is no
    longer a nav destination of its own — it's a sub-panel of Home, reached via the "App Settings"
@@ -211,6 +225,19 @@ button {
 #bottom-nav .nav-label { font-size: 11px; }
 #bottom-nav button.active { opacity: 1; color: var(--nav-active); background: var(--brand-tint); }
 #bottom-nav button[data-nav="vault"].active { color: var(--vault-fg); background: var(--vault); }
+
+/* Universal Back button (Decision 65) — the middle of the three slots, deliberately not styled
+   like the two real tabs either side of it (no stretched flex:1, no icon+label column, no active
+   state — it isn't a destination, so there's nothing for it to look "selected" as). A plain square
+   with rounded corners, icon only, reads as a distinct utility control rather than a third tab.
+   Specificity note: written as #bottom-nav #nav-back-btn (200) rather than #nav-back-btn alone
+   (100), since #bottom-nav button (101) would otherwise win the flex/layout properties below. */
+#bottom-nav #nav-back-btn {
+  flex: 0 0 auto; width: 48px; height: 48px; align-self: center;
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  border-radius: 14px; background: var(--bg); color: var(--fg); opacity: 0.85;
+  padding: 0; margin: 0 2px;
+}
 
 /* --- Backup/restore & Drive settings (Phase 6/13) --- */
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
