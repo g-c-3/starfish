@@ -11,6 +11,9 @@
       "smallIcon": "ic_stat_notify",
       "iconColor": "#488AFF",
       "sound": "notify_tone.wav"
+    },
+    "PrivacyScreen": {
+      "enable": false
     }
   }
 }

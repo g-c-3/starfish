@@ -22,6 +22,7 @@
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "cap-voice-rec": "^6.0.1",
     "@capgo/capacitor-native-biometric": "^6.0.4",
+    "@capacitor-community/privacy-screen": "^5.2.0",
     "@zip.js/zip.js": "^2.8.26"
   },
   "devDependencies": {
