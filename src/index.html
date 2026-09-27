@@ -35,6 +35,7 @@
         <h2>Today</h2>
         <div id="digest"></div>
         <div id="on-this-day"></div>
+        <div id="backup-reminder-banner" class="hidden"></div>
       </header>
 
       <div id="capture-bar" class="capture-cards">
@@ -97,6 +98,14 @@
             <button id="app-biometric-confirm-btn">Confirm</button>
           </div>
         </div>
+      </details>
+
+      <details id="privacy-screen-settings">
+        <summary>Privacy Screen</summary>
+        <label class="switch-row"><input type="checkbox" id="privacy-screen-toggle" /> Hide app content in Recents &amp; block screenshots</label>
+        <p class="mode-description">One Android setting, two effects together, not separable: a plain dark preview instead of your
+          content in the Recents/app-switcher screen, and screenshots/screen recording of the app blocked
+          system-wide. Off by default.</p>
       </details>
 
       <details id="appearance-settings">
