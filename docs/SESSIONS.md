@@ -4,6 +4,42 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 41**
+
+Uploaded a GitHub Actions log bundle from a real CI run — the first actual CI feedback since the
+device-pass debt started (Session 25). Build failed at step 6 (`npm run build`, i.e. the Vite build):
+
+```
+Could not resolve "./privacy-screen.js" from "src/js/app.js"
+```
+
+**Cause:** Session 39 delivered `src/js/privacy-screen.js` as a **NEW** file alongside several
+**REPLACE** files — easy to miss when pasting into GitHub's web UI, since a REPLACE overwrites a
+path that already exists in the file browser, while a NEW file has to be deliberately created at a
+path that isn't there yet. It never made it into the commit; `app.js`'s `import { setPrivacyScreen }
+from './privacy-screen.js'` (also from Session 39) had nothing to resolve against. `npm install`
+(step 5, just before) succeeded fine — the new dependency itself, `@capacitor-community/privacy-screen`
+in `package.json`, was committed correctly; only the wrapper module was missing.
+
+**Fix:** re-delivered `src/js/privacy-screen.js` unchanged (confirmed against the sandbox copy,
+which still builds clean — 99 modules, zero errors — with nothing else in the repo touched). **Why
+correct:** the error names the exact missing path and nothing else; every other file this depends
+on (`package.json`, `capacitor.config.json`, `app.js`) was already confirmed present since `npm
+install` and module resolution got as far as needing this one specific file before failing.
+
+No code changed this session — this was a missing-file diagnosis, not a bug in anything that was
+written. Logged here anyway since it's exactly the kind of gap that could recur with any other NEW
+file in a future session's delivery, worth remembering as a pattern, not just a one-off.
+
+Decisions made: none.
+
+Next session start point: unchanged — once this file is actually committed, the same workflow run
+(or a fresh push) should get past step 6 for the first time and reach the actual APK build/signing
+steps, which is the real first test of everything built across Sessions 25–40. Re-upload the next
+log bundle (or report success) so the device-pass debt can finally start closing.
+
+---
+
 **Session 40**
 
 No new request pending, so continued down the standing list of unblocked Phase 9 items (same

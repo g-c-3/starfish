@@ -225,8 +225,10 @@
   since `android/` itself is never committed and starts from the same unmodified template every
   time. (A third such script, for `FLAG_SECURE`, existed briefly in Sessions 37–38 and is gone as of
   Session 39 — Privacy Screen is a real plugin now, not a native patch; nothing left to run in CI
-  for it.) Live green run against the now-set secrets, with the active patches applied, not yet confirmed —
-  manual check pending.
+  for it.) **First real CI run attempted, Session 41** — failed at the Vite build step
+  (`Could not resolve "./privacy-screen.js"`), root cause a missing file from Session 39's delivery,
+  not a workflow or code problem; re-delivered, next run pending. Live green run still not
+  confirmed — manual check pending.
 - [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
   drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
   Session 32 removed the one call site that invoked it (`onUnlocked()`) — it was calling
