@@ -38,7 +38,7 @@
   --type-file: #10b981;
 
   --danger: #d9534f;
-  --gold: #ffc61a;
+  --neon-green: #39ff14;
   --vault: #1a1030;
   --vault-fg: #e8d9ff;
   --brand-tint: #ece8ff;
@@ -190,16 +190,16 @@ button {
 #power-close-btn svg { width: 20px; height: 20px; }
 #power-close-btn.hidden { display: none; } /* ID+class beats the plain #power-close-btn rule above */
 
-/* Lock/unlock toggle (Decision 65; golden + glow + disabled state added in Decision 66) — sits
+/* Lock/unlock toggle (Decision 65; glow + disabled state added in Decision 66; neon green, closed padlock in Decision 68) — sits
    immediately left of the power button, same fixed-position pattern (see that button's own comment
-   above). --gold (like --danger) is the same color in both light and dark mode, so this reads
+   above). --neon-green (like --danger) is the same color in both light and dark mode, so this reads
    correctly in both without a separate dark-mode variant, same reasoning as the power button's red. */
 #lock-toggle-btn {
   position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 62px; z-index: 6;
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
-  border-radius: 50%; border: none; background: transparent; color: var(--gold);
+  border-radius: 50%; border: none; background: transparent; color: var(--neon-green);
   display: flex; align-items: center; justify-content: center;
-  filter: drop-shadow(0 0 3px var(--gold)) drop-shadow(0 0 7px var(--gold));
+  filter: drop-shadow(0 0 3px var(--neon-green)) drop-shadow(0 0 7px var(--neon-green));
 }
 #lock-toggle-btn svg { width: 20px; height: 20px; }
 #lock-toggle-btn.hidden { display: none; }
@@ -247,7 +247,7 @@ button {
 }
 /* Soft glow on tap (Decision 66) — 0.5s, applied/removed by app.js's click handler (adds "glow",
    removes it again on animationend so it doesn't linger as dead state on the element). Brand color,
-   not gold/red — this is plain interactive feedback, not a status color like the two buttons above. */
+   not neon-green/red — this is plain interactive feedback, not a status color like the two buttons above. */
 @keyframes nav-back-glow {
   0% { box-shadow: 0 0 0 0 transparent; }
   30% { box-shadow: 0 0 10px 3px var(--brand); }
