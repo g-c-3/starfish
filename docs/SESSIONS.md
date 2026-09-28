@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 46**
+
+Icon and color follow-up: lock button changed from an open padlock to a closed one, and from gold
+to neon green (`--neon-green: #39ff14`), including both glow layers. Confirmed no stray `--gold`
+references were left behind. CSS/HTML only; build clean. Decisions made: 68.
+
+Next session start point: unchanged — confirm on device that the closed-lock icon reads clearly at
+this size and that neon green has enough contrast against both light and dark backgrounds.
+
+---
+
 **Session 45**
 
 Screenshot follow-up to Session 44. Vault heading's box (background, border, padding) removed; its

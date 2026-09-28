@@ -1053,3 +1053,15 @@ construction rather than via a magic offset; Home already aligned this way. (2) 
 is now two stacked `drop-shadow` layers (3px + 7px) instead of one, so the brighter color reads as
 lit rather than flat. Still one fixed value across both themes.
 
+---
+
+**68. Lock icon changed from open to closed padlock; color changed from gold to neon green.**
+
+Requested directly. Icon: the shackle now closes fully into the body (`M8 11V7a4 4 0 0 1 8 0v4`,
+both ends anchored to the body's top edge) rather than leaving one side open — a closed-lock glyph
+reads more clearly as "tap to lock" than an already-open one did. Color: `--gold` replaced outright
+with a new `--neon-green` (`#39ff14`), same "fixed across both themes" treatment as `--danger`/the
+variable it replaces — every reference (icon color, both glow `drop-shadow` layers, code comments)
+updated together rather than leaving a stale `--gold` variable unused. Confirmed no other file still
+referenced `--gold` before finishing.
+

@@ -480,8 +480,9 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   use the extra depth. Pressing Back swaps which location is "current" the same way any other navigation
   does, so it toggles back and forth rather than getting stuck. Every dedicated "back to home" element
   (e.g. Decision 61's `#settings-back-btn`) is removed in favor of this one universal control.
-- **Restyle + disabled state + Vault contrast fix (Decision 66).** Lock button: `--gold` (`#d4af37`, fixed
-  across both themes), thicker stroke, persistent glow (`drop-shadow`); disabled (grayscale, dimmed,
+- **Restyle + disabled state + Vault contrast fix (Decision 66; icon/color updated in Decisions 67-68).**
+  Lock button: closed-padlock icon, `--neon-green` (`#39ff14`, fixed across both themes, changed from an
+  earlier open-padlock/gold version), thicker stroke, persistent two-layer glow (`drop-shadow`); disabled (grayscale, dimmed,
   `pointer-events: none`) on Home/Settings whenever no app-open password is set (quick access has nothing
   for it to lock into), recomputed on every entry into those tabs rather than cached; never disabled in the
   Vault, which always has a PIN by the time the button is shown for it. Power button: persistent red glow
