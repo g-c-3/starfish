@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 45**
+
+Screenshot follow-up to Session 44. Vault heading's box (background, border, padding) removed; its
+`h2` now matches Home's "Today" metrics so it sits on the same row as the lock/power buttons.
+`--gold` brightened `#d4af37` → `#ffc61a`, lock glow doubled to two `drop-shadow` layers.
+CSS-only; build clean, braces balanced (137/137). Decisions made: 67.
+
+Next session start point: unchanged — confirm on device that the heading aligns with the buttons
+and the brighter gold reads well in dark mode too.
+
+---
+
 **Session 44**
 
 Follow-up screenshots after Session 43's changes went live — several restyle requests plus one

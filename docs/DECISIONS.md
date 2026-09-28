@@ -1040,3 +1040,16 @@ Six related changes, requested together after seeing the app running on-device f
    assumption flagged at the end of Decision 65 (left visible there at the time, pending
    confirmation) — now resolved by this direct instruction.
 
+---
+
+**67. Vault title box removed and heading aligned to the lock/power row; lock gold brightened.**
+
+Requested after seeing Decision 66 on-device. (1) `.vault-banner` lost its card background, border,
+and padding — the "🔒 PRIVATE VAULT" heading now sits bare on the page. Its `h2` uses the same
+20px/1.45 metrics as Home's "Today" heading inside the same 20px `.screen` padding, so its vertical
+center (~34px) lands on the fixed lock/power buttons' center (14px top + 20px half-height) by
+construction rather than via a magic offset; Home already aligned this way. (2) `--gold` changed
+`#d4af37` → `#ffc61a` (the metallic gold read dull on the light background), and the lock's glow
+is now two stacked `drop-shadow` layers (3px + 7px) instead of one, so the brighter color reads as
+lit rather than flat. Still one fixed value across both themes.
+

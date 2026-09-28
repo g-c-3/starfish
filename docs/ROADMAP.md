@@ -83,7 +83,7 @@
   given a matching persistent red glow; back button given a new icon and a 0.5s tap-glow animation;
   lock button also now hidden on first-run setup. The Vault's lock button had been reported missing
   — actually a contrast bug (a near-black icon on the Vault's own near-black title bar), fixed by
-  removing that dark bar and the bottom nav's matching dark active-Vault-tab background entirely.
+  removing that dark bar and the bottom nav's matching dark active-Vault-tab background entirely. **Session 45, Decision 67:** the title box removed too, heading aligned with the lock/power row, lock gold brightened.
   **Session 30 (Decisions 54/55):**
   fixed a real bug where the Vault's PIN gate had been left disconnected from `vault-screen` by the
   Session 29 refactor (bottom-nav Vault button bypassed it entirely — see Decision 54); both locks
