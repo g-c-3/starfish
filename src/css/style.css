@@ -38,7 +38,7 @@
   --type-file: #10b981;
 
   --danger: #d9534f;
-  --gold: #d4af37;
+  --gold: #ffc61a;
   --vault: #1a1030;
   --vault-fg: #e8d9ff;
   --brand-tint: #ece8ff;
@@ -199,7 +199,7 @@ button {
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
   border-radius: 50%; border: none; background: transparent; color: var(--gold);
   display: flex; align-items: center; justify-content: center;
-  filter: drop-shadow(0 0 4px var(--gold));
+  filter: drop-shadow(0 0 3px var(--gold)) drop-shadow(0 0 7px var(--gold));
 }
 #lock-toggle-btn svg { width: 20px; height: 20px; }
 #lock-toggle-btn.hidden { display: none; }
@@ -299,18 +299,16 @@ button {
 .drive-backup-row button { width: auto; padding: 6px 12px; font-size: 13px; }
 .drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
 
-/* --- Private Vault (pivot) — the title bar's dark background (matching .vault-banner's own
-   deep-violet identity) was removed in Decision 66: it doubled as an unintended contrast bug, since
-   the fixed lock-toggle-btn icon (--fg, dark in light mode) sits visually on top of this bar and
-   was nearly invisible against a near-black backdrop. "You are in the Vault" now comes from the
-   lock emoji + letter-spaced heading alone, plus the bottom nav's own light-lavender Vault tint. --- */
+/* --- Private Vault (pivot) — title bar's dark background removed in Decision 66, and the box
+   around it (card background + border + padding) removed in Decision 67: the heading now sits bare
+   on the page, using the same 20px/1.45 metrics as Home's "Today" heading inside the same 20px
+   .screen padding, so its vertical center (~34px) lands exactly on the fixed lock/power buttons'
+   center (14px top + 20px half-height) — aligned by construction, not by a magic offset. --- */
 .vault-banner {
-  background: var(--card-bg); color: var(--fg); border: 1px solid var(--border);
-  padding: 14px 16px; border-radius: 14px;
+  background: none; border: none; padding: 0; margin: 0 0 12px;
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
 }
-.vault-banner h2 { margin: 0; font-size: 16px; letter-spacing: 0.05em; color: var(--fg); }
+.vault-banner h2 { margin: 0; font-size: 20px; letter-spacing: 0.05em; color: var(--fg); }
 .vault-banner button { width: auto; }
 #vault-capture-bar { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
 #vault-capture-bar button { width: auto; padding: 10px 14px; border-radius: 14px; }
