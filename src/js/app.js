@@ -36,6 +36,12 @@ let privateSessionKey = null; // set only after vault PIN unlock, cleared on vau
 let vaultBioAutoPrompted = false; // avoids re-triggering the OS biometric prompt on every re-render while still locked — reset whenever the vault (re)locks, so the next fresh "locked" state prompts again
 let vaultAutoLockTimer = null;
 let appAutoLockTimer = null;
+// Set immediately before launching a system picker (file chooser, share sheet, etc.) that we
+// expect a result back from. Launching one pauses our Activity exactly the same way backgrounding
+// does — appStateChange can't tell "user opened a picker we ourselves triggered" apart from "user
+// switched away" (Decision 73) — so this is the one narrow signal that lets registerBackgroundLock
+// skip its immediate lock for that specific pause/resume pair, and only that one.
+let expectingPickerReturn = false;
 
 // ---- Universal back button (Decision 65) — a simple two-slot toggle, not a full history stack.
 // "Location" is one of 'home' | 'settings' | 'vault'; recordLocation() is called from inside
@@ -161,14 +167,31 @@ async function bootstrap() {
 // has said "cleared on vault lock/background" since the pivot, but nothing ever actually listened
 // for backgrounding — the vault would stay unlocked indefinitely across app-switches, relying only
 // on the idle timer. Fixes that gap; also locks the app-level screen the same way, if a password exists.
+//
+// expectingPickerReturn (Decision 73) skips this exactly once when the pause was caused by a
+// system picker we launched ourselves (file chooser today; any future share-sheet/camera call
+// should set the same flag before invoking) rather than the person actually leaving the app —
+// Android's Activity lifecycle can't tell the two apart on its own, appStateChange fires isActive:
+// false identically either way. Consumed immediately so it only ever covers the one pause it was
+// set for, never a later, unrelated backgrounding.
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
     if (isActive) return; // only act on going TO background, not returning from it
+    if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     if (privateSessionKey) lockVault();
     const cred = (await db.query(`SELECT app_password_hash FROM credentials WHERE id=1`)).values[0];
     if (cred?.app_password_hash) { disarmAppAutoLock(); showScreen('lock-screen'); }
   });
+}
+
+// Call immediately before any input.click() that opens a system picker (Decision 73). Bounds the
+// exception window: if the expected pause never arrives within a few seconds — some OEM file
+// choosers don't actually leave the Activity — this stops trusting the flag on its own, rather
+// than leaving it armed indefinitely and silently skipping the next unrelated backgrounding too.
+function beginPickerLaunch() {
+  expectingPickerReturn = true;
+  setTimeout(() => { expectingPickerReturn = false; }, 3000);
 }
 
 // ---- Auth gate — app-open password is optional ("quick access"); Vault PIN is separate and unaffected ----
@@ -1435,6 +1458,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureToVault({ type, label: file.name, tags, fileData, extension: file.name.split('.').pop() });
         await renderVaultList('all');
       };
+      beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
       input.click();
     }
   }));
@@ -1632,6 +1656,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureFile(type, { label: file.name, tags, fileData, extension: file.name.split('.').pop() });
         await renderMainTimeline();
       };
+      beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
       input.click();
     }
   }));
