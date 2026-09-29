@@ -10,7 +10,7 @@
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
-- [~] 8 — Tags & label UX (basic tag picker wired to both main + vault capture)
+- [~] 8 — Tags & label UX (tag picker + label-history autocomplete hint both wired; batch-add auto-numbering still not)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
 - [ ] 11 — CI/CD
@@ -188,10 +188,17 @@
 - [~] **8 — Tags & label UX.** `promptForTags()` built and wired into both main and vault capture —
   shows existing tags (`listAllTags()`) as a hint, free-text creates new ones (`applyTags()`'s
   `INSERT OR IGNORE` already handled "new tag" with no changes needed). Tags now display per entry
-  in both the main timeline and vault list. Same `prompt()`-based rough edge as other one-offs
-  flagged elsewhere in this doc — real chip UI and live autocomplete-as-you-type are still Phase 4's
-  design pass, not built here. Label autocomplete (`label_history`) and batch add with
-  auto-numbering (`batchAddWithCommonLabel()`) are drafted but not wired into any UI yet.
+  in both the main timeline and vault list. **Label autocomplete wired (Session 47, Decision 69):**
+  new `listLabelHistory()` (db.js) plus `promptForLabel()` (app.js), mirroring `promptForTags()`'s
+  own hint pattern — shows that type's previously-used labels (most-used first) as a hint inside the
+  same `prompt()`, rather than retyping from memory each time. Wired to both of the app's two voice
+  capture flows (main + vault), the only places today where a label is actually typed by hand; note/
+  file/image/pdf/generic-file labels are auto-derived (text excerpt or filename) with no free-text
+  prompt to attach a hint to. Same `prompt()`-based rough edge as other one-offs flagged elsewhere in
+  this doc — real chip UI and live autocomplete-as-you-type are still Phase 4's design pass, not
+  built here. Batch add with auto-numbering (`batchAddWithCommonLabel()`) is drafted but still not
+  wired into any UI — needs a multi-select Image/PDF/Generic-File capture screen that doesn't exist
+  yet, a bigger piece than this session's label-hint wiring.
 - [~] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
   recurring backup reminder (done — see detail below), quick-capture widget, expense charts, map view,
   confidence-confirmation chip, dark mode toggle (done, gradient mode removed — Decision 53). **Auto-lock timeout done** — `credentials.auto_lock_minutes` has existed since

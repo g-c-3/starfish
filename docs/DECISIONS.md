@@ -1065,3 +1065,38 @@ variable it replaces — every reference (icon color, both glow `drop-shadow` la
 updated together rather than leaving a stale `--gold` variable unused. Confirmed no other file still
 referenced `--gold` before finishing.
 
+---
+
+**69. Label autocomplete (Phase 8) wired using the exact hint pattern `promptForTags()` already
+established, not a new UI mechanism.** No request pending this session, so picked up the oldest
+still-open item off the standing list (ROADMAP Phase 8's "label autocomplete drafted but not wired")
+rather than waiting further on the device-pass debt, same pattern as Sessions 16/17/35/40.
+
+`label_history` has tracked `(type, label, use_count)` since Session 1 and `insertEntry()` already
+writes to it on every non-vault save — nothing there needed to change. What was missing was any read
+path: no function ever queried it back out, and nothing in the UI showed it. Added `listLabelHistory
+(db, type, limit=8)` (db.js) — most-used labels for one type, same shape and ordering convention as
+`listAllTags()`. Vault entries can't leak into this: `insertEntry()`'s existing `is_private` guard
+(Decision 40) already keeps vault labels out of `label_history` entirely, so nothing new was needed
+to preserve that boundary here.
+
+Wired via a new `promptForLabel(type, defaultLabel)` (app.js), placed directly alongside
+`promptForTags()` and built the same way on purpose: a plain `prompt()` with the type's previously-
+used labels appended as a hint string, since a bare `prompt()` can't render real tap-to-select chips
+— that's still Phase 4's design pass, not attempted here, and building a one-off richer picker just
+for labels while tags stays plain would be an inconsistency, not an improvement. Typing anything not
+in the hint still works; `label_history` is a memory aid, not a closed list.
+
+Only wired to voice capture's label prompt (both the main and vault capture bars — the two existing
+call sites) — the one place in the app today where a label is actually free-typed by hand. Note
+labels come from the text itself (`text.slice(0, 40)`), and file/image/pdf/generic-file labels come
+from the picked file's name — neither has a free-text prompt to attach a hint to, so neither was
+touched. Also exposed `listLabelHistory` on `window.Dumpzone`, matching `listAllTags`'s existing
+exposure, in case a future capture screen wants to read suggestions before opening a prompt rather
+than only inside one.
+
+Batch add with auto-numbering (`batchAddWithCommonLabel()`) is a separate, larger piece — it needs an
+actual multi-select Image/PDF/Generic-File capture screen (offering "Add individually" vs. "Batch add
+with common label") that doesn't exist yet, unlike label autocomplete which only needed a read
+function and two call-site swaps. Left for a future session, not folded in here.
+

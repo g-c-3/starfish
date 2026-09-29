@@ -51,3 +51,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-27 | Session 44 | Decision 66 | Restyled lock (gold, thicker, glow, disabled-when-no-password), power (red glow), and back (new icon, tap-glow) buttons; fixed Vault's "missing" lock button — a contrast bug from its near-black title bar, now removed along with the bottom nav's matching dark active-Vault-tab background |
 | 2026-09-28 | Session 45 | Decision 67 | Vault title box removed and heading aligned with lock/power buttons; lock gold brightened (#ffc61a) with a stronger glow |
 | 2026-09-28 | Session 46 | Decision 68 | Lock icon changed from open to closed padlock; color changed from gold to neon green (#39ff14) |
+| 2026-09-29 | Session 47 | Decision 69 | Phase 8 label autocomplete wired — listLabelHistory() (db.js) + promptForLabel() (app.js), applied to both voice-capture label prompts; batch-add auto-numbering still not wired |

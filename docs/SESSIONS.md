@@ -4,6 +4,47 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 47**
+
+No request pending, so continued down the standing list of unblocked items rather than waiting
+further on the device-pass debt — same pattern as Sessions 16/17/35/40. Picked Phase 8's oldest open
+item: label autocomplete, drafted (`label_history` table, populated since Session 1) but never wired
+to anything that read it back.
+
+Added `listLabelHistory(db, type, limit=8)` (db.js) — previously used labels for one type, most-used
+first, same shape/ordering convention as the existing `listAllTags()`. Added `promptForLabel(type,
+defaultLabel)` (app.js), built the same way as the already-established `promptForTags()`: a plain
+`prompt()` with the type's history appended as a hint, rather than a new richer picker just for
+labels while tags stays plain — consistency over a one-off improvement, and real chip UI is still
+Phase 4's job either way. Wired to both existing voice-capture label prompts (main + vault capture
+bars) — the only two places in the app today where a label is actually typed by hand rather than
+auto-derived from the text or filename. Also exposed `listLabelHistory` on `window.Dumpzone`,
+matching `listAllTags`'s existing exposure.
+
+No privacy work needed: `insertEntry()`'s existing `is_private` guard (Decision 40) already keeps
+vault labels out of `label_history` entirely, so the new read path can't leak a vault label into a
+non-vault suggestion list — confirmed by reading that guard again before writing `listLabelHistory`,
+not assumed.
+
+Verified with `node --check` against both modified files as ES modules (sandbox has no npm registry
+access to run a full `vite build` this session — scope was two small, syntactically isolated
+functions plus two call-site swaps, no new dependency, no markup change, so a full bundler pass
+wasn't judged necessary to catch anything a syntax check wouldn't).
+
+Decisions made: 69.
+
+Next session start point: batch add with auto-numbering (`batchAddWithCommonLabel()`) is still not
+wired — needs an actual multi-select Image/PDF/Generic-File capture screen with an "Add individually"
+vs. "Batch add with common label" choice, which doesn't exist yet; that's the next Phase 8 item if
+picked up again. This session's two-line change is low-risk by nature (a hint string and a fallback
+default) but still unconfirmed on a real device, same standing gap as everything since Session 25 —
+worth confirming the voice-label prompt actually shows the hint text correctly once tested. Also
+still open: quick-capture widget, expense charts, map view, confidence-confirmation chip (Phase 9);
+obfuscation/ProGuard/signature check (Phase 10); the manual Google Cloud OAuth setup blocking Phase
+13; and the CI green-run confirmation still pending since Session 42.
+
+---
+
 **Session 46**
 
 Icon and color follow-up: lock button changed from an open padlock to a closed one, and from gold
