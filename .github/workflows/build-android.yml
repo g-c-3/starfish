@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch: {}
 
+permissions:
+  contents: write # needed to create the GitHub Release in the last step below
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -87,3 +90,18 @@ jobs:
         with:
           name: dumpzone-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
+
+      # Every push to main gets its own tagged Release with the APK attached — separate from the
+      # artifact above, which needs a GitHub login and expires; a Release is the permanent, public
+      # download the in-app update check (update-check.js) points people at. Tag is exactly
+      # APP_VERSION_NAME (set by scripts/patch-version.js into $GITHUB_ENV above) prefixed with
+      # "v" — always unique since the run-number suffix always increases, so this never collides
+      # with an existing tag and never needs a --force overwrite.
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ env.APP_VERSION_NAME }}" \
+            android/app/build/outputs/apk/release/app-release.apk \
+            --title "Dumpzone v${{ env.APP_VERSION_NAME }}" \
+            --notes "Automated build from commit ${{ github.sha }}."
