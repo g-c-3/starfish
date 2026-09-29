@@ -1100,3 +1100,25 @@ actual multi-select Image/PDF/Generic-File capture screen (offering "Add individ
 with common label") that doesn't exist yet, unlike label autocomplete which only needed a read
 function and two call-site swaps. Left for a future session, not folded in here.
 
+---
+
+**70. Lock icon's neon green is now theme-aware; its glow is dark-mode-only.** Reported directly from
+a real device (first device feedback since Session 25): `#39ff14` "looks nice in dark mode" but
+"bleeds too much" in light mode, with "no clear icon" — confirming Decision 68's assumption that
+`--neon-green` needed no dark-mode variant, the same "fixed across both themes" treatment as
+`--danger`, was wrong for this hue specifically. Red against either background stays legible; a fully
+saturated `#39ff14` glow against near-white (`--bg: #f6f4ff`, `--card-bg: #ffffff`) has almost no
+contrast at the glow's edges, so the two `drop-shadow` layers smear into the icon instead of framing
+it.
+
+Fix has two parts, kept separate since they're two different causes: (1) `--neon-green` is now
+theme-aware — `:root` (light) gets a solid `#15803d`, `:root[data-theme="dark"]` keeps the original
+`#39ff14`. (2) the glow `filter` moved off the base `#lock-toggle-btn` rule into a `:root[data-theme="dark"] #lock-toggle-btn` override, so light mode
+gets a plain icon with no glow at all instead of a softened one — testing showed the glow itself was
+the bleed, not just its intensity, so softening it in light mode wouldn't have been enough. Moving the glow into a theme-scoped selector
+raised its specificity above the existing `#lock-toggle-btn.disabled` rule, which would otherwise
+have been silently overridden (dark-mode disabled button would keep glowing) — added a matching
+`:root[data-theme="dark"] #lock-toggle-btn.disabled` rule so the disabled state still wins in both
+themes. Caught by rechecking specificity before finishing, not by re-testing the disabled state on
+device (still unconfirmed there, same standing gap as everything since Session 25).
+
