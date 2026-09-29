@@ -226,8 +226,20 @@ async function listAllTags(db) {
   return rows.values || [];
 }
 
+// Powers label autocomplete (Phase 8, ARCHITECTURE §7) — previously used labels for one entry
+// type, most-used first, meant to be shown as tap-to-select suggestions at capture time rather
+// than retyped from scratch. Vault entries never reach label_history at all (insertEntry's
+// is_private guard), so this can never leak a vault label into a non-vault suggestion list.
+async function listLabelHistory(db, type, limit = 8) {
+  const rows = await db.query(
+    `SELECT label, use_count FROM label_history WHERE type = ? ORDER BY use_count DESC, label ASC LIMIT ?`,
+    [type, limit]
+  );
+  return rows.values || [];
+}
+
 export {
   initDb, insertEntry, searchEntries, softDelete,
   listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
-  listAllTags, SCHEMA_SQL
+  listAllTags, listLabelHistory, SCHEMA_SQL
 };

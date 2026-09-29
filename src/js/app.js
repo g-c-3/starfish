@@ -3,7 +3,7 @@
 // capture-to-intent pipeline, digest). Wire up to your actual DOM/UI framework of choice.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
-import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags } from './db.js';
+import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { scheduleReminder, requestPermissions, registerActionTypes } from './notifications.js';
@@ -992,6 +992,7 @@ window.Dumpzone = {
   search: (q) => searchEntries(db, q),
   softDelete: (id) => softDelete(db, id), restoreEntry, permanentlyDelete, showTrash,
   listAllTags: () => listAllTags(db),
+  listLabelHistory: (type) => listLabelHistory(db, type),
   getAppearance, setDarkMode,
   setAppPassword, removeAppPassword, setAutoLockMinutes,
   getBiometricSettings, enableAppBiometric, disableAppBiometric,
@@ -1366,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
         const tags = await promptForTags();
-        const label = prompt('Label for this recording:', `Voice ${new Date().toLocaleTimeString()}`) || 'Voice memo';
+        const label = await promptForLabel('voice', `Voice ${new Date().toLocaleTimeString()}`);
         await captureToVault({ type: 'voice', label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderVaultList('all');
       });
@@ -1478,6 +1479,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     return input.split(',').map((t) => t.trim()).filter(Boolean);
   }
 
+  // ---- Label autocomplete (Phase 8, ARCHITECTURE §7) — same prompt()-based rough edge as
+  // promptForTags() above: label_history's previously used labels for this type are shown as a
+  // hint since a plain prompt() can't render real tap-to-select chips (still Phase 4's job).
+  // Typing anything else still works — history is a memory aid, not a closed list. Only wired to
+  // voice capture's label prompt, the one place today where a label is actually typed by hand;
+  // note/file/image/pdf/generic-file labels are auto-derived (text excerpt or filename) and have
+  // no free-text prompt to attach a hint to.
+  async function promptForLabel(type, defaultLabel) {
+    const history = await listLabelHistory(db, type);
+    const hint = history.length ? ` Previously used: ${history.map((h) => h.label).join(', ')}.` : '';
+    return prompt(`Label for this recording:${hint}`, defaultLabel) || defaultLabel;
+  }
+
   // ---- Voice recording (cap-voice-rec) — was previously just a generic file picker for ALL
   // non-text types including voice, meaning "record a voice memo" actually asked you to upload an
   // existing audio file instead of recording one (confirmed real-device bug, Session 24). Now
@@ -1547,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
         const tags = await promptForTags();
-        const label = prompt('Label for this recording:', `Voice ${new Date().toLocaleTimeString()}`) || 'Voice memo';
+        const label = await promptForLabel('voice', `Voice ${new Date().toLocaleTimeString()}`);
         await captureFile('voice', { label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
       });
