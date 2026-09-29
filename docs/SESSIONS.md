@@ -4,6 +4,79 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 50**
+
+Requested directly, one change: replace Session 49's on-by-default daily background check with a
+manual "Check for updates" button in Settings, and show the version + "up to date" when there's
+nothing newer.
+
+`update-check.js` simplified — dropped the `db` param, the `meta` on/off flag, and the
+`last_update_check_date` gate, none of which mean anything once a check only runs on tap.
+`checkForUpdateIfDue` became `checkForUpdate`, returning `{status: 'up_to_date'|'update_available'|
+'error', ...}` instead of an `available` boolean, so the caller has something to show either way — a
+button that goes silent on a non-match would read as broken. `onUnlocked()`'s automatic call and
+`checkUpdateOnOpen()` are gone. Settings UI: the toggle became a button + inline status line + a
+"View release" button that only appears when one's actually available; the separate
+`update-available-banner` modal is gone, replaced by that inline status. Reverted `backup.js`'s
+`APP_SETTINGS_KEYS` addition from last session — no setting left to persist.
+
+Decisions made: 72.
+
+Verified with `node --check` on both changed files. Not run through CI, not confirmed on device.
+
+Next session start point: same as Session 49's, since nothing here touched CI or device-testable
+surface beyond the Settings UI — confirm the next CI run creates a Release correctly, confirm the new
+Check-for-updates button and its three outcomes (up to date / update available / error) on a real
+device. Standing list otherwise unchanged: batch add with auto-numbering (Phase 8); quick-capture
+widget, expense charts, map view, confidence-confirmation chip (Phase 9); obfuscation/ProGuard/
+signature check (Phase 10); manual Google Cloud OAuth setup blocking Phase 13; light-mode lock-icon
+fix (Session 48) still unconfirmed on device.
+
+---
+
+**Session 49**
+
+Requested directly: build releases automatically and prompt in-app when a newer one exists. Since
+this is the app's first real network call with ads still unwired, confirmed two choices before
+writing anything — on-by-default daily check (not opt-in), release created on every push to `main`
+(not only on a manual version tag) — rather than assuming either.
+
+CI (`build-android.yml`): added a `Create GitHub Release` step after the existing artifact upload,
+using `gh release create` against the built-in `GITHUB_TOKEN` (no new secret); added `permissions:
+contents: write` at the workflow level, since the default token is read-only otherwise. Tag is
+`v<versionName>`, reusing exactly what `scripts/patch-version.js` already stamps onto the APK
+(`<package.json version>+<run number>`) rather than recomputing it a second time — that script now
+also writes `APP_VERSION_NAME` to `$GITHUB_ENV` so the release step can read the same value.
+
+Client: new `update-check.js`, same shape as `gdrive.js`'s `checkAndRunAutoBackupIfDue` — operates
+directly on `db`, gated by a `meta` on/off row plus a `last_update_check_date` row for the once-a-day
+cadence, `navigator.onLine` checked first, silent on any failure. Compares the `+<run number>` suffix
+of the installed app's version (`@capacitor/app`) against the latest release's tag — an exact integer
+comparison, no semver parsing. Wired into `onUnlocked()` (`checkUpdateOnOpen()`), right where the
+retired ad gate used to sit; the code comment there now says plainly that this — not AdMob — is
+currently the app's one network call. On a match: a dismissible banner offering "View release" (opens
+the GitHub Release page via new `@capacitor/browser` dependency) — no auto-install, since a sideloaded
+APK can't update itself; the person still installs by hand, same as always. Added a Settings toggle to
+turn the check off entirely, and added its meta key to `backup.js`'s `APP_SETTINGS_KEYS` so it
+survives a backup/restore round-trip like `dark_mode` already does.
+
+Verified with `node --check` (app.js, update-check.js) and a YAML parse of build-android.yml. Not run
+through actual CI, and the release step in particular has never executed — first real use of
+`gh release create` and the new `contents: write` permission in this repo, worth watching closely on
+the next CI run.
+
+Decisions made: 71.
+
+Next session start point: confirm the next CI run actually creates a Release (not just the artifact)
+and that the tag/version numbers land as expected; confirm the update banner appears on a real device
+once an older build is installed and a newer Release exists. Standing list otherwise unchanged:
+batch add with auto-numbering (Phase 8); quick-capture widget, expense charts, map view,
+confidence-confirmation chip (Phase 9); obfuscation/ProGuard/signature check (Phase 10); manual
+Google Cloud OAuth setup blocking Phase 13; light-mode lock-icon fix (Session 48) still unconfirmed
+on device.
+
+---
+
 **Session 48**
 
 Device feedback on Session 46's lock icon (first device feedback since Session 25): neon green

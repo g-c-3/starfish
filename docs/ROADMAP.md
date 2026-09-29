@@ -13,7 +13,7 @@
 - [~] 8 — Tags & label UX (tag picker + label-history autocomplete hint both wired; batch-add auto-numbering still not)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
-- [ ] 11 — CI/CD
+- [~] 11 — CI/CD (build workflow committed, live green run not yet confirmed; auto-release added Session 49, update check changed to manual Settings button Session 50)
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
@@ -249,7 +249,17 @@
   not a workflow or code problem; re-delivered. **Second attempt, Session 42** — progressed past
   that (file now resolves), failed one step further in because `package.json`/`capacitor.config.json`
   from the same Session 39 delivery also hadn't been committed; re-delivered both. Live green run
-  still not confirmed — manual check pending.
+  still not confirmed — manual check pending. **Auto-release added (Session 49, Decision 71):** every
+  push to `main` now also creates a tagged GitHub Release with the signed APK attached (`gh release
+  create`, tag = `v<versionName>`, always unique since the run-number suffix always increases). Not
+  yet run through CI. **Update check changed to a manual Settings button (Session 50, Decision 72):**
+  Session 49's on-by-default daily background check is gone — `update-check.js` now only runs when
+  "Check for updates" is tapped in Settings, no gate, no on/off setting to maintain since there's
+  nothing left running in the background to turn off. Reports all three outcomes inline in that
+  Settings section: up to date (names the version), an update found (names it, offers "View release"
+  via `@capacitor/browser`), or a check failure (offline/network/unparseable). Still no auto-install —
+  sideloaded APKs can't update themselves regardless of how the check is triggered. Not yet confirmed
+  on device.
 - [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
   drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
   Session 32 removed the one call site that invoked it (`onUnlocked()`) — it was calling

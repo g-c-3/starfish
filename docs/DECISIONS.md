@@ -1102,6 +1102,79 @@ function and two call-site swaps. Left for a future session, not folded in here.
 
 ---
 
+**71. Auto-release on every push to main, plus an on-by-default daily in-app update check.**
+Requested directly, with two explicit choices confirmed before writing anything, since this is the
+app's first real network call now that ads (Phase 12) remain unwired: check on by default (same
+cadence pattern as the ad gate — once a day, silent, never blocks) rather than opt-in; release a new
+GitHub Release on every push to `main` rather than only on a manually pushed version tag.
+
+CI side (`build-android.yml`): a `Create GitHub Release` step runs after the existing artifact
+upload, using `gh release create` (preinstalled on GitHub-hosted runners, no new Action/dependency)
+against the built-in `secrets.GITHUB_TOKEN` — no new secret to configure. Needed `permissions:
+contents: write` added at the workflow level; the default token is otherwise read-only. Tag is
+`v<versionName>`, where `versionName` is exactly what `scripts/patch-version.js` already stamps onto
+the APK itself (`<package.json version>+<CI run number>`) — reused rather than recomputed a second
+time, so the release tag and the installed app's own version string can never drift apart. Since the
+run-number suffix is strictly increasing (that script's own reasoning, unchanged here), every push
+gets a guaranteed-unique tag — no collision handling needed. `patch-version.js` now also writes
+`APP_VERSION_NAME` to `$GITHUB_ENV` so the release step can read the same value without
+re-parsing `package.json` itself.
+
+Client side (`update-check.js`, new module): mirrors `gdrive.js`'s `checkAndRunAutoBackupIfDue` in
+shape — operates directly on `db`, not app.js's `metaGet`/`metaSet` helpers, since app.js imports this
+module and the reverse would be circular. Reads `GET https://api.github.com/repos/g-c-3/starfish/
+releases/latest` (public endpoint, no auth, no personal data sent beyond standard request headers),
+gated the same way `ads.js`'s gate is: a `meta` row for on/off, a `last_update_check_date` row for
+the once-a-day cadence, `navigator.onLine` checked first, a 5s timeout race, silent on any failure.
+Version comparison extracts the `+<run number>` suffix from both the installed app's version
+(`@capacitor/app`'s `App.getInfo().version`) and the release's tag name, and compares the two
+integers directly — exact, and avoids semver parsing entirely, the same reasoning `patch-version.js`
+already used for why versionCode is the run number and not a hand-set value.
+
+On a match, a dismissible banner (`update-available-banner`, same `modal-overlay` shape as the
+existing auto-backup-due banner) names the new version and offers "View release", which opens the
+GitHub Release page via `@capacitor/browser` (new dependency — no native permissions beyond what
+Capacitor's own Custom Tabs launch already needs). No auto-install: a sideloaded APK cannot update
+itself without going through Android's install flow by hand, same as every build up to this one, so
+the banner's only real action is pointing at where to get the new one. A Settings toggle
+(`update-check-toggle`, "Updates" `<details>`, next to Appearance) lets the check be turned off
+entirely — `update_check_enabled` reads/writes through the existing `meta` table, matching
+`auto_backup_enabled`'s existing pattern, and was added to `APP_SETTINGS_KEYS` in `backup.js` so the
+setting survives a backup/restore round-trip the same way `dark_mode` already does.
+`last_update_check_date` deliberately was not added to that list — it's cadence bookkeeping, not a
+user-facing setting, same distinction `gdrive.js` already draws by keeping `last_drive_backup_at` on
+the `credentials` table rather than exporting it.
+
+Not run through CI or confirmed on a device — flagged explicitly, same standing gap as everything
+since Session 25.
+
+---
+
+**72. Update check changed from an on-by-default daily background check to a manual "Check for
+updates" Settings button.** Requested directly, one change: replace Decision 71's cadence entirely
+rather than add the button alongside it. `update-check.js` lost its `db` parameter, its `meta`-backed
+on/off flag, and its `last_update_check_date` gate — none of that machinery has a reason to exist once
+a check only ever runs from an explicit tap; keeping it would have meant a setting that no longer does
+anything a person would notice, and a "last checked" date nobody could query. `checkForUpdateIfDue`
+became `checkForUpdate`, same version-comparison logic (the `+<run number>` suffix, exact integer
+compare, no semver), returning a plain `{status, ...}` result instead of an `available` boolean so the
+caller can also show "up to date" — that state didn't need distinguishing before, when a non-match
+just meant staying silent; now every tap needs a visible outcome, including the version number, or a
+button with no feedback reads as broken.
+
+`onUnlocked()`'s call to the old `checkUpdateOnOpen()` is gone, along with that function. Its Settings
+UI changed from a toggle to a button + inline status line + a conditionally-shown "View release"
+button, in the same `<details id="update-check-settings">` card; the global `update-available-banner`
+modal is gone too, since results now render inline right next to the button that triggered them rather
+than as a separate overlay. `backup.js`'s `APP_SETTINGS_KEYS` addition from Decision 71
+(`update_check_enabled`) is reverted — nothing writes that key anymore.
+
+Net effect: with ads (Phase 12) still unwired, the app now makes zero network calls unless this
+button is tapped — a stronger "fully offline by default" position than Decision 71's daily check,
+not a weaker one. `@capacitor/browser` stays a dependency; "View release" still needs it.
+
+---
+
 **70. Lock icon's neon green is now theme-aware; its glow is dark-mode-only.** Reported directly from
 a real device (first device feedback since Session 25): `#39ff14` "looks nice in dark mode" but
 "bleeds too much" in light mode, with "no clear icon" — confirming Decision 68's assumption that
