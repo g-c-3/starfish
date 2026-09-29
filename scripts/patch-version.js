@@ -51,3 +51,10 @@ if (gradle === before) {
 
 fs.writeFileSync(GRADLE_PATH, gradle, 'utf8');
 console.log(`patch-version.js: versionCode=${versionCode}, versionName="${versionName}"`);
+
+// Exposes versionName to later CI steps (e.g. the GitHub Release step in build-android.yml) so the
+// release tag and the installed app's own version string are always built from this one value —
+// not recomputed a second time and risking drift. No-op outside Actions (GITHUB_ENV unset).
+if (process.env.GITHUB_ENV) {
+  fs.appendFileSync(process.env.GITHUB_ENV, `APP_VERSION_NAME=${versionName}\n`);
+}
