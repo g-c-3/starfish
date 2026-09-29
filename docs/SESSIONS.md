@@ -4,6 +4,33 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 48**
+
+Device feedback on Session 46's lock icon (first device feedback since Session 25): neon green
+"looks nice in dark mode" but "bleeds too much" in light mode, "no clear icon." Confirmed the report
+by reading Decision 68/style.css again rather than guessing — `--neon-green` had no dark-mode
+variant, same fixed-both-themes treatment as `--danger`, which was the wrong call for this
+particular hue against light mode's near-white background.
+
+Fix, two parts: `--neon-green` is now theme-aware (`#15803d` in `:root`/light, `#39ff14` kept in
+`:root[data-theme="dark"]`), and the glow `filter` moved off the base `#lock-toggle-btn` rule into a
+dark-mode-scoped override, so light mode has no glow at all rather than a softer one — the glow
+itself was the bleed, confirmed against the screenshots, not just its strength. Moving the glow into
+a theme-scoped selector raised its specificity above the existing `.disabled` rule, so added a
+matching dark-mode `.disabled` override to keep the disabled state winning in both themes — caught
+by rechecking specificity, not by a second device test.
+
+Decisions made: 70.
+
+Next session start point: light-mode fix is code-reviewed and specificity-checked but not yet
+confirmed on device — that confirmation, plus the disabled state in dark mode specifically, are the
+first things to verify next. Standing list otherwise unchanged from Session 47: batch add with
+auto-numbering (Phase 8) still not wired; quick-capture widget, expense charts, map view,
+confidence-confirmation chip (Phase 9); obfuscation/ProGuard/signature check (Phase 10); manual
+Google Cloud OAuth setup blocking Phase 13; CI green-run confirmation still pending since Session 42.
+
+---
+
 **Session 47**
 
 No request pending, so continued down the standing list of unblocked items rather than waiting
