@@ -15,6 +15,9 @@ import {
   restoreFromDrive, checkAndRunAutoBackupIfDue
 } from './gdrive.js';
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
+import { checkForUpdate } from './update-check.js';
+import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -312,6 +315,10 @@ async function onUnlocked() {
   // so removing this isn't fixing a confirmed hang by itself, but it was extra async work sitting
   // in the exact unlock path a freeze was reported on, and it served no purpose with nothing to
   // gate. Removed rather than left calling into a module with nothing behind it.
+  //
+  // Update check (Decision 71) is NOT run here either, by design (Decision 72) — it's a manual
+  // Settings button (handleCheckForUpdateClick()) now, not a background check on every open. With
+  // ads still unwired, the app currently makes zero network calls unless that button is tapped.
   await checkAutoBackupOnOpen(); // never blocks getting into the app
   // Actual rendering (digest, on-this-day, timeline) happens via DOMContentLoaded's render*()
   // functions, called once right after bootstrap() resolves — showDigest()/showMainTimeline()
@@ -930,6 +937,41 @@ async function handleDriveBackupNow() {
   }
 }
 
+// Manual only (Decision 72) — runs when "Check for updates" is tapped in Settings, never on app
+// open. Sideloaded APKs can't update themselves, so a match only offers a link to the release page;
+// same-version and error outcomes are reported inline too, since a button with no feedback path
+// reads as broken.
+async function handleCheckForUpdateClick() {
+  const statusEl = document.getElementById('update-check-status');
+  const viewBtn = document.getElementById('update-view-release-btn');
+  viewBtn.classList.add('hidden');
+  statusEl.textContent = 'Checking…';
+
+  let currentVersion;
+  try {
+    currentVersion = (await App.getInfo()).version;
+  } catch (e) {
+    statusEl.textContent = 'Could not read the installed version.';
+    return;
+  }
+
+  const result = await checkForUpdate({ currentVersion });
+  if (result.status === 'up_to_date') {
+    statusEl.textContent = `Up to date — ${result.version}.`;
+  } else if (result.status === 'update_available') {
+    statusEl.textContent = `Update available: ${result.version} (you're on ${currentVersion}).`;
+    viewBtn.dataset.url = result.url;
+    viewBtn.classList.remove('hidden');
+  } else {
+    const messages = {
+      offline: 'Offline — connect and try again.',
+      network_error: 'Could not reach GitHub — try again later.',
+      unparseable_version: 'Could not compare versions.'
+    };
+    statusEl.textContent = messages[result.reason] || `Check failed (${result.reason}).`;
+  }
+}
+
 // Runs once per app open/resume, after unlock. Never silent about needing the passkey (Decision 32) —
 // the passkey is never stored, so a due auto-backup shows a one-tap banner instead of failing quietly
 // or trying to cache the passkey across sessions.
@@ -1041,6 +1083,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       setPrivacyScreen(e.target.checked);
     });
   }
+
+  // Update-check settings UI wiring (Decision 72) — manual button, no stored setting: a check
+  // happens only when tapped, so there's nothing to populate on load, unlike the toggles above.
+  document.getElementById('check-update-btn').addEventListener('click', handleCheckForUpdateClick);
+  document.getElementById('update-view-release-btn').addEventListener('click', async (e) => {
+    const url = e.currentTarget.dataset.url;
+    if (url) await Browser.open({ url });
+  });
 
   // Backup & Restore (local) wiring
   renderCategoryCheckboxes('backup-categories', 'backup');
