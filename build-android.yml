@@ -1,0 +1,107 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # needed to create the GitHub Release in the last step below
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Build web assets (Vite bundles src/ into www/)
+        run: npm run build
+
+      - name: Add Android platform (if not committed)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Patch AndroidManifest.xml with required permissions
+        run: node scripts/patch-manifest.js
+
+      # Disabled for now (Decision 63) — FLAG_SECURE blocks screenshots app-wide, which got in the
+      # way of taking screenshots during active development. Re-enable by uncommenting this step;
+      # scripts/patch-mainactivity.js itself is untouched and still correct.
+      # - name: Patch MainActivity.java (FLAG_SECURE — blank recents preview, block screenshots)
+      #   run: node scripts/patch-mainactivity.js
+
+      - name: Set version code/name for this build
+        run: node scripts/patch-version.js
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
+      - name: Generate app icons from resources/icon.png
+        run: npx @capacitor/assets generate --android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Verify keystore secrets are set
+        run: |
+          if [ ! -s android/app/release.keystore ]; then
+            echo "::error::KEYSTORE_BASE64 secret is missing or empty — release.keystore decoded to 0 bytes. Set it under repo Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+            echo "::error::One or more of KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD is missing. Set all four secrets before running this workflow."
+            exit 1
+          fi
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/release.keystore" \
+            -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dumpzone-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      # Every push to main gets its own tagged Release with the APK attached — separate from the
+      # artifact above, which needs a GitHub login and expires; a Release is the permanent, public
+      # download the in-app update check (update-check.js) points people at. Tag is exactly
+      # APP_VERSION_NAME (set by scripts/patch-version.js into $GITHUB_ENV above) prefixed with
+      # "v" — always unique since the run-number suffix always increases, so this never collides
+      # with an existing tag and never needs a --force overwrite.
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ env.APP_VERSION_NAME }}" \
+            android/app/build/outputs/apk/release/app-release.apk \
+            --title "Dumpzone v${{ env.APP_VERSION_NAME }}" \
+            --notes "Automated build from commit ${{ github.sha }}."
