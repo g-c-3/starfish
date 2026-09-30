@@ -17,7 +17,6 @@ import {
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
 import { App } from '@capacitor/app';
-import { Browser } from '@capacitor/browser';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -1149,16 +1148,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Update-check settings UI wiring (Decision 72; download-direct in Decision 75) — manual
-  // button, no stored setting: a check happens only when tapped, so there's nothing to populate
-  // on load, unlike the toggles above. Browser.open() on the .apk asset URL directly (not the
-  // release page) hands the file straight to the OS's own download manager — same one tap fewer
-  // as a Play Store update's download step, still a manual install afterward since a sideloaded
-  // APK can't install itself.
+  // Update-check settings UI wiring (Decision 72; download-direct in Decision 75, fixed in
+  // Decision 77) — manual button, no stored setting: a check happens only when tapped, so
+  // there's nothing to populate on load, unlike the toggles above.
+  //
+  // window.location.assign(), not @capacitor/browser's Browser.open() (Decision 77) — Browser.open()
+  // opens a Chrome Custom Tab, which stayed stuck mid-download for a binary this size instead of
+  // ever finishing (reported: downloads never completed). Capacitor's WebView doesn't know how to
+  // render a .apk response itself, so assigning the URL directly hands it off to the OS's actual
+  // default-browser app — the real DownloadManager, not a Custom Tab's — which is what completes
+  // the download properly. @capacitor/browser is no longer used anywhere else in this codebase;
+  // dropped from package.json.
   document.getElementById('check-update-btn').addEventListener('click', handleCheckForUpdateClick);
-  document.getElementById('update-download-btn').addEventListener('click', async (e) => {
+  document.getElementById('update-download-btn').addEventListener('click', (e) => {
     const url = e.currentTarget.dataset.url;
-    if (url) await Browser.open({ url });
+    if (url) window.location.assign(url);
   });
 
   // Backup & Restore (local) wiring
