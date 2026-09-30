@@ -417,6 +417,17 @@ input[type="checkbox"]:checked::after {
   .switch-row input[type="checkbox"] { transition: background 0.15s ease; }
 }
 
+/* Reported ugly/cramped: adjacent switch-row toggles (App lock/Vault's six lock-trigger switches
+   from Decision 74 made this visible, but it was latent everywhere) had zero gap between them —
+   .switch-row itself sets no vertical margin, and a bare <label> has no default browser margin to
+   fall back on, so two in a row rendered touching. Needs #settings-tab/#vault-settings-card details
+   > .switch-row specificity (ID + type + class) to actually win over the existing details-child
+   margin-zeroing rule above, which would otherwise re-zero a plain `.switch-row { margin-top }`.
+   The first switch-row directly after <summary> gets a smaller, not zero, top margin — flush
+   against the summary line read just as cramped as flush against another toggle did. */
+#settings-tab details > .switch-row, #vault-settings-card > .switch-row { margin-top: 14px; }
+#settings-tab details > summary + .switch-row, #vault-settings-card > summary + .switch-row { margin-top: 10px; }
+
 /* Modern radio dots for restore-mode (append/overwrite) */
 input[type="radio"] {
   appearance: none; -webkit-appearance: none;
