@@ -4,6 +4,35 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 54**
+
+Reported from device screenshots: Decision 74's six lock-trigger toggles rendered with no visible gap
+between them, description paragraphs reading ambiguously about which toggle they belonged to.
+
+Root cause wasn't the existing details-child margin-zeroing rule (that one only matters for elements
+with a natural margin to suppress) — `.switch-row` itself never set any vertical margin, and its
+wrapping `<label>` has no default browser margin either, so adjacent toggles had nothing providing a
+gap in the first place. Added `margin-top: 14px` to `.switch-row` at matching specificity (ID + type +
+class) so the existing zeroing rule can't silently re-zero it, with a smaller 10px variant for a
+switch-row sitting directly under a `<summary>`.
+
+Fixed at the shared `.switch-row` level rather than scoped to just the two reported sections — the
+same gap was missing everywhere a switch-row could end up adjacent to another one (auto-backup,
+biometric toggles, the restore safety-backup confirmation), just never visible until three toggles
+landed in a row for the first time in Decision 74.
+
+Decisions made: 76.
+
+Verified brace-balance on the full stylesheet; this is a pure CSS change with no JS/schema surface,
+so no `node --check` applies. Not confirmed on device — next screenshot should show breathing room
+between all three lock-trigger toggles in both App lock and Vault, and ideally a broader glance at
+other Settings sections too, since the fix wasn't scoped narrowly to just those two.
+
+Next session start point: unchanged from Session 53 — CI run for patch-screenlock.js, screen-off
+toggle on-device confirmation, and now also this spacing fix, all still awaiting a real device pass.
+
+---
+
 **Session 53**
 
 Reported from a device screenshot: update-available detection itself was correct (`0.1.0+175` →

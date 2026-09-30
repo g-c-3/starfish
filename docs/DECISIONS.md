@@ -1295,3 +1295,29 @@ The "up to date" case was already correct — it already named the version (`0.1
 Decision 72's own design) — reworded slightly for clarity ("You're up to date — …" instead of "Up to
 date — …") but not changed in substance; flagging this so it's clear that half of the report was
 already working as designed, not a second bug.
+
+---
+
+**76. Fixed cramped spacing between adjacent switch-row toggles in App lock/Vault Settings.** Reported
+from device screenshots: Decision 74's six lock-trigger toggles rendered touching each other with no
+visible gap, and their description paragraphs read ambiguously as belonging to either the toggle
+above or below. Root cause: `.switch-row` itself sets no vertical margin, and its wrapping `<label>`
+has no default browser margin to fall back on — nothing was ever providing the gap, not a value being
+suppressed. A pre-existing rule (`#settings-tab details > *:not(summary), #vault-settings-card > *
+:not(summary) { margin-top: 0; }`, meant to keep the very first element under a `<summary>` flush
+against it) wasn't the cause here, but does mean a plain `.switch-row { margin-top }` fix would need
+matching specificity (ID + type + class) to actually take effect, not just get re-zeroed by it.
+
+Added `#settings-tab details > .switch-row, #vault-settings-card > .switch-row { margin-top: 14px; }`,
+with a smaller 10px variant for a switch-row that's the first element right after `<summary>` (flush
+against the summary line read just as cramped as flush against another toggle did). Left
+`.mode-description`'s own spacing untouched (`margin: 0 0 10px 24px` — no top margin, hugs the element
+above it, indented like an explanation) since the fix's job was to add the *missing* gap after each
+toggle, not to rebalance a rule that was already correct.
+
+Deliberately fixed at the shared `.switch-row` level, not scoped to only the six new lock toggles —
+the same "no gap between adjacent toggles" problem was latent everywhere in Settings (auto-backup,
+biometric toggles, the safety-backup confirmation), just not visible until Decision 74 put three
+toggles in a row for the first time. Every Settings/Vault section with switch-rows should read
+slightly more breathable now, not just App lock/Vault — worth a broader visual re-check next time
+Settings is open on device, not only the two sections that were screenshotted.
