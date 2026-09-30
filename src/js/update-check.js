@@ -21,8 +21,13 @@ function extractRunNumber(versionOrTag) {
 
 // Returns one of:
 //   { status: 'up_to_date', version }
-//   { status: 'update_available', version, url }
+//   { status: 'update_available', version, url, downloadUrl }
 //   { status: 'error', reason }  — 'offline' | 'network_error' | 'http_<code>' | 'unparseable_version'
+//
+// downloadUrl is the release's .apk asset link directly (Decision 75) — build-android.yml's
+// "Create GitHub Release" step attaches exactly one file, the signed APK, so this is a straight
+// lookup, not a guess. Falls back to the release page itself only if no .apk asset is found (would
+// mean that CI step changed shape without this being updated to match).
 async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
   if (!navigator.onLine) return { status: 'error', reason: 'offline' };
 
@@ -48,7 +53,13 @@ async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
   if (latestRun <= currentRun) {
     return { status: 'up_to_date', version: currentVersion };
   }
-  return { status: 'update_available', version: release.tag_name, url: release.html_url };
+  const apkAsset = (release.assets || []).find((a) => a.name && a.name.endsWith('.apk'));
+  return {
+    status: 'update_available',
+    version: release.tag_name,
+    url: release.html_url,
+    downloadUrl: apkAsset ? apkAsset.browser_download_url : release.html_url
+  };
 }
 
 export { checkForUpdate };

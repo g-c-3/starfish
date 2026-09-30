@@ -1002,13 +1002,14 @@ async function handleDriveBackupNow() {
 }
 
 // Manual only (Decision 72) — runs when "Check for updates" is tapped in Settings, never on app
-// open. Sideloaded APKs can't update themselves, so a match only offers a link to the release page;
-// same-version and error outcomes are reported inline too, since a button with no feedback path
-// reads as broken.
+// open. Sideloaded APKs can't update themselves, so a match offers a direct download of the new
+// APK (Decision 75) rather than the release page — one tap fewer, straight into the OS download
+// manager. Same-version and error outcomes are reported inline too, since a button with no
+// feedback path reads as broken.
 async function handleCheckForUpdateClick() {
   const statusEl = document.getElementById('update-check-status');
-  const viewBtn = document.getElementById('update-view-release-btn');
-  viewBtn.classList.add('hidden');
+  const downloadBtn = document.getElementById('update-download-btn');
+  downloadBtn.classList.add('hidden');
   statusEl.textContent = 'Checking…';
 
   let currentVersion;
@@ -1021,11 +1022,11 @@ async function handleCheckForUpdateClick() {
 
   const result = await checkForUpdate({ currentVersion });
   if (result.status === 'up_to_date') {
-    statusEl.textContent = `Up to date — ${result.version}.`;
+    statusEl.textContent = `You're up to date — ${result.version}.`;
   } else if (result.status === 'update_available') {
     statusEl.textContent = `Update available: ${result.version} (you're on ${currentVersion}).`;
-    viewBtn.dataset.url = result.url;
-    viewBtn.classList.remove('hidden');
+    downloadBtn.dataset.url = result.downloadUrl;
+    downloadBtn.classList.remove('hidden');
   } else {
     const messages = {
       offline: 'Offline — connect and try again.',
@@ -1148,10 +1149,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Update-check settings UI wiring (Decision 72) — manual button, no stored setting: a check
-  // happens only when tapped, so there's nothing to populate on load, unlike the toggles above.
+  // Update-check settings UI wiring (Decision 72; download-direct in Decision 75) — manual
+  // button, no stored setting: a check happens only when tapped, so there's nothing to populate
+  // on load, unlike the toggles above. Browser.open() on the .apk asset URL directly (not the
+  // release page) hands the file straight to the OS's own download manager — same one tap fewer
+  // as a Play Store update's download step, still a manual install afterward since a sideloaded
+  // APK can't install itself.
   document.getElementById('check-update-btn').addEventListener('click', handleCheckForUpdateClick);
-  document.getElementById('update-view-release-btn').addEventListener('click', async (e) => {
+  document.getElementById('update-download-btn').addEventListener('click', async (e) => {
     const url = e.currentTarget.dataset.url;
     if (url) await Browser.open({ url });
   });
