@@ -4,6 +4,30 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 55**
+
+Reported directly: the "Download update" button (Decision 75) got stuck mid-download, never
+completing. Checked against a separate, working sideloaded-Android project's own update-check code
+(shared for comparison, unrelated app) — its own comments confirm the mechanism: `@capacitor/browser`'s
+`Browser.open()` opens a Chrome Custom Tab, which isn't built to drive a real file download of any
+size; `window.location.assign(url)` instead lets Capacitor's WebView hand the URL off to the device's
+actual default-browser app, which uses the real system `DownloadManager` and completes properly.
+
+Swapped the one call site to `window.location.assign()`, dropped the now-unused `@capacitor/browser`
+import and its `package.json` dependency (nothing else in the codebase used it), and dropped `async`
+from the click handler since there's no longer a promise to await.
+
+Decisions made: 77.
+
+Verified with `node --check` on app.js and a JSON parse of package.json. Not run through CI or
+confirmed on device — the previous "stuck downloading" report was itself only caught on-device, so
+that's the one thing to specifically re-test next: tap "Download update" and confirm it actually
+reaches a completed file this time, not just that it starts.
+
+Next session start point: unchanged from Session 54, plus confirming this download fix on device.
+
+---
+
 **Session 54**
 
 Reported from device screenshots: Decision 74's six lock-trigger toggles rendered with no visible gap

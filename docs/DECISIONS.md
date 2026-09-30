@@ -1321,3 +1321,26 @@ biometric toggles, the safety-backup confirmation), just not visible until Decis
 toggles in a row for the first time. Every Settings/Vault section with switch-rows should read
 slightly more breathable now, not just App lock/Vault — worth a broader visual re-check next time
 Settings is open on device, not only the two sections that were screenshotted.
+
+---
+
+**77. Update download switched from `@capacitor/browser`'s `Browser.open()` to
+`window.location.assign()`; `@capacitor/browser` dropped as a dependency.** Reported directly:
+Decision 75's "Download update" button got stuck mid-download instead of ever completing. Root cause:
+`Browser.open()` opens a Chrome Custom Tab — an in-app overlay meant for viewing web content without
+leaving the app, not for driving an actual file download of any real size. A `.apk` response isn't
+something Capacitor's WebView can render itself, so the fix is to let the WebView hand the URL off
+entirely to the device's own default-browser app via `window.location.assign(url)` — that gets the
+real system `DownloadManager`, not a Custom Tab's, which is what actually completes the download and
+surfaces the normal "Download complete" notification.
+
+Confirmed by inspecting a separate, working sideloaded-Android project's own update-check
+implementation (unrelated app, shared for comparison) — its own code comment states the same
+mechanism explicitly: "Capacitor's WebView hands non-app URLs to the system browser, which downloads
+the APK." That project uses `window.location.assign()` for exactly this reason and doesn't depend on
+`@capacitor/browser` at all.
+
+`@capacitor/browser` had exactly one call site in this codebase (this button) — removed the import and
+the dependency from `package.json` rather than leaving an unused native plugin installed. The click
+handler no longer needs to be `async` either, since `window.location.assign()` doesn't return a
+promise worth awaiting.

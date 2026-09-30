@@ -59,3 +59,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-29 | Session 52 | Decision 74 | Split idle/background/screen-off into six independent lock toggles (app+vault); screen-off needs new native BroadcastReceiver (patch-screenlock.js), defaults off until confirmed on device |
 | 2026-09-30 | Session 53 | Decision 75 | "Check for updates" now downloads the .apk asset directly (Browser.open on browser_download_url) instead of opening the release page; button renamed "Download update" |
 | 2026-09-30 | Session 54 | Decision 76 | Fixed cramped/touching switch-row toggles in Settings — .switch-row given its own margin-top at matching specificity, applies to all Settings sections not just the six lock toggles |
+| 2026-09-30 | Session 55 | Decision 77 | Update download stuck mid-download fixed — switched from @capacitor/browser's Browser.open() (Custom Tab) to window.location.assign() (system browser/DownloadManager); dependency removed |
