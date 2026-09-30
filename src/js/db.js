@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS credentials (
   vault_auto_lock_minutes INTEGER DEFAULT 5, -- Private Vault's own, independent timeout — separate lock, separate timer
   biometric_app_enabled INTEGER DEFAULT 0,   -- fingerprint/face as an alternative to the app-open password (Decision 50)
   biometric_vault_enabled INTEGER DEFAULT 0, -- same, for the Vault PIN — independent toggle, independent of the above
+  app_lock_idle_enabled INTEGER DEFAULT 1,        -- three independent lock triggers per lock (Decision 74)
+  app_lock_background_enabled INTEGER DEFAULT 1,
+  app_lock_screenoff_enabled INTEGER DEFAULT 0,   -- needs the native listener in android-notes §14; off until confirmed on device
+  vault_lock_idle_enabled INTEGER DEFAULT 1,
+  vault_lock_background_enabled INTEGER DEFAULT 1,
+  vault_lock_screenoff_enabled INTEGER DEFAULT 0,
   last_backup_at INTEGER,
   last_drive_backup_at INTEGER
 );
@@ -115,6 +121,17 @@ async function initDb(sqlite) {
   // editing SCHEMA_SQL — see Decision 50.
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
   await ensureColumn(db, 'credentials', 'biometric_vault_enabled', 'INTEGER DEFAULT 0');
+  // Three independent lock triggers per lock (Decision 74), replacing "idle timer + always-on
+  // background lock" with separate on/off switches for each. Idle and background default to 1
+  // (matches prior, always-on behavior — no surprise change for existing installs). Screen-off is
+  // brand new (needs a native listener, see android-notes §14) and defaults to 0 until confirmed
+  // working on a real device — nothing before this could ever have relied on it being on.
+  await ensureColumn(db, 'credentials', 'app_lock_idle_enabled', 'INTEGER DEFAULT 1');
+  await ensureColumn(db, 'credentials', 'app_lock_background_enabled', 'INTEGER DEFAULT 1');
+  await ensureColumn(db, 'credentials', 'app_lock_screenoff_enabled', 'INTEGER DEFAULT 0');
+  await ensureColumn(db, 'credentials', 'vault_lock_idle_enabled', 'INTEGER DEFAULT 1');
+  await ensureColumn(db, 'credentials', 'vault_lock_background_enabled', 'INTEGER DEFAULT 1');
+  await ensureColumn(db, 'credentials', 'vault_lock_screenoff_enabled', 'INTEGER DEFAULT 0');
 
   const versionRow = await db.query(`SELECT value FROM meta WHERE key='schema_version'`);
   if (!versionRow.values || versionRow.values.length === 0) {

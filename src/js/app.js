@@ -163,7 +163,7 @@ async function bootstrap() {
   await showLockScreen();
 }
 
-// Immediate lock on backgrounding, not just the idle timers below. privateSessionKey's own comment
+// Immediate lock on backgrounding, not just the idle timers above. privateSessionKey's own comment
 // has said "cleared on vault lock/background" since the pivot, but nothing ever actually listened
 // for backgrounding — the vault would stay unlocked indefinitely across app-switches, relying only
 // on the idle timer. Fixes that gap; also locks the app-level screen the same way, if a password exists.
@@ -174,15 +174,42 @@ async function bootstrap() {
 // Android's Activity lifecycle can't tell the two apart on its own, appStateChange fires isActive:
 // false identically either way. Consumed immediately so it only ever covers the one pause it was
 // set for, never a later, unrelated backgrounding.
+//
+// handleLockTrigger() (Decision 74) does the actual locking for both this and the screen-off
+// listener below, each gated by its own pair of `*_lock_<trigger>_enabled` columns — independent
+// per lock (app/vault) and per trigger (idle/background/screenoff). Note the two triggers overlap
+// at the OS level: turning the screen off also pauses the Activity, so appStateChange fires here
+// too, regardless of the screenoff-specific toggle's state. With "Lock when backgrounded" on,
+// screen-off already locks via this listener; the screenoff toggle only matters when background is
+// off but screen-off should still lock — not a bug, just how Android's lifecycle works.
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
     if (isActive) return; // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
-    if (privateSessionKey) lockVault();
-    const cred = (await db.query(`SELECT app_password_hash FROM credentials WHERE id=1`)).values[0];
-    if (cred?.app_password_hash) { disarmAppAutoLock(); showScreen('lock-screen'); }
+    await handleLockTrigger('background');
   });
+
+  // Fired by native code (android-notes/native-setup.md §14) on Intent.ACTION_SCREEN_OFF — a
+  // signal appStateChange alone can't produce, since Android's Activity lifecycle treats "screen
+  // turned off" and "switched to another app" identically. Not a Capacitor plugin: MainActivity
+  // dispatches this as a plain DOM event via evaluateJavascript() directly into the WebView,
+  // avoiding a full plugin-registration/cap-sync setup for one narrow signal.
+  window.addEventListener('dumpzone-screen-off', () => handleLockTrigger('screenoff'));
+}
+
+// Shared by both triggers above — trigger is 'background' or 'screenoff', matching the
+// `app_lock_<trigger>_enabled` / `vault_lock_<trigger>_enabled` column suffixes exactly (Decision
+// 74). Not user input, so building the column name with a template literal is safe here.
+async function handleLockTrigger(trigger) {
+  const cred = (await db.query(
+    `SELECT app_password_hash, app_lock_${trigger}_enabled, vault_lock_${trigger}_enabled FROM credentials WHERE id=1`
+  )).values[0];
+  if (privateSessionKey && (cred?.[`vault_lock_${trigger}_enabled`] ?? 1)) lockVault();
+  if (cred?.app_password_hash && (cred[`app_lock_${trigger}_enabled`] ?? 1)) {
+    disarmAppAutoLock();
+    showScreen('lock-screen');
+  }
 }
 
 // Call immediately before any input.click() that opens a system picker (Decision 73). Bounds the
@@ -623,7 +650,8 @@ function lockVault() {
 // ("separate auto lock after certain time"), read from its own column, not auto_lock_minutes.
 async function armVaultAutoLock() {
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
-  const row = await db.query(`SELECT vault_auto_lock_minutes FROM credentials WHERE id=1`);
+  const row = await db.query(`SELECT vault_auto_lock_minutes, vault_lock_idle_enabled FROM credentials WHERE id=1`);
+  if (!(row.values[0]?.vault_lock_idle_enabled ?? 1)) return; // idle trigger switched off (Decision 74)
   const minutes = row.values[0]?.vault_auto_lock_minutes ?? 5;
   vaultAutoLockTimer = setTimeout(() => lockVault(), minutes * 60 * 1000);
 }
@@ -631,6 +659,18 @@ async function armVaultAutoLock() {
 async function setVaultAutoLockMinutes(minutes) {
   await db.run(`UPDATE credentials SET vault_auto_lock_minutes=? WHERE id=1`, [minutes]);
   if (privateSessionKey) armVaultAutoLock(); // re-arm immediately with the new duration if already unlocked
+}
+
+// One setter for all six toggles (Decision 74) — lock is 'app'|'vault', trigger is
+// 'idle'|'background'|'screenoff', matching the column names exactly. Re-arms the idle timer
+// immediately on a live toggle flip so turning "Lock after inactivity" off actually cancels a
+// timer already ticking, not just future ones.
+async function setLockTriggerEnabled(lock, trigger, enabled) {
+  await db.run(`UPDATE credentials SET ${lock}_lock_${trigger}_enabled=? WHERE id=1`, [enabled ? 1 : 0]);
+  if (trigger === 'idle') {
+    if (lock === 'app') await armAppAutoLock();
+    else if (privateSessionKey) await armVaultAutoLock();
+  }
 }
 
 // ---- App-level idle auto-lock (Phase 9 — the `auto_lock_minutes` column has existed since Session
@@ -641,8 +681,9 @@ async function setVaultAutoLockMinutes(minutes) {
 // patches for exactly that reason; a delegated listener can't be missed the same way. ----
 async function armAppAutoLock() {
   if (appAutoLockTimer) clearTimeout(appAutoLockTimer);
-  const cred = (await db.query(`SELECT app_password_hash, auto_lock_minutes FROM credentials WHERE id=1`)).values[0];
+  const cred = (await db.query(`SELECT app_password_hash, auto_lock_minutes, app_lock_idle_enabled FROM credentials WHERE id=1`)).values[0];
   if (!cred?.app_password_hash) return; // quick access — nothing to arm
+  if (!(cred.app_lock_idle_enabled ?? 1)) return; // idle trigger switched off (Decision 74)
   const minutes = cred.auto_lock_minutes ?? 5;
   appAutoLockTimer = setTimeout(() => { disarmAppAutoLock(); showScreen('lock-screen'); }, minutes * 60 * 1000);
 }
@@ -1059,7 +1100,7 @@ window.Dumpzone = {
   listAllTags: () => listAllTags(db),
   listLabelHistory: (type) => listLabelHistory(db, type),
   getAppearance, setDarkMode,
-  setAppPassword, removeAppPassword, setAutoLockMinutes,
+  setAppPassword, removeAppPassword, setAutoLockMinutes, setLockTriggerEnabled,
   getBiometricSettings, enableAppBiometric, disableAppBiometric,
   enableVaultBiometric, disableVaultBiometric, tryBiometricUnlockApp, tryBiometricUnlockVault,
   // Private Vault — unlockVault/lockVault replace the old unlockPrivateNotes/lockPrivateNotes names
@@ -1483,6 +1524,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('vault-auto-lock-select').addEventListener('change', (e) => setVaultAutoLockMinutes(Number(e.target.value)));
   document.getElementById('app-auto-lock-select').addEventListener('change', (e) => setAutoLockMinutes(Number(e.target.value)));
+
+  // Three independent lock-trigger toggles, per lock (Decision 74) — six checkboxes total, same
+  // populate-then-wire shape as the biometric toggles above. Screen-off defaults unchecked (column
+  // default 0) since it needs the native listener in android-notes §14, not yet confirmed on device.
+  {
+    const row = (await db.query(
+      `SELECT app_lock_idle_enabled, app_lock_background_enabled, app_lock_screenoff_enabled,
+              vault_lock_idle_enabled, vault_lock_background_enabled, vault_lock_screenoff_enabled
+       FROM credentials WHERE id=1`
+    )).values[0] || {};
+    const wire = (id, lock, trigger, defaultOn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const col = `${lock}_lock_${trigger}_enabled`;
+      el.checked = !!(row[col] ?? (defaultOn ? 1 : 0));
+      el.addEventListener('change', (e) => setLockTriggerEnabled(lock, trigger, e.target.checked));
+    };
+    wire('app-lock-idle-toggle', 'app', 'idle', true);
+    wire('app-lock-background-toggle', 'app', 'background', true);
+    wire('app-lock-screenoff-toggle', 'app', 'screenoff', false);
+    wire('vault-lock-idle-toggle', 'vault', 'idle', true);
+    wire('vault-lock-background-toggle', 'vault', 'background', true);
+    wire('vault-lock-screenoff-toggle', 'vault', 'screenoff', false);
+  }
 
   // ---- Select files (multi-select, shared by main + vault) ----
   let selectedIds = new Set();
