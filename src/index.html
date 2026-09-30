@@ -80,15 +80,25 @@
       <details id="app-lock-settings">
         <summary>App lock</summary>
         <p class="mode-description">Only applies if an app-open password is set — quick access has nothing to lock back to.</p>
-        <label>Lock the app after
+
+        <label class="switch-row"><input type="checkbox" id="app-lock-idle-toggle" checked /> Lock after inactivity</label>
+        <label>
           <select id="app-auto-lock-select">
             <option value="1">1 minute</option>
             <option value="5" selected>5 minutes</option>
             <option value="15">15 minutes</option>
             <option value="30">30 minutes</option>
           </select>
-          of inactivity, or immediately when backgrounded.
         </label>
+
+        <label class="switch-row"><input type="checkbox" id="app-lock-background-toggle" checked /> Lock when backgrounded (switching to another app)</label>
+
+        <label class="switch-row"><input type="checkbox" id="app-lock-screenoff-toggle" /> Lock when the phone screen locks</label>
+        <p class="mode-description">Needs a small native listener (see Decision 74) — not yet confirmed on device. Turning the
+          screen off also counts as "backgrounded" above, so with that switch on, screen-off already locks the app regardless
+          of this one; this switch matters specifically when "Lock when backgrounded" is off but the phone's own screen
+          lock/timeout should still lock the app.</p>
+
         <div id="app-biometric-row" class="hidden">
           <label class="switch-row"><input type="checkbox" id="app-biometric-toggle" /> Unlock with fingerprint/face</label>
           <p class="mode-description">A convenience alternative to typing your password — the password itself is unchanged and still works.</p>
@@ -236,15 +246,22 @@
         </div>
 
         <h4>Auto-lock</h4>
-        <label>Lock the Vault after
+        <label class="switch-row"><input type="checkbox" id="vault-lock-idle-toggle" checked /> Lock after inactivity</label>
+        <label>
           <select id="vault-auto-lock-select">
             <option value="1">1 minute</option>
             <option value="5" selected>5 minutes</option>
             <option value="15">15 minutes</option>
             <option value="30">30 minutes</option>
           </select>
-          of inactivity — independent of the app-open lock timing.
         </label>
+        <p class="mode-description">Independent of the app-open lock's own timing.</p>
+
+        <label class="switch-row"><input type="checkbox" id="vault-lock-background-toggle" checked /> Lock when backgrounded (switching to another app)</label>
+
+        <label class="switch-row"><input type="checkbox" id="vault-lock-screenoff-toggle" /> Lock when the phone screen locks</label>
+        <p class="mode-description">Same native listener as the app-lock version (Decision 74) — not yet confirmed on device.
+          Same relationship to "Lock when backgrounded" as the app-lock switches above.</p>
 
         <details id="vault-trash-settings">
           <summary>Vault Trash</summary>
