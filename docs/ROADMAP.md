@@ -207,7 +207,23 @@
   the Vault pivot, but nothing ever listened for backgrounding — the vault would stay unlocked
   indefinitely across app-switches, relying only on its idle timer. Both the app-level password lock
   and the vault now lock immediately on backgrounding (`@capacitor/app`'s `appStateChange`), not just
-  after idle timeout.
+  after idle timeout. **False-positive lock on file-picker fixed (Session 51, Decision 73):** the
+  system file chooser pauses the Activity the same way backgrounding does, so adding an Image/PDF/
+  Generic File was locking the app/vault the instant the picker opened. One-shot `expectingPickerReturn`
+  flag (armed by `beginPickerLaunch()` before both `input.click()` sites, 3s safety timeout) suppresses
+  that one pause without weakening the immediate-lock behavior for any real backgrounding. Sharing out
+  and the Drive OAuth flow deliberately still lock immediately — not the same case.
+  **Split into three independent lock triggers, per lock (Session 52, Decision 74):** "idle timer" and
+  "lock on background" were previously a package deal with no way to turn either off separately, and
+  there was no way to lock specifically on the phone's own screen-off/lock either. Now six independent
+  toggles (`app_lock_idle_enabled`, `app_lock_background_enabled`, `app_lock_screenoff_enabled` and the
+  same three `vault_lock_*`), each gating its own trigger. Screen-off needed new native code — Android's
+  Activity lifecycle can't distinguish "screen turned off" from "backgrounded" on its own, so a
+  `BroadcastReceiver` for `Intent.ACTION_SCREEN_OFF` was added via a new idempotent CI script
+  (`scripts/patch-screenlock.js`, see android-notes §14), dispatching a `dumpzone-screen-off` DOM event
+  into the WebView. Defaults to **off** in the database until confirmed working on a real device — the
+  other two default to their prior always-on behavior, so no existing install's behavior changes
+  silently. Not yet run through CI or confirmed on device.
   **Digest, on-this-day, and storage breakdown done.** `showDigest()` had backend logic since early
   on but was never rendered anywhere — fixed, and while fixing it, found it also never excluded
   vault entries from its counts: a "3 notes today" digest with 1 public + 2 vault notes would have

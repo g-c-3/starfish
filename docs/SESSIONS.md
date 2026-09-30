@@ -4,6 +4,90 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 52**
+
+Requested directly: split "idle timer or backgrounded" into three independent switches — idle,
+backgrounded, and phone-screen-lock — for both App lock and Vault, six toggles total.
+
+Idle and background were straightforward: six new `credentials` columns (`ensureColumn`, matching
+Decision 50's migration pattern), idle/background defaulting to `1` (matches prior always-on
+behavior, no silent change for existing installs). `armAppAutoLock()`/`armVaultAutoLock()` check
+their own idle column; the background `appStateChange` listener now goes through a shared
+`handleLockTrigger(trigger)` gated by the matching column.
+
+Screen-off needed real thought: Android pauses the Activity identically for "screen turned off" and
+"switched to another app" — `appStateChange` genuinely cannot distinguish them, this isn't a JS gap
+to work around. `Intent.ACTION_SCREEN_OFF` is the actual distinct signal, but it only reaches a
+receiver registered in code, not the manifest. Added a `BroadcastReceiver` in `MainActivity` that
+dispatches a plain `dumpzone-screen-off` DOM event into the WebView via `evaluateJavascript()` —
+deliberately not a full Capacitor plugin, which would need its own Gradle module and `cap sync`
+discovery, more untestable-here moving parts than this narrow signal needs. New
+`scripts/patch-screenlock.js` applies it, same idempotent-CI-script pattern as `patch-manifest.js`/
+`patch-mainactivity.js` (`android/` is never committed). Verified the script itself against both
+possible `MainActivity.java` shapes (stock, and one with an existing `onCreate()`) in a scratch copy,
+including idempotency on a second run — couldn't go further than that; no Gradle/device build is
+possible in this environment. Screen-off defaults **off** in the database specifically because of
+that gap — idle/background default to matching prior behavior, but screen-off is genuinely new and
+unconfirmed, so it doesn't turn on by itself.
+
+Documented clearly (Settings descriptions, android-notes §14, Decision 74) that background and
+screen-off overlap at the OS level: turning the screen off also counts as backgrounding, so with
+"Lock when backgrounded" on, screen-off already locks regardless of its own toggle. The screen-off
+switch is for the specific case of background off, screen-lock still wanted — not a bug, just how
+Android's lifecycle works, flagged so it isn't mistaken for one later.
+
+Decisions made: 74.
+
+Verified with `node --check` on db.js/app.js, YAML-validated the workflow, and manually ran
+`patch-screenlock.js` against two hand-built fake `MainActivity.java` files in a scratch directory to
+confirm both code paths and idempotency — as close to a real test as this environment allows. Not run
+through actual CI, and the screen-off receiver has never executed on a real device or even a real
+Gradle build — flagged explicitly, this is genuinely new native surface, not just new JS.
+
+Next session start point: confirm the CI build actually compiles with `patch-screenlock.js` applied
+(first real test of this script), then confirm on device that toggling "Lock when the phone screen
+locks" on and actually locking the screen fires the lock as expected, and that leaving it off while
+"Lock when backgrounded" stays on still locks on screen-off (expected, per the overlap noted above).
+Standing list otherwise unchanged from Session 51.
+
+---
+
+**Session 51**
+
+Reported directly: adding a file locks the app/vault immediately, because the system file picker
+pauses the Activity the same way backgrounding does, and `registerBackgroundLock()` (Decision 45)
+can't tell the two apart. Re-read ARCHITECTURE.md's Credentials section first (debugging a confirmed
+bug touching it) rather than trusting in-context memory of it.
+
+Fix: a one-shot `expectingPickerReturn` flag, armed by a new `beginPickerLaunch()` right before each
+of the two `input.click()` calls (main capture, vault capture — confirmed via grep these are the only
+two picker launch points in the codebase). The `appStateChange` listener checks and consumes it before
+doing anything else, so it only ever suppresses the one pause it was armed for. Bounded by a 3-second
+timeout that also clears the flag, so a picker launch that never actually pauses the Activity (some
+OEM file choosers don't) can't leave the exception armed indefinitely and silently swallow the next
+real backgrounding.
+
+Also found and fixed a documentation bug of my own while re-reading DECISIONS.md for context:
+Decision 70 (Session 48's lock-icon theme-aware fix) had landed out of order, after 71 and 72 instead
+of between 69 and 71 — a wrong anchor text in an earlier session's edit matched inside Decision 69's
+body instead of the true file tail. Content wasn't duplicated, just misplaced; moved it back into
+correct chronological order before appending 73.
+
+Scope note: only the file-chooser path got the exception. Sharing a vault entry out and the Google
+Drive OAuth flow pause the Activity the same way and still lock immediately — both are cases of data
+or a credential actually leaving the app, unlike picking a file to bring something in, so left as-is
+without being asked to change them.
+
+Decisions made: 73.
+
+Verified with `node --check` on app.js. Not run through CI or confirmed on device.
+
+Next session start point: confirm on a real device that adding an Image/PDF/Generic File no longer
+locks the app/vault, and that a genuine backgrounding (Home button, app switcher) still locks
+correctly right after using the picker. Standing list otherwise unchanged from Session 50.
+
+---
+
 **Session 50**
 
 Requested directly, one change: replace Session 49's on-by-default daily background check with a

@@ -1102,6 +1102,28 @@ function and two call-site swaps. Left for a future session, not folded in here.
 
 ---
 
+**70. Lock icon's neon green is now theme-aware; its glow is dark-mode-only.** Reported directly from
+a real device (first device feedback since Session 25): `#39ff14` "looks nice in dark mode" but
+"bleeds too much" in light mode, with "no clear icon" — confirming Decision 68's assumption that
+`--neon-green` needed no dark-mode variant, the same "fixed across both themes" treatment as
+`--danger`, was wrong for this hue specifically. Red against either background stays legible; a fully
+saturated `#39ff14` glow against near-white (`--bg: #f6f4ff`, `--card-bg: #ffffff`) has almost no
+contrast at the glow's edges, so the two `drop-shadow` layers smear into the icon instead of framing
+it.
+
+Fix has two parts, kept separate since they're two different causes: (1) `--neon-green` is now
+theme-aware — `:root` (light) gets a solid `#15803d`, `:root[data-theme="dark"]` keeps the original
+`#39ff14`. (2) the glow `filter` moved off the base `#lock-toggle-btn` rule into a `:root[data-theme="dark"] #lock-toggle-btn` override, so light mode
+gets a plain icon with no glow at all instead of a softened one — testing showed the glow itself was
+the bleed, not just its intensity, so softening it in light mode wouldn't have been enough. Moving the glow into a theme-scoped selector
+raised its specificity above the existing `#lock-toggle-btn.disabled` rule, which would otherwise
+have been silently overridden (dark-mode disabled button would keep glowing) — added a matching
+`:root[data-theme="dark"] #lock-toggle-btn.disabled` rule so the disabled state still wins in both
+themes. Caught by rechecking specificity before finishing, not by re-testing the disabled state on
+device (still unconfirmed there, same standing gap as everything since Session 25).
+
+---
+
 **71. Auto-release on every push to main, plus an on-by-default daily in-app update check.**
 Requested directly, with two explicit choices confirmed before writing anything, since this is the
 app's first real network call now that ads (Phase 12) remain unwired: check on by default (same
@@ -1175,23 +1197,78 @@ not a weaker one. `@capacitor/browser` stays a dependency; "View release" still 
 
 ---
 
-**70. Lock icon's neon green is now theme-aware; its glow is dark-mode-only.** Reported directly from
-a real device (first device feedback since Session 25): `#39ff14` "looks nice in dark mode" but
-"bleeds too much" in light mode, with "no clear icon" — confirming Decision 68's assumption that
-`--neon-green` needed no dark-mode variant, the same "fixed across both themes" treatment as
-`--danger`, was wrong for this hue specifically. Red against either background stays legible; a fully
-saturated `#39ff14` glow against near-white (`--bg: #f6f4ff`, `--card-bg: #ffffff`) has almost no
-contrast at the glow's edges, so the two `drop-shadow` layers smear into the icon instead of framing
-it.
+**73. File-chooser picker no longer triggers the immediate-lock-on-backgrounding behavior from
+Decision 45.** Reported directly: adding a file (Image/PDF/Generic File, both main and vault capture)
+opens the system file picker, which — same as switching to another app — pauses our Activity;
+`registerBackgroundLock()`'s `appStateChange` listener can't tell those two cases apart on its own,
+so it locked the vault and/or showed the app lock screen the instant the picker appeared, even though
+the person never actually left the app.
 
-Fix has two parts, kept separate since they're two different causes: (1) `--neon-green` is now
-theme-aware — `:root` (light) gets a solid `#15803d`, `:root[data-theme="dark"]` keeps the original
-`#39ff14`. (2) the glow `filter` moved off the base `#lock-toggle-btn` rule into a `:root[data-theme="dark"] #lock-toggle-btn` override, so light mode
-gets a plain icon with no glow at all instead of a softened one — testing showed the glow itself was
-the bleed, not just its intensity, so softening it in light mode wouldn't have been enough. Moving the glow into a theme-scoped selector
-raised its specificity above the existing `#lock-toggle-btn.disabled` rule, which would otherwise
-have been silently overridden (dark-mode disabled button would keep glowing) — added a matching
-`:root[data-theme="dark"] #lock-toggle-btn.disabled` rule so the disabled state still wins in both
-themes. Caught by rechecking specificity before finishing, not by re-testing the disabled state on
-device (still unconfirmed there, same standing gap as everything since Session 25).
+Fix is a one-shot flag, `expectingPickerReturn`, set by a new `beginPickerLaunch()` immediately before
+either of the two `input.click()` calls (main capture, vault capture — the only two system-picker
+launch points in the codebase, confirmed by grep before writing anything). `registerBackgroundLock()`
+checks it first: if true, consumes it (resets to `false`) and returns without locking anything, for
+that one pause event only — a later, unrelated backgrounding still locks normally, since the flag is
+already spent. Bounded by a 3-second timeout that also resets the flag, in case the expected pause
+never arrives (some OEM file choosers don't actually leave the Activity) — without that bound, a
+picker launch that doesn't trigger a pause would leave the flag armed indefinitely and silently skip
+the next real backgrounding too, which would be a security regression, not just a missed edge case.
 
+Deliberately narrow: only the file-chooser path was touched. Sharing a vault entry out and the Google
+Drive OAuth flow also pause the Activity the same way, and still lock immediately, unchanged — both
+are cases where data or a credential is genuinely leaving the app's boundary, unlike picking a file
+to bring something in, so the same exception was not extended to them without being asked.
+
+---
+
+**74. Idle timeout, lock-on-background, and lock-on-screen-off split into three independent on/off
+switches, for both the app-open lock and the Vault lock (six toggles total).** Requested directly.
+Previously "idle timer" and "lock on background" (Decision 45/73) were a package deal with no way to
+turn either off on its own, and there was no way to lock specifically when the phone's own screen
+turns off, as distinct from switching to another app.
+
+Six new `credentials` columns (`ensureColumn`, same migration pattern as `biometric_*_enabled` —
+Decision 50): `app_lock_idle_enabled`, `app_lock_background_enabled`, `app_lock_screenoff_enabled`,
+and the same three `vault_lock_*`. Idle and background default to `1` — matches the prior, always-on
+behavior exactly, so no existing install's behavior changes just from installing this update.
+Screen-off defaults to `0`, for a different reason: it's genuinely new capability nothing before this
+could have relied on, and it needs new native code (below) that can't be verified without a real
+device — defaulting it on would mean shipping an unconfirmed security behavior as if it were settled.
+
+`armAppAutoLock()`/`armVaultAutoLock()` now check their own `*_idle_enabled` column before arming (both
+already clear any existing timer unconditionally at the top, so toggling idle off mid-session correctly
+cancels a timer already ticking, not just future ones). `registerBackgroundLock()`'s single inline
+lock-or-don't block became a shared `handleLockTrigger(trigger)` — `trigger` is `'background'` or
+`'screenoff'`, matching the column-name suffixes exactly (not user input, so building the column name
+with a template literal is safe) — called from both the existing `appStateChange` listener and a new
+one below it.
+
+**Screen-off needed real native code, not just another JS check.** Android pauses the Activity
+identically whether the screen turned off or the person switched to another app — `appStateChange`
+can't tell them apart, full stop. `Intent.ACTION_SCREEN_OFF` is a separate, system-wide broadcast that
+only fires on an actual screen-off, but it's one of the broadcasts Android has never allowed to be
+declared in the manifest — only a receiver registered in code can catch it. Went with a `MainActivity`
+`BroadcastReceiver` dispatching a plain `dumpzone-screen-off` DOM event into the WebView via
+`evaluateJavascript()`, rather than a full Capacitor plugin — a real plugin needs its own Gradle
+module, manifest entry, and `cap sync` discovery, a lot of untestable-here moving parts for one narrow
+signal. `src/js/app.js` listens with an ordinary `window.addEventListener()`, no Capacitor plugin API
+on the JS side either.
+
+New `scripts/patch-screenlock.js`, same idempotent-CI-script pattern as `patch-manifest.js`/
+`patch-mainactivity.js` (`android/` is never committed — see Decision 49). Handles `MainActivity.java`
+in either shape `patch-mainactivity.js`'s own currently-disabled (Decision 63) step might leave it in
+— stock empty class, or one with an existing `onCreate()` — and runs every build regardless of that
+other script's on/off state. No `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` flag on the
+`registerReceiver()` call: Android 13+ requires one for a context-registered receiver only when the
+filter isn't restricted to protected system broadcasts, and `ACTION_SCREEN_OFF` — only the OS can ever
+send it — is exempt. Verified the script itself against both `MainActivity.java` shapes in a scratch
+copy, including that a second run is a correct no-op; not verified by an actual Gradle/device build,
+since neither is possible in this environment.
+
+Two lock triggers overlap at the OS level, and this is expected, not a bug: turning the screen off
+also pauses the Activity, so with "Lock when backgrounded" on, screen-off already locks via that path
+regardless of the screen-off toggle's own state. The screen-off toggle is additive — it matters
+specifically when background is off but the phone's own screen lock/timeout should still lock the
+app. Documented in both Settings descriptions and android-notes §14 so this isn't mistaken for a bug
+report later, same concern patch-mainactivity.js's own comment raised about FLAG_SECURE and
+screenshots.
