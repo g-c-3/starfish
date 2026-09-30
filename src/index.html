@@ -294,6 +294,23 @@
     </div>
   </div>
 
+  <div id="reminder-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>New reminder</h3>
+      <input id="reminder-label-input" type="text" placeholder="What to remember" />
+      <input id="reminder-when-input" type="datetime-local" />
+      <select id="reminder-repeat-select" aria-label="Repeat">
+        <option value="">Does not repeat</option>
+        <option value="daily">Repeats daily</option>
+        <option value="weekly">Repeats weekly</option>
+        <option value="monthly">Repeats monthly</option>
+      </select>
+      <p id="reminder-error" class="status-line" role="alert"></p>
+      <button id="reminder-save-btn">Save reminder</button>
+      <button id="reminder-cancel-btn" class="secondary-btn">Cancel</button>
+    </div>
+  </div>
+
   <div id="overwrite-confirm-dialog" class="modal-overlay hidden">
     <div class="modal-box">
       <h3>Overwrite — this can't be undone</h3>
