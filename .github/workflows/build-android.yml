@@ -46,6 +46,12 @@ jobs:
       # - name: Patch MainActivity.java (FLAG_SECURE — blank recents preview, block screenshots)
       #   run: node scripts/patch-mainactivity.js
 
+      # Decision 74 — powers the "lock when the phone screen locks" switch (app + vault settings).
+      # Runs regardless of whether the FLAG_SECURE step above is enabled; patch-screenlock.js
+      # handles MainActivity.java in either state (see that script's own header comment).
+      - name: Patch MainActivity.java (screen-off receiver for app/vault lock)
+        run: node scripts/patch-screenlock.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
