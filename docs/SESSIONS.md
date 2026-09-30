@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 56**
+
+Phase 4: Reminder capture card built. `#reminder-modal` (index.html) and `promptForReminder()` (app.js);
+main capture bar's Reminder branch now saves the entry, applies tags, and schedules the notification.
+Location and Money remain placeholders. Vault Reminder remains a placeholder (Decision 78).
+
+Decisions made: 78.
+
+Verified: `npm install` + `vite build` succeeded, modal markup present in both built output files. Not
+run through CI or on device. Device checks: modal opens, `datetime-local` picker renders in the
+WebView, notification fires at `fire_at`, repeat rules fire repeatedly, tags attach.
+
+Open, unchanged: `scripts/patch-mainactivity.js` still exists in the repo although Decision 64 marked it
+for deletion; delete it on GitHub. `captureText()`'s auto-detected reminder path ignores `extra.tags`.
+Battery-optimization prompt on first reminder and the "X reminders scheduled" indicator
+(ARCHITECTURE.md §7) are still not built.
+
+Next session start point: Phase 4 Location/Money need a defined capture shape before building; else
+Phase 8 batch-add or Phase 5 OCR. Standing device/CI confirmations from Session 55 unchanged.
+
+---
+
 **Session 55**
 
 Reported directly: the "Download update" button (Decision 75) got stuck mid-download, never

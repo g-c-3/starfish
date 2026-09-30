@@ -1344,3 +1344,16 @@ the APK." That project uses `window.location.assign()` for exactly this reason a
 the dependency from `package.json` rather than leaving an unused native plugin installed. The click
 handler no longer needs to be `async` either, since `window.location.assign()` doesn't return a
 promise worth awaiting.
+
+---
+
+**78. Reminder capture card built (main capture bar only); Vault Reminder stays a placeholder.**
+Capture uses a modal (`#reminder-modal`: label, `datetime-local`, repeat select), not `prompt()` — a
+date/time needs a real picker, and free-typed dates parse inconsistently by locale. `promptForReminder()`
+(app.js) resolves `{label, fire_at, repeat_rule}` or `null`; label required, one-time reminders must be in
+the future, repeating ones aren't checked. Save path: `insertEntry()` → `applyTags()` →
+`scheduleReminder()`. A scheduling failure is reported, the row stays saved — same order as the
+auto-detected path in `captureText()`. Same `type: 'reminder'` and columns as auto-detected reminders
+(Decision 57); the two are indistinguishable once created. Vault Reminder not built: the notification
+body carries the label in plaintext outside the vault's encryption boundary. Whether vault reminders
+should exist at all is open. Location and Money unchanged.
