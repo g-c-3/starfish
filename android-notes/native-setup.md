@@ -257,3 +257,47 @@ doesn't matter, they touch different files.
 **Currently disabled (Decision 63)** — the screenshot-blocking side effect got in the way of taking
 screenshots during active development. `build-android.yml`'s step calling this script is commented
 out, not removed; this script is untouched and still correct. Re-enable by uncommenting that step.
+
+## 14. Screen-off lock trigger (Decision 74)
+Powers the "Lock when the phone screen locks" switch in both App lock and Vault settings, as a
+third trigger independent of "lock after inactivity" and "lock when backgrounded."
+
+**Why this needs native code at all:** Capacitor's `@capacitor/app` `appStateChange` event fires
+`isActive: false` when the Activity pauses — which happens identically whether the person switched
+to another app or the screen just turned off. There's no way to tell those two apart from JS alone.
+Android does have a distinct signal for an actual screen-off: `Intent.ACTION_SCREEN_OFF`, a
+system-wide broadcast independent of Activity focus — but it's one of the broadcasts Android has
+never allowed to be declared in the manifest; it only reaches a receiver registered in code.
+
+**Why not a full Capacitor plugin:** a real plugin needs its own Gradle module, manifest entry, and
+`cap sync` discovery — a lot of moving parts (and CI risk, since none of it can be tested locally
+here) for one narrow signal. Instead, `MainActivity` registers the `BroadcastReceiver` directly and
+dispatches a plain DOM event straight into the WebView via `evaluateJavascript()`:
+```java
+getBridge().getWebView().post(() ->
+    getBridge().getWebView().evaluateJavascript(
+        "window.dispatchEvent(new Event('dumpzone-screen-off'))", null));
+```
+`src/js/app.js` listens with an ordinary `window.addEventListener('dumpzone-screen-off', ...)` —
+no Capacitor plugin API involved on the JS side either.
+
+**`scripts/patch-screenlock.js`** applies this, same idempotent-CI-script pattern as
+`patch-manifest.js`/`patch-mainactivity.js` and for the same reason (`android/` is never committed —
+see §3). Handles `MainActivity.java` in either state `patch-mainactivity.js`'s own (currently
+disabled, Decision 63) step might leave it in: a stock empty class, or one that already has an
+`onCreate()`. Runs every CI build regardless of that other script's on/off state. Verified against
+both shapes locally in a scratch copy before shipping (not a full Android build — no way to compile
+Java or drive Gradle in this environment), including that a second run against already-patched
+output is a correct no-op.
+
+**No `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` flag** on the `registerReceiver()` call — Android
+13+ requires one for a context-registered receiver only when targeting API 33+ (this project targets
+34, per §10's own notes) *and* the filter isn't restricted to protected system broadcasts.
+`ACTION_SCREEN_OFF` is one — only the OS can ever send it — so it's exempt. Documented here
+explicitly so the plain two-arg call doesn't read as a missed update later.
+
+**Not yet confirmed on a real device** — this is the first genuinely new native receiver added to
+this codebase since the FLAG_SECURE patch, and unlike that one, it's on by default in CI (no
+commented-out step to flip). The screen-off toggle itself defaults **off** in the database (see
+Decision 74) specifically because of this — turning it on is an explicit, informed choice until a
+real build confirms the event actually reaches the WebView as expected.
