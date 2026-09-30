@@ -1619,6 +1619,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   // vault one-offs (ROADMAP), not a new pattern. Shows existing tags as a pickable hint since a
   // plain prompt() can't render real chips; typing a name not in that list creates it (existing
   // applyTags()/entry_tags behavior — INSERT OR IGNORE already handles "new tag" for free). ----
+  // ---- Reminder capture (Phase 4). Modal, not prompt(): a date/time needs a real picker, and
+  // free-typed text would need the same parsing Edit's prompt() already gets wrong on locale.
+  // Resolves { label, fire_at, repeat_rule } or null on cancel. One-time reminders must be future. ----
+  function promptForReminder() {
+    const modal = document.getElementById('reminder-modal');
+    const labelEl = document.getElementById('reminder-label-input');
+    const whenEl = document.getElementById('reminder-when-input');
+    const repeatEl = document.getElementById('reminder-repeat-select');
+    const errEl = document.getElementById('reminder-error');
+    const pad = (n) => String(n).padStart(2, '0');
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    d.setMinutes(0, 0, 0);
+    labelEl.value = '';
+    whenEl.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+    repeatEl.value = '';
+    errEl.textContent = '';
+    modal.classList.remove('hidden');
+    labelEl.focus();
+
+    return new Promise((resolve) => {
+      const saveBtn = document.getElementById('reminder-save-btn');
+      const cancelBtn = document.getElementById('reminder-cancel-btn');
+      const finish = (result) => {
+        saveBtn.removeEventListener('click', onSave);
+        cancelBtn.removeEventListener('click', onCancel);
+        modal.classList.add('hidden');
+        resolve(result);
+      };
+      const onCancel = () => finish(null);
+      const onSave = () => {
+        const label = labelEl.value.trim();
+        const fireAt = new Date(whenEl.value).getTime();
+        if (!label) { errEl.textContent = 'Enter what to remember.'; return; }
+        if (isNaN(fireAt)) { errEl.textContent = 'Pick a date and time.'; return; }
+        if (!repeatEl.value && fireAt <= Date.now()) { errEl.textContent = 'Pick a time in the future.'; return; }
+        finish({ label, fire_at: fireAt, repeat_rule: repeatEl.value || null });
+      };
+      saveBtn.addEventListener('click', onSave);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
   async function promptForTags() {
     const existing = await listAllTags(db);
     const hint = existing.length ? ` Existing: ${existing.map((t) => t.name).join(', ')}.` : '';
@@ -1713,10 +1755,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureFile('voice', { label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
       });
-    } else if (type === 'reminder' || type === 'location' || type === 'money') {
-      // Placeholder — cards added now, capture flow not yet defined for any of the three. Explicit
-      // branch so these don't silently fall into the generic file-picker case below, which would
-      // be wrong for all of them.
+    } else if (type === 'reminder') {
+      const reminder = await promptForReminder();
+      if (!reminder) return;
+      const tags = await promptForTags();
+      const id = crypto.randomUUID();
+      await insertEntry(db, { id, type: 'reminder', ...reminder });
+      await applyTags(id, tags);
+      try {
+        await scheduleReminder({ id, ...reminder });
+      } catch (err) {
+        alert(`Reminder saved, but scheduling its notification failed: ${err.message || err}`);
+      }
+      await renderMainTimeline();
+    } else if (type === 'location' || type === 'money') {
+      // Placeholder — capture flow not yet defined for either. Explicit branch so these don't
+      // silently fall into the generic file-picker case below, which would be wrong for both.
       alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
     } else {
       const input = document.createElement('input');
