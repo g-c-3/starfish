@@ -4,6 +4,33 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 53**
+
+Reported from a device screenshot: update-available detection itself was correct (`0.1.0+175` →
+`0.1.0+176`), but "View release" only opened the release page — one extra tap from the actual file.
+
+`checkForUpdate()` now returns `downloadUrl`, the release's `.apk` asset link found via
+`release.assets` (a direct lookup, not a guess — `build-android.yml`'s release step attaches exactly
+one file). Button renamed to "Download update"; `Browser.open()` on that asset URL directly hands the
+file to the OS download manager instead of the release page. Still a manual install afterward — a
+sideloaded APK can't install itself no matter how the file arrived.
+
+Also confirmed the "up to date" case was already working as designed (already names the version) —
+reworded slightly for clarity, not a second bug fixed.
+
+Decisions made: 75.
+
+Verified with `node --check` on both changed files. Not run through CI or confirmed on device — the
+actual `.apk` asset name/shape from a real release has never been inspected directly, only inferred
+from what `build-android.yml` attaches; worth confirming the asset lookup finds it on the next real
+check.
+
+Next session start point: confirm the download button actually starts a real file download on
+device (not just opens a page), and everything still open from Session 52 (CI run for
+patch-screenlock.js, screen-off toggle on-device confirmation).
+
+---
+
 **Session 52**
 
 Requested directly: split "idle timer or backgrounded" into three independent switches — idle,

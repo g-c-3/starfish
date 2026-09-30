@@ -57,3 +57,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-29 | Session 50 | Decision 72 | Update check changed from daily background check to a manual "Check for updates" Settings button; shows up-to-date/update-available/error inline |
 | 2026-09-29 | Session 51 | Decision 73 | File-picker no longer triggers immediate lock-on-background (expectingPickerReturn one-shot flag); also fixed Decision 70 landing out of order in DECISIONS.md |
 | 2026-09-29 | Session 52 | Decision 74 | Split idle/background/screen-off into six independent lock toggles (app+vault); screen-off needs new native BroadcastReceiver (patch-screenlock.js), defaults off until confirmed on device |
+| 2026-09-30 | Session 53 | Decision 75 | "Check for updates" now downloads the .apk asset directly (Browser.open on browser_download_url) instead of opening the release page; button renamed "Download update" |

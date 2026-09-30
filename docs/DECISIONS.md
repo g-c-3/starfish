@@ -1272,3 +1272,26 @@ specifically when background is off but the phone's own screen lock/timeout shou
 app. Documented in both Settings descriptions and android-notes §14 so this isn't mistaken for a bug
 report later, same concern patch-mainactivity.js's own comment raised about FLAG_SECURE and
 screenshots.
+
+---
+
+**75. "Check for updates" downloads the APK directly instead of opening the release page.**
+Reported from a device screenshot: the update-available case (correctly detecting `0.1.0+175` →
+`0.1.0+176`) was working, but "View release" only ever led to the GitHub release page, one extra tap
+away from the actual file. `checkForUpdate()` now also returns `downloadUrl` — the release's `.apk`
+asset's `browser_download_url`, found via `release.assets`, not guessed — since `build-android.yml`'s
+release step attaches exactly one file, the signed APK, this is a direct lookup. Falls back to the
+release page itself only if no `.apk` asset is found, which would mean that CI step had changed shape
+without this being updated to match.
+
+Button renamed `update-view-release-btn` → `update-download-btn` ("Download update") to match what
+it now does — `Browser.open()` on the asset URL directly hands the file to the OS's own download
+manager instead of rendering a page, the same behavior a direct link to any non-browser-renderable
+file type gets. Still one manual step short of an actual install: a sideloaded APK can't install
+itself regardless of how the file arrived, so tapping the downloaded file in the notification shade
+or Downloads app is still required, same as always.
+
+The "up to date" case was already correct — it already named the version (`0.1.0+176`, matching
+Decision 72's own design) — reworded slightly for clarity ("You're up to date — …" instead of "Up to
+date — …") but not changed in substance; flagging this so it's clear that half of the report was
+already working as designed, not a second bug.
