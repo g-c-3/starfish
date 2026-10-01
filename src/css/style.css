@@ -113,7 +113,7 @@ h3 { font-size: 18px; font-weight: 700; }
 h4 { font-size: 13px; font-weight: 650; color: var(--muted); letter-spacing: 0.02em; text-transform: uppercase; }
 
 .screen { min-height: 100vh; padding: 20px; position: relative; z-index: 1; }
-.hidden { display: none; }
+.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 #main-screen, #vault-screen { padding-bottom: 118px; } /* clears the floating nav */
 
 .ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -168,7 +168,7 @@ input[type="search"], #search-input, #vault-search-input {
   background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
   padding: 12px 14px; margin: 12px 0 0; font-size: 13px; box-shadow: var(--shadow);
 }
-#backup-reminder-banner.hidden { display: none; }
+#backup-reminder-banner.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 #backup-reminder-banner span { flex: 1 1 auto; }
 #backup-reminder-banner .secondary-btn { width: auto; margin: 0; padding: 8px 12px; font-size: 13px; }
 #backup-reminder-banner .link-btn { font-size: 15px; text-decoration: none; opacity: 0.6; }
@@ -270,7 +270,7 @@ input[type="search"], #search-input, #vault-search-input {
   filter: drop-shadow(0 0 4px var(--danger));
 }
 #power-close-btn svg { width: 20px; height: 20px; }
-#power-close-btn.hidden { display: none; }
+#power-close-btn.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 #lock-toggle-btn {
   position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 62px; z-index: 6;
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
@@ -279,7 +279,7 @@ input[type="search"], #search-input, #vault-search-input {
 }
 :root[data-theme="dark"] #lock-toggle-btn { filter: drop-shadow(0 0 3px var(--neon-green)) drop-shadow(0 0 7px var(--neon-green)); }
 #lock-toggle-btn svg { width: 20px; height: 20px; }
-#lock-toggle-btn.hidden { display: none; }
+#lock-toggle-btn.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 /* Disabled (Decision 66); the dark-mode twin is needed for specificity (Decision 70). */
 #lock-toggle-btn.disabled { filter: grayscale(1); opacity: 0.35; pointer-events: none; }
 :root[data-theme="dark"] #lock-toggle-btn.disabled { filter: grayscale(1); opacity: 0.35; pointer-events: none; }
@@ -292,7 +292,7 @@ input[type="search"], #search-input, #vault-search-input {
   border: 1px solid var(--border); border-radius: 26px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
 }
-#bottom-nav.hidden { display: none; }
+#bottom-nav.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 #bottom-nav button {
   flex: 1; width: auto; background: none; box-shadow: none;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -325,7 +325,7 @@ input[type="search"], #search-input, #vault-search-input {
   background: rgba(8, 6, 20, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
-.modal-overlay.hidden { display: none; }
+.modal-overlay.hidden { display: none !important; } /* !important: component rules like .secondary-btn { display: flex } would otherwise un-hide it */
 .modal-box {
   background: var(--surface); color: var(--fg);
   border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -497,4 +497,18 @@ input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 select {
   appearance: none; -webkit-appearance: none; padding-right: 40px;
   background-image: var(--chevron-down); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+}
+
+/* ---- Disabled buttons (Download update stays visible but inert until a newer release is found) ---- */
+button:disabled, button[disabled] { opacity: 0.42; cursor: not-allowed; filter: grayscale(0.35); box-shadow: none; }
+button:disabled:active { transform: none; filter: grayscale(0.35); }
+
+/* ---- Biometric unlock: slow breathing glow to draw the eye without nagging ---- */
+.biometric-btn { border-color: rgba(139, 124, 246, 0.55); box-shadow: 0 0 10px 1px rgba(139, 124, 246, 0.25); }
+@keyframes biometric-breathe {
+  0%, 100% { box-shadow: 0 0 6px 0 rgba(139, 124, 246, 0.18); border-color: rgba(139, 124, 246, 0.4); }
+  50%      { box-shadow: 0 0 22px 4px rgba(139, 124, 246, 0.5); border-color: rgba(139, 124, 246, 0.9); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .biometric-btn:not(.hidden) { animation: biometric-breathe 3.6s ease-in-out infinite; }
 }
