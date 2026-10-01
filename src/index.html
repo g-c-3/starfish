@@ -31,29 +31,39 @@
 
   <div id="main-screen" class="screen hidden">
     <div id="home-tab">
-      <header>
-        <h2>Today</h2>
-        <div id="digest"></div>
-        <div id="on-this-day"></div>
-        <div id="backup-reminder-banner" class="hidden"></div>
-      </header>
+      <div id="home-main">
+        <header>
+          <h2>Today</h2>
+          <div id="digest"></div>
+          <div id="on-this-day"></div>
+          <div id="backup-reminder-banner" class="hidden"></div>
+        </header>
 
-      <div id="capture-bar" class="capture-cards">
-        <button data-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
-        <button data-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
-        <button data-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
-        <button data-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
-        <button data-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span></button>
-        <button data-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span></button>
-        <button data-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
-        <button data-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
+        <button id="universal-new-btn">＋ New</button>
+
+        <div id="capture-bar" class="capture-cards">
+        <button data-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span><span class="card-count"></span></button>
+        <button data-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span><span class="card-count"></span></button>
+        <button data-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span><span class="card-count"></span></button>
+        <button data-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span><span class="card-count"></span></button>
+        <button data-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span><span class="card-count"></span></button>
+        <button data-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span><span class="card-count"></span></button>
+        <button data-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span><span class="card-count"></span></button>
+        <button data-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span><span class="card-count"></span></button>
+        </div>
+
+        <button id="open-settings-tile" class="settings-tile"><span class="card-icon">⚙️</span> App Settings</button>
+
+        <input id="search-input" placeholder="Search everything..." />
+        <button id="select-files-btn" class="secondary-btn">Select files</button>
+        <div id="timeline"></div>
       </div>
 
-      <button id="open-settings-tile" class="settings-tile"><span class="card-icon">⚙️</span> App Settings</button>
-
-      <input id="search-input" placeholder="Search everything..." />
-      <button id="select-files-btn" class="secondary-btn">Select files</button>
-      <div id="timeline"></div>
+      <div id="folder-view" class="hidden">
+        <h2 id="folder-title"></h2>
+        <button id="folder-new-btn">＋ New</button>
+        <div id="folder-list"></div>
+      </div>
     </div>
 
     <div id="settings-tab" class="hidden">
@@ -291,6 +301,23 @@
       <button id="select-files-append-btn" class="secondary-btn">Download for append</button>
       <button id="select-files-delete-btn" class="secondary-btn warning-text">Delete selected</button>
       <button id="select-files-close-btn" class="secondary-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="new-chooser-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>What do you want to add?</h3>
+      <div id="new-chooser-grid" class="capture-cards">
+        <button data-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
+        <button data-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
+        <button data-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
+        <button data-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
+        <button data-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span></button>
+        <button data-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span></button>
+        <button data-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
+        <button data-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
+      </div>
+      <button id="new-chooser-cancel-btn" class="secondary-btn">Cancel</button>
     </div>
   </div>
 
