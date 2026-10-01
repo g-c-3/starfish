@@ -474,11 +474,10 @@ Download for append, Delete — shared between main and Vault, category-grouped 
   synchronous `showScreen('main-screen')`) or the main app (reuses `showLockScreen()` wholesale) depending
   on which is current; `#vault-lock-btn` (the Vault banner's own former "Lock" button) is gone, fully
   replaced. A third bottom-nav slot, `#nav-back-btn`, sits between Home and Vault — styled as a plain
-  rounded square, not a third tab (no label, no active state). Backed by a deliberately simple two-slot
-  toggle (`currentLocation`/`lastLocation`, one of `'home'`/`'settings'`/`'vault'`), not a full history
-  stack — this app's actual navigation depth is only ever one level deep, so a stack has no case that could
-  use the extra depth. Pressing Back swaps which location is "current" the same way any other navigation
-  does, so it toggles back and forth rather than getting stuck. Every dedicated "back to home" element
+  rounded square, not a third tab (no label, no active state). Hierarchical since Decision 82 (originally a two-slot toggle):
+  Back goes up one level inside the current section and stops at that section's landing page, where it is
+  dimmed — Home: Settings or an open folder -> Home landing; Vault: an open Vault Settings card -> Vault
+  landing. It never switches between Home and Vault; the nav's Home/Vault buttons do that. Every dedicated "back to home" element
   (e.g. Decision 61's `#settings-back-btn`) is removed in favor of this one universal control.
 - **Restyle + disabled state + Vault contrast fix (Decision 66; icon/color updated in Decisions 67-68).**
   Lock button: closed-padlock icon, `--neon-green` (`#39ff14`, fixed across both themes, changed from an

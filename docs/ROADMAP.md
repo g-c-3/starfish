@@ -76,7 +76,7 @@
   a second small icon button, left of the power button, locks whichever of the app or the Vault is
   currently open (context-aware, checked at click time); the Vault's own former "Lock" button is
   gone, replaced by it. A third bottom-nav slot between Home and Vault is a universal Back button
-  (a simple two-slot last-location toggle, not a full history stack) — every dedicated "back to
+  (hierarchical since Session 60, Decision 82 — originally a two-slot toggle) — every dedicated "back to
   home" element from earlier sessions is removed in favor of it. **Restyled + Vault contrast bug
   fixed (Session 44, Decision 66):** lock button now golden, thicker, persistent glow, and disabled
   (grayed out, not tappable) on Home/Settings whenever no app-open password is set; power button
@@ -96,7 +96,9 @@
   biometric toggle showing on the locked gate instead of only once unlocked, and Lock not returning
   Home immediately. Added Reminder and Location as two more cards (eight total:
   Text/Voice/Image/PDF/Reminder/Location/Money/Files) — Reminder reuses the existing auto-detected
-  type, Location is new; both placeholder like Money. **Session 59 (Decision 81):** Home cards are folders — each opens its type's list with a New
+  type, Location is new; both placeholder like Money. **Session 60 (Decision 82):** Back is hierarchical — one level up inside Home or Vault, stops at the
+  landing page (dimmed there), never switches section. Not run on a device.
+  **Session 59 (Decision 81):** Home cards are folders — each opens its type's list with a New
   button and count badge; universal New with a type chooser on Home; Home timeline is search-only; Vault
   unchanged. Not run on a device.
   **Session 57 (Decision 79):** Location card built on the main capture bar — GPS fix saved with

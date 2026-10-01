@@ -1407,3 +1407,17 @@ types, then calls `startCapture()`. Rules:
   limit 200 per folder.
 Vault capture bar unchanged: still direct-capture cards, no folders. Whether the Vault should mirror
 this is open.
+
+---
+
+**82. Back is hierarchical and stops at the landing page; it no longer toggles between Home and Vault.**
+Reported from a recording: repeated Back presses bounced Home -> Vault -> Home. Replaces the two-slot
+`currentLocation`/`lastLocation` toggle from Decision 65 (`lastLocation` removed). `backAction()`
+(app.js) names what Back does now, one level up inside the current section only:
+- Home: Settings -> Home landing; open folder (Decision 81) -> Home landing; landing -> nothing.
+- Vault: open Vault Settings card -> Vault landing; landing or locked gate -> nothing.
+Back never crosses between Home and Vault; the bottom-nav Home/Vault buttons do that. At a landing page
+the button is dimmed and inert (`.disabled`, `updateBackButtonState()`), so a press that does nothing
+doesn't read as broken. Vault Trash and Select files are not Back levels: Trash is nested inside the
+settings card that Back collapses, and Select files has its own close. All other Decision 65 behavior
+(button position, glow, no dedicated back elements) unchanged.

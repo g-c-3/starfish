@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 60**
+
+Phase 4: Back button made hierarchical (Decision 82). It goes up one level inside Home or Vault and stops
+at that section's landing page, where it is dimmed; it no longer bounces between Home and Vault.
+
+Decisions made: 82.
+
+Verified: `vite build`; no remaining reference to `lastLocation`; `showScreen()`/`switchMainTab()` confirmed
+to keep `currentLocation` current on every Home/Settings/Vault transition. Not run through CI or on
+device; the behavior itself was not exercised, only the code paths read. Device checks: repeated Back on
+Home landing does nothing and is dimmed; Back from Settings and from an open folder reaches Home landing
+and stops; Back in Vault with Vault Settings open collapses it, then stops; Back never switches section.
+
+Open: unchanged from Session 59.
+
+Next session start point: unchanged from Session 57, plus device pass on Sessions 59 and 60.
+
+---
+
 **Session 59**
 
 Phase 4: Home restructured around folders (Decision 81). Cards open per-type lists with a New button
