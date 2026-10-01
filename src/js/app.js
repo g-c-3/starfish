@@ -43,20 +43,16 @@ let appAutoLockTimer = null;
 // skip its immediate lock for that specific pause/resume pair, and only that one.
 let expectingPickerReturn = false;
 
-// ---- Universal back button (Decision 65) — a simple two-slot toggle, not a full history stack.
-// "Location" is one of 'home' | 'settings' | 'vault'; recordLocation() is called from inside
-// showScreen()/switchMainTab() themselves (not from each individual call site), so every existing
-// caller gets Back-button support for free. Back always returns to wherever you were immediately
-// before the current location — tapping it again toggles right back to where you just left,
-// rather than getting stuck unable to return. Deliberately not a deeper stack: this app's actual
-// navigation depth is only ever one level (Home ⇄ Settings ⇄ Vault), so a stack would add
-// complexity with no case that could ever use it.
+// ---- Universal back button (Decisions 65, 82) — hierarchical, not a history or a toggle. Back goes
+// up one level inside the section you are in (Home or Vault) and stops at that section's landing
+// page; it never jumps between Home and Vault. "Location" is one of 'home' | 'settings' | 'vault';
+// recordLocation() is called from inside showScreen()/switchMainTab() themselves, so every caller
+// keeps it current. backAction() is the single place that says what Back would do right now (or
+// null at a landing page, where the button is dimmed and does nothing).
 let currentLocation = 'home';
-let lastLocation = 'home';
 function recordLocation(loc) {
-  if (loc === currentLocation) return; // re-visiting where you already are isn't a navigation
-  lastLocation = currentLocation;
   currentLocation = loc;
+  updateBackButtonState();
 }
 
 // ---- Screen visibility — nothing wired this before now; every screen built across every
@@ -128,22 +124,35 @@ function switchMainTab(tab) {
   updateLockButtonDisabledState(false);
 }
 
-// Universal back button (Decision 65) — navigates to lastLocation using the same functions every
-// other caller uses (showScreen/switchMainTab), so recordLocation()'s own bookkeeping inside those
-// functions naturally produces the toggle-back-and-forth behavior described above; nothing extra
-// needs to happen here beyond picking where to go.
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   openFolderType = null;
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
+  updateBackButtonState();
+}
+
+// One level up inside the current section, or null when already on its landing page (Decision 82).
+//   Home:  Settings -> Home landing; open folder -> Home landing; Home landing -> nothing.
+//   Vault: open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
+function backAction() {
+  if (currentLocation === 'vault') {
+    const card = document.getElementById('vault-settings-card');
+    return card && card.open ? () => { card.open = false; } : null;
+  }
+  if (currentLocation === 'settings') return () => showScreen('main-screen', { tab: 'home' });
+  if (openFolderType) return closeFolder;
+  return null;
+}
+
+function updateBackButtonState() {
+  document.getElementById('nav-back-btn')?.classList.toggle('disabled', !backAction());
 }
 
 function goBack() {
-  // An open folder is a sub-view of Home: Back closes it before it navigates anywhere else.
-  if (openFolderType && currentLocation === 'home') { closeFolder(); return; }
-  if (lastLocation === 'vault') { showScreen('vault-screen'); window.refreshVaultGateView(); }
-  else showScreen('main-screen', { tab: lastLocation }); // 'home' or 'settings'
+  const action = backAction();
+  if (action) action();
+  updateBackButtonState();
 }
 
 function setActiveNavTab(tab) {
@@ -1872,6 +1881,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   async function openFolder(type, btn) {
     openFolderType = type;
+    updateBackButtonState();
     document.getElementById('folder-title').textContent = `${btn.querySelector('.card-icon').textContent} ${VAULT_TYPE_LABELS[type]}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
@@ -1879,6 +1889,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
   document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
+
+  document.getElementById('vault-settings-card').addEventListener('toggle', updateBackButtonState);
+  updateBackButtonState();
 
   const newChooser = document.getElementById('new-chooser-modal');
   document.getElementById('universal-new-btn').addEventListener('click', () => newChooser.classList.remove('hidden'));
