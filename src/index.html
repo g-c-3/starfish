@@ -28,28 +28,48 @@
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
       <symbol id="i-select" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+      <symbol id="i-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+      <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a14 14 0 0 1-2.6 3.4M6.5 7.5C4.5 9 3.3 11 2.5 12c1 2 4.5 6 9.5 6 1.4 0 2.7-.3 3.8-.8"/><path d="M9.9 10a3 3 0 0 0 4.1 4.1"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.4-9-7.4z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></symbol>
     </defs>
   </svg>
-  <div id="first-run-setup" class="screen hidden">
-    <h1>Welcome to Dumpzone</h1>
-    <p style="font-size:13px; opacity:0.8;">Both are optional and can be changed later in Settings.</p>
-    <h4>App-open password (optional)</h4>
-    <p class="mode-description">Leave blank for quick access — no password prompt when opening the app.</p>
-    <input id="setup-app-password" type="password" placeholder="App-open password (optional)" />
-    <input id="setup-app-password-hint" type="text" placeholder="Optional hint" />
-    <h4>Private Vault PIN (optional, set up anytime)</h4>
-    <p class="mode-description">A separate PIN just for the Vault — independent of the app-open password above.</p>
-    <input id="setup-vault-pin" type="password" placeholder="Vault PIN (optional)" />
-    <input id="setup-vault-pin-hint" type="text" placeholder="Optional hint" />
-    <button id="first-run-continue-btn">Continue</button>
+  <div id="first-run-setup" class="screen auth-screen hidden">
+    <div class="auth-head">
+      <div class="brand-mark"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></div>
+      <h1>Welcome to Dumpzone</h1>
+      <p class="screen-sub">Private, on-device capture. Both settings below are optional and can be changed later in Settings.</p>
+    </div>
+    <section class="form-card">
+      <h3>App-open password</h3>
+      <p class="mode-description">Leave blank for quick access — no password prompt when opening the app.</p>
+      <input id="setup-app-password" type="password" placeholder="Password (optional)" />
+      <input id="setup-app-password-hint" type="text" placeholder="Hint (optional)" />
+    </section>
+    <section class="form-card">
+      <h3>Private Vault PIN</h3>
+      <p class="mode-description">A separate PIN just for the Vault — independent of the app-open password. Set it now or anytime later.</p>
+      <input id="setup-vault-pin" type="password" placeholder="Vault PIN (optional)" />
+      <input id="setup-vault-pin-hint" type="text" placeholder="Hint (optional)" />
+    </section>
+    <button id="first-run-continue-btn" class="new-btn">Continue</button>
   </div>
 
-  <div id="lock-screen" class="screen hidden">
-    <h1>Dumpzone</h1>
-    <input id="password-input" type="password" placeholder="Password" />
-    <button id="unlock-btn">Unlock</button>
-    <button id="biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
-    <div id="password-hint"></div>
+  <div id="lock-screen" class="screen auth-screen hidden">
+    <div class="auth-head">
+      <div class="brand-mark"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></div>
+      <h1>Dumpzone</h1>
+      <p class="screen-sub">Enter your password to continue.</p>
+    </div>
+    <section class="form-card">
+      <input id="password-input" type="password" placeholder="Password" />
+      <button id="unlock-btn">Unlock</button>
+      <button id="biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
+      <div id="password-hint"></div>
+    </section>
   </div>
 
   <div id="main-screen" class="screen hidden">
@@ -92,27 +112,30 @@
 
     <div id="settings-tab" class="hidden">
       <h2>Settings</h2>
+      <p class="screen-sub">Everything stays on this device.</p>
 
-      <details id="your-data-settings">
-        <summary>Your Data</summary>
+      <p class="settings-group">Data</p>
+      <details id="your-data-settings" data-tone="blue">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="tile-label">Your Data</span></summary>
         <p class="mode-description">Everything below stays on this device unless you export or share it yourself.</p>
         <div id="your-data-summary" class="status-line"></div>
         <button id="your-data-export-btn" class="secondary-btn">Export Now</button>
       </details>
 
-      <details id="storage-breakdown-settings">
-        <summary>Storage breakdown</summary>
+      <details id="storage-breakdown-settings" data-tone="blue">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-storage"/></svg></span><span class="tile-label">Storage breakdown</span></summary>
         <div id="storage-breakdown-list"></div>
       </details>
 
-      <details id="trash-settings">
-        <summary>Trash</summary>
+      <details id="trash-settings" data-tone="blue">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span class="tile-label">Trash</span></summary>
         <p class="mode-description">Deleted items stay here 30 days before being permanently removed automatically.</p>
         <div id="trash-list"></div>
       </details>
 
-      <details id="app-lock-settings">
-        <summary>App lock</summary>
+      <p class="settings-group">Security</p>
+      <details id="app-lock-settings" data-tone="green">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">App lock</span></summary>
         <p class="mode-description">Only applies if an app-open password is set — quick access has nothing to lock back to.</p>
 
         <label class="switch-row"><input type="checkbox" id="app-lock-idle-toggle" checked /> Lock after inactivity</label>
@@ -143,21 +166,22 @@
         </div>
       </details>
 
-      <details id="privacy-screen-settings">
-        <summary>Privacy Screen</summary>
+      <details id="privacy-screen-settings" data-tone="green">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-eyeoff"/></svg></span><span class="tile-label">Privacy Screen</span></summary>
         <label class="switch-row"><input type="checkbox" id="privacy-screen-toggle" /> Hide app content in Recents &amp; block screenshots</label>
         <p class="mode-description">One Android setting, two effects together, not separable: a plain dark preview instead of your
           content in the Recents/app-switcher screen, and screenshots/screen recording of the app blocked
           system-wide. Off by default.</p>
       </details>
 
-      <details id="appearance-settings">
-        <summary>Appearance</summary>
+      <p class="settings-group">Preferences</p>
+      <details id="appearance-settings" data-tone="violet">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-palette"/></svg></span><span class="tile-label">Appearance</span></summary>
         <label class="switch-row"><input type="checkbox" id="dark-mode-toggle" /> Dark mode</label>
       </details>
 
-      <details id="update-check-settings">
-        <summary>Updates</summary>
+      <details id="update-check-settings" data-tone="violet">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></span><span class="tile-label">Updates</span></summary>
         <p class="mode-description">Checks this project's public GitHub Releases page — only when
           you tap the button below, never automatically. The only thing this app asks of the network
           besides the optional Drive backup.</p>
@@ -166,8 +190,9 @@
         <button id="update-download-btn" class="secondary-btn hidden">Download update</button>
       </details>
 
-      <details id="backup-settings">
-        <summary>Backup &amp; Restore (local)</summary>
+      <p class="settings-group">Backup</p>
+      <details id="backup-settings" data-tone="amber">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><span class="tile-label">Backup &amp; Restore (local)</span></summary>
 
         <h4>Back up now</h4>
         <div id="backup-categories" class="category-checkboxes"></div>
@@ -188,9 +213,9 @@
         <div id="restore-status" class="status-line"></div>
       </details>
 
-      <details id="drive-settings">
-        <summary>Google Drive Backup (optional)</summary>
-        <p style="font-size:12px; opacity:0.8;">Off by default. Connecting only ever gives this app
+      <details id="drive-settings" data-tone="amber">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-cloud"/></svg></span><span class="tile-label">Google Drive Backup (optional)</span></summary>
+        <p class="mode-description">Off by default. Connecting only ever gives this app
           access to backup files it creates itself — never the rest of your Drive.</p>
 
         <div id="drive-disconnected-view">
@@ -217,13 +242,17 @@
       <h2><svg class="ic title-lock" aria-hidden="true"><use href="#i-lock"/></svg>Private Vault</h2>
     </header>
 
-    <div id="vault-pin-setup-view" class="hidden">
+    <div id="vault-pin-setup-view" class="hidden form-card">
+      <div class="brand-mark small"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></div>
+      <h3>Create your Vault</h3>
       <p class="mode-description">Set a PIN to create your Private Vault — its own encryption, its own auto-lock, separate from the app-open password.</p>
       <input id="vault-setup-pin-input" type="password" placeholder="Set a Vault PIN" />
       <input id="vault-setup-pin-hint-input" type="text" placeholder="Optional hint" />
       <button id="vault-setup-pin-btn">Set up Vault</button>
     </div>
-    <div id="vault-locked-view">
+    <div id="vault-locked-view" class="form-card">
+      <div class="brand-mark small"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></div>
+      <h3>Vault locked</h3>
       <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
       <button id="vault-unlock-btn">Unlock Vault</button>
       <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
@@ -369,8 +398,10 @@
     </div>
   </div>
 
-  <div id="ad-gate-screen" class="screen hidden">
-    <p>Loading...</p>
+  <div id="ad-gate-screen" class="screen auth-screen hidden">
+    <div class="brand-mark"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></div>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="screen-sub">Loading...</p>
   </div>
 
   <script type="module" src="js/app.js"></script>
