@@ -96,7 +96,10 @@
   biometric toggle showing on the locked gate instead of only once unlocked, and Lock not returning
   Home immediately. Added Reminder and Location as two more cards (eight total:
   Text/Voice/Image/PDF/Reminder/Location/Money/Files) — Reminder reuses the existing auto-detected
-  type, Location is new; both placeholder like Money. **Session 57 (Decision 79):** Location card built on the main capture bar — GPS fix saved with
+  type, Location is new; both placeholder like Money. **Session 59 (Decision 81):** Home cards are folders — each opens its type's list with a New
+  button and count badge; universal New with a type chooser on Home; Home timeline is search-only; Vault
+  unchanged. Not run on a device.
+  **Session 57 (Decision 79):** Location card built on the main capture bar — GPS fix saved with
   coordinates, optional Share of a map link on save; Share action handles location entries; not run on a
   device. Vault Location and Money still placeholders. **Session 56 (Decision 78):** Reminder card built on the main capture bar — modal with
   datetime picker and repeat select, tags, notification scheduled on save; not run on a device. Vault

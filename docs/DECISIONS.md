@@ -1386,3 +1386,24 @@ empty or unusable list reports `unparseable_version`. Tested against a mocked li
 and draft entries. Limit: only the 15 newest releases are inspected — more than 15 builds between
 checks still resolves correctly, since the highest of those 15 is newer than any build installed from
 before them.
+
+---
+
+**81. Home cards are folders; each has its own New button; Home also has a universal New.**
+Tapping a card opens that type's list (`#folder-view`) with a "＋ New" button that runs the same
+capture flow the card used to run directly (extracted from the card click handler into
+`startCapture(type)`, body unchanged). Each card shows a count badge (`renderFolderCounts()`, one
+grouped query). A "＋ New" button above the cards opens `#new-chooser-modal`, a grid of the same eight
+types, then calls `startCapture()`. Rules:
+- Home no longer lists all entries mixed. `#timeline` now holds search results only; an empty search
+  box clears it. Entries are reached through their folder, search, or Select files.
+- Money's folder also lists `expense` entries. They are the only money-related records until Money
+  capture is defined, and with the mixed list gone they would otherwise have no folder. Types stay
+  separate (Decision 55); only the listing is shared.
+- Vault entries are excluded from counts and folder lists (`is_private=0`), same boundary as the digest.
+- Back: the universal Back button closes an open folder first (Decision 65 allows no dedicated back
+  element); the bottom-nav Home button also closes it.
+- Folder list uses the existing row render (Share, Download, Download for append, Edit, Delete),
+  limit 200 per folder.
+Vault capture bar unchanged: still direct-capture cards, no folders. Whether the Vault should mirror
+this is open.

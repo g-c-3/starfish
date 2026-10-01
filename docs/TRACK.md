@@ -63,3 +63,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-01 | Session 56 | Decision 78 | Reminder capture card built (modal with datetime picker and repeat select, tags, notification scheduling); Vault/Location/Money cards unchanged |
 | 2026-10-01 | Session 57 | Decision 79 | Location capture card built (GPS fix saved with coordinates, optional Share of a map link); Share action handles location entries; ACCESS_COARSE_LOCATION added to manifest patch |
 | 2026-10-01 | Session 58 | Decision 80 | Update check fixed to offer the newest build: scans the release list for the highest run number instead of /releases/latest (commit-date ordering, 60s cache) |
+| 2026-10-01 | Session 59 | Decision 81 | Home cards now open per-type folders with a New button and count badge; universal New with type chooser; Home timeline is search-only; Money folder lists expenses |

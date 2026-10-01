@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 59**
+
+Phase 4: Home restructured around folders (Decision 81). Cards open per-type lists with a New button
+and count badge; a universal New on Home opens a type chooser; the mixed Home timeline is now search
+results only. Money's folder also lists expenses. Universal Back and the Home nav button close an open
+folder.
+
+Decisions made: 81.
+
+Verified: `vite build`; every new element id present exactly once in `index.html`; chooser and card
+markup counts checked. Not run through CI or on device; no DOM-level test ran. Device checks: card
+opens its folder, New inside it adds to that list, counts update after capture/delete, universal New
+asks for a type, Back closes the folder, search results still show and clear, Money folder shows
+expenses.
+
+Open: Vault has no folders (Decision 81). Counts do not refresh after a backup restore until the next
+capture/delete. Location rows show label only. Session 56 and 57 open items unchanged.
+
+Next session start point: unchanged from Session 57, plus device pass on this change.
+
+---
+
 **Session 58**
 
 Reported from device: Settings offered build 196 while 198 existed. `update-check.js` now lists
