@@ -71,3 +71,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-01 | Session 64 | Decision 86 | Phase 15 step 1: design system on Home and Vault — tokens, bundled Inter, SVG icon sprite, tiles, rows, floating nav, empty states; backup banner empty-bar bug fixed |
 | 2026-10-01 | Session 65 | Decision 87 | Phase 15 step 2: auth screens, Vault gate, ad gate and Settings restyled; Settings grouped with icon chips; switch rows reworked |
 | 2026-10-02 | Session 66 | Decision 88 | Biometric buttons relabelled with slow glow; Download update disabled until an update is found; `.hidden` display bug fixed |
+| 2026-10-02 | Session 67 | Decision 89 | Background art: cubes on unlock screens, rounded squares on Home and Vault landing; theme tokens for both modes |

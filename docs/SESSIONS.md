@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 67**
+
+Phase 15: background art (Decision 89). Two original drawings, written as SVG symbols in the sprite: isometric cube outlines for the lock screen, first-run, ad gate and the locked Vault; overlapping rounded squares for the Home and Vault landing pages. Colors come from new `--art-*` tokens, so one drawing serves dark and light. Layers sit behind screen content, ignore touches, and fade out toward the content area. Reference images supplied were used for style direction only; none is embedded.
+
+Decisions made: 89.
+
+Verified: `vite build`, headless render of lock, Home and locked Vault in both themes at 360 px. Not run through CI or on device. Device checks: art does not hurt legibility of the header or digest chips; no horizontal scroll on Home or Vault; cubes disappear once the Vault unlocks; squares absent in folder views and Settings; scrolling feels normal.
+
+Next session start point: unchanged (Phase 15 step 3). Device pass on Sessions 59 to 67.
+
+---
+
 **Session 66**
 
 Fixes from device screenshots of Session 65 (Decision 88).

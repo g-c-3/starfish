@@ -341,5 +341,6 @@ individual items) can be picked up in any order once prerequisites are met.
     brand mark and form cards; Settings grouped (Data, Security, Preferences, Backup) with icon chips;
     switches as label-left rows; custom select arrow. Not run on a device.
     Session 66: biometric buttons read "Use Biometric" with a slow glow; Download update disabled until a newer release is found; `.hidden` made unconditional.
+    Session 67: background art — cubes on unlock/auth screens, rounded squares on Home and Vault landing; both themes.
   - [ ] 3 — Capture flows: replace `prompt()`/`confirm()`/`alert()` with in-app bottom sheets (touches logic).
   - [ ] 4 — Polish: transitions, haptics if the existing plugins allow, light-theme tuning.

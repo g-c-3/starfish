@@ -1491,3 +1491,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `.hidden` is `display: none !important`. Component classes that set `display` must not be able to un-hide an element the app hides.
 - Download update: always rendered, `disabled` until a check returns an available update. A new check disables it first.
 
+---
+
+**89. Background art.** Extends Decision 86.
+- Two drawings, both `<symbol>`s in the `index.html` sprite: `art-cubes` (unlock, first-run, ad gate, locked Vault) and `art-squares` (inside `#home-main` and `#vault-main`, so folder views and Settings stay plain).
+- Theme handling: strokes and fills use `--art-t/-b/-v/-p/-a` tokens (inline `style="…var()"`), plus `--art-opacity` per theme. No second asset per theme.
+- Layer rules: `.bg-art` is absolute, `z-index: -1` inside `.screen`'s stacking context, `pointer-events: none`, masked to fade. Cubes cover the screen; squares cover the top 300 px.
+- The locked-Vault cubes are a sibling after `#vault-content` and hidden by `#vault-content:not(.hidden) ~ .bg-cubes`, so no JS tracks the state.
+- Art is original and generated, not taken from stock images.
+
