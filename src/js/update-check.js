@@ -3,8 +3,8 @@
 // on/off setting from Decision 71 are gone — a check now happens only on that explicit tap, so
 // there's nothing left to gate.
 //
-// Same network call it always was: a GET to GitHub's public REST API for one public repo's latest
-// release. No auth, no account, no personal data sent beyond what any HTTP request exposes
+// Same network call it always was: a GET to GitHub's public REST API for one public repo's recent
+// releases. No auth, no account, no personal data sent beyond what any HTTP request exposes
 // (IP/User-Agent) — now only when tapped, never on app open.
 
 const REPO = 'g-c-3/starfish';
@@ -31,19 +31,27 @@ function extractRunNumber(versionOrTag) {
 async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
   if (!navigator.onLine) return { status: 'error', reason: 'offline' };
 
+  // Not /releases/latest (Decision 80): that endpoint ranks by commit date and is cached for 60s,
+  // so builds pushed minutes apart can report an older one. The list is scanned for the highest
+  // run number instead. The timestamp param and no-store keep a cached copy from being served.
   let release;
   try {
     const res = await Promise.race([
-      fetchImpl(`https://api.github.com/repos/${REPO}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github+json' }
+      fetchImpl(`https://api.github.com/repos/${REPO}/releases?per_page=15&_=${Date.now()}`, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store'
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), FETCH_TIMEOUT_MS))
     ]);
     if (!res.ok) return { status: 'error', reason: `http_${res.status}` };
-    release = await res.json();
+    const releases = await res.json();
+    release = (Array.isArray(releases) ? releases : [])
+      .filter((r) => !r.draft && !r.prerelease && extractRunNumber(r.tag_name) != null)
+      .sort((a, b) => extractRunNumber(b.tag_name) - extractRunNumber(a.tag_name))[0];
   } catch (e) {
     return { status: 'error', reason: 'network_error' };
   }
+  if (!release) return { status: 'error', reason: 'unparseable_version' };
 
   const latestRun = extractRunNumber(release.tag_name);
   const currentRun = extractRunNumber(currentVersion);
