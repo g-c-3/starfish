@@ -132,7 +132,16 @@ function switchMainTab(tab) {
 // other caller uses (showScreen/switchMainTab), so recordLocation()'s own bookkeeping inside those
 // functions naturally produces the toggle-back-and-forth behavior described above; nothing extra
 // needs to happen here beyond picking where to go.
+let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
+function closeFolder() {
+  openFolderType = null;
+  document.getElementById('folder-view')?.classList.add('hidden');
+  document.getElementById('home-main')?.classList.remove('hidden');
+}
+
 function goBack() {
+  // An open folder is a sub-view of Home: Back closes it before it navigates anywhere else.
+  if (openFolderType && currentLocation === 'home') { closeFolder(); return; }
   if (lastLocation === 'vault') { showScreen('vault-screen'); window.refreshVaultGateView(); }
   else showScreen('main-screen', { tab: lastLocation }); // 'home' or 'settings'
 }
@@ -696,10 +705,10 @@ async function setAutoLockMinutes(minutes) {
   await armAppAutoLock(); // re-arm immediately with the new duration if currently unlocked with a password set
 }
 
-async function showMainTimeline() {
-  const rows = await db.query(
-    `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0 ORDER BY created_at DESC LIMIT 100`
-  );
+async function showMainTimeline(types = null) {
+  const typeClause = types ? ` AND type IN (${types.map(() => '?').join(',')})` : '';
+  const sql = `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0${typeClause} ORDER BY created_at DESC LIMIT 200`;
+  const rows = types ? await db.query(sql, types) : await db.query(sql);
   const entries = rows.values || [];
   // One extra query for all tags at once (GROUP_CONCAT) rather than one per row — same bulk
   // approach vault.js's buildVaultIndex already uses for its own index, just via SQL here instead
@@ -1372,7 +1381,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#bottom-nav button[data-nav]').forEach((btn) => btn.addEventListener('click', async () => {
     const tab = btn.dataset.nav;
     if (tab === 'vault') { showScreen('vault-screen'); await refreshVaultGateView(); }
-    else showScreen('main-screen', { tab });
+    else {
+      if (tab === 'home') closeFolder(); // tapping Home always lands on the card grid, not an open folder (Decision 81)
+      showScreen('main-screen', { tab });
+    }
   }));
 
   // "App Settings" tile (Decision 61) — the settings-tab panel itself is unchanged, only its entry
@@ -1741,8 +1753,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
-  document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', async () => {
-    const type = btn.dataset.type;
+  async function startCapture(type) {
     if (type === 'note') {
       const text = prompt('Note text:');
       if (!text) return;
@@ -1808,14 +1819,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
       input.click();
     }
-  }));
+  }
 
   // ---- Main timeline — showMainTimeline() (app.js) only ever returned rows; nothing rendered
   // them or attached the five per-file actions (built in Phase 7, two sessions ago) to anything.
   // This is that missing render step, mirroring renderVaultList's already-working shape. ----
+  // Cards are folders (Decision 81): a card opens the list of that type; Money also lists expenses,
+  // the only money-related records there are until Money capture is defined. Vault entries are never
+  // counted or listed here (is_private=0), same boundary as the digest.
+  const FOLDER_TYPES = {
+    note: ['note'], voice: ['voice'], image: ['image'], pdf: ['pdf'], reminder: ['reminder'],
+    location: ['location'], money: ['money', 'expense'], file: ['file']
+  };
+
+  async function renderFolderCounts() {
+    const res = await db.query(`SELECT type, COUNT(*) AS c FROM entries WHERE deleted_at IS NULL AND is_private=0 GROUP BY type`);
+    const byType = Object.fromEntries((res.values || []).map((r) => [r.type, r.c]));
+    document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => {
+      const n = FOLDER_TYPES[btn.dataset.type].reduce((sum, t) => sum + (byType[t] || 0), 0);
+      btn.querySelector('.card-count').textContent = n ? String(n) : '';
+    });
+  }
+
   async function renderMainTimeline() {
-    const rows = await showMainTimeline();
-    document.getElementById('timeline').innerHTML = rows.map((row) => `
+    await renderFolderCounts();
+    if (!openFolderType) return;
+    const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
+    document.getElementById('folder-list').innerHTML = rows.map((row) => `
       <div class="drive-backup-row" data-type="${row.type}">
         <span>${row.label} (${row.type})${row.tags && row.tags.length ? ' — ' + row.tags.join(', ') : ''}</span>
         <span>
@@ -1826,7 +1856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="main-delete-btn warning-text" data-id="${row.id}">Delete</button>
         </span>
       </div>
-    `).join('') || 'Nothing captured yet.';
+    `).join('') || 'Nothing here yet.';
 
     document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
     document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
@@ -1840,6 +1870,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       await softDelete(db, b.dataset.id); await renderMainTimeline();
     }));
   }
+  async function openFolder(type, btn) {
+    openFolderType = type;
+    document.getElementById('folder-title').textContent = `${btn.querySelector('.card-icon').textContent} ${VAULT_TYPE_LABELS[type]}`;
+    document.getElementById('home-main').classList.add('hidden');
+    document.getElementById('folder-view').classList.remove('hidden');
+    await renderMainTimeline();
+  }
+  document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
+  document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
+
+  const newChooser = document.getElementById('new-chooser-modal');
+  document.getElementById('universal-new-btn').addEventListener('click', () => newChooser.classList.remove('hidden'));
+  document.getElementById('new-chooser-cancel-btn').addEventListener('click', () => newChooser.classList.add('hidden'));
+  document.querySelectorAll('#new-chooser-grid button[data-type]').forEach((btn) => btn.addEventListener('click', () => {
+    newChooser.classList.add('hidden');
+    startCapture(btn.dataset.type);
+  }));
+
   await renderMainTimeline();
 
   // ---- Digest, on-this-day, storage breakdown (ARCHITECTURE §6) — backend logic (showDigest,
@@ -1958,7 +2006,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('search-input').addEventListener('input', async (e) => {
     const term = e.target.value;
-    const rows = term ? await searchEntries(db, term) : await showMainTimeline();
+    if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
+    const rows = await searchEntries(db, term);
     document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row" data-type="${row.type}"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
   });
 
