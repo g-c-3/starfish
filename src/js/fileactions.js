@@ -159,12 +159,20 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
     return;
   }
 
-  if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
+  if (row.type === 'location' && row.latitude != null && row.longitude != null) {
+    // Plain text with a map link built from the stored coordinates — no network call; the
+    // recipient's device resolves the link. Shared only when this action is invoked.
+    await Share.share({ text: `${row.label}\n${mapLinkFor(row.latitude, row.longitude)}`, title: row.label });
+  } else if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
     await Share.share({ url: uri, title: row.label });
   } else {
     await Share.share({ text: row.body_text || row.label, title: row.label });
   }
+}
+
+function mapLinkFor(lat, lng) {
+  return `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
 function mimeTypeFor(row) {

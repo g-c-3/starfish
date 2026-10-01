@@ -17,6 +17,7 @@ import {
 import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
 import { App } from '@capacitor/app';
+import { Geolocation } from '@capacitor/geolocation';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -1676,10 +1677,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // voice capture's label prompt, the one place today where a label is actually typed by hand;
   // note/file/image/pdf/generic-file labels are auto-derived (text excerpt or filename) and have
   // no free-text prompt to attach a hint to.
-  async function promptForLabel(type, defaultLabel) {
+  async function promptForLabel(type, defaultLabel, noun = 'recording') {
     const history = await listLabelHistory(db, type);
     const hint = history.length ? ` Previously used: ${history.map((h) => h.label).join(', ')}.` : '';
-    return prompt(`Label for this recording:${hint}`, defaultLabel) || defaultLabel;
+    return prompt(`Label for this ${noun}:${hint}`, defaultLabel) || defaultLabel;
   }
 
   // ---- Voice recording (cap-voice-rec) — was previously just a generic file picker for ALL
@@ -1768,9 +1769,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert(`Reminder saved, but scheduling its notification failed: ${err.message || err}`);
       }
       await renderMainTimeline();
-    } else if (type === 'location' || type === 'money') {
-      // Placeholder — capture flow not yet defined for either. Explicit branch so these don't
-      // silently fall into the generic file-picker case below, which would be wrong for both.
+    } else if (type === 'location') {
+      // Current GPS fix → entry with latitude/longitude → optional share (Decision 79). The fix
+      // stays on-device; only the explicit Share step sends anything out.
+      let coords;
+      try {
+        await Geolocation.requestPermissions();
+        coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
+      } catch (err) {
+        alert(`Could not get your location: ${err.message || err}`);
+        return;
+      }
+      const label = await promptForLabel('location', `Location ${new Date().toLocaleTimeString()}`, 'location');
+      const tags = await promptForTags();
+      const id = crypto.randomUUID();
+      await insertEntry(db, { id, type: 'location', label, latitude: coords.latitude, longitude: coords.longitude });
+      await applyTags(id, tags);
+      await renderMainTimeline();
+      if (confirm('Location saved. Share it now?')) {
+        try { await shareEntry(db, id); } catch (err) { if (!/cancel/i.test(err.message || '')) alert(`Share failed: ${err.message || err}`); }
+      }
+    } else if (type === 'money') {
+      // Placeholder — capture flow not yet defined. Explicit branch so it doesn't silently fall
+      // into the generic file-picker case below, which would be wrong for it.
       alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
     } else {
       const input = document.createElement('input');
