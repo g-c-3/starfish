@@ -17,7 +17,7 @@
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
-- [~] 15 — UI redesign (1 design system, Home and Vault done — Session 64; 2 lock/first-run/Settings, 3 in-app sheets for capture prompts, 4 polish not started)
+- [~] 15 — UI redesign (1 design system and 2 auth/Settings screens done — Sessions 64–65; 3 in-app sheets for capture prompts, 4 polish not started)
 
 ## Detailed
 
@@ -337,6 +337,8 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] 1 — Design system, Home, Vault (Session 64): tokens, bundled Inter, inline SVG icon sprite,
     folder tiles with corner count badges, entry rows with icon actions, floating nav, empty states,
     dark and light themes. Not run on a device.
-  - [ ] 2 — Lock screen, first-run, Settings and Vault Settings (grouped rows, consistent switches).
+  - [x] 2 — Lock screen, first-run, Vault gate, ad gate, Settings (Session 65): centered auth layout with
+    brand mark and form cards; Settings grouped (Data, Security, Preferences, Backup) with icon chips;
+    switches as label-left rows; custom select arrow. Not run on a device.
   - [ ] 3 — Capture flows: replace `prompt()`/`confirm()`/`alert()` with in-app bottom sheets (touches logic).
   - [ ] 4 — Polish: transitions, haptics if the existing plugins allow, light-theme tuning.

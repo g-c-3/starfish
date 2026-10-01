@@ -460,9 +460,9 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   (previously `var(--fg)`-colored) icon sitting on top of it nearly invisible in light mode. Fixed by
   removing that dark title bar entirely (`.vault-banner` now uses `var(--card-bg)`) and the bottom nav's
   matching dark active-Vault-tab background (now `var(--vault-fg)`, a light tint, with `var(--vault)` as
-  the now-legible text/icon color) — the Vault's visual identity now comes from the lock emoji, heading,
-  and nav tint rather than a solid dark panel. The inner filter chips (`.vault-tab.active`) keep their dark
-  background — text-on-dark is legible there, not the same bug.
+  the now-legible text/icon color) — the Vault's visual identity comes from the lock icon, heading and nav
+  tint rather than a solid dark panel. Superseded in part by Decision 86: the filter chips and tabs no
+  longer exist (Decision 85) and the nav uses the floating style.
 
 ## 7. Capture UX decisions (validated during design, binding for the build)
 

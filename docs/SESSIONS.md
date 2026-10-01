@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 65**
+
+Phase 15, step 2 (Decision 87). Lock screen, first-run, Vault PIN setup and locked views, and the ad gate share one auth layout: centered column, gradient brand mark, form cards. Settings is grouped under Data, Security, Preferences and Backup; each section has an icon chip and a tone. Switch rows put the label left and the switch right; helper text is no longer indented under switches (still indented under radios). Selects get a themed arrow. Seven icons added to the sprite. The ad gate shows a spinner and the brand mark instead of bare text.
+
+Markup only plus CSS: no ids removed, no JS changed. First-run inputs keep their ids; placeholder wording shortened.
+
+Decisions made: 87.
+
+Verified: `vite build`, headless render at 360 px of lock, first-run, Settings (App lock open), Vault locked, light first-run. Not run through CI or on device. Device checks: lock screen and biometric button; first-run Continue still saves; every Settings section opens and its controls work (switches, selects, backup/restore, Drive); Vault locked and PIN-setup views; ad gate looks right while loading; light theme.
+
+Open: `#password-hint` shows both hints and errors in one muted style. Settings sub-controls such as the biometric confirm box are unstyled beyond tokens.
+
+Next session start point: Phase 15 step 3 (in-app sheets replacing `prompt()`/`confirm()`/`alert()`), which changes logic and needs a careful pass; or Money capture if defined. Device pass on Sessions 59 to 65.
+
+---
+
 **Session 64**
 
 Phase 15, step 1: design system applied to Home and Vault (Decision 86). New `style.css` with theme tokens, per-type color context, floating translucent bottom nav, 2-column folder tiles with icon chip and corner count badge, entry rows (type chip, title, meta, tag chips, icon-only Share/Download/Edit/Delete), designed empty states, bottom-sheet type chooser, refined inputs and switches. Inline SVG sprite added to `index.html` replaces every emoji icon. Inter variable (latin subset, OFL) bundled in `src/fonts/`. Home header shows the date and the digest as colored chips.

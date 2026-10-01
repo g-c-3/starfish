@@ -1475,3 +1475,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Bottom nav: floating, translucent, rounded; Back stays the middle control.
 - Rows built by `drive-backup-row` (trash, Drive list, storage) keep that class with the new surface style.
 - Rendered strings are escaped (`escapeHtml`) before `innerHTML`.
+
+---
+
+**87. Auth screens and Settings structure.** Extends Decision 86.
+- Lock screen, first-run, ad gate: `.auth-screen` (centered column, max 440 px). The `:not(.hidden)` guard keeps the `.hidden` rule effective. Vault PIN setup and locked views are `.form-card`s with a small brand mark.
+- Settings groups: Data (Your Data, Storage breakdown, Trash), Security (App lock, Privacy Screen), Preferences (Appearance, Updates), Backup (Backup & Restore, Google Drive). Group labels are plain text, not collapsible. Section tone (`data-tone`: blue, green, violet, amber) only tints the icon chip.
+- Switch rows: label left, switch right (`row-reverse` on the existing markup, so no JS or id change).
+- First-run copy shortened; the two credentials remain separate cards (app-open password, Vault PIN), never merged.
+

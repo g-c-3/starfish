@@ -69,3 +69,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-01 | Session 62 | Decision 84 | Phase 8 batch add built on main capture: multi-select Image/PDF/Files, common label with auto-numbering or individual add; Vault batch add not built |
 | 2026-10-01 | Session 63 | Decision 85 | Vault made a copy of Home: folder cards with counts, per-folder New, universal New, search-only list, tabs removed; Back and lock handle Vault folders |
 | 2026-10-01 | Session 64 | Decision 86 | Phase 15 step 1: design system on Home and Vault — tokens, bundled Inter, SVG icon sprite, tiles, rows, floating nav, empty states; backup banner empty-bar bug fixed |
+| 2026-10-01 | Session 65 | Decision 87 | Phase 15 step 2: auth screens, Vault gate, ad gate and Settings restyled; Settings grouped with icon chips; switch rows reworked |
