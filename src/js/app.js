@@ -1075,7 +1075,8 @@ async function handleDriveBackupNow() {
 async function handleCheckForUpdateClick() {
   const statusEl = document.getElementById('update-check-status');
   const downloadBtn = document.getElementById('update-download-btn');
-  downloadBtn.classList.add('hidden');
+  downloadBtn.disabled = true; // enabled only once a newer release is found
+  delete downloadBtn.dataset.url;
   statusEl.textContent = 'Checking…';
 
   let currentVersion;
@@ -1092,7 +1093,7 @@ async function handleCheckForUpdateClick() {
   } else if (result.status === 'update_available') {
     statusEl.textContent = `Update available: ${result.version} (you're on ${currentVersion}).`;
     downloadBtn.dataset.url = result.downloadUrl;
-    downloadBtn.classList.remove('hidden');
+    downloadBtn.disabled = false;
   } else {
     const messages = {
       offline: 'Offline — connect and try again.',
