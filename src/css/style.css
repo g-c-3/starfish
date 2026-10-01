@@ -50,6 +50,7 @@
   --vault: #1a1030;
   --vault-fg: #e8d9ff;
   --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6785' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
+  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6785' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="dark"] {
@@ -74,6 +75,7 @@
   --ink-note: #fbbf4a; --ink-voice: #2dd4bf; --ink-image: #f472b6; --ink-pdf: #60a5fa;
   --ink-reminder: #fb923c; --ink-location: #22d3ee; --ink-money: #f87171; --ink-file: #34d399;
   --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a96b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
+  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a96b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
 
 /* Per-type color context. Anything inside inherits --tc-rgb / --tc-ink. 'expense' shares Money's. */
@@ -205,7 +207,6 @@ input[type="search"], #search-input, #vault-search-input {
 .capture-cards .card-count:empty { display: none; }
 
 /* Settings entry (Home tile + Vault card header share this look) */
-.tile-icon { --tc-rgb: 139, 124, 246; --tc-ink: var(--brand-ink); }
 .tile-label { flex: 1; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; text-align: left; }
 .settings-tile {
   display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 12px;
@@ -315,7 +316,8 @@ input[type="search"], #search-input, #vault-search-input {
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
 .category-checkboxes label { width: auto; display: flex; align-items: center; gap: 6px; font-size: 14px; }
 .status-line { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: 4px 0 12px; }
-.mode-description { font-size: 12px; color: var(--muted); margin: 0 0 10px 24px; }
+.mode-description { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin: 0 0 10px; }
+.radio-row + .mode-description { margin-left: 28px; }
 
 /* ---- Modals. The type chooser is a bottom sheet; the rest stay centered. ---- */
 .modal-overlay {
@@ -386,6 +388,7 @@ input[type="checkbox"] {
   position: relative; display: inline-block; vertical-align: middle;
 }
 input[type="checkbox"]:checked { background: var(--brand); border-color: var(--brand); }
+.switch-row input[type="checkbox"] { margin: 0; }
 input[type="checkbox"]:checked::after {
   content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 13px; font-weight: 700;
@@ -394,7 +397,7 @@ input[type="checkbox"]:checked::after {
 /* ---- Modern switches: a single on/off setting (dark mode, biometric unlock, auto-backup, the
    safety-backup confirmation) reads as a sliding switch rather than the compact checkbox above —
    marked with class="switch-row" on the wrapping <label> in index.html. ---- */
-.switch-row { display: flex; align-items: center; gap: 10px; width: auto; cursor: pointer; }
+.switch-row { display: flex; flex-direction: row-reverse; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 10px 0; font-size: 15px; cursor: pointer; }
 .switch-row input[type="checkbox"] {
   width: 44px; height: 26px; min-width: 44px;
   border-radius: 999px; background: var(--track); border: none;
@@ -420,8 +423,8 @@ input[type="checkbox"]:checked::after {
    margin-zeroing rule above, which would otherwise re-zero a plain `.switch-row { margin-top }`.
    The first switch-row directly after <summary> gets a smaller, not zero, top margin — flush
    against the summary line read just as cramped as flush against another toggle did. */
-#settings-tab details > .switch-row, #vault-settings-card > .switch-row { margin-top: 14px; }
-#settings-tab details > summary + .switch-row, #vault-settings-card > summary + .switch-row { margin-top: 10px; }
+#settings-tab details > .switch-row, #vault-settings-card > .switch-row { margin-top: 2px; }
+#settings-tab details > summary + .switch-row, #vault-settings-card > summary + .switch-row { margin-top: 6px; }
 
 /* Modern radio dots for restore-mode (append/overwrite) */
 input[type="radio"] {
@@ -439,3 +442,59 @@ input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 #vault-settings-card { padding: 4px 14px 4px 12px; }
 #vault-settings-card > summary { gap: 12px; padding: 8px 0; }
 #vault-settings-card > summary .tile-icon { flex: none; }
+
+/* ---- Step 2: auth screens, Settings groups, form cards (Decision 87) ---- */
+.auth-screen:not(.hidden) {
+  display: flex; flex-direction: column; justify-content: center; gap: 14px;
+  max-width: 440px; margin: 0 auto; padding-top: calc(20px + env(safe-area-inset-top, 0px));
+}
+.auth-head { text-align: center; margin-bottom: 6px; }
+.auth-head h1 { margin: 14px 0 6px; color: var(--fg); }
+.screen-sub { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.brand-mark {
+  width: 68px; height: 68px; margin: 0 auto; border-radius: 22px; color: #fff;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--btn-1), var(--btn-2));
+  box-shadow: 0 14px 30px -10px rgba(108, 92, 231, 0.7), 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+.brand-mark .ic { width: 32px; height: 32px; stroke-width: 1.7; }
+.brand-mark.small { width: 48px; height: 48px; border-radius: 16px; margin: 0 0 12px; }
+.brand-mark.small .ic { width: 24px; height: 24px; }
+.form-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
+  box-shadow: var(--shadow); padding: 18px;
+}
+.form-card h3 { margin: 0 0 4px; font-size: 17px; }
+.form-card input, .form-card button { margin-top: 8px; margin-bottom: 0; }
+.form-card .mode-description { margin-bottom: 4px; }
+#password-hint { margin-top: 12px; text-align: center; font-size: 13px; color: var(--muted); }
+#password-hint:empty { display: none; }
+#first-run-continue-btn { margin-top: 6px; }
+#vault-pin-setup-view, #vault-locked-view { margin-top: 18px; }
+.spinner {
+  width: 28px; height: 28px; margin: 6px auto 0; border-radius: 50%;
+  border: 3px solid var(--brand-tint); border-top-color: var(--brand);
+}
+@media (prefers-reduced-motion: no-preference) { .spinner { animation: spin 0.8s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+#ad-gate-screen { text-align: center; }
+
+/* Settings: grouped, icon-led */
+#settings-tab > h2 { margin-bottom: 0; }
+.settings-group {
+  margin: 22px 4px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+#settings-tab > .screen-sub + .settings-group { margin-top: 14px; }
+#settings-tab > details > summary { gap: 12px; padding: 8px 0; }
+#settings-tab > details { padding: 4px 14px 4px 12px; }
+#settings-tab > details[open] { padding-bottom: 16px; }
+#settings-tab details > *:not(summary) { margin-left: 2px; margin-right: 2px; }
+[data-tone="blue"]   { --tc-rgb: var(--type-pdf-rgb);   --tc-ink: var(--ink-pdf); }
+[data-tone="green"]  { --tc-rgb: var(--type-file-rgb);  --tc-ink: var(--ink-file); }
+[data-tone="amber"]  { --tc-rgb: var(--type-note-rgb);  --tc-ink: var(--ink-note); }
+[data-tone="violet"] { --tc-rgb: 139, 124, 246;         --tc-ink: var(--brand-ink); }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 40px;
+  background-image: var(--chevron-down); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+}
