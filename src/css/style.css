@@ -141,25 +141,25 @@ button {
 .capture-cards .card-icon { font-size: 24px; line-height: 1; }
 .capture-cards .card-label { font-size: 11px; font-weight: 700; }
 
-#capture-bar button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { background: var(--type-note); }
-#capture-bar button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { background: var(--type-voice); }
-#capture-bar button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { background: var(--type-image); }
-#capture-bar button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { background: var(--type-pdf); }
-#capture-bar button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { background: var(--type-reminder); }
-#capture-bar button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { background: var(--type-location); }
-#capture-bar button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { background: var(--type-money); }
-#capture-bar button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { background: var(--type-file); }
+#capture-bar button[data-type="note"], #new-chooser-grid button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { background: var(--type-note); }
+#capture-bar button[data-type="voice"], #new-chooser-grid button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { background: var(--type-voice); }
+#capture-bar button[data-type="image"], #new-chooser-grid button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { background: var(--type-image); }
+#capture-bar button[data-type="pdf"], #new-chooser-grid button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { background: var(--type-pdf); }
+#capture-bar button[data-type="reminder"], #new-chooser-grid button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { background: var(--type-reminder); }
+#capture-bar button[data-type="location"], #new-chooser-grid button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { background: var(--type-location); }
+#capture-bar button[data-type="money"], #new-chooser-grid button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { background: var(--type-money); }
+#capture-bar button[data-type="file"], #new-chooser-grid button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { background: var(--type-file); }
 
 /* Capture-card labels need dark text on the lighter type colors — checked with the actual WCAG
    formula, not eyeballed. Applies to both Home and Vault, since both carry visible labels. */
-#capture-bar button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { color: #2a1c00; }
-#capture-bar button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { color: #00332c; }
-#capture-bar button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { color: #3a0020; }
-#capture-bar button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { color: #001b3a; }
-#capture-bar button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { color: #3a1400; }
-#capture-bar button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { color: #002733; }
-#capture-bar button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { color: #3a0000; }
-#capture-bar button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { color: #00301f; }
+#capture-bar button[data-type="note"], #new-chooser-grid button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { color: #2a1c00; }
+#capture-bar button[data-type="voice"], #new-chooser-grid button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { color: #00332c; }
+#capture-bar button[data-type="image"], #new-chooser-grid button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { color: #3a0020; }
+#capture-bar button[data-type="pdf"], #new-chooser-grid button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { color: #001b3a; }
+#capture-bar button[data-type="reminder"], #new-chooser-grid button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { color: #3a1400; }
+#capture-bar button[data-type="location"], #new-chooser-grid button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { color: #002733; }
+#capture-bar button[data-type="money"], #new-chooser-grid button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { color: #3a0000; }
+#capture-bar button[data-type="file"], #new-chooser-grid button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { color: #00301f; }
 
 #timeline { margin-top: 12px; }
 
@@ -438,3 +438,9 @@ input[type="radio"] {
 }
 input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 .radio-row { display: flex; align-items: center; width: auto; }
+
+/* Cards as folders (Decision 81): count badge, folder view, universal New button. */
+.capture-cards button { position: relative; }
+.capture-cards .card-count { position: absolute; top: 6px; right: 9px; font-size: 11px; font-weight: 800; opacity: 0.85; }
+#universal-new-btn { margin: 12px 0 0; }
+#folder-new-btn { margin: 12px 0; }
