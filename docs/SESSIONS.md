@@ -4,6 +4,27 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 61**
+
+Download for append removed (Decision 83): UI, bulk action, import screen, filename prefix, backup-payload
+entry filter, default export key, and the zip dependency. Scope confirmed beforehand: import screen removed
+entirely, nothing replaces it, restore Append mode stays.
+
+Decisions made: 83.
+
+Verified: `node --check` on every JS file, `vite build` (bundle about 271 kB to 107 kB), grep shows no
+remaining references to the removed functions or `@zip.js/zip.js` in `src/`. Not run through CI or on
+device. Device checks: Home folder rows and Vault rows show four actions; Select files shows Share,
+Download, Delete only; Settings has no append import section; full backup and restore (Append and
+Overwrite) still work; Drive backup filenames unchanged.
+
+Open: unchanged from Session 60. Docs: Decisions 9, 33, 34, 41, 43, 44, 55 still describe the removed
+feature as history; Decision 83 lists what it supersedes.
+
+Next session start point: unchanged from Session 57, plus device pass on Sessions 59 to 61.
+
+---
+
 **Session 60**
 
 Phase 4: Back button made hierarchical (Decision 82). It goes up one level inside Home or Vault and stops

@@ -1421,3 +1421,20 @@ the button is dimmed and inert (`.disabled`, `updateBackButtonState()`), so a pr
 doesn't read as broken. Vault Trash and Select files are not Back levels: Trash is nested inside the
 settings card that Back collapses, and Select files has its own close. All other Decision 65 behavior
 (button position, glow, no dedicated back elements) unchanged.
+
+---
+
+**83. Download for append removed.** The per-entry encrypted export and everything built on it are gone:
+- Per-entry "Download for append" button on Home folders and the Vault list; the bulk button in Select
+  files; the "Append files from download" import screen in Settings.
+- `downloadForAppend()`, `importAppendZips()`, the `download_append` bulk action, the app-level default
+  export key (`APP_DEFAULT_PASSPHRASE`), the per-file archive `mode` field, the `entryIds` filter on
+  `buildBackupPayload()`, and the `append_` filename prefix (only `backup_` remains).
+- `@zip.js/zip.js` dependency, used nowhere else; the built bundle dropped from about 271 kB to 107 kB.
+Per-entry actions are now Share, Download, Edit, Delete. Nothing replaces it; moving data between devices
+is Backup & Restore (including Private Vault) or the optional Drive backup.
+Unchanged: Backup & Restore's Append mode, UUID dedup, the `(Restored)` suffix and the cross-PIN Vault
+append path (Decisions 7, 35). They serve full-backup restore, not this feature.
+Supersedes: Decision 9 (five actions, per-file zip), 33 (zip library), 34 (per-file pipeline), 43 (action
+order), the vault-PIN export clause of 41, the per-entry append item in 44, and the `append` prefix in
+55. Those entries stay as history. Any `append_*.dz` file exported earlier can no longer be imported.

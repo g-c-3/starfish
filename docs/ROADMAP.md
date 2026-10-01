@@ -9,7 +9,7 @@
 - [~] 4 — App shell & control flow (5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
-- [~] 7 — Per-file actions (all five built, now attached to the main timeline)
+- [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
 - [~] 8 — Tags & label UX (tag picker + label-history autocomplete hint both wired; batch-add auto-numbering still not)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
@@ -57,7 +57,7 @@
   voice/image/pdf/file on the non-vault side. Built `captureFile()` to fill that gap (mirrors
   `captureToVault`, unencrypted, writes to `Directory.Data/files/<uuid>.<ext>` per the existing
   storage convention). Also: `showMainTimeline()` returned rows but nothing ever rendered them or
-  attached the five per-file actions (built in Phase 7, sitting unused ever since) to anything —
+  attached the per-file actions (built in Phase 7, sitting unused ever since) to anything —
   that's now done too, with tags shown per entry (one bulk `GROUP_CONCAT` query, not N+1).
   OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
   yet — labels/tags still work for search. **Visual theme modernized (Session 28, Decision 52)** —
@@ -96,7 +96,9 @@
   biometric toggle showing on the locked gate instead of only once unlocked, and Lock not returning
   Home immediately. Added Reminder and Location as two more cards (eight total:
   Text/Voice/Image/PDF/Reminder/Location/Money/Files) — Reminder reuses the existing auto-detected
-  type, Location is new; both placeholder like Money. **Session 60 (Decision 82):** Back is hierarchical — one level up inside Home or Vault, stops at the
+  type, Location is new; both placeholder like Money. **Session 61 (Decision 83):** Download for append removed everywhere — buttons, bulk action, import screen,
+  `append_` filenames, zip dependency. Restore Append mode unchanged. Not run on a device.
+  **Session 60 (Decision 82):** Back is hierarchical — one level up inside Home or Vault, stops at the
   landing page (dimmed there), never switches section. Not run on a device.
   **Session 59 (Decision 81):** Home cards are folders — each opens its type's list with a New
   button and count badge; universal New with a type chooser on Home; Home timeline is search-only; Vault
@@ -142,7 +144,7 @@
   fields), the main screen with digest/on-this-day/timeline/capture bar all present, "Select files"
   opening correctly with proper empty-state handling ("Nothing to select yet" rather than an error
   on empty data), and all eight settings sections rendering (Storage breakdown, Trash, App lock,
-  Private Vault, Appearance, Backup & Restore, Google Drive Backup, Append files from download).
+  Private Vault, Appearance, Backup & Restore, Google Drive Backup).
   This confirms all three fixes (SQLite import, Vite bundling, GoogleAuth guard) actually work
   together, not just in isolation. Real functional testing (capture, search, tags, edit/delete,
   backup/restore, Vault) starts now.
@@ -166,35 +168,17 @@
   written but especially untested (no way to exercise it without two real devices or a manually
   crafted second-PIN backup). Still plain/unstyled — matches Phase 4's current bare-skeleton look,
   not a finished visual design.
-- [~] **7 — Per-file actions.** `fileactions.js` built, all five: Share, Download-for-append
-  (encrypted zip, reuses `backup.js`'s exact
-  payload/archive pipeline scoped to one entry — Decision 34, zip library is `@zip.js/zip.js` not
-  JSZip — Decision 33), plain Download, Edit (reminders
-  reschedule via a caller-supplied callback), Delete (re-exports `db.js`'s existing `softDelete`).
-  The "Append files from download" multi-select import screen is built and wired
-  (`index.html`/`app.js`, `importAppendZips()`). **Not run on a device.**
-  **Vault pivot — Share/Download reversed (Decision 41):** originally scoped Vault entries to
-  Copy-only; overridden on explicit direction that user convenience outweighs that caution — all
-  five actions now work identically for Vault and non-Vault entries, decrypting into memory first.
-  Added the "Select files" multi-select screen (category-grouped, per-item size, bulk Share/
-  Download/Download-for-append/Delete — Decision 44), shared between main and Vault.
-  **Known rough edge:** the import screen's and bulk-download-for-append's per-file passphrase/PIN
-  prompts use `prompt()`, same category of shortcut as the Drive flows' rough edge (Phase 13) —
-  spec's "reuse last passkey for a session" convenience isn't wired in yet.
-  Two real bugs caught and fixed while wiring the UI: bulk "download for append" would have thrown
-  for every Vault item (no PIN was ever collected for that flow); deleting a Vault item never
-  rebuilt the in-memory search index, so it would keep appearing in Vault search/browse until the
-  next unlock. Both fixed before this was presented, not after.
-  Earlier fix, still standing: Session 5's `restoreBackup` cross-PIN append bug
-  (`entry._sourcePinSalt` never actually set — Decision 35).
-  Now attached to real UI (Phase 4): both the main timeline and vault list render all five actions
-  — Share/Download/Download for append/Edit/Delete — per entry. Wiring Edit surfaced two more real
-  bugs in `editEntry()` itself, fixed before wiring anything to it: it expected `fields.text` for
-  vault entries but `fields.body_text` for non-vault notes, so calling it consistently from one UI
-  would have silently no-op'd whichever side didn't match; and expense/reminder fields
-  (`amount`/`expense_category`/`fire_at`/`repeat_rule`) were never actually written to the row at
-  all — only checked, to decide whether to call the reminder-reschedule callback — meaning editing a
-  reminder's time or an expense's amount would have silently done nothing.
+- [~] **7 — Per-file actions.** `fileactions.js` built: Share, plain Download, Edit (reminders reschedule
+  via a caller-supplied callback), Delete (re-exports `db.js`'s `softDelete`), plus the "Select files"
+  multi-select (category-grouped, per-item size, bulk Share/Download/Delete — Decision 44). Share/Download
+  work identically for Vault and non-Vault entries, decrypting into memory first (Decision 41); Share also
+  handles location entries (Decision 79). **Download for append removed (Session 61, Decision 83)** along
+  with its import screen, per-entry zip format, `append_` filename prefix and the `@zip.js/zip.js`
+  dependency. Both entry lists render the four actions per entry. **Not run on a device.**
+  Wiring Edit surfaced two real bugs in `editEntry()`, fixed earlier and still standing: it expected
+  `fields.text` for vault entries but `fields.body_text` for non-vault notes, and expense/reminder fields
+  (`amount`/`expense_category`/`fire_at`/`repeat_rule`) were never written to the row. A vault delete also
+  never rebuilt the in-memory search index; fixed.
 - [~] **8 — Tags & label UX.** `promptForTags()` built and wired into both main and vault capture —
   shows existing tags (`listAllTags()`) as a hint, free-text creates new ones (`applyTags()`'s
   `INSERT OR IGNORE` already handled "new tag" with no changes needed). Tags now display per entry

@@ -151,7 +151,7 @@ workflow — this version is a real runtime toggle instead.
 
 Text, Voice, Image, PDF, and Files can all be private now, gated by the one Vault PIN (§3). The Vault is meant
 to be **an exact functional replica of the main app** — same capture, same edit, same tags/label autocomplete,
-same search, same trash-with-30-day-restore, same five per-file actions in the same order — with three
+same search, same trash-with-30-day-restore, same four per-file actions in the same order — with three
 deliberate differences, all safety-necessary rather than arbitrary:
 
 1. **Everything lives encrypted at rest, including raw file bytes.** A vault entry's `file_path` stays `NULL`;
@@ -165,9 +165,9 @@ deliberate differences, all safety-necessary rather than arbitrary:
    autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
 3. **Share and plain Download work exactly like the main app's** (Decision 41, reversed from an earlier,
    more restrictive default) — the UI should carry a one-time notice that doing so puts a plaintext copy
-   outside the vault's encryption boundary from that point on, but nothing is blocked. "Download for append"
-   stays vault-PIN-only, no passkey/default option — that restriction is about the format safely round-tripping
-   back into a vault, not about limiting what the person can do with their own content.
+   outside the vault's encryption boundary from that point on, but nothing is blocked.
+   ("Download for append" no longer exists — Decision 83. Moving Vault content between devices is a full
+   backup with the Private Vault category, restored with its cross-PIN append path.)
 4. **Vault entries never touch `entries_fts` or `label_history` — not just their body, their label too**
    (Decision 40). This was a real, silently-shipped bug until this pivot: both tables were being written for
    *every* entry regardless of `is_private`, meaning a vault item's title (though never its body) was
@@ -190,8 +190,7 @@ append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixe
 ## 4. Backup & Restore (full design)
 
 ### Filenames (Decision 55, letters extended in Decision 57)
-`<prefix>_<letters>_<yyyymmdd_hhmmss>.dz` — `prefix` is `backup` (a full Backup & Restore export) or
-`append` (a single entry's "Download for append" export); `letters` is a fixed-order subset of
+`backup_<letters>_<yyyymmdd_hhmmss>.dz` (the `append_` prefix was removed in Decision 83); `letters` is a fixed-order subset of
 `tviprlmf` (Text/Voice/Image/PDF/Reminder/Location/Money/Files — only the letters for categories
 actually included, regardless of the order they were selected in; a backup with only Text and PDF
 is `tp`, not `pt`). Categories with no letter of their own (Private Vault, Expenses, Tags, App
@@ -353,64 +352,33 @@ Phase 6 already has. One restore engine regardless of source, not two to keep in
 app's current Capacitor 6 pin — the newer, more actively-recommended Capawesome Google Sign-In plugin
 requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
-## 5. Per-file actions (every entry gets these five — `fileactions.js`, Decisions 33–35)
+## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
-**Implementation note (differs slightly from the original zip-contents description below):**
-`downloadForAppend()` doesn't zip a raw file plus a separate sidecar as two entries — it wraps the
-entry in the exact same JSON payload shape `buildBackupPayload()` produces for a full backup (now
-scoped to one entry via an `entryIds` filter), encrypts that whole payload the same way
-`encryptBackup()` always has, and puts that single encrypted JSON file inside the zip. Net effect is
-the same (one file round-trips back in, same dedup handling as a full restore) but the mechanism is
-"one entry's worth of a full-backup payload" rather than a separately-designed sidecar format —
-simpler, and it means `decryptBackupPayload()`/`restoreBackup()` handle a per-file import with zero
-extra code, not a second decrypt/dedup path to maintain.
+Download for append, its per-entry encrypted zip and the "Append files from download" import screen were
+removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
+(§4), including Private Vault content.
 
 1. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Works identically
    for Vault entries** (Decision 41, pivot — was Copy-only before): content is decrypted into memory first,
    never written to disk unencrypted, but otherwise no restriction. A one-time notice on first vault
    Share/Download: content leaves the vault's encryption boundary as plaintext from that point on. `copyPrivateNote()`
    still exists as an extra convenience for vault text specifically, not a replacement for Share/Download anymore.
-2. **Download for append** — produces a file meant to round-trip back into Dumpzone later (this device, another
-   device, or after a reinstall). **Always encrypted, never plaintext** — the only thing optional is whether a
-   user-supplied passkey is used:
-   - **Passkey given:** standard AES-GCM via the same KDF as full backups. Session-only "reuse last passkey"
-     convenience for batch exports (never persisted to disk; clears when the app backgrounds/closes) — not yet
-     wired into the UI (`app.js` currently prompts per file; see ROADMAP's rough-edge note).
-     Forgetting this passkey makes that specific export permanently unrecoverable, same as a full backup.
-   - **Passkey skipped:** file is still encrypted, using a fixed **app-level default key** baked into the app
-     itself (not user- or device-specific) — this keeps the file portable across installs but is honestly closer
-     to obfuscation than real protection, since any Dumpzone install effectively holds that same default key.
-     The UI must say so plainly: *"No passkey set — file will use default app-level encryption (not secured
-     against other Dumpzone users)."* The file's own `mode` field (`passkey`/`default`/`pin`) records which was
-     used so import doesn't have to guess whether to prompt for a passkey.
-   - **Vault exception (any of the five types, not just text):** no passkey prompt, no optional toggle — always
-     encrypted with the vault's own PIN-derived key (the PIN itself is used as the passphrase into the same
-     `encryptBackup()` call, with a
-     fresh random salt each export — self-contained, no need to carry the device's stored PIN salt along). This
-     restriction is unaffected by Decision 41 — it's about the format safely round-tripping back into a vault,
-     not about limiting what the person can otherwise do with their content (which Share/Download above now allow).
-   - Zip contents: one encrypted JSON file (see implementation note above) — **the same underlying schema used
-     by full backups**, so one shared import/dedup engine (`restoreBackup()`) handles both a full-backup restore
-     and appending a handful of individually-downloaded zips.
-   - **"Append files from download" screen** — built, in `index.html`/`app.js`: a multi-select import accepting
-     any number of these zips at once, running each through `importAppendZips()` (append mode only, no
-     overwrite option on this screen) and producing a combined summary report.
-3. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
+2. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
    the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). **Works for
    Vault entries too** (Decision 41, pivot) — decrypted into memory first, written out plain only at the moment
    this is explicitly invoked. Built (`downloadPlain()`).
-4. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
+3. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
    correcting misreads that hurt search; expense amount/category editable; reminder time/repeat editable and
    must reschedule its notification, not just silently update the DB row. **Vault entries of any type**
    (not just text) require the vault PIN already unlocked for that session to edit content — label/tags-only
    edits don't, since those were never encrypted. Built (`editEntry()`), takes a caller-supplied reschedule
    callback for reminders rather than importing `notifications.js` directly, to avoid a circular import with `app.js`.
-5. **Delete** — soft-delete into the 30-day trash bin (main or Vault's own — §3b); consistent with
+4. **Delete** — soft-delete into the 30-day trash bin (main or Vault's own — §3b); consistent with
    the append-mode philosophy of never silently destroying data. Already existed as `db.js`'s `softDelete()`;
    `fileactions.js` re-exports it so every per-file action is reachable from one module.
 
-**"Select files" multi-select** (Decision 44, §3b) covers four of these five in bulk — Share, Download,
-Download for append, Delete — shared between main and Vault, category-grouped with per-item size shown.
+**"Select files" multi-select** (Decision 44, §3b) covers three of these four in bulk — Share, Download,
+Delete — shared between main and Vault, category-grouped with per-item size shown.
 
 ## 6. Additional features (all approved, part of v1 scope)
 
@@ -624,7 +592,7 @@ dumpzone/
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
       vault.js          -> Private Vault: content bundling, save/load, in-memory search index
-      fileactions.js    -> per-file actions: share, download-for-append (+ its zip import), plain download, edit
+      fileactions.js    -> per-file actions: share, plain download, edit, delete + Select files bulk support
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.
@@ -642,7 +610,7 @@ credential hashing/KDF/AES helpers, the intent engine (reminders, expenses, OCR 
 scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
 plus the expense follow-up timeout) including the optional-password/first-run-setup path, the core backup/restore
 engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — blocked on manual OAuth setup for
-device testing), all five per-file actions (`fileactions.js`) including the "Select files" multi-select, and
+device testing), all four per-file actions (`fileactions.js`) including the "Select files" multi-select, and
 the Private Vault (`vault.js` + its `app.js`/`index.html` wiring — capture/browse/search across all five types,
 its own trash bin, its own auto-lock). Screen show/hide wiring (`showScreen()`) was itself missing until the
 Vault pivot surfaced it — every UI section built in every prior session was technically unreachable before that.
