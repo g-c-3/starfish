@@ -1484,3 +1484,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Switch rows: label left, switch right (`row-reverse` on the existing markup, so no JS or id change).
 - First-run copy shortened; the two credentials remain separate cards (app-open password, Vault PIN), never merged.
 
+---
+
+**88. Biometric button and update download state.**
+- Unlock buttons are labelled "Use Biometric" (fingerprint icon). They carry `.biometric-btn`: a slow breathing glow, no motion under reduced-motion preference.
+- `.hidden` is `display: none !important`. Component classes that set `display` must not be able to un-hide an element the app hides.
+- Download update: always rendered, `disabled` until a check returns an available update. A new check disables it first.
+

@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 66**
+
+Fixes from device screenshots of Session 65 (Decision 88).
+- Both unlock buttons (app lock screen, Vault locked view) now read "Use Biometric" with a fingerprint icon and a slow breathing glow (3.6 s cycle; static soft glow under reduced motion). Settings toggles keep their longer wording.
+- Download update is visible but disabled until a check finds a newer release; a new check disables it again and clears its stored URL.
+
+Bug fixed: "Download update" showed before any check. Cause: `.secondary-btn { display: flex }` came later in the stylesheet than `.hidden { display: none }` and won. Fix: `.hidden { display: none !important }`. Correct because no component display rule can now un-hide an element JS has hidden. The same defect could have shown the biometric buttons on devices without biometric enrollment; device check below.
+
+Decisions made: 88.
+
+Verified: `node --check`, `vite build`, headless render of the lock screen button and the Updates section. Not run through CI or on device. Device checks: on a device without enrolled biometrics the biometric buttons stay hidden; Check for updates on the current version leaves Download disabled; with a newer release it enables and downloads; glow is slow and not distracting.
+
+Next session start point: unchanged from Session 65 (Phase 15 step 3). Device pass on Sessions 59 to 66.
+
+---
+
 **Session 65**
 
 Phase 15, step 2 (Decision 87). Lock screen, first-run, Vault PIN setup and locked views, and the ad gate share one auth layout: centered column, gradient brand mark, form cards. Settings is grouped under Data, Security, Preferences and Backup; each section has an icon chip and a tone. Switch rows put the label left and the switch right; helper text is no longer indented under switches (still indented under radios). Selects get a themed arrow. Seven icons added to the sprite. The ad gate shows a spinner and the brand mark instead of bare text.
