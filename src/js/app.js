@@ -958,6 +958,39 @@ function formatBytes(n) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ---- Row/icon rendering shared by Home folders, Vault folders and both search lists (Decision 86).
+// Icons come from the inline sprite in index.html. All user text is escaped before it reaches innerHTML.
+const TYPE_ICON = { note: 'note', voice: 'voice', image: 'image', pdf: 'pdf', reminder: 'reminder', location: 'location', money: 'money', expense: 'money', file: 'file' };
+function iconSvg(name, cls = 'ic') { return `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`; }
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function typeLabelFor(type) { return VAULT_TYPE_LABELS[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : ''); }
+function formatEntryDate(ms) {
+  if (!ms) return '';
+  return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+}
+// actionPrefix: 'main' | 'vault' renders Share/Download/Edit/Delete icon buttons wired by their existing
+// ${prefix}-*-btn classes; null renders a plain (search-result) row.
+function entryRowHtml({ id, type, label, meta = '', tags = [] }, actionPrefix = null) {
+  const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
+  return `
+    <div class="entry-row" data-type="${escapeHtml(type)}">
+      <span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>
+      <span class="row-main">
+        <span class="row-title">${escapeHtml(label)}</span>
+        <span class="row-meta">${escapeHtml(meta)}</span>
+        ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
+      </span>
+      ${actionPrefix ? `<span class="row-actions">${btn('share', 'Share')}${btn('download', 'Download')}${btn('edit', 'Edit')}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
+    </div>`;
+}
+function emptyStateHtml(kind = 'folder') {
+  return kind === 'search'
+    ? `<div class="empty-state">${iconSvg('search')}<strong>No matches</strong><span>Try a different word.</span></div>`
+    : `<div class="empty-state">${iconSvg('plus')}<strong>Nothing here yet</strong><span>Tap New to add the first one.</span></div>`;
+}
+
 // ---- Google Drive backup UI (optional, opt-in — Phase 13) ----
 async function refreshDriveConnectionView() {
   const disconnectedView = document.getElementById('drive-disconnected-view');
@@ -1451,17 +1484,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // button, a universal New asks for a type, and the list under the search box is search results only.
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
   function vaultRowsHtml(items) {
-    return items.map((e) => `
-      <div class="drive-backup-row" data-type="${e.type}">
-        <span>${e.label} (${VAULT_TYPE_LABELS[e.type]}, ${formatBytes(e.sizeBytes)})${e.tags.length ? ' — ' + e.tags.join(', ') : ''}</span>
-        <span>
-          <button class="vault-share-btn" data-id="${e.id}">Share</button>
-          <button class="vault-download-btn" data-id="${e.id}">Download</button>
-          <button class="vault-edit-btn" data-id="${e.id}">Edit</button>
-          <button class="vault-delete-btn warning-text" data-id="${e.id}">Delete</button>
-        </span>
-      </div>
-    `).join('') || 'Nothing here yet.';
+    return items.map((e) => entryRowHtml({
+      id: e.id, type: e.type, label: e.label, tags: e.tags,
+      meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`
+    }, 'vault')).join('') || emptyStateHtml('folder');
   }
 
   function renderVaultCounts() {
@@ -1494,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('vault-list');
     if (!term) { list.innerHTML = ''; return; }
     const items = searchVault(term);
-    list.innerHTML = items.map((e2) => `<div class="drive-backup-row" data-type="${e2.type}"><span>${e2.label} (${VAULT_TYPE_LABELS[e2.type]})</span></div>`).join('') || 'No matches.';
+    list.innerHTML = items.map((e2) => entryRowHtml({ id: e2.id, type: e2.type, label: e2.label, tags: e2.tags, meta: `${typeLabelFor(e2.type)} · ${formatBytes(e2.sizeBytes)}` })).join('') || emptyStateHtml('search');
   }
 
   // Call only while unlocked (browseVault/searchVault throw otherwise).
@@ -1542,7 +1568,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openVaultFolder(type, btn) {
     openVaultFolderType = type;
     updateBackButtonState();
-    document.getElementById('vault-folder-title').textContent = `${btn.querySelector('.card-icon').textContent} ${VAULT_TYPE_LABELS[type]}`;
+    const vTitle = document.getElementById('vault-folder-title');
+    vTitle.dataset.vaultType = type;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     renderVault();
@@ -1876,17 +1904,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderFolderCounts();
     if (!openFolderType) return;
     const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
-    document.getElementById('folder-list').innerHTML = rows.map((row) => `
-      <div class="drive-backup-row" data-type="${row.type}">
-        <span>${row.label} (${row.type})${row.tags && row.tags.length ? ' — ' + row.tags.join(', ') : ''}</span>
-        <span>
-          <button class="main-share-btn" data-id="${row.id}">Share</button>
-          <button class="main-download-btn" data-id="${row.id}">Download</button>
-          <button class="main-edit-btn" data-id="${row.id}">Edit</button>
-          <button class="main-delete-btn warning-text" data-id="${row.id}">Delete</button>
-        </span>
-      </div>
-    `).join('') || 'Nothing here yet.';
+    document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
+      id: row.id, type: row.type, label: row.label, tags: row.tags,
+      meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
+    }, 'main')).join('') || emptyStateHtml('folder');
 
     document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
     document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
@@ -1902,7 +1923,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openFolder(type, btn) {
     openFolderType = type;
     updateBackButtonState();
-    document.getElementById('folder-title').textContent = `${btn.querySelector('.card-icon').textContent} ${VAULT_TYPE_LABELS[type]}`;
+    const hTitle = document.getElementById('folder-title');
+    hTitle.dataset.type = type;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await renderMainTimeline();
@@ -1929,11 +1952,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Digest, on-this-day, storage breakdown (ARCHITECTURE §6) — backend logic (showDigest,
   // onThisDay, storageBreakdown) existed already; none of it was ever rendered until now. ----
   async function renderDigest() {
+    document.getElementById('today-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
     const rows = await showDigest();
-    if (rows.length === 0) { document.getElementById('digest').textContent = 'Nothing yet today.'; return; }
-    document.getElementById('digest').textContent = rows.map((r) =>
-      r.total ? `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''} ($${r.total.toFixed(2)})` : `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''}`
-    ).join(' · ');
+    const el = document.getElementById('digest');
+    if (rows.length === 0) { el.innerHTML = '<span class="empty-line">Nothing yet today.</span>'; return; }
+    el.innerHTML = rows.map((r) => {
+      const text = r.total ? `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''} ($${r.total.toFixed(2)})` : `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''}`;
+      return `<span class="chip" data-type="${escapeHtml(r.type)}">${escapeHtml(text)}</span>`;
+    }).join('');
   }
   await renderDigest();
 
@@ -2044,7 +2070,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const term = e.target.value;
     if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
     const rows = await searchEntries(db, term);
-    document.getElementById('timeline').innerHTML = rows.map((row) => `<div class="drive-backup-row" data-type="${row.type}"><span>${row.label} (${row.type})</span></div>`).join('') || 'No matches.';
+    document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
+      id: row.id, type: row.type, label: row.label, tags: row.tags,
+      meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
+    })).join('') || emptyStateHtml('search');
   });
 
   // Auto-biometric on the app-open lock screen (Decision 56/58) — deliberately the very last
