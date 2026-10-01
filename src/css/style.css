@@ -263,6 +263,8 @@ button {
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 #bottom-nav #nav-back-btn.glow { animation: nav-back-glow 0.5s ease-out; }
+/* Landing page of the current section: nothing above it, so Back is dimmed and inert (Decision 82). */
+#bottom-nav #nav-back-btn.disabled { opacity: 0.3; pointer-events: none; }
 
 /* --- Backup/restore & Drive settings (Phase 6/13) --- */
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
