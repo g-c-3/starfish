@@ -321,29 +321,6 @@ button {
 }
 .vault-banner h2 { margin: 0; font-size: 20px; letter-spacing: 0.05em; color: var(--fg); }
 .vault-banner button { width: auto; }
-#vault-capture-bar { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
-#vault-capture-bar button { width: auto; padding: 10px 14px; border-radius: 14px; }
-#vault-capture-bar button[data-vault-type="note"]  { background: var(--type-note);  color: #2a1c00; }
-#vault-capture-bar button[data-vault-type="voice"] { background: var(--type-voice); color: #00332c; }
-#vault-capture-bar button[data-vault-type="image"] { background: var(--type-image); color: #3a0020; }
-#vault-capture-bar button[data-vault-type="pdf"]   { background: var(--type-pdf);   color: #001b3a; }
-#vault-capture-bar button[data-vault-type="file"]  { background: var(--type-file);  color: #00301f; }
-
-#vault-tabs { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
-.vault-tab {
-  width: auto; padding: 7px 14px; border-radius: 18px;
-  border: 1.5px solid var(--border); background: var(--card-bg); color: var(--fg); font-weight: 600;
-}
-.vault-tab.active { background: var(--vault); color: var(--vault-fg); border-color: var(--vault); }
-.vault-tab[data-vault-tab="note"].active     { background: var(--type-note);     color: #2a1c00; border-color: var(--type-note); }
-.vault-tab[data-vault-tab="voice"].active    { background: var(--type-voice);    color: #00332c; border-color: var(--type-voice); }
-.vault-tab[data-vault-tab="image"].active    { background: var(--type-image);    color: #3a0020; border-color: var(--type-image); }
-.vault-tab[data-vault-tab="pdf"].active      { background: var(--type-pdf);      color: #001b3a; border-color: var(--type-pdf); }
-.vault-tab[data-vault-tab="reminder"].active { background: var(--type-reminder); color: #3a1400; border-color: var(--type-reminder); }
-.vault-tab[data-vault-tab="location"].active { background: var(--type-location); color: #002733; border-color: var(--type-location); }
-.vault-tab[data-vault-tab="money"].active    { background: var(--type-money);    color: #3a0000; border-color: var(--type-money); }
-.vault-tab[data-vault-tab="file"].active     { background: var(--type-file);     color: #00301f; border-color: var(--type-file); }
-
 .select-files-category { margin-bottom: 12px; }
 .select-files-category-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
 .select-files-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 4px 20px; font-size: 14px; }
@@ -444,5 +421,5 @@ input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 /* Cards as folders (Decision 81): count badge, folder view, universal New button. */
 .capture-cards button { position: relative; }
 .capture-cards .card-count { position: absolute; top: 6px; right: 9px; font-size: 11px; font-weight: 800; opacity: 0.85; }
-#universal-new-btn { margin: 12px 0 0; }
-#folder-new-btn { margin: 12px 0; }
+#universal-new-btn, #vault-universal-new-btn { margin: 12px 0 0; }
+#folder-new-btn, #vault-folder-new-btn { margin: 12px 0; }
