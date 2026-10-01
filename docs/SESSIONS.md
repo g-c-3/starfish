@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 64**
+
+Phase 15, step 1: design system applied to Home and Vault (Decision 86). New `style.css` with theme tokens, per-type color context, floating translucent bottom nav, 2-column folder tiles with icon chip and corner count badge, entry rows (type chip, title, meta, tag chips, icon-only Share/Download/Edit/Delete), designed empty states, bottom-sheet type chooser, refined inputs and switches. Inline SVG sprite added to `index.html` replaces every emoji icon. Inter variable (latin subset, OFL) bundled in `src/fonts/`. Home header shows the date and the digest as colored chips.
+
+Bug fixed: an empty bordered bar under the Home header. Cause: `#backup-reminder-banner { display: flex }` outranks `.hidden`. Fix: `.hidden` restated at ID specificity. Correct because the banner now hides whenever app.js adds `.hidden`.
+
+Also: entry labels, tags and types are HTML-escaped before rendering (previously inserted raw).
+
+Decisions made: 86.
+
+Verified: `node --check`, `vite build` (font emitted, CSS 18 kB), headless render of Home (dark and light), a folder list and the Vault at 360 px. Not run through CI or on device. Device checks: Inter loads (no fallback look); tiles fit at your width; count badges; folder rows and four icon buttons respond; Vault Settings card opens and toggles still work; nav active states; chooser sheet; light theme via Appearance.
+
+Not touched: lock screen, first-run, Settings tab internals (step 2); capture prompts (step 3).
+
+Next session start point: Phase 15 step 2, unless Money capture is defined first. Device pass on Sessions 59 to 64.
+
+---
+
 **Session 63**
 
 Phase 4: Vault made a copy of Home in appearance and function (Decision 85). The eight cards are the same grid with count badges and open per-type folders; each folder has New. A universal New above the cards opens the shared type chooser for the Vault. The list under the Vault search box is search results only. Vault Settings sits where Home's settings tile does. Type tabs removed. Back closes an open Vault folder first, then the Vault Settings card. Lock closes any open folder and clears every rendered list.

@@ -1461,3 +1461,17 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Back (Decision 82): open Vault folder closes first, then an open Vault Settings card. The nav Vault button and every lock reset the Vault to the card grid.
 - Not changed: Vault Reminder, Location, Money remain placeholders; Vault capture of files stays single-file (no batch, Decision 84).
 
+
+
+---
+
+**86. Visual system.** Supersedes the visual identity notes of Decisions 52, 53, 55 and 57; behavior in those decisions is unchanged.
+- Layered surfaces (bg, surface, surface-2) with a hairline border and one soft shadow. Dark and light themes both complete; every color is a token.
+- Type color is context, not fill: `data-type` / `data-vault-type` set `--tc-rgb` and `--tc-ink` (darker ink in light theme for contrast). It appears only on icon chips, count badges and digest chips. `expense` shares Money's color.
+- Font: Inter variable, latin subset, bundled in `src/fonts/` (OFL license kept alongside). No network fetch; system fonts are the fallback for other scripts.
+- Icons: inline SVG sprite at the top of `index.html`, referenced as `<use href="#i-name">`, stroke-based, `currentColor`. No emoji as icons.
+- Folder tiles: two columns, icon chip + label; count is a badge on the chip corner so labels never truncate.
+- Entry rows: one template (`entryRowHtml`) for Home folders, Vault folders and search results. Actions are icon-only buttons keeping the existing `main-*` / `vault-*` classes. An overflow menu is deferred to the in-app sheets of step 3.
+- Bottom nav: floating, translucent, rounded; Back stays the middle control.
+- Rows built by `drive-backup-row` (trash, Drive list, storage) keep that class with the new surface style.
+- Rendered strings are escaped (`escapeHtml`) before `innerHTML`.
