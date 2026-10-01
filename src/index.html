@@ -206,69 +206,67 @@
     </div>
 
     <div id="vault-content" class="hidden">
-      <div id="vault-capture-bar" class="capture-cards">
-        <button data-vault-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span></button>
-        <button data-vault-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span></button>
-        <button data-vault-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span></button>
-        <button data-vault-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span></button>
-        <button data-vault-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span></button>
-        <button data-vault-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span></button>
-        <button data-vault-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span></button>
-        <button data-vault-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span></button>
-      </div>
+      <div id="vault-main">
+        <button id="vault-universal-new-btn">＋ New</button>
 
-      <input id="vault-search-input" placeholder="Search the vault..." />
-      <button id="vault-select-files-btn" class="secondary-btn">Select files</button>
-
-      <div id="vault-tabs">
-        <button class="vault-tab active" data-vault-tab="all">All</button>
-        <button class="vault-tab" data-vault-tab="note">Text</button>
-        <button class="vault-tab" data-vault-tab="voice">Voice</button>
-        <button class="vault-tab" data-vault-tab="image">Image</button>
-        <button class="vault-tab" data-vault-tab="pdf">PDF</button>
-        <button class="vault-tab" data-vault-tab="reminder">Reminder</button>
-        <button class="vault-tab" data-vault-tab="location">Location</button>
-        <button class="vault-tab" data-vault-tab="money">Money</button>
-        <button class="vault-tab" data-vault-tab="file">Files</button>
-      </div>
-      <div id="vault-list"></div>
-
-      <details id="vault-settings-card">
-        <summary>⚙️ Vault Settings</summary>
-
-        <div id="vault-biometric-row" class="hidden">
-          <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
-          <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
-          <div id="vault-biometric-confirm" class="hidden">
-            <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
-            <button id="vault-biometric-confirm-btn">Confirm</button>
-          </div>
+        <div id="vault-capture-bar" class="capture-cards">
+        <button data-vault-type="note"><span class="card-icon">📝</span><span class="card-label">Text</span><span class="card-count"></span></button>
+        <button data-vault-type="voice"><span class="card-icon">🎙️</span><span class="card-label">Voice</span><span class="card-count"></span></button>
+        <button data-vault-type="image"><span class="card-icon">📷</span><span class="card-label">Image</span><span class="card-count"></span></button>
+        <button data-vault-type="pdf"><span class="card-icon">📄</span><span class="card-label">PDF</span><span class="card-count"></span></button>
+        <button data-vault-type="reminder"><span class="card-icon">⏰</span><span class="card-label">Reminder</span><span class="card-count"></span></button>
+        <button data-vault-type="location"><span class="card-icon">📍</span><span class="card-label">Location</span><span class="card-count"></span></button>
+        <button data-vault-type="money"><span class="card-icon">💰</span><span class="card-label">Money</span><span class="card-count"></span></button>
+        <button data-vault-type="file"><span class="card-icon">📁</span><span class="card-label">Files</span><span class="card-count"></span></button>
         </div>
 
-        <h4>Auto-lock</h4>
-        <label class="switch-row"><input type="checkbox" id="vault-lock-idle-toggle" checked /> Lock after inactivity</label>
-        <label>
-          <select id="vault-auto-lock-select">
-            <option value="1">1 minute</option>
-            <option value="5" selected>5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-          </select>
-        </label>
-        <p class="mode-description">Independent of the app-open lock's own timing.</p>
+        <details id="vault-settings-card">
+          <summary>⚙️ Vault Settings</summary>
 
-        <label class="switch-row"><input type="checkbox" id="vault-lock-background-toggle" checked /> Lock when backgrounded (switching to another app)</label>
+          <div id="vault-biometric-row" class="hidden">
+            <label class="switch-row"><input type="checkbox" id="vault-biometric-toggle" /> Unlock Vault with fingerprint/face</label>
+            <p class="mode-description">A convenience alternative to typing your Vault PIN — the PIN itself is unchanged and still works.</p>
+            <div id="vault-biometric-confirm" class="hidden">
+              <input id="vault-biometric-confirm-pin" type="password" placeholder="Confirm current Vault PIN" />
+              <button id="vault-biometric-confirm-btn">Confirm</button>
+            </div>
+          </div>
 
-        <label class="switch-row"><input type="checkbox" id="vault-lock-screenoff-toggle" /> Lock when the phone screen locks</label>
-        <p class="mode-description">Same native listener as the app-lock version (Decision 74) — not yet confirmed on device.
-          Same relationship to "Lock when backgrounded" as the app-lock switches above.</p>
+          <h4>Auto-lock</h4>
+          <label class="switch-row"><input type="checkbox" id="vault-lock-idle-toggle" checked /> Lock after inactivity</label>
+          <label>
+            <select id="vault-auto-lock-select">
+              <option value="1">1 minute</option>
+              <option value="5" selected>5 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </label>
+          <p class="mode-description">Independent of the app-open lock's own timing.</p>
 
-        <details id="vault-trash-settings">
-          <summary>Vault Trash</summary>
-          <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
-          <div id="vault-trash-list"></div>
+          <label class="switch-row"><input type="checkbox" id="vault-lock-background-toggle" checked /> Lock when backgrounded (switching to another app)</label>
+
+          <label class="switch-row"><input type="checkbox" id="vault-lock-screenoff-toggle" /> Lock when the phone screen locks</label>
+          <p class="mode-description">Same native listener as the app-lock version (Decision 74) — not yet confirmed on device.
+            Same relationship to "Lock when backgrounded" as the app-lock switches above.</p>
+
+          <details id="vault-trash-settings">
+            <summary>Vault Trash</summary>
+            <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
+            <div id="vault-trash-list"></div>
+          </details>
         </details>
-      </details>
+
+        <input id="vault-search-input" placeholder="Search the vault..." />
+        <button id="vault-select-files-btn" class="secondary-btn">Select files</button>
+        <div id="vault-list"></div>
+      </div>
+
+      <div id="vault-folder-view" class="hidden">
+        <h2 id="vault-folder-title"></h2>
+        <button id="vault-folder-new-btn">＋ New</button>
+        <div id="vault-folder-list"></div>
+      </div>
     </div>
   </div>
 
