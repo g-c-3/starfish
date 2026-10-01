@@ -132,11 +132,20 @@ function closeFolder() {
   updateBackButtonState();
 }
 
+let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
+function closeVaultFolder() {
+  openVaultFolderType = null;
+  document.getElementById('vault-folder-view')?.classList.add('hidden');
+  document.getElementById('vault-main')?.classList.remove('hidden');
+  updateBackButtonState();
+}
+
 // One level up inside the current section, or null when already on its landing page (Decision 82).
 //   Home:  Settings -> Home landing; open folder -> Home landing; Home landing -> nothing.
-//   Vault: open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
+//   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 function backAction() {
   if (currentLocation === 'vault') {
+    if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
     return card && card.open ? () => { card.open = false; } : null;
   }
@@ -662,8 +671,11 @@ function lockVault() {
   // this was the actual bug: the vault could appear "already unlocked" indefinitely.
   const list = document.getElementById('vault-list');
   const trash = document.getElementById('vault-trash-list');
+  const folderList = document.getElementById('vault-folder-list');
   if (list) list.innerHTML = '';
+  if (folderList) folderList.innerHTML = '';
   if (trash) trash.innerHTML = '';
+  closeVaultFolder(); // next unlock lands on the card grid, not a previously open folder
 }
 
 // Called on unlock and on any vault activity (app.js's vault UI handlers should call this on
@@ -1299,6 +1311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // in showScreen(), but vault-screen doesn't change screen id when its internal gate/content
     // substate toggles, so that exclusion has to live here instead.
     document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', !unlocked);
+    if (unlocked) renderVault(); // counts and any open folder (biometric unlock reaches here too)
     updateLockButtonDisabledState(true); // vault context never shows "disabled" — always has a PIN by the time it's shown
 
     const settings = await getBiometricSettings();
@@ -1333,13 +1346,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('vault-unlock-btn').addEventListener('click', async () => {
     const result = await unlockVault(document.getElementById('vault-pin-input').value);
-    if (result.success) { await refreshVaultGateView(); await renderVaultList('all'); }
+    if (result.success) { await refreshVaultGateView(); renderVault(); }
     else if (result.setupNeeded) await refreshVaultGateView();
     else alert('Wrong PIN.');
   });
   document.getElementById('vault-biometric-unlock-btn')?.addEventListener('click', async () => {
     const result = await window.tryBiometricUnlockVault();
-    if (result.success) { await refreshVaultGateView(); await renderVaultList('all'); }
+    if (result.success) { await refreshVaultGateView(); renderVault(); }
     else alert('Biometric unlock failed — enter your Vault PIN.');
   });
   // vault-lock-btn removed (Decision 65) — replaced by the universal #lock-toggle-btn, wired
@@ -1365,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // is wired separately below with its own, different behavior (goBack(), not "jump to this tab").
   document.querySelectorAll('#bottom-nav button[data-nav]').forEach((btn) => btn.addEventListener('click', async () => {
     const tab = btn.dataset.nav;
-    if (tab === 'vault') { showScreen('vault-screen'); await refreshVaultGateView(); }
+    if (tab === 'vault') { closeVaultFolder(); showScreen('vault-screen'); await refreshVaultGateView(); }
     else {
       if (tab === 'home') closeFolder(); // tapping Home always lands on the card grid, not an open folder (Decision 81)
       showScreen('main-screen', { tab });
@@ -1434,15 +1447,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.querySelectorAll('#vault-tabs .vault-tab').forEach((tab) => tab.addEventListener('click', () => {
-    document.querySelectorAll('#vault-tabs .vault-tab').forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    renderVaultList(tab.dataset.vaultTab);
-  }));
-
-  async function renderVaultList(typeOrAll) {
-    const items = browseVault(typeOrAll);
-    document.getElementById('vault-list').innerHTML = items.map((e) => `
+  // ---- Vault mirrors Home (Decision 85): cards are folders with count badges, each folder has a New
+  // button, a universal New asks for a type, and the list under the search box is search results only.
+  // Counts and lists read the in-memory index (Decision 39), never the DB. ----
+  function vaultRowsHtml(items) {
+    return items.map((e) => `
       <div class="drive-backup-row" data-type="${e.type}">
         <span>${e.label} (${VAULT_TYPE_LABELS[e.type]}, ${formatBytes(e.sizeBytes)})${e.tags.length ? ' — ' + e.tags.join(', ') : ''}</span>
         <span>
@@ -1453,39 +1462,63 @@ document.addEventListener('DOMContentLoaded', async () => {
         </span>
       </div>
     `).join('') || 'Nothing here yet.';
+  }
 
-    document.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
-    document.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
-    document.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
-      const item = items.find((i) => i.id === b.dataset.id);
-      await editEntryUI(item, true);
-      await renderVaultList(typeOrAll);
+  function renderVaultCounts() {
+    const byType = {};
+    for (const e of browseVault('all')) byType[e.type] = (byType[e.type] || 0) + 1;
+    document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => {
+      const n = byType[btn.dataset.vaultType] || 0;
+      btn.querySelector('.card-count').textContent = n ? String(n) : '';
+    });
+  }
+
+  function renderVaultFolderList() {
+    const container = document.getElementById('vault-folder-list');
+    const items = browseVault(openVaultFolderType);
+    container.innerHTML = vaultRowsHtml(items);
+    container.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
+    container.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
+    container.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
+      await editEntryUI(items.find((i) => i.id === b.dataset.id), true);
+      renderVault();
     }));
-    document.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-      await deleteVaultEntry(b.dataset.id); await renderVaultList(typeOrAll);
+    container.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
+      await deleteVaultEntry(b.dataset.id);
+      renderVault();
     }));
   }
 
-  document.getElementById('vault-search-input').addEventListener('input', (e) => {
-    const term = e.target.value;
-    const items = term ? searchVault(term) : browseVault('all');
-    document.getElementById('vault-list').innerHTML = items.map((e2) => `<div class="drive-backup-row" data-type="${e2.type}"><span>${e2.label} (${VAULT_TYPE_LABELS[e2.type]})</span></div>`).join('') || 'No matches.';
-  });
+  function renderVaultSearch() {
+    const term = document.getElementById('vault-search-input').value;
+    const list = document.getElementById('vault-list');
+    if (!term) { list.innerHTML = ''; return; }
+    const items = searchVault(term);
+    list.innerHTML = items.map((e2) => `<div class="drive-backup-row" data-type="${e2.type}"><span>${e2.label} (${VAULT_TYPE_LABELS[e2.type]})</span></div>`).join('') || 'No matches.';
+  }
 
-  document.querySelectorAll('#vault-capture-bar button').forEach((btn) => btn.addEventListener('click', async () => {
-    const type = btn.dataset.vaultType;
+  // Call only while unlocked (browseVault/searchVault throw otherwise).
+  function renderVault() {
+    renderVaultCounts();
+    if (openVaultFolderType) renderVaultFolderList();
+    renderVaultSearch();
+  }
+
+  document.getElementById('vault-search-input').addEventListener('input', renderVaultSearch);
+
+  async function startVaultCapture(type) {
     if (type === 'note') {
       const text = prompt('Vault note text:');
       if (!text) return;
       const tags = await promptForTags(); // declared below — hoisted within this same DOMContentLoaded scope
       await captureToVault({ type: 'note', label: text.slice(0, 40), tags, text });
-      await renderVaultList('all');
+      renderVault();
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
         const tags = await promptForTags();
         const label = await promptForLabel('voice', `Voice ${new Date().toLocaleTimeString()}`);
         await captureToVault({ type: 'voice', label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
-        await renderVaultList('all');
+        renderVault();
       });
     } else if (type === 'reminder' || type === 'location' || type === 'money') {
       alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
@@ -1499,12 +1532,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
         const tags = await promptForTags();
         await captureToVault({ type, label: file.name, tags, fileData, extension: file.name.split('.').pop() });
-        await renderVaultList('all');
+        renderVault();
       };
       beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
       input.click();
     }
-  }));
+  }
+
+  async function openVaultFolder(type, btn) {
+    openVaultFolderType = type;
+    updateBackButtonState();
+    document.getElementById('vault-folder-title').textContent = `${btn.querySelector('.card-icon').textContent} ${VAULT_TYPE_LABELS[type]}`;
+    document.getElementById('vault-main').classList.add('hidden');
+    document.getElementById('vault-folder-view').classList.remove('hidden');
+    renderVault();
+  }
+  document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
+  document.getElementById('vault-folder-new-btn').addEventListener('click', () => startVaultCapture(openVaultFolderType));
 
   async function renderVaultTrash() {
     const items = await showVaultTrash();
@@ -1517,9 +1561,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         </span>
       </div>
     `).join('') || 'Vault trash is empty.';
-    document.querySelectorAll('.vault-restore-btn').forEach((b) => b.addEventListener('click', async () => { await restoreEntry(b.dataset.id); await renderVaultTrash(); }));
+    document.querySelectorAll('.vault-restore-btn').forEach((b) => b.addEventListener('click', async () => { await restoreEntry(b.dataset.id); await renderVaultTrash(); renderVault(); }));
     document.querySelectorAll('.vault-perm-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-      if (confirm('Delete permanently? This cannot be undone.')) { await permanentlyDelete(b.dataset.id); await renderVaultTrash(); }
+      if (confirm('Delete permanently? This cannot be undone.')) { await permanentlyDelete(b.dataset.id); await renderVaultTrash(); renderVault(); }
     }));
   }
   document.getElementById('vault-trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderVaultTrash(); });
@@ -1870,11 +1914,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateBackButtonState();
 
   const newChooser = document.getElementById('new-chooser-modal');
-  document.getElementById('universal-new-btn').addEventListener('click', () => newChooser.classList.remove('hidden'));
+  let newChooserTarget = 'home'; // which section's capture the shared chooser feeds (Decision 85)
+  document.getElementById('universal-new-btn').addEventListener('click', () => { newChooserTarget = 'home'; newChooser.classList.remove('hidden'); });
+  document.getElementById('vault-universal-new-btn').addEventListener('click', () => { newChooserTarget = 'vault'; newChooser.classList.remove('hidden'); });
   document.getElementById('new-chooser-cancel-btn').addEventListener('click', () => newChooser.classList.add('hidden'));
   document.querySelectorAll('#new-chooser-grid button[data-type]').forEach((btn) => btn.addEventListener('click', () => {
     newChooser.classList.add('hidden');
-    startCapture(btn.dataset.type);
+    if (newChooserTarget === 'vault') startVaultCapture(btn.dataset.type);
+    else startCapture(btn.dataset.type);
   }));
 
   await renderMainTimeline();
