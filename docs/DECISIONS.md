@@ -1372,3 +1372,17 @@ device only through that explicit Share. Permission failure, GPS timeout, or no 
 saved. `ACCESS_COARSE_LOCATION` added to `scripts/patch-manifest.js` (and native-setup §3): the
 plugin's own manifest is empty and Android 12+ needs COARSE declared alongside FINE. Vault Location,
 Money unchanged (placeholders). Map view of saved locations (ARCHITECTURE §7) still not built.
+
+---
+
+**80. Update check scans the release list for the highest run number instead of calling
+`/releases/latest`.** Reported from a device: builds up to 198 existed, the check offered 196. Cause
+(likely, not proven — the API rate-limited further inspection): `/releases/latest` ranks releases by
+the tagged commit's date, not by tag or run number, and responses are publicly cached for 60 seconds,
+so builds pushed minutes apart can report an older one. Fix: `GET /releases?per_page=15`, drop drafts,
+prereleases and tags without a `+<run number>` suffix, take the highest run number. Request carries a
+timestamp query param and `cache: 'no-store'`. Same single manual-tap network call (Decision 72). An
+empty or unusable list reports `unparseable_version`. Tested against a mocked list with out-of-order
+and draft entries. Limit: only the 15 newest releases are inspected — more than 15 builds between
+checks still resolves correctly, since the highest of those 15 is newer than any build installed from
+before them.

@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 58**
+
+Reported from device: Settings offered build 196 while 198 existed. `update-check.js` now lists
+releases and picks the highest run number (Decision 80) instead of trusting `/releases/latest`.
+
+Decisions made: 80.
+
+Verified: mocked-list test (out-of-order, draft, empty list, already-current), `vite build`. Not
+confirmed on device or against the live API — it rate-limited this session's inspection, so the cause
+is reasoned, not observed. Device check: with a newer build released, "Check for updates" must name
+the newest run number; tap again right after a new release to confirm no stale result.
+
+Open: unchanged from Session 57.
+
+Next session start point: unchanged from Session 57.
+
+---
+
 **Session 57**
 
 Phase 4: Location capture card built. Current GPS fix saved as a `location` entry with coordinates,

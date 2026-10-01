@@ -279,7 +279,8 @@
   nothing left running in the background to turn off. Reports all three outcomes inline in that
   Settings section: up to date (names the version), an update found (names it, offers a direct
   download of the `.apk` asset — see Session 53, Decision 75), or a check failure (offline/network/
-  unparseable). Still no auto-install — sideloaded APKs can't update themselves regardless of how the
+  unparseable). **Wrong build offered, fixed (Session 58, Decision 80):** the check now scans the
+  release list for the highest run number instead of using `/releases/latest`. Still no auto-install — sideloaded APKs can't update themselves regardless of how the
   check is triggered or the file arrived. Not yet confirmed on device.
 - [ ] **12 — Ads integration. Deliberately deferred (Decision 58) — not part of this build.** Logic
   drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
