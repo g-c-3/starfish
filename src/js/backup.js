@@ -4,8 +4,7 @@
 // Archive format (single JSON file, AES-GCM encrypted as a whole by crypto.encryptBackup):
 //   { schemaVersion, createdAt, categories: [...], entries: [...], tags: [...], settings: {...} }
 // entries[].fileData is base64 file bytes for voice/image/pdf/file categories (present only when
-// that category was included). This is the SAME schema a per-file "download for append" export
-// uses for its single-entry sidecar (see Decision 9) — one shared shape, two write paths.
+// that category was included).
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { encryptBackup, decryptBackup } from './crypto.js';
@@ -46,8 +45,8 @@ const APP_SETTINGS_KEYS = ['dark_mode']; // non-sensitive only — never credent
 // those keys restores them as harmless, unread meta rows, same as explained in app.js.
 
 // ---------------------------------------------------------------------------
-// Filenames — backup_<letters>_<timestamp>.dz / append_<letters>_<timestamp>.dz (Decision 55,
-// letters extended in Decision 57 when Reminder and Location joined the card set).
+// Filenames — backup_<letters>_<timestamp>.dz (Decision 55, letters extended in Decision 57 when
+// Reminder and Location joined the card set; the append_ prefix was removed in Decision 83).
 // <letters> is a fixed-order subset of "tviprlmf" (Text/Voice/Image/PDF/Reminder/Location/Money/
 // Files) — only the letters for categories actually included, in that order regardless of the
 // order they were selected in. Categories with no letter (private_vault/expenses/tags/
@@ -67,8 +66,7 @@ function backupTimestamp(date = new Date()) {
   return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
 }
 
-// prefix: 'backup' (full Backup & Restore export) or 'append' (per-entry Download-for-append) —
-// same shape either way, just the leading word, per spec.
+// prefix: always 'backup' today (Backup & Restore and Drive backups).
 function backupFileName(prefix, categories) {
   return `${prefix}_${categoryLetters(categories)}_${backupTimestamp()}.dz`;
 }
@@ -94,7 +92,7 @@ async function readFileBase64(filePath) {
   return res.data; // already base64
 }
 
-async function buildBackupPayload(db, categories, entryIds = null) {
+async function buildBackupPayload(db, categories) {
   const wantAll = (name) => categories.includes(name);
   const payload = {
     schemaVersion: SCHEMA_VERSION,
@@ -108,10 +106,7 @@ async function buildBackupPayload(db, categories, entryIds = null) {
 
   const entryCategoryNames = Object.keys(ENTRY_CATEGORIES).filter(wantAll);
   if (entryCategoryNames.length > 0) {
-    const idFilter = entryIds ? ` AND id IN (${entryIds.map(() => '?').join(',')})` : '';
-    const rows = (await db.query(
-      `SELECT * FROM entries WHERE deleted_at IS NULL${idFilter}`, entryIds || []
-    )).values || [];
+    const rows = (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL`)).values || [];
     for (const row of rows) {
       const cat = entryCategoryNames.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;

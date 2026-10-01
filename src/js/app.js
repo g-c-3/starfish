@@ -14,7 +14,7 @@ import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
   restoreFromDrive, checkAndRunAutoBackupIfDue
 } from './gdrive.js';
-import { importAppendZips, getSelectableEntries, runBulkAction, shareEntry, downloadPlain, downloadForAppend, editEntry } from './fileactions.js';
+import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
 import { App } from '@capacitor/app';
 import { Geolocation } from '@capacitor/geolocation';
@@ -1087,31 +1087,6 @@ async function checkAutoBackupOnOpen() {
   }
 }
 
-// ---- Append files from download (Phase 7) — always append mode, no overwrite option here ----
-// prompt()/confirm() again for the one-off passphrase/PIN, same known rough edge as the Drive
-// flows (ROADMAP) — a batch of individually-downloaded zips can each need a different passkey or
-// the private-notes PIN, so a single upfront input wouldn't cover every file in the selection.
-async function handleAppendImport() {
-  const statusEl = document.getElementById('append-import-status');
-  const fileInput = document.getElementById('append-import-input');
-  if (!fileInput.files.length) { statusEl.textContent = 'Choose one or more files first.'; return; }
-
-  statusEl.textContent = 'Importing…';
-  const report = await importAppendZips(db, fileInput.files, {
-    passphraseGetter: (hint) => Promise.resolve(
-      prompt(hint ? `Backup passkey (hint: ${hint}):` : 'Backup passkey:')
-    ),
-    pinGetter: () => Promise.resolve(prompt('Private-notes PIN for this file:'))
-  });
-
-  let msg = `Processed ${report.filesProcessed} of ${fileInput.files.length} — ` +
-    `added ${report.added}, skipped ${report.skippedExactDup} duplicates, ${report.restoredLabeled} "(Restored)".`;
-  if (report.errors.length > 0) {
-    msg += ` ${report.errors.length} failed: ${report.errors.map((e) => `${e.file} (${e.error})`).join('; ')}.`;
-  }
-  statusEl.textContent = msg;
-}
-
 window.Dumpzone = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel,
   search: (q) => searchEntries(db, q),
@@ -1132,7 +1107,6 @@ window.Dumpzone = {
   // only when acting on a vault item, these functions no-op that param otherwise.
   shareEntry: (id) => shareEntry(db, id, { privateSessionKey }),
   downloadPlain: (id) => downloadPlain(db, id, { privateSessionKey }),
-  downloadForAppend: (id, opts) => downloadForAppend(db, id, opts),
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
   getSelectableGroups, runBulkFileAction,
   onThisDay, storageBreakdown, clearOldInCategory, yourDataSummary,
@@ -1210,7 +1184,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('auto-backup-frequency').addEventListener('change', (e) => metaSet('auto_backup_frequency', e.target.value));
   await refreshDriveConnectionView(); // silent — reflects existing connection state, never prompts on load
 
-  document.getElementById('append-import-btn').addEventListener('click', handleAppendImport);
 
   // ---- First-run setup / lock screen ----
   document.getElementById('first-run-continue-btn').addEventListener('click', async () => {
@@ -1472,7 +1445,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span>
           <button class="vault-share-btn" data-id="${e.id}">Share</button>
           <button class="vault-download-btn" data-id="${e.id}">Download</button>
-          <button class="vault-append-btn" data-id="${e.id}">Download for append</button>
           <button class="vault-edit-btn" data-id="${e.id}">Edit</button>
           <button class="vault-delete-btn warning-text" data-id="${e.id}">Delete</button>
         </span>
@@ -1485,10 +1457,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const item = items.find((i) => i.id === b.dataset.id);
       await editEntryUI(item, true);
       await renderVaultList(typeOrAll);
-    }));
-    document.querySelectorAll('.vault-append-btn').forEach((b) => b.addEventListener('click', async () => {
-      const pin = prompt('Vault PIN (required for Download for append):');
-      if (pin) await window.Dumpzone.downloadForAppend(b.dataset.id, { pin });
     }));
     document.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await deleteVaultEntry(b.dataset.id); await renderVaultList(typeOrAll);
@@ -1619,22 +1587,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statusEl = document.getElementById('select-files-status');
     if (selectedIds.size === 0) { statusEl.textContent = 'Nothing selected.'; return; }
     if (action === 'delete' && !confirm(`Delete ${selectedIds.size} item(s)? They go to trash, not permanent.`)) return;
-    // download_append needs a PIN for any vault items in the selection — prompted once upfront
-    // rather than per-item; harmless/unused if nothing selected turns out to be a vault entry.
-    let extraOpts = {};
-    if (action === 'download_append') {
-      const pin = prompt('Vault PIN (only needed if any selected items are in the Vault):');
-      extraOpts = { pin: pin || undefined };
-    }
     statusEl.textContent = 'Working…';
-    const results = await runBulkFileAction(action, [...selectedIds], extraOpts);
+    const results = await runBulkFileAction(action, [...selectedIds]);
     const failed = results.filter((r) => !r.ok);
     statusEl.textContent = `Done — ${results.length - failed.length} succeeded, ${failed.length} failed.` +
       (failed.length ? ` (${failed.map((f) => f.error).join('; ')})` : '');
   }
   document.getElementById('select-files-share-btn').addEventListener('click', () => runSelectedBulk('share'));
   document.getElementById('select-files-download-btn').addEventListener('click', () => runSelectedBulk('download'));
-  document.getElementById('select-files-append-btn').addEventListener('click', () => runSelectedBulk('download_append'));
   document.getElementById('select-files-delete-btn').addEventListener('click', () => runSelectedBulk('delete'));
 
   // ---- Shared tag picker (Phase 8) — same prompt()-based rough edge already flagged for Drive/
@@ -1860,7 +1820,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <span>
           <button class="main-share-btn" data-id="${row.id}">Share</button>
           <button class="main-download-btn" data-id="${row.id}">Download</button>
-          <button class="main-append-btn" data-id="${row.id}">Download for append</button>
           <button class="main-edit-btn" data-id="${row.id}">Edit</button>
           <button class="main-delete-btn warning-text" data-id="${row.id}">Delete</button>
         </span>
@@ -1869,7 +1828,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
     document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
-    document.querySelectorAll('.main-append-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadForAppend(b.dataset.id, {})));
     document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       const row = rows.find((r) => r.id === b.dataset.id);
       await editEntryUI(row, false);
