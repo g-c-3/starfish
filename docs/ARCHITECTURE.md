@@ -39,7 +39,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | PDF | OCR'd | label + OCR text | ocr_text |
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
-| Location | none yet | label only | placeholder — capture flow not yet defined (Decision 57) |
+| Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link |
 | Money | none yet | label only | placeholder — capture flow not yet defined (Decision 55); deliberately a separate type from Expense below, not a reuse of it |
 | Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
 

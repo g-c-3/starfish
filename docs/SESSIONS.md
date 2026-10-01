@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 57**
+
+Phase 4: Location capture card built. Current GPS fix saved as a `location` entry with coordinates,
+then an optional Share (map link via the native share sheet). Share action extended to location
+entries generally (Decision 79). `ACCESS_COARSE_LOCATION` added to `patch-manifest.js`.
+
+Decisions made: 79.
+
+Verified: `vite build` succeeded, new code present in built output; `patch-manifest.js` run against a
+sample manifest: inserted on first run, no-op on second. Not run through CI or on device. Device
+checks: permission dialog appears, fix returns indoors/outdoors, timeout alert on no fix, Share sheet
+opens with label and link, link opens at the right point, entry survives backup/restore with
+coordinates.
+
+Open: Vault Location and Money still placeholders. Map view not built. Entry row shows label only, no
+coordinates. Session 56 open items unchanged.
+
+Next session start point: Money capture shape needs defining; else Phase 8 batch-add or Phase 5 OCR.
+Standing device/CI confirmations unchanged.
+
+---
+
 **Session 56**
 
 Phase 4: Reminder capture card built. `#reminder-modal` (index.html) and `promptForReminder()` (app.js);

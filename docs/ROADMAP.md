@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (5 reported bugs fixed — Session 31; 8 capture cards, 2 still placeholder: Location/Money; Reminder built Session 56, main only)
+- [~] 4 — App shell & control flow (5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all five built, now attached to the main timeline)
@@ -96,7 +96,9 @@
   biometric toggle showing on the locked gate instead of only once unlocked, and Lock not returning
   Home immediately. Added Reminder and Location as two more cards (eight total:
   Text/Voice/Image/PDF/Reminder/Location/Money/Files) — Reminder reuses the existing auto-detected
-  type, Location is new; both placeholder like Money. **Session 56 (Decision 78):** Reminder card built on the main capture bar — modal with
+  type, Location is new; both placeholder like Money. **Session 57 (Decision 79):** Location card built on the main capture bar — GPS fix saved with
+  coordinates, optional Share of a map link on save; Share action handles location entries; not run on a
+  device. Vault Location and Money still placeholders. **Session 56 (Decision 78):** Reminder card built on the main capture bar — modal with
   datetime picker and repeat select, tags, notification scheduled on save; not run on a device. Vault
   Reminder, Location, Money still placeholders.
   **Session 32 (Decision 58):** Session 31's

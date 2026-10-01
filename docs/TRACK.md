@@ -61,3 +61,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-09-30 | Session 54 | Decision 76 | Fixed cramped/touching switch-row toggles in Settings — .switch-row given its own margin-top at matching specificity, applies to all Settings sections not just the six lock toggles |
 | 2026-09-30 | Session 55 | Decision 77 | Update download stuck mid-download fixed — switched from @capacitor/browser's Browser.open() (Custom Tab) to window.location.assign() (system browser/DownloadManager); dependency removed |
 | 2026-10-01 | Session 56 | Decision 78 | Reminder capture card built (modal with datetime picker and repeat select, tags, notification scheduling); Vault/Location/Money cards unchanged |
+| 2026-10-01 | Session 57 | Decision 79 | Location capture card built (GPS fix saved with coordinates, optional Share of a map link); Share action handles location entries; ACCESS_COARSE_LOCATION added to manifest patch |

@@ -1357,3 +1357,18 @@ auto-detected path in `captureText()`. Same `type: 'reminder'` and columns as au
 (Decision 57); the two are indistinguishable once created. Vault Reminder not built: the notification
 body carries the label in plaintext outside the vault's encryption boundary. Whether vault reminders
 should exist at all is open. Location and Money unchanged.
+
+---
+
+**79. Location capture card built (main capture bar only), with an optional Share step on save.**
+Tap: `@capacitor/geolocation` (already a dependency, previously unused) `requestPermissions()` →
+`getCurrentPosition({enableHighAccuracy, timeout: 15s})` → label prompt (history-aware, type
+`location`) → tags → `insertEntry()` with `latitude`/`longitude` (existing columns; backup already
+carries them) → "Share it now?" confirm. Share is opt-in per save, never automatic. `shareEntry()`
+(fileactions.js) gained a location branch, so the per-entry Share action and bulk Share send the
+label plus a map link built from the stored coordinates (`https://www.google.com/maps?q=<lat>,<lng>`).
+Building the link makes no network call; the recipient's device resolves it. Coordinates leave the
+device only through that explicit Share. Permission failure, GPS timeout, or no fix: alert, nothing
+saved. `ACCESS_COARSE_LOCATION` added to `scripts/patch-manifest.js` (and native-setup §3): the
+plugin's own manifest is empty and Android 12+ needs COARSE declared alongside FINE. Vault Location,
+Money unchanged (placeholders). Map view of saved locations (ARCHITECTURE §7) still not built.
