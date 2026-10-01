@@ -470,7 +470,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   than separate top-level buttons per type; all captures land in the same unified timeline regardless of source.
   **Home layout (Decision 81):** the eight cards are folders, each listing only its type (Money also lists
   expenses) with a New button inside; a universal New on Home asks which type; the mixed timeline is now
-  search results only. The Vault keeps direct-capture cards.
+  search results only. The Vault mirrors this exactly (Decision 85).
 - **Confidence-based confirmation, not silent action** — when the intent engine detects a reminder or expense,
   show a small inline confirmation chip (e.g. "Detected: ₹500 expense — categorize?") with an auto-dismiss into
   the sensible default (uncategorized / as-parsed) if ignored, rather than committing silently with no visible

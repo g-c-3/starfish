@@ -1449,3 +1449,15 @@ order), the vault-PIN export clause of 41, the per-entry append item in 44, and 
 - OCR-based label pre-fill (`suggestLabel()`) not applied: no OCR text exists yet (Phase 5).
 Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decision 69.
 
+---
+
+**85. Vault mirrors Home.** Resolves the open question in Decision 81.
+- Cards: same eight-card grid (`#vault-capture-bar`, now the shared `.capture-cards` layout instead of a wrapping row), each with a count badge. A card opens that type's folder (`#vault-folder-view`) with a New button running the Vault capture for that type.
+- Universal New (`#vault-universal-new-btn`) opens the shared `#new-chooser-modal`; a target flag routes the choice to Home or Vault capture.
+- The list under the search box (`#vault-list`) is search results only; empty search clears it. Entries are reached through folders, search, or Select files.
+- Counts, folder lists and search read the in-memory index (Decision 39) and render only while unlocked. Money's folder lists Money entries only; Vault has no Expense type.
+- The type tabs (`#vault-tabs`) and their CSS are removed; folders replace them. Folder rows keep the four actions.
+- Vault Settings card moved to the position of Home's settings tile.
+- Back (Decision 82): open Vault folder closes first, then an open Vault Settings card. The nav Vault button and every lock reset the Vault to the card grid.
+- Not changed: Vault Reminder, Location, Money remain placeholders; Vault capture of files stays single-file (no batch, Decision 84).
+

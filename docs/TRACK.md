@@ -67,3 +67,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-01 | Session 60 | Decision 82 | Back button made hierarchical: goes up within Home or Vault and stops at the landing page (dimmed there); no longer toggles between Home and Vault |
 | 2026-10-01 | Session 61 | Decision 83 | Download for append removed: per-entry and bulk buttons, import screen, append_ filename prefix, per-entry archive code, zip dependency; per-entry actions now four |
 | 2026-10-01 | Session 62 | Decision 84 | Phase 8 batch add built on main capture: multi-select Image/PDF/Files, common label with auto-numbering or individual add; Vault batch add not built |
+| 2026-10-01 | Session 63 | Decision 85 | Vault made a copy of Home: folder cards with counts, per-folder New, universal New, search-only list, tabs removed; Back and lock handle Vault folders |

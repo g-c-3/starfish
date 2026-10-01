@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 63**
+
+Phase 4: Vault made a copy of Home in appearance and function (Decision 85). The eight cards are the same grid with count badges and open per-type folders; each folder has New. A universal New above the cards opens the shared type chooser for the Vault. The list under the Vault search box is search results only. Vault Settings sits where Home's settings tile does. Type tabs removed. Back closes an open Vault folder first, then the Vault Settings card. Lock closes any open folder and clears every rendered list.
+
+Decisions made: 85.
+
+Verified: `node --check`, `vite build` (bundle about 109 kB), no duplicate ids in `index.html`, no missing ids except the four dynamically created ones noted in earlier sessions. Not run through CI or on device. Device checks: cards show counts after capture, delete and trash restore; folder opens, New inside it adds to that list; Back closes folder then settings card; Lock then unlock lands on the card grid; Vault search shows results only and clears when emptied; Select files still opens from the Vault.
+
+Open: Vault Reminder, Location, Money still placeholders; Vault batch add not built (Decision 84). Vault search results show label and type only, same as Home.
+
+Next session start point: Money capture shape needs defining; else Phase 5 OCR or Vault batch add. Device pass on Sessions 59 to 63.
+
+---
+
 **Session 62**
 
 Phase 8: batch add built on the main capture bar (Decision 84). Image, PDF and Files pickers are multi-select. One file behaves as before. More than one asks: batch (one common label, auto-numbered) or individual (each named by its file). Tags are asked once for the whole selection.

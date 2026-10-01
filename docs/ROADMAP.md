@@ -100,6 +100,7 @@
   `append_` filenames, zip dependency. Restore Append mode unchanged. Not run on a device.
   **Session 60 (Decision 82):** Back is hierarchical — one level up inside Home or Vault, stops at the
   landing page (dimmed there), never switches section. Not run on a device.
+  **Session 63 (Decision 85):** Vault mirrors Home — folder cards with count badges, per-folder New, universal New with type chooser, search-only list, type tabs removed. Not run on a device.
   **Session 59 (Decision 81):** Home cards are folders — each opens its type's list with a New
   button and count badge; universal New with a type chooser on Home; Home timeline is search-only; Vault
   unchanged. Not run on a device.
