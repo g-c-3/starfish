@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 68**
+
+Planning only; no code changed. Requirements for opening and editing entries recorded as Phase 16 and Decision 90. Phase 15 step 3 (in-app sheets) is folded into 16A.
+
+Decisions made: 90.
+
+Next session start point: Phase 16A, unless the open choices in ROADMAP Phase 16 change the order. Money capture shape still to be given. Device pass on Sessions 59 to 67.
+
+---
+
 **Session 67**
 
 Phase 15: background art (Decision 89). Two original drawings, written as SVG symbols in the sprite: isometric cube outlines for the lock screen, first-run, ad gate and the locked Vault; overlapping rounded squares for the Home and Vault landing pages. Colors come from new `--art-*` tokens, so one drawing serves dark and light. Layers sit behind screen content, ignore touches, and fade out toward the content area. Reference images supplied were used for style direction only; none is embedded.

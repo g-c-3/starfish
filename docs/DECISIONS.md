@@ -1500,3 +1500,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The locked-Vault cubes are a sibling after `#vault-content` and hidden by `#vault-content:not(.hidden) ~ .bg-cubes`, so no JS tracks the state.
 - Art is original and generated, not taken from stock images.
 
+---
+
+**90. Open & edit requirements.**
+- Every entry opens on tap into a viewer for its type; Share, Download, Edit, Delete stay.
+- Text: opens as a text editor. Voice: opens as a recorder (new) and a player (saved). Image: photo viewer with thumbnails. PDF: PDF viewer. Reminder: opens; greyed out once completed. Location: viewable as coordinates or better. Files: open with the phone's matching app.
+- An entry has at most two tags. Previously used tags appear as tappable, selectable chips.
+- Save is one dialog: file name at the top, tags below it, description below that. Pressing Save without filling anything stores a default file name, no tags, no description.
+- Existing entries with more than two tags are left as they are until edited.
+- Money capture shape: to be specified by the owner.
+

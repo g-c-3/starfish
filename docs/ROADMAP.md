@@ -17,7 +17,8 @@
 - [ ] 12 — Ads integration
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
-- [~] 15 — UI redesign (1 design system and 2 auth/Settings screens done — Sessions 64–65; 3 in-app sheets for capture prompts, 4 polish not started)
+- [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
+- [ ] 16 — Open & edit (A unified Save dialog, B text editor, C voice recorder + playback, D image viewer, E reminder detail, F location detail, G open Files with phone app, H PDF viewer)
 
 ## Detailed
 
@@ -344,3 +345,20 @@ individual items) can be picked up in any order once prerequisites are met.
     Session 67: background art — cubes on unlock/auth screens, rounded squares on Home and Vault landing; both themes.
   - [ ] 3 — Capture flows: replace `prompt()`/`confirm()`/`alert()` with in-app bottom sheets (touches logic).
   - [ ] 4 — Polish: transitions, haptics if the existing plugins allow, light-theme tuning.
+- [ ] **16 — Open & edit (Decision 90).** Every entry opens on tap; the four row actions stay.
+  - [ ] A — Unified Save dialog: file name, tags (max 2, previous tags as tappable chips), description,
+    one Save button; untouched Save stores a default name, no tags, no description. Replaces
+    `prompt()`/`confirm()`/`alert()` in capture (this is Phase 15 step 3). Adds a `description` column
+    (migration), included in backup/restore and the Vault.
+  - [ ] B — Viewer shell + Text editor (title, body, save/discard, same dialog for details).
+  - [ ] C — Voice: recorder screen (timer, record/stop) then playback (play/pause, scrub, speed).
+  - [ ] D — Image: thumbnail grid in the Image folder, full-screen viewer (swipe, pinch zoom).
+  - [ ] E — Reminder: detail view, greyed out once completed (auto when fired, plus manual mark done).
+  - [ ] F — Location: coordinates card, offline plot, copy, hand off to the phone's maps app.
+  - [ ] G — Files: open with the phone's matching app.
+  - [ ] H — PDF: in-app viewer.
+  - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,
+    about 1.3 MB larger APK) or by handing off to the phone's PDF app; adding a file-opener plugin for G
+    (Vault files get a short-lived decrypted copy in app cache); a real map needs network tiles, which
+    would break the single-network-call rule, so F uses coordinates plus hand-off.
+  - Suggested order: A, B, E, F, C, D, G, H.
