@@ -1,330 +1,346 @@
-/* Dumpzone visual identity. Design plan, kept here so a future pass doesn't re-derive it from
-   scratch or drift into a generic look by accident:
-   - Color: a neutral violet-tinted surface (not flat grey) + one brand accent (indigo/violet,
-     #6C5CE7) for primary actions, PLUS an eight-color category set — one hue per capture type
-     (Text/Voice/Image/PDF/Reminder/Location/Money/Files) — used consistently on capture buttons, filter tabs, and every
-     list row (Decision 52). The color IS information here (which type something is, at a glance
-     across a long list), not decoration layered on top.
-   - Type: system font stack, kept deliberately (this is an offline app — no web font to fetch,
-     nothing to embed, consistent with the no-network-except-ads rule). Weight and scale carry
-     hierarchy instead of a second typeface.
-   - Layout (Decision 53): a bottom nav (Home / Vault / Settings) replaces the previous single
-     long scrolling page — settings used to sit as a wall of stacked <details> below the timeline
-     on the same screen; now they're their own tab. The opt-in "Gradient mode" full-screen glow
-     effect was removed entirely (Decision 53) — dark mode is the only remaining Appearance
-     option. Rows read as quiet cards with a colored left edge (type), not the identical
-     drop-shadowed tile grid every generic dashboard defaults to. Toggles are switches, not
-     checkboxes — a single on/off setting reads as a switch; a multi-select-from-a-list (backup
-     categories) stays a compact checkbox, since that's a different kind of choice. */
+/* Dumpzone visual system (Decision 86). Rules, so later passes stay consistent:
+   - Surfaces are layered (bg < surface < surface-2) with a hairline border and one soft shadow; no
+     flat boxes, no heavy outlines.
+   - Color carries meaning: one hue per capture type (--tc-rgb / --tc-ink, set from data-type or
+     data-vault-type) appears only on icon chips, count badges and digest chips. Brand violet is for
+     actions and the active nav item.
+   - Type: Inter variable (bundled, latin subset) — no network fetch. Falls back to the system font.
+   - Icons: inline SVG sprite in index.html (<use href="#i-name">), stroke-based, currentColor.
+   - Both themes are complete; every color below is a token. */
+
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/Inter-latin-wght.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
 
 :root {
-  --bg: #f6f4ff;
-  --fg: #1c1830;
-  --card-bg: #ffffff;
-  --border: #e6e1f5;
+  --bg: #f4f2fb;
+  --glow: rgba(108, 92, 231, 0.16);
+  --surface: #ffffff;
+  --surface-2: #efecfa;
+  --card-bg: var(--surface);
+  --fg: #17142b;
+  --muted: #6b6785;
+  --border: rgba(23, 20, 43, 0.09);
+  --border-strong: rgba(23, 20, 43, 0.18);
+  --track: #d9d4ee;
+  --shadow: 0 1px 2px rgba(23, 20, 43, 0.05), 0 8px 24px rgba(60, 40, 140, 0.08);
 
   --brand: #6c5ce7;
-  --btn-1: #6c5ce7;
-  --btn-2: #5b4bc4;
+  --brand-ink: #5b47e0;
+  --btn-1: #7c6cff;
+  --btn-2: #5b47e0;
   --brand-fg: #ffffff;
+  --brand-tint: rgba(108, 92, 231, 0.12);
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --nav-active: #5b47e0;
 
-  --type-note: #f5a623;
-  --type-voice: #14b8a6;
-  --type-image: #ec4899;
-  --type-pdf: #3b82f6;
-  --type-reminder: #f97316;
-  --type-location: #06b6d4;
-  --type-money: #ef4444;
-  --type-file: #10b981;
+  --type-note: #f5a623;     --type-note-rgb: 245, 166, 35;    --ink-note: #b45309;
+  --type-voice: #14b8a6;    --type-voice-rgb: 20, 184, 166;   --ink-voice: #0f766e;
+  --type-image: #ec4899;    --type-image-rgb: 236, 72, 153;   --ink-image: #be185d;
+  --type-pdf: #3b82f6;      --type-pdf-rgb: 59, 130, 246;     --ink-pdf: #1d4ed8;
+  --type-reminder: #f97316; --type-reminder-rgb: 249, 115, 22; --ink-reminder: #c2410c;
+  --type-location: #06b6d4; --type-location-rgb: 6, 182, 212; --ink-location: #0e7490;
+  --type-money: #ef4444;    --type-money-rgb: 239, 68, 68;    --ink-money: #b91c1c;
+  --type-file: #10b981;     --type-file-rgb: 16, 185, 129;    --ink-file: #047857;
 
   --danger: #d9534f;
   --neon-green: #15803d;
   --vault: #1a1030;
   --vault-fg: #e8d9ff;
-  --brand-tint: #ece8ff;
-  --nav-active: #5b4bc4;
+  --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6785' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="dark"] {
-  --bg: #16132a;
-  --fg: #ede9fb;
-  --card-bg: #1f1b38;
-  --border: #362f58;
+  --bg: #0f0d1c;
+  --glow: rgba(124, 108, 255, 0.22);
+  --surface: #181530;
+  --surface-2: #221f3f;
+  --fg: #efedfa;
+  --muted: #9a96b8;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --track: #34305a;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 28px rgba(0, 0, 0, 0.38);
 
   --brand: #8b7cf6;
-  --btn-1: #6c5ce7;
-  --btn-2: #4c3db0;
-  --brand-fg: #ffffff;
-  --brand-tint: #2a2350;
-  --nav-active: #a599f9;
+  --brand-ink: #a89dfb;
+  --brand-tint: rgba(139, 124, 246, 0.16);
+  --nav-bg: rgba(24, 21, 48, 0.82);
+  --nav-active: #b3a9fc;
   --neon-green: #39ff14;
+
+  --ink-note: #fbbf4a; --ink-voice: #2dd4bf; --ink-image: #f472b6; --ink-pdf: #60a5fa;
+  --ink-reminder: #fb923c; --ink-location: #22d3ee; --ink-money: #f87171; --ink-file: #34d399;
+  --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a96b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
 }
+
+/* Per-type color context. Anything inside inherits --tc-rgb / --tc-ink. 'expense' shares Money's. */
+[data-type="note"], [data-vault-type="note"]         { --tc-rgb: var(--type-note-rgb);     --tc-ink: var(--ink-note); }
+[data-type="voice"], [data-vault-type="voice"]       { --tc-rgb: var(--type-voice-rgb);    --tc-ink: var(--ink-voice); }
+[data-type="image"], [data-vault-type="image"]       { --tc-rgb: var(--type-image-rgb);    --tc-ink: var(--ink-image); }
+[data-type="pdf"], [data-vault-type="pdf"]           { --tc-rgb: var(--type-pdf-rgb);      --tc-ink: var(--ink-pdf); }
+[data-type="reminder"], [data-vault-type="reminder"] { --tc-rgb: var(--type-reminder-rgb); --tc-ink: var(--ink-reminder); }
+[data-type="location"], [data-vault-type="location"] { --tc-rgb: var(--type-location-rgb); --tc-ink: var(--ink-location); }
+[data-type="money"], [data-type="expense"], [data-vault-type="money"] { --tc-rgb: var(--type-money-rgb); --tc-ink: var(--ink-money); }
+[data-type="file"], [data-vault-type="file"]         { --tc-rgb: var(--type-file-rgb);     --tc-ink: var(--ink-file); }
 
 * { box-sizing: border-box; }
 
 body {
-  font-family: -apple-system, Roboto, sans-serif;
+  font-family: "Inter", -apple-system, Roboto, "Noto Sans", sans-serif;
+  font-optical-sizing: auto;
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   position: relative;
   line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
+body::before { /* soft top glow; fixed layer instead of background-attachment (janky in WebView) */
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 55% at 50% -12%, var(--glow), transparent 62%);
+}
 
-h1, h2, h3, h4 { margin: 0 0 10px; letter-spacing: -0.01em; }
-h1 { font-size: 26px; font-weight: 800; color: var(--brand); }
-h2 { font-size: 20px; font-weight: 700; }
-h4 { font-size: 14px; font-weight: 700; opacity: 0.85; }
+h1, h2, h3, h4 { margin: 0 0 10px; letter-spacing: -0.02em; }
+h1 { font-size: 28px; font-weight: 800; color: var(--brand-ink); }
+h2 { font-size: 22px; font-weight: 700; line-height: 28px; }
+h3 { font-size: 18px; font-weight: 700; }
+h4 { font-size: 13px; font-weight: 650; color: var(--muted); letter-spacing: 0.02em; text-transform: uppercase; }
 
 .screen { min-height: 100vh; padding: 20px; position: relative; z-index: 1; }
 .hidden { display: none; }
+#main-screen, #vault-screen { padding-bottom: 118px; } /* clears the floating nav */
 
-/* Screens that show the bottom nav need room at the bottom so the last list item/button isn't
-   hidden behind it — first-run/lock/ad-gate don't show the nav, so they keep plain padding. */
-#main-screen, #vault-screen { padding-bottom: 96px; }
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 input, button, select {
-  font-size: 16px; padding: 12px 14px; margin: 6px 0; width: 100%;
-  border-radius: 12px; border: 1px solid var(--border);
-  background: var(--card-bg); color: var(--fg);
+  font: inherit; font-size: 16px; padding: 13px 16px; margin: 6px 0; width: 100%;
+  border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--fg);
 }
-input:focus-visible, button:focus-visible, select:focus-visible {
-  outline: 2px solid var(--brand); outline-offset: 2px;
-}
+input::placeholder { color: var(--muted); opacity: 0.85; }
+input:focus-visible, select:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 button {
   background: linear-gradient(135deg, var(--btn-1), var(--btn-2));
   color: var(--brand-fg); border: none; font-weight: 600; cursor: pointer;
 }
 @media (prefers-reduced-motion: no-preference) {
-  button { transition: transform 0.1s ease, filter 0.15s ease; }
-  button:active { transform: scale(0.97); filter: brightness(0.95); }
+  button { transition: transform 0.12s ease, filter 0.15s ease, background-color 0.15s ease; }
+  button:active { transform: scale(0.975); filter: brightness(0.94); }
 }
 
 .secondary-btn {
-  background: var(--card-bg); color: var(--brand);
-  border: 1.5px solid var(--brand); font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--surface); color: var(--brand-ink);
+  border: 1px solid var(--border-strong); font-weight: 600;
 }
-.link-btn { width: auto; background: none; color: var(--brand); text-decoration: underline; padding: 0; font-weight: 500; }
+.link-btn { width: auto; background: none; color: var(--brand-ink); text-decoration: underline; padding: 0; font-weight: 500; }
 .warning-text { color: var(--danger); opacity: 1; }
 
-/* Recurring backup reminder (Session 40) — a soft, dismissible banner, not a modal (unlike
-   #auto-backup-due-banner, which gates an actual due auto-backup and needs a decision from the
-   person; this is just a nudge, so it never blocks anything). */
+input[type="search"], #search-input, #vault-search-input {
+  padding-left: 44px; background-image: var(--search-icon); background-repeat: no-repeat; background-position: 15px center; background-size: 18px;
+}
+
+/* ---- Home header ---- */
+#home-tab > header { padding: 0 0 6px; margin: 0; }
+#today-date { margin: 2px 0 0; font-size: 14px; color: var(--muted); font-weight: 500; }
+#digest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+#digest .empty-line { font-size: 13px; color: var(--muted); }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 12px 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: rgba(var(--tc-rgb, 139, 124, 246), 0.14); color: var(--tc-ink, var(--brand-ink));
+}
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--tc-rgb, 139, 124, 246)); }
+#on-this-day:not(:empty) { margin-top: 12px; }
+#on-this-day .mode-description { margin: 0 0 4px; font-size: 13px; opacity: 1; color: var(--muted); }
+
+/* Backup reminder (Session 40): soft dismissible banner. #id display rule would beat .hidden —
+   the empty bar on Home was this — so .hidden is restated with the same specificity. */
 #backup-reminder-banner {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
-  padding: 10px 14px; margin: 8px 0; font-size: 13px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 12px 14px; margin: 12px 0 0; font-size: 13px; box-shadow: var(--shadow);
 }
+#backup-reminder-banner.hidden { display: none; }
 #backup-reminder-banner span { flex: 1 1 auto; }
 #backup-reminder-banner .secondary-btn { width: auto; margin: 0; padding: 8px 12px; font-size: 13px; }
 #backup-reminder-banner .link-btn { font-size: 15px; text-decoration: none; opacity: 0.6; }
 
-/* ---- Masthead — the one deliberate colorful flourish, not repeated elsewhere ---- */
-#home-tab > header {
-  padding-bottom: 14px; margin-bottom: 8px;
-  border-bottom: 3px solid transparent;
-  border-image: linear-gradient(90deg, var(--type-note), var(--type-voice), var(--type-image), var(--type-pdf), var(--type-reminder), var(--type-location), var(--type-money), var(--type-file)) 1;
-}
-#home-tab > header h2 { font-size: 24px; }
-
-/* ---- Capture cards: one per capture type, the app's most-used surface, shared markup/class
-   between Home (#capture-bar) and the Vault (#vault-capture-bar) — Decision 55, extended to eight
-   cards in Decision 57. Four columns so eight cards form a neat 4x2 grid; each carries its own
-   type color, same vocabulary as list rows and filter tabs elsewhere. ---- */
-.capture-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
-.capture-cards button {
-  width: auto; flex: none; box-shadow: none;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 14px 4px; border-radius: 16px; background: var(--card-bg); color: var(--fg);
-}
-.capture-cards .card-icon { font-size: 24px; line-height: 1; }
-.capture-cards .card-label { font-size: 11px; font-weight: 700; }
-
-#capture-bar button[data-type="note"], #new-chooser-grid button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { background: var(--type-note); }
-#capture-bar button[data-type="voice"], #new-chooser-grid button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { background: var(--type-voice); }
-#capture-bar button[data-type="image"], #new-chooser-grid button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { background: var(--type-image); }
-#capture-bar button[data-type="pdf"], #new-chooser-grid button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { background: var(--type-pdf); }
-#capture-bar button[data-type="reminder"], #new-chooser-grid button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { background: var(--type-reminder); }
-#capture-bar button[data-type="location"], #new-chooser-grid button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { background: var(--type-location); }
-#capture-bar button[data-type="money"], #new-chooser-grid button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { background: var(--type-money); }
-#capture-bar button[data-type="file"], #new-chooser-grid button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { background: var(--type-file); }
-
-/* Capture-card labels need dark text on the lighter type colors — checked with the actual WCAG
-   formula, not eyeballed. Applies to both Home and Vault, since both carry visible labels. */
-#capture-bar button[data-type="note"], #new-chooser-grid button[data-type="note"],     #vault-capture-bar button[data-vault-type="note"]     { color: #2a1c00; }
-#capture-bar button[data-type="voice"], #new-chooser-grid button[data-type="voice"],    #vault-capture-bar button[data-vault-type="voice"]    { color: #00332c; }
-#capture-bar button[data-type="image"], #new-chooser-grid button[data-type="image"],    #vault-capture-bar button[data-vault-type="image"]    { color: #3a0020; }
-#capture-bar button[data-type="pdf"], #new-chooser-grid button[data-type="pdf"],      #vault-capture-bar button[data-vault-type="pdf"]      { color: #001b3a; }
-#capture-bar button[data-type="reminder"], #new-chooser-grid button[data-type="reminder"], #vault-capture-bar button[data-vault-type="reminder"] { color: #3a1400; }
-#capture-bar button[data-type="location"], #new-chooser-grid button[data-type="location"], #vault-capture-bar button[data-vault-type="location"] { color: #002733; }
-#capture-bar button[data-type="money"], #new-chooser-grid button[data-type="money"],    #vault-capture-bar button[data-vault-type="money"]    { color: #3a0000; }
-#capture-bar button[data-type="file"], #new-chooser-grid button[data-type="file"],     #vault-capture-bar button[data-vault-type="file"]     { color: #00301f; }
-
-#timeline { margin-top: 12px; }
-
-/* "App Settings" tile (Decision 61) — Home's single entry point into settings-tab, replacing the
-   bottom nav's old Settings button. Deliberately neutral (not a capture-type color, since it isn't
-   a capture type) and full-width so it reads as a distinct row, not an extra capture card. */
-.settings-tile {
+/* ---- Primary New button ---- */
+.new-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--card-bg); color: var(--fg); border: 1.5px solid var(--border);
-  font-weight: 700;
+  height: 54px; padding: 0 20px; margin: 16px 0 0; border-radius: 18px;
+  font-size: 16px; font-weight: 650; letter-spacing: -0.005em;
+  box-shadow: 0 10px 24px -8px rgba(108, 92, 231, 0.6), 0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
-.settings-tile .card-icon { font-size: 18px; }
+.new-btn .ic { width: 20px; height: 20px; stroke-width: 2.2; }
+#folder-new-btn, #vault-folder-new-btn { margin: 14px 0 16px; }
 
-/* Small fixed power/close button (Decision 61; restyled transparent/icon-only in Decision 62) —
-   lives outside every .screen element so it's present regardless of which screen showScreen() has
-   visible ("all pages" except the app-open lock screen — see showScreen()'s own toggle), rather
-   than being duplicated into first-run/lock/main/vault/ad-gate individually. Sits above the bottom
-   nav (z-index 5) but below modal dialogs (z-index 10), so an open modal still takes visual
-   priority. Transparent background with only the icon stroke colored — reads correctly in both
-   light and dark mode without a separate dark-mode variant, since --danger is the same red in
-   both themes (unlike --bg/--fg/--card-bg, which do change under :root[data-theme="dark"]). */
+/* ---- Folder tiles (Decision 81) ---- */
+.capture-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.capture-cards button {
+  position: relative; width: auto; min-width: 0; margin: 0; min-height: 66px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; text-align: left;
+  padding: 12px 14px 12px 12px; border-radius: 18px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.capture-cards .card-icon, .tile-icon, .row-icon, .title-ico {
+  width: 40px; height: 40px; flex: none; border-radius: 13px;
+  display: grid; place-items: center;
+  background: rgba(var(--tc-rgb, 139, 124, 246), 0.16); color: var(--tc-ink, var(--brand-ink));
+}
+.capture-cards .card-icon .ic { width: 21px; height: 21px; }
+.capture-cards .card-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.capture-cards .card-count { /* notification-style badge on the icon chip's corner: costs the label no width */
+  position: absolute; top: 6px; left: 39px; box-sizing: border-box;
+  min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums;
+  background: rgb(var(--tc-rgb, 139, 124, 246)); color: #0f0d1c; border: 2px solid var(--surface);
+}
+.capture-cards .card-count:empty { display: none; }
+
+/* Settings entry (Home tile + Vault card header share this look) */
+.tile-icon { --tc-rgb: 139, 124, 246; --tc-ink: var(--brand-ink); }
+.tile-label { flex: 1; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; text-align: left; }
+.settings-tile {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 12px;
+  padding: 12px 14px 12px 12px; border-radius: 18px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.tile-chev { color: var(--muted); width: 18px; height: 18px; }
+#search-input, #vault-search-input { margin: 0 0 10px; }
+#select-files-btn, #vault-select-files-btn { margin: 0 0 6px; }
+#timeline, #vault-list { margin-top: 14px; }
+
+/* Screen titles */
+#folder-title, #vault-folder-title { display: flex; align-items: center; gap: 12px; margin: 0; }
+.title-ico { width: 34px; height: 34px; border-radius: 11px; }
+.title-ico .ic { width: 19px; height: 19px; }
+.vault-banner { background: none; border: none; padding: 0; margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; }
+.vault-banner h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 22px; letter-spacing: -0.02em; color: var(--fg); }
+.title-lock { width: 22px; height: 22px; color: var(--brand-ink); }
+.vault-banner button { width: auto; }
+
+/* ---- Entry rows ---- */
+.entry-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 12px; margin-bottom: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
+}
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.row-title { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { font-size: 12px; color: var(--muted); }
+.row-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.row-actions { flex: 1 1 100%; display: flex; justify-content: flex-end; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border); }
+.row-actions .icon-btn {
+  width: 40px; height: 36px; margin: 0; padding: 0; border-radius: 12px;
+  display: grid; place-items: center; background: transparent; color: var(--muted);
+}
+.row-actions .icon-btn:active { background: var(--surface-2); }
+.row-actions .icon-btn.warning-text { color: var(--danger); }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 44px 20px; text-align: center; color: var(--muted); }
+.empty-state .ic { width: 34px; height: 34px; opacity: 0.55; margin-bottom: 4px; stroke-width: 1.5; }
+.empty-state strong { color: var(--fg); font-weight: 650; font-size: 15px; }
+.empty-state span { font-size: 13px; }
+
+/* Generic label + actions row — trash bins, Drive backup list, storage breakdown (not typed entries). */
+.drive-backup-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; margin-bottom: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  font-size: 14px; flex-wrap: wrap; gap: 6px;
+}
+.drive-backup-row button { width: auto; margin: 0; padding: 7px 13px; font-size: 13px; border-radius: 10px; background: var(--surface-2); color: var(--fg); }
+.drive-backup-row button.warning-text { color: var(--danger); }
+.drive-backup-row > span:first-child { flex: 1 1 100%; }
+
+/* ---- Fixed power / lock buttons (Decisions 61–70, behavior unchanged) ---- */
 #power-close-btn {
   position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 6;
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
   border-radius: 50%; border: none; background: transparent; color: var(--danger);
   display: flex; align-items: center; justify-content: center;
-  filter: drop-shadow(0 0 4px var(--danger)); /* persistent red glow, requested directly */
+  filter: drop-shadow(0 0 4px var(--danger));
 }
 #power-close-btn svg { width: 20px; height: 20px; }
-#power-close-btn.hidden { display: none; } /* ID+class beats the plain #power-close-btn rule above */
-
-/* Lock/unlock toggle (Decision 65; glow + disabled state added in Decision 66; neon green, closed
-   padlock in Decision 68; per-theme color + dark-mode-only glow in Decision 70) — sits immediately
-   left of the power button, same fixed-position pattern (see that button's own comment above).
-   --neon-green is theme-aware, unlike --danger: the vivid #39ff14 that reads cleanly against the
-   dark card background bleeds into an unreadable smear on the light theme's near-white background,
-   so light mode gets a solid, darker green (#15803d) with no glow — glow is what caused the bleed,
-   not the hue, so light mode drops the filter entirely rather than softening it. */
+#power-close-btn.hidden { display: none; }
 #lock-toggle-btn {
   position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 62px; z-index: 6;
   width: 40px; height: 40px; min-width: 0; padding: 0; margin: 0;
   border-radius: 50%; border: none; background: transparent; color: var(--neon-green);
   display: flex; align-items: center; justify-content: center;
 }
-:root[data-theme="dark"] #lock-toggle-btn {
-  filter: drop-shadow(0 0 3px var(--neon-green)) drop-shadow(0 0 7px var(--neon-green));
-}
+:root[data-theme="dark"] #lock-toggle-btn { filter: drop-shadow(0 0 3px var(--neon-green)) drop-shadow(0 0 7px var(--neon-green)); }
 #lock-toggle-btn svg { width: 20px; height: 20px; }
 #lock-toggle-btn.hidden { display: none; }
-/* Disabled (Decision 66) — quick access has nothing for this button to lock. No color, no glow,
-   not tappable. Needs both a plain and a dark-mode-scoped rule (Decision 70): the dark-mode glow
-   above is scoped to `:root[data-theme="dark"] #lock-toggle-btn` (specificity 1,2,0), which now
-   outranks the plain `#lock-toggle-btn.disabled` (1,1,0) and would otherwise win and keep glowing
-   in dark mode while disabled — the dark-mode disabled rule below (1,3,0) beats both. */
+/* Disabled (Decision 66); the dark-mode twin is needed for specificity (Decision 70). */
 #lock-toggle-btn.disabled { filter: grayscale(1); opacity: 0.35; pointer-events: none; }
 :root[data-theme="dark"] #lock-toggle-btn.disabled { filter: grayscale(1); opacity: 0.35; pointer-events: none; }
 
-/* ---- Bottom nav (Decision 53, tabs reduced to two in Decision 61) — fixed, shown only for
-   main-screen/vault-screen (app.js toggles its .hidden class from showScreen()). Settings is no
-   longer a nav destination of its own — it's a sub-panel of Home, reached via the "App Settings"
-   tile below — so the nav only ever needs to distinguish Home vs Vault, each with its own active
-   color: Home uses the brand accent tint, Vault its own light lavender tint (--vault-fg used as a
-   background here, --vault as the text/icon color — swapped from the dark title-bar pairing below,
-   since a dark active-tab background reads as a second "black bar" the same way the banner did;
-   removed in Decision 66 for the same reason). ---- */
+/* ---- Bottom nav: floating translucent bar. Home | Back | Vault (Decisions 61, 65). ---- */
 #bottom-nav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-  display: flex; background: var(--card-bg); border-top: 1px solid var(--border);
-  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+  display: flex; align-items: center; gap: 4px; padding: 6px;
+  background: var(--nav-bg); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--border); border-radius: 26px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
 }
 #bottom-nav.hidden { display: none; }
 #bottom-nav button {
   flex: 1; width: auto; background: none; box-shadow: none;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 8px 4px; margin: 0; border-radius: 12px;
-  color: var(--fg); opacity: 0.7; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 4px 8px; margin: 0; border-radius: 20px; border: none;
+  color: var(--muted); font-weight: 600;
 }
-#bottom-nav .nav-icon { font-size: 20px; line-height: 1; }
-#bottom-nav .nav-label { font-size: 11px; }
-#bottom-nav button.active { opacity: 1; color: var(--nav-active); background: var(--brand-tint); }
-#bottom-nav button[data-nav="vault"].active { color: var(--vault); background: var(--vault-fg); }
-
-/* Universal Back button (Decision 65) — the middle of the three slots, deliberately not styled
-   like the two real tabs either side of it (no stretched flex:1, no icon+label column, no active
-   state — it isn't a destination, so there's nothing for it to look "selected" as). A plain square
-   with rounded corners, icon only, reads as a distinct utility control rather than a third tab.
-   Specificity note: written as #bottom-nav #nav-back-btn (200) rather than #nav-back-btn alone
-   (100), since #bottom-nav button (101) would otherwise win the flex/layout properties below. */
+#bottom-nav .nav-icon { display: grid; place-items: center; line-height: 0; }
+#bottom-nav .nav-icon .ic { width: 22px; height: 22px; }
+#bottom-nav .nav-label { font-size: 11px; letter-spacing: 0.01em; }
+#bottom-nav button.active { color: var(--nav-active); background: var(--brand-tint); }
 #bottom-nav #nav-back-btn {
-  flex: 0 0 auto; width: 48px; height: 48px; align-self: center;
+  flex: 0 0 auto; width: 46px; height: 46px; align-self: center; margin: 0 2px; padding: 0;
   display: flex; flex-direction: row; align-items: center; justify-content: center;
-  border-radius: 14px; background: var(--bg); color: var(--fg); opacity: 0.85;
-  padding: 0; margin: 0 2px;
+  border-radius: 50%; background: var(--surface-2); color: var(--fg); opacity: 0.9;
 }
-/* Soft glow on tap (Decision 66) — 0.5s, applied/removed by app.js's click handler (adds "glow",
-   removes it again on animationend so it doesn't linger as dead state on the element). Brand color,
-   not neon-green/red — this is plain interactive feedback, not a status color like the two buttons above. */
-@keyframes nav-back-glow {
-  0% { box-shadow: 0 0 0 0 transparent; }
-  30% { box-shadow: 0 0 10px 3px var(--brand); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
+@keyframes nav-back-glow { 0% { box-shadow: 0 0 0 0 transparent; } 30% { box-shadow: 0 0 10px 3px var(--brand); } 100% { box-shadow: 0 0 0 0 transparent; } }
 #bottom-nav #nav-back-btn.glow { animation: nav-back-glow 0.5s ease-out; }
-/* Landing page of the current section: nothing above it, so Back is dimmed and inert (Decision 82). */
 #bottom-nav #nav-back-btn.disabled { opacity: 0.3; pointer-events: none; }
 
-/* --- Backup/restore & Drive settings (Phase 6/13) --- */
+/* --- Backup/restore & Drive settings --- */
 .category-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; }
 .category-checkboxes label { width: auto; display: flex; align-items: center; gap: 6px; font-size: 14px; }
-.status-line { font-size: 13px; opacity: 0.85; min-height: 1.2em; margin: 4px 0 12px; }
-.mode-description { font-size: 12px; opacity: 0.7; margin: 0 0 10px 24px; }
+.status-line { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: 4px 0 12px; }
+.mode-description { font-size: 12px; color: var(--muted); margin: 0 0 10px 24px; }
 
+/* ---- Modals. The type chooser is a bottom sheet; the rest stay centered. ---- */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 10;
-  background: rgba(20,16,40,0.55);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
+  background: rgba(8, 6, 20, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .modal-overlay.hidden { display: none; }
 .modal-box {
-  background: var(--card-bg); color: var(--fg);
-  border: 1px solid var(--border); border-radius: 16px;
-  padding: 20px; max-width: 420px; width: 100%;
+  background: var(--surface); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  padding: 22px; max-width: 420px; width: 100%;
+}
+#new-chooser-modal { align-items: flex-end; padding: 0; }
+#new-chooser-modal .modal-box { max-width: 560px; border-radius: 28px 28px 0 0; padding: 22px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+#new-chooser-modal h3 { margin-bottom: 4px; }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .modal-overlay:not(.hidden) .modal-box { animation: sheet-in 0.22s ease-out; }
 }
 
-/* .drive-backup-row is a generic label+actions row, reused across the main timeline (#timeline),
-   the vault list (#vault-list), the trash bins, AND the Drive backup list — NOT scoped to
-   #drive-backup-list alone (Session 23 fixed a specificity bug here; still true). Rows carrying
-   a real capture type (data-type="note|voice|image|pdf|file", added Session 28) get a colored
-   left edge matching the capture-bar button that made them — the same color vocabulary used
-   twice reinforces it as a category system, not decoration. Rows without a type (Drive backup
-   list, storage breakdown) just get the plain card treatment below. */
-.drive-backup-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; margin-bottom: 6px;
-  background: var(--card-bg); border: 1px solid var(--border); border-left: 4px solid var(--border);
-  border-radius: 10px;
-  font-size: 14px; flex-wrap: wrap; gap: 4px;
-}
-.drive-backup-row[data-type="note"]     { border-left-color: var(--type-note); }
-.drive-backup-row[data-type="voice"]    { border-left-color: var(--type-voice); }
-.drive-backup-row[data-type="image"]    { border-left-color: var(--type-image); }
-.drive-backup-row[data-type="pdf"]      { border-left-color: var(--type-pdf); }
-.drive-backup-row[data-type="reminder"] { border-left-color: var(--type-reminder); }
-.drive-backup-row[data-type="location"] { border-left-color: var(--type-location); }
-.drive-backup-row[data-type="money"]    { border-left-color: var(--type-money); }
-.drive-backup-row[data-type="file"]     { border-left-color: var(--type-file); }
-.drive-backup-row button { width: auto; padding: 6px 12px; font-size: 13px; }
-.drive-backup-row > span:first-child { flex: 1 1 100%; } /* label gets its own line above the action buttons when wrapped */
-
-/* --- Private Vault (pivot) — title bar's dark background removed in Decision 66, and the box
-   around it (card background + border + padding) removed in Decision 67: the heading now sits bare
-   on the page, using the same 20px/1.45 metrics as Home's "Today" heading inside the same 20px
-   .screen padding, so its vertical center (~34px) lands exactly on the fixed lock/power buttons'
-   center (14px top + 20px half-height) — aligned by construction, not by a magic offset. --- */
-.vault-banner {
-  background: none; border: none; padding: 0; margin: 0 0 12px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.vault-banner h2 { margin: 0; font-size: 20px; letter-spacing: 0.05em; color: var(--fg); }
-.vault-banner button { width: auto; }
 .select-files-category { margin-bottom: 12px; }
 .select-files-category-header { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
 .select-files-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 4px 20px; font-size: 14px; }
-.select-files-item .file-size { opacity: 0.6; font-size: 12px; }
+.select-files-item .file-size { color: var(--muted); font-size: 12px; }
 
 /* ---- Settings cards (Decision 53; extended to Vault's own settings card in Decision 61) —
    modern expandable cards, not the browser-default disclosure triangle list this replaced. Each
@@ -332,18 +348,18 @@ button {
    default ▶/▼ glyph. Shared between #settings-tab (Home) and #vault-settings-card (Vault, which
    nests its own Vault Trash <details> the same way) so both read as the same design language. ---- */
 #settings-tab details, #vault-settings-card, #vault-settings-card details {
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
-  padding: 4px 16px; margin-bottom: 10px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 4px 16px; margin-bottom: 12px; overflow: hidden;
 }
 #settings-tab summary, #vault-settings-card summary {
   list-style: none; cursor: pointer;
-  padding: 14px 0; font-weight: 700; font-size: 15px;
+  padding: 14px 0; font-weight: 650; font-size: 15px;
   display: flex; align-items: center; justify-content: space-between;
 }
 #settings-tab summary::-webkit-details-marker, #vault-settings-card summary::-webkit-details-marker { display: none; }
 #settings-tab summary::after, #vault-settings-card summary::after {
-  content: "›"; font-size: 22px; font-weight: 400; opacity: 0.5;
-  transform: rotate(90deg); display: inline-block;
+  content: "›"; font-size: 22px; font-weight: 400; color: var(--muted);
+  transform: rotate(90deg); display: inline-block; margin-left: 10px;
 }
 #settings-tab details[open] > summary::after, #vault-settings-card[open] > summary::after,
 #vault-settings-card details[open] > summary::after { transform: rotate(270deg); }
@@ -365,8 +381,8 @@ button {
 input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
   width: 20px; height: 20px; min-width: 20px;
-  border-radius: 6px; border: 1.5px solid var(--border);
-  background: var(--card-bg); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
+  border-radius: 6px; border: 1.5px solid var(--border-strong);
+  background: var(--surface); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
   position: relative; display: inline-block; vertical-align: middle;
 }
 input[type="checkbox"]:checked { background: var(--brand); border-color: var(--brand); }
@@ -381,7 +397,7 @@ input[type="checkbox"]:checked::after {
 .switch-row { display: flex; align-items: center; gap: 10px; width: auto; cursor: pointer; }
 .switch-row input[type="checkbox"] {
   width: 44px; height: 26px; min-width: 44px;
-  border-radius: 999px; background: var(--border); border: none;
+  border-radius: 999px; background: var(--track); border: none;
 }
 .switch-row input[type="checkbox"]::before {
   content: ""; position: absolute; top: 3px; left: 3px;
@@ -411,15 +427,15 @@ input[type="checkbox"]:checked::after {
 input[type="radio"] {
   appearance: none; -webkit-appearance: none;
   width: 20px; height: 20px; min-width: 20px;
-  border-radius: 50%; border: 1.5px solid var(--border);
-  background: var(--card-bg); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
+  border-radius: 50%; border: 1.5px solid var(--border-strong);
+  background: var(--surface); margin: 0 8px 0 0; padding: 0; flex-shrink: 0; cursor: pointer;
   display: inline-block; vertical-align: middle;
 }
 input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 .radio-row { display: flex; align-items: center; width: auto; }
 
-/* Cards as folders (Decision 81): count badge, folder view, universal New button. */
-.capture-cards button { position: relative; }
-.capture-cards .card-count { position: absolute; top: 6px; right: 9px; font-size: 11px; font-weight: 800; opacity: 0.85; }
-#universal-new-btn, #vault-universal-new-btn { margin: 12px 0 0; }
-#folder-new-btn, #vault-folder-new-btn { margin: 12px 0; }
+
+/* Vault Settings header uses the same icon-chip + label as Home's App Settings tile */
+#vault-settings-card { padding: 4px 14px 4px 12px; }
+#vault-settings-card > summary { gap: 12px; padding: 8px 0; }
+#vault-settings-card > summary .tile-icon { flex: none; }
