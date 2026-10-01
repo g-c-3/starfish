@@ -35,6 +35,7 @@
       <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/></symbol>
       <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></symbol>
       <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></symbol>
+      <symbol id="i-fingerprint" viewBox="0 0 24 24"><path d="M5 11.5A7.5 7.5 0 0 1 12 4a7.4 7.4 0 0 1 7 4.5"/><path d="M8 8a5.5 5.5 0 0 1 9.5 3c0 1.4 0 3-.4 4.5"/><path d="M12 11a2 2 0 0 0-2 2c0 2.5-.5 4.5-1.5 6.5"/><path d="M14 13c0 3-.5 5.5-1.8 8"/><path d="M5.2 15.5c.5-1.3.8-2.6.8-4"/></symbol>
     </defs>
   </svg>
   <div id="first-run-setup" class="screen auth-screen hidden">
@@ -67,7 +68,7 @@
     <section class="form-card">
       <input id="password-input" type="password" placeholder="Password" />
       <button id="unlock-btn">Unlock</button>
-      <button id="biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
+      <button id="biometric-unlock-btn" class="secondary-btn biometric-btn hidden"><svg class="ic" aria-hidden="true"><use href="#i-fingerprint"/></svg><span>Use Biometric</span></button>
       <div id="password-hint"></div>
     </section>
   </div>
@@ -187,7 +188,7 @@
           besides the optional Drive backup.</p>
         <button id="check-update-btn" class="secondary-btn">Check for updates</button>
         <div id="update-check-status" class="status-line"></div>
-        <button id="update-download-btn" class="secondary-btn hidden">Download update</button>
+        <button id="update-download-btn" class="secondary-btn" disabled>Download update</button>
       </details>
 
       <p class="settings-group">Backup</p>
@@ -255,7 +256,7 @@
       <h3>Vault locked</h3>
       <input id="vault-pin-input" type="password" placeholder="Vault PIN" />
       <button id="vault-unlock-btn">Unlock Vault</button>
-      <button id="vault-biometric-unlock-btn" class="secondary-btn hidden">Unlock with fingerprint/face</button>
+      <button id="vault-biometric-unlock-btn" class="secondary-btn biometric-btn hidden"><svg class="ic" aria-hidden="true"><use href="#i-fingerprint"/></svg><span>Use Biometric</span></button>
     </div>
 
     <div id="vault-content" class="hidden">
