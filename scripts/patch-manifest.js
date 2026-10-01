@@ -28,6 +28,9 @@ const REQUIRED_PERMISSIONS = [
   'android.permission.RECORD_AUDIO',
   'android.permission.CAMERA',
   'android.permission.ACCESS_FINE_LOCATION',
+  // Android 12+ requires COARSE to be declared alongside FINE for a runtime location request;
+  // @capacitor/geolocation's own manifest is empty and declares neither.
+  'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.READ_EXTERNAL_STORAGE',
   'android.permission.INTERNET',
