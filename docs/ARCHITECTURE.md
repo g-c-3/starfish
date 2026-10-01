@@ -501,6 +501,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   - Once saved, every entry from the batch is fully independent — searchable, editable (can be individually
     renamed later via the existing Edit action), and deletable on its own, with no lingering "batch" grouping
     in the data model.
+  - **Status (Decision 84):** built on the main capture bar only (Image/PDF/Files). Chosen by a confirm dialog when more than one file is picked; individual add labels each entry by file name. `suggestLabel()` pre-fill not wired (no OCR text yet). Vault batch add not built.
 - **Expense follow-up flow** — implemented as `promptExpenseFollowup()` in `app.js`. When "spent 500" has no
   inline category, the expense entry is saved immediately as `uncategorized`, and the UI asks "What did you
   spend this on?" with a 15-second window (`EXPENSE_FOLLOWUP_TIMEOUT_MS`). A reply updates the category and

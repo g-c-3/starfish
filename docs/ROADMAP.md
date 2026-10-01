@@ -10,7 +10,7 @@
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
-- [~] 8 — Tags & label UX (tag picker + label-history autocomplete hint both wired; batch-add auto-numbering still not)
+- [~] 8 — Tags & label UX (tag picker, label-history hint, main-capture batch add wired — Session 62; Vault batch add not)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
 - [~] 11 — CI/CD (build workflow committed, live green run not yet confirmed; auto-release added Session 49, update check changed to manual Settings button Session 50)
@@ -190,9 +190,7 @@
   file/image/pdf/generic-file labels are auto-derived (text excerpt or filename) with no free-text
   prompt to attach a hint to. Same `prompt()`-based rough edge as other one-offs flagged elsewhere in
   this doc — real chip UI and live autocomplete-as-you-type are still Phase 4's design pass, not
-  built here. Batch add with auto-numbering (`batchAddWithCommonLabel()`) is drafted but still not
-  wired into any UI — needs a multi-select Image/PDF/Generic-File capture screen that doesn't exist
-  yet, a bigger piece than this session's label-hint wiring.
+  built here. **Batch add built (Session 62, Decision 84):** main capture for Image/PDF/Files is multi-select; more than one file offers batch add (one common label, auto-numbered, counter continues from `label_history`) or individual add (file names). Tags apply to the whole batch. Vault batch add and OCR-based label pre-fill not built. Not run on a device.
 - [~] **9 — Additional features.** Digest, on-this-day, storage breakdown, data-transparency screen,
   recurring backup reminder (done — see detail below), quick-capture widget, expense charts, map view,
   confidence-confirmation chip, dark mode toggle (done, gradient mode removed — Decision 53). **Auto-lock timeout done** — `credentials.auto_lock_minutes` has existed since

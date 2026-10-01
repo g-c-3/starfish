@@ -1438,3 +1438,14 @@ append path (Decisions 7, 35). They serve full-backup restore, not this feature.
 Supersedes: Decision 9 (five actions, per-file zip), 33 (zip library), 34 (per-file pipeline), 43 (action
 order), the vault-PIN export clause of 41, the per-entry append item in 44, and the `append` prefix in
 55. Those entries stay as history. Any `append_*.dz` file exported earlier can no longer be imported.
+
+---
+
+**84. Batch add on the main capture bar.** Image, PDF and Files pickers accept multiple files. One file: unchanged. Two or more: confirm dialog, OK = batch, Cancel = individual.
+- Batch: one common label (history-aware hint), tags asked once, each file saved as its own entry labelled `<base> <n>`. `n` continues from the base label's `use_count` in `label_history`, which holds one counter row per (type, base label). No batch grouping is stored (Decision 11).
+- Individual: each entry labelled by its file name, shared tags.
+- Numbered labels written by `insertEntry()` are deleted from `label_history` after the batch unless they already existed, so autocomplete lists base labels only.
+- Voice stays one at a time. Vault unchanged: single-file picker, no batch. Whether the Vault should mirror this is open.
+- OCR-based label pre-fill (`suggestLabel()`) not applied: no OCR text exists yet (Phase 5).
+Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decision 69.
+

@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 62**
+
+Phase 8: batch add built on the main capture bar (Decision 84). Image, PDF and Files pickers are multi-select. One file behaves as before. More than one asks: batch (one common label, auto-numbered) or individual (each named by its file). Tags are asked once for the whole selection.
+
+`batchAddWithCommonLabel()` rewritten: it was drafted against pre-staged file paths nothing produced. It now takes picked file data, saves each through `captureFile()`, and continues numbering from the base label's `label_history` counter. Numbered labels that `insertEntry()` adds to `label_history` are removed again unless they pre-existed, so autocomplete shows base labels only.
+
+Decisions made: 84.
+
+Verified: `node --check`, `vite build` (bundle about 108 kB). Not run through CI or on device. Device checks: picker allows multi-select; one file saves as before; two or more show the choice; batch numbering continues on a second batch with the same label; Cancel on the label prompt saves nothing; folder count updates.
+
+Open: Vault batch add not built. OCR label pre-fill waits on Phase 5 OCR. Money capture shape still undefined. `scripts/patch-mainactivity.js` still in repo; delete it on GitHub (Decision 64).
+
+Next session start point: Money capture shape needs defining; else Phase 5 OCR or Vault batch add. Device pass on Sessions 59 to 62.
+
+---
+
 **Session 61**
 
 Download for append removed (Decision 83): UI, bulk action, import screen, filename prefix, backup-payload
