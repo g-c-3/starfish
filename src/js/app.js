@@ -588,41 +588,44 @@ async function captureFile(type, { label, tags = [], fileData, extension, autoCa
   return id;
 }
 
-// ---- Batch add: one common label + auto-numbering for multi-select Image/PDF/Generic File captures ----
-// files: array of { type, file_path, extension?, auto_category?, ocr_text? } already staged by the picker.
-// Numbering continues from label_history rather than restarting at 1, so a later batch with the same
-// baseLabel picks up where the previous one left off (e.g. "Invoice 4" after an earlier "Invoice 1..3").
+// ---- Batch add: one common label + auto-numbering for multi-select Image/PDF/Generic File captures
+// (Decision 84). files: array of { fileData (base64), extension }, in selection order.
+// Numbering continues from the baseLabel's counter row in label_history, so a later batch picks up
+// where the last one stopped ("Invoice 4" after "Invoice 1..3"). Each file is an independent entry.
 async function batchAddWithCommonLabel(type, baseLabel, files, tags = []) {
   const historyRow = await db.query(
     `SELECT use_count FROM label_history WHERE type=? AND label=?`,
     [type, baseLabel]
   );
-  let n = (historyRow.values && historyRow.values[0]) ? historyRow.values[0].use_count : 0;
+  const start = (historyRow.values && historyRow.values[0]) ? historyRow.values[0].use_count : 0;
+  const labels = files.map((_, i) => `${baseLabel} ${start + i + 1}`);
+
+  // insertEntry() counts every saved label into label_history; numbered variants would crowd the
+  // autocomplete hint, so only the ones that weren't already there are removed afterward.
+  const placeholders = labels.map(() => '?').join(',');
+  const existing = await db.query(
+    `SELECT label FROM label_history WHERE type=? AND label IN (${placeholders})`,
+    [type, ...labels]
+  );
+  const preexisting = new Set((existing.values || []).map((r) => r.label));
 
   const createdIds = [];
-  for (const file of files) {
-    n += 1;
-    const id = crypto.randomUUID();
-    await insertEntry(db, {
-      id, type,
-      label: `${baseLabel} ${n}`,
-      body_text: file.ocr_text || null,
-      file_path: file.file_path,
-      extension: file.extension || null,
-      auto_category: file.auto_category || null
-    });
-    await applyTags(id, tags);
-    createdIds.push(id);
+  for (let i = 0; i < files.length; i++) {
+    createdIds.push(await captureFile(type, {
+      label: labels[i], tags, fileData: files[i].fileData, extension: files[i].extension
+    }));
   }
 
-  // Collapse to one running counter per (type, baseLabel) rather than one row per numbered variant.
+  for (const label of labels) {
+    if (!preexisting.has(label)) await db.run(`DELETE FROM label_history WHERE type=? AND label=?`, [type, label]);
+  }
+  const n = start + files.length;
   await db.run(
     `INSERT INTO label_history (type, label, use_count) VALUES (?,?,?)
      ON CONFLICT(type, label) DO UPDATE SET use_count = ?`,
     [type, baseLabel, n, n]
   );
-
-  return createdIds; // caller shows: "N files added as '<baseLabel> 1' .. '<baseLabel> N>'"
+  return { ids: createdIds, first: labels[0], last: labels[labels.length - 1] };
 }
 
 // ---- Private notes unlock (independent PIN, own derived key) ----
@@ -1777,12 +1780,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = acceptForType(type);
+      input.multiple = true; // Decision 84 — more than one file offers batch add
       input.onchange = async () => {
-        const file = input.files[0];
-        if (!file) return;
-        const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-        const tags = await promptForTags();
-        await captureFile(type, { label: file.name, tags, fileData, extension: file.name.split('.').pop() });
+        const picked = Array.from(input.files || []);
+        if (!picked.length) return;
+        const files = [];
+        for (const file of picked) {
+          const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+          files.push({ name: file.name, fileData, extension: file.name.split('.').pop() });
+        }
+        const batch = files.length > 1
+          && confirm(`${files.length} files selected.\nOK: batch add with one common label, auto-numbered.\nCancel: add individually, each named by its file.`);
+        if (batch) {
+          const baseLabel = (await promptForLabel(type, VAULT_TYPE_LABELS[type] || type, 'batch') || '').trim();
+          if (!baseLabel) return;
+          const tags = await promptForTags();
+          const { ids, first, last } = await batchAddWithCommonLabel(type, baseLabel, files, tags);
+          alert(`${ids.length} files added as '${first}' to '${last}'.`);
+        } else {
+          const tags = await promptForTags();
+          for (const f of files) await captureFile(type, { label: f.name, tags, fileData: f.fileData, extension: f.extension });
+        }
         await renderMainTimeline();
       };
       beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
