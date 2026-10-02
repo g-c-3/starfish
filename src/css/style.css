@@ -609,6 +609,14 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .detail-list .tag-wrap { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .detail-actions { display: flex; gap: 10px; }
 .detail-actions button { margin: 0; flex: 1; }
+.hero-coords { font-size: 17px; }
+.hero-note { font-size: 12px; color: var(--muted); }
+.loc-plot { width: 100%; height: auto; margin-top: 4px; }
+.loc-plot rect { fill: var(--surface-2); }
+.loc-plot line { stroke: var(--border-strong); stroke-width: 0.5; }
+.loc-plot line.axis { stroke: var(--muted); stroke-width: 0.8; }
+.loc-plot .ring { fill: rgba(var(--tc-rgb), 0.22); }
+.loc-plot .pin { fill: rgb(var(--tc-rgb)); stroke: var(--surface); stroke-width: 1.2; }
 
 /* Completed / fired reminders are greyed out in lists (Decision 92) */
 .entry-row.is-done { opacity: 0.5; }
