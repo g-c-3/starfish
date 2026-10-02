@@ -62,6 +62,10 @@ private variant — out of vault scope.
    timeout is — locking the app doesn't necessarily lock the Vault and vice versa. Also locks immediately on
    backgrounding, same as the app-open password (Decision 45) — `privateSessionKey` never survives the app
    actually leaving the foreground, not just an idle window.
+   Typed credentials never persist (Decision 94): every password/PIN field is emptied when the lock screen shows
+   (all app-lock paths) and when the Vault locks (Vault fields), and after a successful unlock.
+   Lock button (`#lock-toggle-btn`): locks the Vault on the Vault screen, the app on Home/Settings (by
+   `currentLocation`); the two locks stay independent.
 3. **Backup passkey** — never stored anywhere. Combined with a random salt (stored unencrypted in backup header) via PBKDF2/Argon2id to derive the backup's AES-256 key. Forgetting it makes that backup permanently unrecoverable.
 
 All three support an optional, plaintext **hint** — but not all stored the same way. The app-open password and

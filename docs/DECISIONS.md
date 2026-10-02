@@ -1542,3 +1542,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Open in Maps: `geo:lat,lng?q=lat,lng(label)` through `window.location.assign`, as in Decision 77. Dumpzone makes no request; the phone's maps app does whatever it does. Leaving the app triggers the normal background lock.
 - Copy: `navigator.clipboard`, no plugin added.
 - No stored coordinates: notice only, no actions.
+
+---
+
+**94. Credential fields cleared on lock; lock button routed by screen.**
+- `clearSecretInputs()` empties password inputs: all of them when the lock screen shows (`showScreen('lock-screen')`, which every app-lock path uses), the Vault ones (`vault-pin-input`, `vault-setup-pin-input`, `vault-biometric-confirm-pin`) in `lockVault()`, and the relevant field right after a successful unlock.
+- Lock button (`#lock-toggle-btn`): Vault screen locks the Vault and returns Home; Home and Settings lock the app. Chosen by `currentLocation`, not by `#vault-content`'s class, which is only reset when the Vault gate is next shown.
+- The two locks stay independent (Decision 65): the button locks only what is on screen.

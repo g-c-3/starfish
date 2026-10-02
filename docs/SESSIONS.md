@@ -4,6 +4,29 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 72**
+
+Three reported bugs from device recordings (Decision 94).
+- Typed password stayed in the lock screen field after the app locked, so anyone could press Unlock. Same for the Vault PIN field after the Vault locked.
+- Lock button did nothing on Home until Vault was opened and left again.
+- Lock button on Settings (and Home) only took the user back to Home, like Back.
+
+Bugs fixed:
+- Cause (1): nothing ever emptied the inputs. Fix: `clearSecretInputs()` empties every password field when the lock screen shows and the Vault fields in `lockVault()`; also called after each successful unlock. Correct because every lock path (button, idle, background, screen off) goes through `showScreen('lock-screen')` or `lockVault()`.
+- Cause (2, 3): the lock button chose Vault or app by whether `#vault-content` was visible. `lockVault()` never hides it and leaving the Vault does not either, so from Home the button kept locking the Vault (already locked, then a jump to Home). Fix: choose by `currentLocation === 'vault'`. Correct because that value is set by every screen switch and is the same value Back uses.
+
+Decisions made: 94.
+
+Verified: `node --check`, `vite build`, headless test of `clearSecretInputs` (Vault-only and all fields; non-password fields untouched). Not run through CI or on device; the button routing was reasoned from the code and the recordings, not exercised.
+
+Device checks: unlock with the typed password, lock with the button, confirm the field is empty; same after idle lock, switching apps, screen off; Vault PIN field empty after Vault lock; lock button on Home and on Settings shows the lock screen, with the Vault open earlier and not; in the Vault it still locks the Vault and returns Home; biometric unlock unaffected.
+
+Open: locking the app from Home does not lock an unlocked Vault (independent locks, Decision 65). Say if the button should lock both.
+
+Next session start point: Phase 16 C (voice recorder and player). Open choices still to confirm for G and H. Money capture shape still to be given. Device pass on Sessions 59 to 72.
+
+---
+
 **Session 71**
 
 Phase 16 F (Decision 93).
