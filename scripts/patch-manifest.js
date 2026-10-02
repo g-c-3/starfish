@@ -36,6 +36,11 @@ const REQUIRED_PERMISSIONS = [
   'android.permission.INTERNET',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+  // Exact reminder delivery (Decision 101). Without one of these, @capacitor/local-notifications 6.x falls back to an
+  // inexact alarm that Doze and battery saving can hold for minutes. USE_EXACT_ALARM is granted at install on
+  // Android 13+; SCHEDULE_EXACT_ALARM covers Android 12. Still a normal banner notification, no alarm screen.
+  'android.permission.USE_EXACT_ALARM',
+  'android.permission.SCHEDULE_EXACT_ALARM',
 ];
 
 if (!fs.existsSync(MANIFEST_PATH)) {
