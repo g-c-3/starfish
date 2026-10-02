@@ -1522,3 +1522,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Rows carry `data-id`; a tap outside `.row-actions` opens the entry. Text notes only until the other viewers exist.
 - `toast()` replaces `alert()` for messages in these flows. Reminder time entry and expense edit still use `prompt()` until their own steps.
 
+---
+
+**92. Reminder completion, detail and notification actions.** Implements Decision 90's reminder rules.
+- Status (`reminders.js`): `done` (`completed_at` set), `fired` (no repeat, time passed), `upcoming`. Inactive = done or fired, greyed and struck through in lists. Repeating reminders only become inactive via Mark done (which also cancels their notifications).
+- `completed_at INTEGER` on `entries`; carried through `editEntry`, backup and restore. Editing a reminder to a new time clears it and reschedules.
+- Reopen is offered only when the reminder was marked done; a fired one-off offers Reschedule.
+- Notification actions: Done = mark done; Snooze = a one-off notification 10 minutes out under id `hash(entryId + ':snooze')`. The listener needs only the database. A plain tap on a notification is deliberately not handled, so nothing is opened ahead of the lock screen.
+- `softDelete` cancels a reminder's notifications; `restoreFromTrash` reschedules a pending one (dynamic imports keep `db.js` free of the notification plugin at load).
+- Reminder date/time and repeat are fields of `openSaveDialog({ reminder })`; the standalone reminder pop-up is removed. The dialog compares times to the minute and keeps the stored value when unchanged.
+- `openViewer()` is the shared full-screen shell for entry viewers: header with back and edit, scrolling body, closed by lock like the editor.
+

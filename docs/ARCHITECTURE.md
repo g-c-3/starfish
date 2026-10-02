@@ -533,7 +533,16 @@ default name, no tags, no description; picked files keep their phone name. Tag c
 entries in the same scope only (main dialog: non-private; Vault dialog: private). Text notes are written in a
 full-screen editor that leads into the dialog. Both overlays close when the app locks (all) or the Vault locks
 (Vault ones); a capture loop that sees a lock stops instead of reopening the editor. Description is searchable in
-the same FTS column as the body. Tapping a row opens it; only text notes have a viewer so far.
+the same FTS column as the body. Tapping a row opens it; text notes and reminders have viewers so far.
+
+### Reminders: completion and notification actions (Decision 92)
+`reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
+has passed; otherwise `upcoming`. Done and fired are greyed out in lists. A repeating reminder only becomes inactive
+through Mark done. The reminder's date, time and repeat are fields of the Save dialog. Notification buttons: Done
+sets `completed_at` and cancels; Snooze schedules a one-off 10 minutes out under its own id, so a repeating schedule
+is not replaced. Both run from the database alone, so they work while the app is locked; a plain tap on the
+notification does nothing, so content is never opened ahead of the lock screen. Deleting a reminder cancels its
+notifications; restoring a pending one reschedules it.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 70**
+
+Phase 16 E (Decision 92).
+- Reminder opens in a viewer (shared shell for the later viewers): time, repeat, status pill, description, tags, created. Actions: Mark done or Reopen, and Reschedule. The pencil in the header edits details.
+- Completed means marked done, or fired (one-off, time passed). Both are greyed out and struck through in Home lists and search. Repeating reminders only become inactive by Mark done.
+- Reminder date/time and repeat moved into the Save dialog (presets: in 1 hour, tonight 8 pm, tomorrow 9 am); the separate reminder pop-up and its `prompt()`-based edit are gone. Re-saving a fired reminder without changing its time is allowed; a new past time is refused.
+- New column `completed_at` (migration, backup, edit).
+
+Bugs fixed (found while reading): notification Done and Snooze buttons were registered but nothing handled them; they now mark done and snooze 10 minutes. Deleting a reminder left its notification scheduled, so it could still fire; delete now cancels it and restore reschedules a pending one. A reminder created from typed text can carry seconds, which the minute-based picker would have treated as a time change; the dialog now compares to the minute and keeps the stored value.
+
+Decisions made: 92.
+
+Verified: `node --check` on all changed files, `vite build`, headless test of the row states (upcoming, fired, done, repeating past), the dialog's reminder block (past time refused, preset, repeat, unchanged-time re-save) and the detail layout. Not run through CI or on device; the database writes, notification actions and delete/restore hooks were not exercised.
+
+Device checks: create a reminder in the dialog and confirm it fires; Mark done then Reopen; a fired one-off shows Reschedule only; Done and Snooze from the notification itself, including with the app locked; delete a reminder before it is due and confirm it stays silent; restore it; backup and restore keep `completed_at`.
+
+Next session start point: Phase 16 F (location detail). Open choices still to confirm for F (coordinates plus hand-off to the phone's maps app), G (file-opener plugin) and H (PDF viewer). Money capture shape still to be given. Device pass on Sessions 59 to 70.
+
+---
+
 **Session 69**
 
 Phase 16 A and B (Decision 91).
