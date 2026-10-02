@@ -44,7 +44,35 @@ async function scheduleReminder(entry) {
 }
 
 async function cancelReminder(entryId) {
-  await LocalNotifications.cancel({ notifications: [{ id: hashIdToInt(entryId) }] });
+  // The snooze notification has its own id, so cancelling a reminder cancels both.
+  await LocalNotifications.cancel({ notifications: [{ id: hashIdToInt(entryId) }, { id: hashIdToInt(`${entryId}:snooze`) }] });
+}
+
+// One-off notification N minutes from now. Separate id so snoozing a repeating reminder
+// does not replace its recurring schedule.
+async function snoozeReminder(entry, minutes = 10) {
+  await ensureChannel();
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: hashIdToInt(`${entry.id}:snooze`),
+      title: 'Dumpzone Reminder',
+      body: entry.label,
+      channelId: CHANNEL_ID,
+      schedule: { at: new Date(Date.now() + minutes * 60 * 1000) },
+      actionTypeId: 'REMINDER_ACTIONS',
+      extra: { entryId: entry.id }
+    }]
+  });
+}
+
+// Calls onAction(actionId, entryId) for the Snooze / Done buttons on a reminder notification. Plain taps
+// on the notification body are ignored on purpose: opening an entry from a notification could show
+// content while the app is still locked.
+function listenForReminderActions(onAction) {
+  LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+    const entryId = event?.notification?.extra?.entryId;
+    if (entryId && (event.actionId === 'snooze' || event.actionId === 'done')) onAction(event.actionId, entryId);
+  });
 }
 
 async function registerActionTypes() {
@@ -68,4 +96,4 @@ function hashIdToInt(uuid) {
   return Math.abs(hash);
 }
 
-export { scheduleReminder, cancelReminder, requestPermissions, registerActionTypes, ensureChannel };
+export { scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };

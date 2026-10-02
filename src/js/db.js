@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS entries (
   repeat_rule TEXT,                  -- null | 'daily' | 'weekly' | 'monthly'
   snoozed_until INTEGER,
   notified INTEGER DEFAULT 0,
+  completed_at INTEGER,              -- owner marked the reminder done (Decision 92); NULL = not marked
 
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
@@ -121,6 +122,7 @@ async function initDb(sqlite) {
   // fresh DB (columns already there from SCHEMA_SQL, no-ops) and an existing one (adds them
   // once, then no-ops from then on). Reuse this for any future column addition instead of only
   // editing SCHEMA_SQL — see Decision 50.
+  await ensureColumn(db, 'entries', 'completed_at', 'INTEGER');
   await ensureColumn(db, 'entries', 'description', 'TEXT');
   await ensureColumn(db, 'entries', 'encrypted_description', 'BLOB');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
@@ -202,6 +204,11 @@ async function searchEntries(db, queryText, opts = {}) {
 
 async function softDelete(db, id) {
   await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [Date.now(), id]);
+  // A deleted reminder must not still fire from its scheduled notification (Decision 92).
+  const row = ((await db.query(`SELECT type FROM entries WHERE id = ?`, [id])).values || [])[0];
+  if (row && row.type === 'reminder') {
+    try { (await import('./notifications.js')).cancelReminder(id); } catch { /* notification plugin unavailable — nothing scheduled */ }
+  }
 }
 
 // Two independent bins share this same deleted_at/is_private pair rather than needing a second set
@@ -217,6 +224,14 @@ async function listTrash(db, { isPrivate = false } = {}) {
 
 async function restoreFromTrash(db, id) {
   await db.run(`UPDATE entries SET deleted_at = NULL WHERE id = ?`, [id]);
+  // Put a still-pending reminder back on the schedule.
+  const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+  if (row && row.type === 'reminder' && !row.is_private) {
+    const { reminderStatus } = await import('./reminders.js');
+    if (reminderStatus(row) === 'upcoming') {
+      try { await (await import('./notifications.js')).scheduleReminder(row); } catch { /* scheduling failed — entry is restored regardless */ }
+    }
+  }
 }
 
 // User-triggered "delete permanently" from within a trash bin — same cascade-safe deletion

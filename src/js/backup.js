@@ -293,12 +293,12 @@ async function restoreBackup(db, opts) {
     await db.run(
       `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
         auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
-        fire_at, repeat_rule, snoozed_until, notified, description, encrypted_description, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
        entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
        entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
-       entry.snoozed_until, entry.notified || 0, entry.description || null, encryptedDescription,
+       entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription,
        entry.created_at || Date.now(), Date.now()]
     );
     // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts

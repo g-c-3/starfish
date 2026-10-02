@@ -6,7 +6,8 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
-import { scheduleReminder, requestPermissions, registerActionTypes } from './notifications.js';
+import { scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
+import { reminderStatus, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
@@ -147,6 +148,7 @@ function closeVaultFolder() {
 function backAction() {
   if (activeSaveDialog) return () => activeSaveDialog.finish(null);
   if (activeEditor) return () => activeEditor.requestBack();
+  if (activeViewer) return () => activeViewer.finish();
   if (currentLocation === 'vault') {
     if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
@@ -187,6 +189,15 @@ async function bootstrap() {
 
   await requestPermissions();
   await registerActionTypes();
+  // Snooze / Done buttons on a reminder notification (Decision 92). Needs only the database, so it works while the app is locked.
+  listenForReminderActions(async (actionId, entryId) => {
+    try {
+      const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
+      if (!row) return;
+      if (actionId === 'done') await markReminderDone(entryId);
+      else if (actionId === 'snooze') await snoozeReminder(row, 10);
+    } catch { /* a failed action leaves the reminder as it was */ }
+  });
   await purgeOldTrash(db); // purges BOTH bins — same 30-day rule, filtered by is_private only when listing
   await registerBackgroundLock();
 
@@ -976,10 +987,18 @@ function formatEntryDate(ms) {
 }
 // actionPrefix: 'main' | 'vault' renders Share/Download/Edit/Delete icon buttons wired by their existing
 // ${prefix}-*-btn classes; null renders a plain (search-result) row.
-function entryRowHtml({ id, type, label, meta = '', tags = [] }, actionPrefix = null) {
+// Meta line and greyed-out flag for a full entry row (Home folders and search).
+function rowMeta(row) {
+  if (row.type !== 'reminder') return { meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · '), done: false };
+  const st = reminderStatus(row);
+  const when = formatEntryDate(row.fire_at);
+  const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
+  return { meta: ['Reminder', `${lead} ${when}`, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st !== 'upcoming' };
+}
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false }, actionPrefix = null) {
   const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
   return `
-    <div class="entry-row" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
+    <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
       <span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
@@ -1008,20 +1027,22 @@ function toast(message) {
 
 let activeSaveDialog = null; // { finish, isVault }
 let activeEditor = null;     // { finish, requestBack, isVault }
+let activeViewer = null;     // { finish } — entry viewer shell (Decision 92)
 let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
 
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
 function dismissOverlays(vaultOnly = false) {
-  const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault));
+  const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
   if (activeEditor && (!vaultOnly || activeEditor.isVault)) activeEditor.finish(null);
+  if (activeViewer && (!vaultOnly || activeViewer.isVault)) activeViewer.finish();
 }
 
 // Resolves { name, tags, description, mode } or null (cancelled). An untouched Save returns the default
 // name, no tags, no description. count > 1 shows the naming switch: mode 'own' (each file keeps its own
 // name; name is null) or 'number' (one common name, numbered).
-function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null } = {}) {
+function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null, reminder = null } = {}) {
   return new Promise(async (resolve) => {
     const $ = (id) => document.getElementById(id);
     const dlg = $('save-dialog'), nameEl = $('sd-name'), descEl = $('sd-desc'), newTagEl = $('sd-new-tag');
@@ -1030,6 +1051,24 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
     let known = [];
     try { known = await listTagsForScope(db, isVault); } catch { known = []; }
     let mode = 'own';
+
+    // Reminder block (Decision 92): when + repeat live in the same dialog, so a reminder is saved in one step too.
+    const remEl = $('sd-reminder'), whenEl = $('sd-when'), repeatEl = $('sd-repeat');
+    const pad = (n) => String(n).padStart(2, '0');
+    const toLocalInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    remEl.classList.toggle('hidden', !reminder);
+    if (reminder) {
+      const start = reminder.fire_at || (() => { const d = new Date(Date.now() + 60 * 60 * 1000); d.setMinutes(0, 0, 0); return d.getTime(); })();
+      whenEl.value = toLocalInput(start);
+      repeatEl.value = reminder.repeat_rule || '';
+      $('sd-presets').querySelectorAll('button').forEach((b) => { b.onclick = () => {
+        const d = new Date();
+        if (b.dataset.preset === 'hour') { d.setTime(Date.now() + 60 * 60 * 1000); d.setMinutes(0, 0, 0); }
+        else if (b.dataset.preset === 'tonight') { d.setHours(20, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); }
+        else { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+        whenEl.value = toLocalInput(d.getTime());
+      }; });
+    }
 
     $('sd-heading').textContent = heading;
     descEl.value = description || '';
@@ -1090,12 +1129,25 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       addTag(); // a tag typed but not yet added still counts
       const typed = nameEl.value.trim();
       const own = count > 1 && mode === 'own';
-      finish({
+      const result = {
         name: own ? null : (typed || defaultName),
         tags: selected.slice(0, MAX_TAGS),
         description: descEl.value.trim(),
         mode: count > 1 ? mode : 'single'
-      });
+      };
+      if (reminder) {
+        let fireAt = new Date(whenEl.value).getTime();
+        if (isNaN(fireAt)) { toast('Pick a date and time'); return; }
+        // The picker works in whole minutes. Unchanged to the minute means unchanged: keep the stored value exactly,
+        // so a reminder created from typed text (which may carry seconds) is not treated as rescheduled.
+        const unchanged = reminder.fire_at && Math.floor(fireAt / 60000) === Math.floor(reminder.fire_at / 60000);
+        if (unchanged) fireAt = reminder.fire_at;
+        // A past time is only refused when it is a new choice: re-saving an already-fired reminder unchanged is fine.
+        if (!repeatEl.value && fireAt <= Date.now() && !unchanged) { toast('Pick a time in the future'); return; }
+        result.fire_at = fireAt;
+        result.repeat_rule = repeatEl.value || null;
+      }
+      finish(result);
     };
     $('sd-cancel-btn').onclick = () => finish(null);
     dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) finish(null); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
@@ -1144,6 +1196,19 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
     updateBackButtonState();
     if (!text) setTimeout(() => ta.focus(), 60);
   });
+}
+
+// Reminder completion (Decision 92). Top-level: notification actions call these before the UI exists.
+async function markReminderDone(id) {
+  await db.run(`UPDATE entries SET completed_at = ?, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
+  try { await cancelReminder(id); } catch { /* nothing scheduled */ }
+}
+async function reopenReminder(id) {
+  await db.run(`UPDATE entries SET completed_at = NULL, updated_at = ? WHERE id = ?`, [Date.now(), id]);
+  const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+  if (row && reminderStatus(row) === 'upcoming') {
+    try { await scheduleReminder(row); } catch { /* scheduling failed — entry still reopened */ }
+  }
 }
 
 async function getEntryTags(entryId) {
@@ -1878,45 +1943,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Reminder capture (Phase 4). Modal, not prompt(): a date/time needs a real picker, and
   // free-typed text would need the same parsing Edit's prompt() already gets wrong on locale.
   // Resolves { label, fire_at, repeat_rule } or null on cancel. One-time reminders must be future. ----
-  function promptForReminder() {
-    const modal = document.getElementById('reminder-modal');
-    const labelEl = document.getElementById('reminder-label-input');
-    const whenEl = document.getElementById('reminder-when-input');
-    const repeatEl = document.getElementById('reminder-repeat-select');
-    const errEl = document.getElementById('reminder-error');
-    const pad = (n) => String(n).padStart(2, '0');
-    const d = new Date(Date.now() + 60 * 60 * 1000);
-    d.setMinutes(0, 0, 0);
-    labelEl.value = '';
-    whenEl.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
-    repeatEl.value = '';
-    errEl.textContent = '';
-    modal.classList.remove('hidden');
-    labelEl.focus();
-
-    return new Promise((resolve) => {
-      const saveBtn = document.getElementById('reminder-save-btn');
-      const cancelBtn = document.getElementById('reminder-cancel-btn');
-      const finish = (result) => {
-        saveBtn.removeEventListener('click', onSave);
-        cancelBtn.removeEventListener('click', onCancel);
-        modal.classList.add('hidden');
-        resolve(result);
-      };
-      const onCancel = () => finish(null);
-      const onSave = () => {
-        const label = labelEl.value.trim();
-        const fireAt = new Date(whenEl.value).getTime();
-        if (!label) { errEl.textContent = 'Enter what to remember.'; return; }
-        if (isNaN(fireAt)) { errEl.textContent = 'Pick a date and time.'; return; }
-        if (!repeatEl.value && fireAt <= Date.now()) { errEl.textContent = 'Pick a time in the future.'; return; }
-        finish({ label, fire_at: fireAt, repeat_rule: repeatEl.value || null });
-      };
-      saveBtn.addEventListener('click', onSave);
-      cancelBtn.addEventListener('click', onCancel);
-    });
-  }
-
   async function promptForTags() {
     const existing = await listAllTags(db);
     const hint = existing.length ? ` Existing: ${existing.map((t) => t.name).join(', ')}.` : '';
@@ -2027,12 +2053,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         toast('Recording saved');
       });
     } else if (type === 'reminder') {
-      const reminder = await promptForReminder();
-      if (!reminder) return;
-      const d = await openSaveDialog({ heading: 'Save reminder', defaultName: reminder.label, discardLabel: 'Discard' });
+      const d = await openSaveDialog({ heading: 'New reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard', reminder: {} });
       if (!d) return;
       const id = crypto.randomUUID();
-      const saved = { ...reminder, label: d.name };
+      const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
       await applyTags(id, d.tags);
       try {
@@ -2121,8 +2145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!openFolderType) return;
     const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags,
-      meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
     }, 'main')).join('') || emptyStateHtml('folder');
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -2264,7 +2287,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function editEntryUI(item, isVault) {
     if (item.type === 'note') return openNote(item, isVault);
     const tags = item.tags || await getEntryTags(item.id);
-    const d = await openSaveDialog({ heading: 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault });
+    const isReminder = item.type === 'reminder' && !isVault;
+    const d = await openSaveDialog({
+      heading: isReminder ? 'Edit reminder' : 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault,
+      reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule } : null
+    });
     if (!d) return;
     const fields = { label: d.name, description: d.description };
 
@@ -2273,12 +2300,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (newAmount !== null && newAmount !== '') fields.amount = parseFloat(newAmount);
       const newCategory = prompt('New category:', item.expense_category || '');
       if (newCategory !== null) fields.expense_category = newCategory;
-    } else if (item.type === 'reminder' && !isVault) {
-      const newWhen = prompt('New date/time (leave blank to keep):', item.fire_at ? new Date(item.fire_at).toLocaleString() : '');
-      if (newWhen) {
-        const parsed = new Date(newWhen).getTime();
-        if (!isNaN(parsed)) fields.fire_at = parsed;
-        else toast('Could not parse that date/time — details saved, time unchanged.');
+    } else if (isReminder) {
+      const timeChanged = d.fire_at !== item.fire_at || (d.repeat_rule || null) !== (item.repeat_rule || null);
+      // A new time reopens a finished reminder and reschedules it. A label-only change reschedules an active one
+      // so the notification text stays current; a finished one is left alone.
+      if (timeChanged || reminderStatus(item) === 'upcoming') {
+        fields.fire_at = d.fire_at;
+        fields.repeat_rule = d.repeat_rule;
+        if (timeChanged) fields.completed_at = null;
       }
     }
 
@@ -2311,6 +2340,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
+  // Entry viewer shell (Decision 92). render(bodyEl, helpers) fills the body; call helpers.refresh() after a change.
+  function openViewer({ title, isVault = false, render, onEdit }) {
+    return new Promise((resolve) => {
+      const $ = (id) => document.getElementById(id);
+      const screen = $('viewer-screen'), body = $('viewer-body');
+      $('viewer-title').textContent = title;
+      const finish = () => {
+        screen.classList.add('hidden');
+        body.innerHTML = '';
+        activeViewer = null;
+        updateBackButtonState();
+        resolve();
+      };
+      const refresh = async () => { await render(body, { refresh, close: finish }); };
+      $('viewer-back-btn').onclick = finish;
+      $('viewer-edit-btn').onclick = async () => { if (onEdit) { await onEdit(); await refresh(); } };
+      activeViewer = { finish, isVault };
+      screen.classList.remove('hidden');
+      updateBackButtonState();
+      refresh();
+    });
+  }
+
+  async function openReminder(item) {
+    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    await openViewer({
+      title: 'Reminder',
+      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      render: async (body, { refresh }) => {
+        const row = await fresh();
+        const tags = await getEntryTags(row.id);
+        const st = reminderStatus(row);
+        const stLabel = { upcoming: 'Upcoming', done: 'Done', fired: 'Fired' }[st];
+        const when = new Date(row.fire_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        // A fired one-off can't simply be reopened (its time is past): offer Reschedule instead.
+        const canToggle = st === 'upcoming' || row.completed_at;
+        const toggleLabel = st === 'upcoming' ? 'Mark done' : 'Reopen';
+        body.innerHTML = `
+          <div class="detail-hero${st === 'upcoming' ? '' : ' inactive'}" data-type="reminder">
+            <span class="row-icon">${iconSvg('reminder')}</span>
+            <div class="hero-when">${escapeHtml(when)}</div>
+            <div class="hero-sub">${escapeHtml(row.label)}</div>
+            <span class="status-pill ${st}">${stLabel}</span>
+          </div>
+          <dl class="detail-list">
+            <div><dt>Repeat</dt><dd>${escapeHtml(repeatLabel(row.repeat_rule))}</dd></div>
+            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
+            <div><dt>Created</dt><dd>${escapeHtml(formatEntryDate(row.created_at))}</dd></div>
+          </dl>
+          <div class="detail-actions">
+            ${canToggle ? `<button id="rv-toggle-btn">${toggleLabel}</button>` : ''}
+            <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
+          </div>`;
+        const t = document.getElementById('rv-toggle-btn');
+        if (t) t.onclick = async () => { if (st === 'upcoming') await markReminderDone(row.id); else await reopenReminder(row.id); await refresh(); };
+        document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
+      }
+    });
+  }
+
   // Tapping a row opens it. Only text notes have a viewer so far; the other types follow (Phase 16 B–H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
@@ -2321,6 +2411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
+    else if (item.type === 'reminder' && !isVault) await openReminder(item);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
@@ -2329,8 +2420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
     const rows = await searchEntries(db, term);
     document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags,
-      meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
     document.querySelectorAll('#timeline .entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
   });
