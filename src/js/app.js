@@ -7,7 +7,7 @@ import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromT
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
-import { reminderStatus, repeatLabel } from './reminders.js';
+import { reminderStatus, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
@@ -212,7 +212,12 @@ async function bootstrap() {
       const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
       if (!row) return;
       if (actionId === 'done') await markReminderDone(entryId);
-      else if (actionId === 'snooze') await snoozeReminder(row, 10);
+      else if (actionId === 'snooze') {
+        await snoozeReminder(row, 10);
+        // Persisted so the row shows "Snoozed until" rather than greyed-out "Fired" (Decision 99).
+        await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ?`, [Date.now() + 10 * 60 * 1000, Date.now(), entryId]);
+      }
+      window.dispatchEvent(new Event('dumpzone-reminders-changed'));
     } catch { /* a failed action leaves the reminder as it was */ }
   });
   await purgeOldTrash(db); // purges BOTH bins — same 30-day rule, filtered by is_private only when listing
@@ -1011,7 +1016,8 @@ function rowMeta(row) {
   const st = reminderStatus(row);
   const when = formatEntryDate(row.fire_at);
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
-  return { meta: ['Reminder', `${lead} ${when}`, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st !== 'upcoming' };
+  const timing = st === 'snoozed' ? `Snoozed until ${formatEntryDate(row.snoozed_until)}` : `${lead} ${when}`;
+  return { meta: ['Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
 }
 function entryRowHtml({ id, type, label, meta = '', tags = [], done = false }, actionPrefix = null) {
   const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
@@ -1226,13 +1232,13 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
 
 // Reminder completion (Decision 92). Top-level: notification actions call these before the UI exists.
 async function markReminderDone(id) {
-  await db.run(`UPDATE entries SET completed_at = ?, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
+  await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
   try { await cancelReminder(id); } catch { /* nothing scheduled */ }
 }
 async function reopenReminder(id) {
   await db.run(`UPDATE entries SET completed_at = NULL, updated_at = ? WHERE id = ?`, [Date.now(), id]);
   const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
-  if (row && reminderStatus(row) === 'upcoming') {
+  if (row && isReminderActive(row)) {
     try { await scheduleReminder(row); } catch { /* scheduling failed — entry still reopened */ }
   }
 }
@@ -2204,6 +2210,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
+  // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
+  window.addEventListener('dumpzone-reminders-changed', () => { renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {}); });
   document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
 
   document.getElementById('vault-settings-card').addEventListener('toggle', updateBackButtonState);
@@ -2333,10 +2341,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const timeChanged = d.fire_at !== item.fire_at || (d.repeat_rule || null) !== (item.repeat_rule || null);
       // A new time reopens a finished reminder and reschedules it. A label-only change reschedules an active one
       // so the notification text stays current; a finished one is left alone.
-      if (timeChanged || reminderStatus(item) === 'upcoming') {
+      if (timeChanged || isReminderActive(item)) {
         fields.fire_at = d.fire_at;
         fields.repeat_rule = d.repeat_rule;
-        if (timeChanged) fields.completed_at = null;
+        if (timeChanged) { fields.completed_at = null; fields.snoozed_until = null; }
       }
     }
 
@@ -2401,19 +2409,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const row = await fresh();
         const tags = await getEntryTags(row.id);
         const st = reminderStatus(row);
-        const stLabel = { upcoming: 'Upcoming', done: 'Done', fired: 'Fired' }[st];
+        const stLabel = { upcoming: 'Upcoming', snoozed: 'Snoozed', done: 'Done', fired: 'Fired' }[st];
+        const active = st === 'upcoming' || st === 'snoozed';
         const when = new Date(row.fire_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
         // A fired one-off can't simply be reopened (its time is past): offer Reschedule instead.
-        const canToggle = st === 'upcoming' || row.completed_at;
-        const toggleLabel = st === 'upcoming' ? 'Mark done' : 'Reopen';
+        const canToggle = active || row.completed_at;
+        const toggleLabel = active ? 'Mark done' : 'Reopen';
         body.innerHTML = `
-          <div class="detail-hero${st === 'upcoming' ? '' : ' inactive'}" data-type="reminder">
+          <div class="detail-hero${active ? '' : ' inactive'}" data-type="reminder">
             <span class="row-icon">${iconSvg('reminder')}</span>
             <div class="hero-when">${escapeHtml(when)}</div>
             <div class="hero-sub">${escapeHtml(row.label)}</div>
             <span class="status-pill ${st}">${stLabel}</span>
           </div>
           <dl class="detail-list">
+            ${st === 'snoozed' ? `<div><dt>Snoozed until</dt><dd>${escapeHtml(formatEntryDate(row.snoozed_until))}</dd></div>` : ''}
             <div><dt>Repeat</dt><dd>${escapeHtml(repeatLabel(row.repeat_rule))}</dd></div>
             ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
@@ -2424,7 +2434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
           </div>`;
         const t = document.getElementById('rv-toggle-btn');
-        if (t) t.onclick = async () => { if (st === 'upcoming') await markReminderDone(row.id); else await reopenReminder(row.id); await refresh(); };
+        if (t) t.onclick = async () => { if (active) await markReminderDone(row.id); else await reopenReminder(row.id); await refresh(); };
         document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
       }
     });

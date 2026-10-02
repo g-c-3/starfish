@@ -147,7 +147,7 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   // Expense/reminder-specific fields — these were previously never actually written to the row at
   // all (only checked, further down, to decide whether to call rescheduleReminder), so editing a
   // reminder's time or an expense's amount silently did nothing before this fix.
-  for (const key of ['amount', 'expense_category', 'fire_at', 'repeat_rule', 'completed_at']) {
+  for (const key of ['amount', 'expense_category', 'fire_at', 'repeat_rule', 'completed_at', 'snoozed_until']) {
     if (fields[key] !== undefined) updates[key] = fields[key];
   }
 
