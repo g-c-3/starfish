@@ -49,14 +49,15 @@ Required:
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 ```
-Note: we deliberately do NOT request `SCHEDULE_EXACT_ALARM` — we're using standard Local Notifications,
-not AlarmManager exact alarms (see main README: notification-with-tone, not a true alarm).
+`USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` are requested so reminders are delivered on time through Doze
+(Decision 101). They only change when the notification is delivered: it is still a plain banner, with no alarm
+screen or alarm sound. Google Play restricts both to alarm and calendar apps (see Decision 98).
 
 **These are applied automatically by CI, not hand-edited — see Decision 49.** `android/` is never
 committed (build-android.yml runs `npx cap add android` fresh whenever the folder is missing, which
 is every run today), so a manifest edit made by hand in a checked-out `android/` folder would be
 discarded the next run anyway, whether or not anyone remembered to make it. `scripts/patch-manifest.js`
-runs in CI right after the platform is added and inserts any of the above eight permissions not already
+runs in CI right after the platform is added and inserts any of the above permissions not already
 present — idempotent, so it's also safe on a future `android/` that does get committed. This list is the
 single source of truth for required permissions; if a new plugin needs one, add it to
 `REQUIRED_PERMISSIONS` in that script, not to a manifest file directly (there currently isn't one to edit
