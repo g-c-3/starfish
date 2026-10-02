@@ -32,7 +32,8 @@ async function scheduleReminder(entry) {
   // entry: { id, label, fire_at, repeat_rule }
   await ensureChannel();
 
-  const schedule = { at: new Date(entry.fire_at) };
+  // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
+  const schedule = { at: new Date(entry.fire_at), allowWhileIdle: true };
   if (entry.repeat_rule === 'daily') schedule.every = 'day';
   if (entry.repeat_rule === 'weekly') schedule.every = 'week';
   if (entry.repeat_rule === 'monthly') schedule.every = 'month';
@@ -65,7 +66,7 @@ async function snoozeReminder(entry, minutes = 10) {
       title: 'Dumpzone Reminder',
       body: entry.label,
       channelId: CHANNEL_ID,
-      schedule: { at: new Date(Date.now() + minutes * 60 * 1000) },
+      schedule: { at: new Date(Date.now() + minutes * 60 * 1000), allowWhileIdle: true },
       actionTypeId: 'REMINDER_ACTIONS',
       extra: { entryId: entry.id }
     }]
