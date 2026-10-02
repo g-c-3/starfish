@@ -65,9 +65,9 @@ between CI runs).
 **Two of these (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`) exist specifically for
 `cap-voice-rec`'s own declared foreground service** — see §5.
 
-## 4. Notification sound file
-Place a `.wav` file at `android/app/src/main/res/raw/notify_tone.wav` — referenced by
-`capacitor.config.json`'s `LocalNotifications.sound` and by `notifications.js`'s channel setup.
+## 4. Notification sound
+Reminders use the system's default notification sound (Decision 96). `notify_tone.wav` is no longer referenced by
+`notifications.js`; it is only the pre-Android 8 fallback named in `capacitor.config.json`'s `LocalNotifications.sound`.
 
 ## 5. Voice recorder with noise-reduction toggle
 **Basic recording done (Session 24): `cap-voice-rec` (v6.x, explicitly built for Capacitor 6 —
