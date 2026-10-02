@@ -2401,7 +2401,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tapping a row opens it. Only text notes have a viewer so far; the other types follow (Phase 16 B–H).
+  // Location detail (Decision 93): coordinates, a grid plot drawn from them (no map data, no network), copy, hand-off.
+  function formatCoords(lat, lng) {
+    return `${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(6)}° ${lng >= 0 ? 'E' : 'W'}`;
+  }
+  function locationPlotSvg(lat, lng) {
+    const x = Math.min(354, Math.max(6, lng + 180)), y = Math.min(174, Math.max(6, 90 - lat));
+    const v = [];
+    for (let lo = -150; lo <= 150; lo += 30) v.push(`<line x1="${lo + 180}" y1="0" x2="${lo + 180}" y2="180"${lo === 0 ? ' class="axis"' : ''}/>`);
+    for (let la = -60; la <= 60; la += 30) v.push(`<line x1="0" y1="${90 - la}" x2="360" y2="${90 - la}"${la === 0 ? ' class="axis"' : ''}/>`);
+    return `<svg class="loc-plot" viewBox="0 0 360 180" role="img" aria-label="Position on a latitude and longitude grid">
+      <rect width="360" height="180" rx="6"/>${v.join('')}
+      <circle class="ring" cx="${x}" cy="${y}" r="9"/><circle class="pin" cx="${x}" cy="${y}" r="3.5"/></svg>`;
+  }
+
+  async function openLocation(item) {
+    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    await openViewer({
+      title: 'Location',
+      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      render: async (body) => {
+        const row = await fresh();
+        const tags = await getEntryTags(row.id);
+        const has = row.latitude != null && row.longitude != null;
+        const coords = has ? formatCoords(row.latitude, row.longitude) : '';
+        body.innerHTML = `
+          <div class="detail-hero" data-type="location">
+            <span class="row-icon">${iconSvg('location')}</span>
+            <div class="hero-when hero-coords">${has ? escapeHtml(coords) : 'No coordinates saved'}</div>
+            <div class="hero-sub">${escapeHtml(row.label)}</div>
+            ${has ? locationPlotSvg(row.latitude, row.longitude) : ''}
+            ${has ? '<div class="hero-note">Grid plot, 30° lines. No map data is stored.</div>' : ''}
+          </div>
+          <dl class="detail-list">
+            ${has ? `<div><dt>Decimal</dt><dd>${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}</dd></div>` : ''}
+            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
+            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(row.created_at))}</dd></div>
+          </dl>
+          ${has ? `<div class="detail-actions">
+            <button id="lv-maps-btn">Open in Maps</button>
+            <button id="lv-copy-btn" class="secondary-btn">Copy</button>
+          </div>` : ''}`;
+        if (!has) return;
+        document.getElementById('lv-copy-btn').onclick = async () => {
+          try { await navigator.clipboard.writeText(`${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`); toast('Coordinates copied'); }
+          catch { toast('Could not copy'); }
+        };
+        // geo: URI hands off to the phone's maps app; nothing is fetched by Dumpzone. Leaving the app locks it like any background.
+        document.getElementById('lv-maps-btn').onclick = () => {
+          window.location.assign(`geo:${row.latitude.toFixed(6)},${row.longitude.toFixed(6)}?q=${row.latitude.toFixed(6)},${row.longitude.toFixed(6)}(${encodeURIComponent(row.label)})`);
+        };
+      }
+    });
+  }
+
+  // Tapping a row opens it. Text, reminder and location have viewers; the other types follow (Phase 16 C, D, G, H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -2412,6 +2467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
     else if (item.type === 'reminder' && !isVault) await openReminder(item);
+    else if (item.type === 'location' && !isVault) await openLocation(item);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
