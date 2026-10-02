@@ -34,7 +34,7 @@
   - [x] App icon — source artwork at `resources/icon.png`; CI generates all densities via
     `@capacitor/assets`. Confirmed on-device (Session 7): initial version rendered visibly smaller
     than sibling icons (double safe-zone padding — see Decision 24); re-cropped full-bleed and fixed.
-  - [ ] Play Console account — not blocking; only if Play distribution is later decided on.
+  - [ ] Play Console account — deferred; revisit when the app is fully ready (Decision 98).
 - [ ] **2 — Core data layer.** `db.js` (schema, FTS5, tags, label history, soft-delete),
   `crypto.js` (PBKDF2/AES-GCM). Committed; not device-tested. Stale pre-rebrand naming
   (`actioner.db`, header comment) fixed earlier. **Vault pivot:** `is_private` generalized from
@@ -244,7 +244,8 @@
   39, Decision 64) — a real Settings toggle (off by default), `@capacitor-community/privacy-screen`
   (pinned `5.2.0` for Capacitor 6 compatibility) blanking the recents preview and blocking screenshots
   together, replacing Session 37/38's build-time-only `MainActivity` patch (Decisions 62/63) entirely
-  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Reminder banner channel, default sound (Session 74, Decision 96)** — not run on a device.
+  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Reminders fire while closed: `allowWhileIdle` (Session 75, Decision 97)** — not run on a device.
+  **Reminder banner channel, default sound (Session 74, Decision 96)** — not run on a device.
   **Reminder save toast with distance (Session 73, Decision 95)** — not run on a device.
   **Typed credentials cleared on lock (Session 72, Decision 94)** — password and PIN fields are emptied when
   either lock engages and after a successful unlock; not run on a device. JS

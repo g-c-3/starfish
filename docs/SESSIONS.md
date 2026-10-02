@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 75**
+
+Reported: another app's reminders fire while closed and under battery saving; asked to compare and to record that Play distribution is revisited when the app is ready (Decisions 97, 98).
+- Compared the reference app's reminder scheduling with this one. Difference: it schedules with `allowWhileIdle: true`; this app did not. Confirmed against the installed 6.1.3 plugin source: without the flag the alarm is `set(RTC)`, non-waking.
+- Fix: `allowWhileIdle: true` on reminder and snooze schedules. This supersedes the exact-alarm proposal from Session 74 (Decision 97).
+- Recorded: Play distribution deferred until the app is fully ready (Decision 98).
+
+Decisions made: 97, 98.
+
+Verified: `node --check`, `vite build`, plugin source read. Not run through CI or on device.
+
+Device checks: install, set a reminder 3 minutes ahead, close the app from recents, turn the screen off and wait; the banner should appear within a few minutes. Repeat with battery saver on. Report delay observed and phone make if it still waits for the app to open.
+
+Open: repeating reminders (daily, weekly, monthly) are unverified; the plugin call passes `every` without `repeats`. Test one on a device, then decide on a schedule-ahead approach.
+Open: battery-optimisation prompt and "X scheduled" indicator (documented, not built); notification small icon drawable.
+
+Next session start point: Phase 16 C (voice recorder and player), after the device pass on Sessions 59 to 75. Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 74**
 
 Reported: a reminder due 5:39 pm showed in the shade only after the app was opened at 5:40; wanted a subtle banner like a calendar reminder, no alarm behaviour (Decision 96).

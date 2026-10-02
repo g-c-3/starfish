@@ -79,3 +79,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-02 | Session 72 | Decision 94 | Bug fixes: typed password/PIN cleared when the app or Vault locks; lock button on Home/Settings now locks the app instead of acting on the Vault |
 | 2026-10-02 | Session 73 | Decision 95 | Reminder save toast shows time and distance; cause of missed reminder traced to stored time |
 | 2026-10-02 | Session 74 | Decision 96 | Reminders moved to a banner channel with the default sound; late delivery traced to inexact scheduling |
+| 2026-10-03 | Session 75 | Decisions 97, 98 | Reminders scheduled with allowWhileIdle so they fire while closed; Play distribution deferred until app is ready |

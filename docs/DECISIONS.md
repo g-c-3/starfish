@@ -1563,3 +1563,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Channel `dumpzone_reminders_v2`: importance 4 (heads-up banner), no custom sound. Snooze and Done actions unchanged.
 - A channel's importance and sound cannot change after creation, so the style change uses a new id. On first launch after the update the old channel is deleted and every live reminder is scheduled again on the new one (`reminder_channel` = 2 in app meta; retried next launch if it fails). A pending snooze on the old channel is lost.
 - Not changed: scheduling stays inexact. A banner does not make delivery earlier; late delivery under battery saving remains open (Session 74).
+
+---
+
+**97. Reminders schedule with `allowWhileIdle`; exact alarms not needed.**
+- Cause of reminders appearing only after the app was opened: `schedule` had no `allowWhileIdle`, so `@capacitor/local-notifications` 6.x set `AlarmManager.set(RTC)`, a non-waking alarm. Doze and battery saving hold it until the phone is next awake.
+- Fix: `allowWhileIdle: true` on reminder and snooze schedules. The plugin then uses `setAndAllowWhileIdle(RTC_WAKEUP)`, which wakes the phone. A reference app with reminders that fire while closed and under battery saving schedules this way, inexact.
+- Consequence: delivery can still be late, up to several minutes under Doze (Android allows idle-mode alarms about once per 9 minutes per app). Accepted for a subtle banner reminder.
+- Exact alarms (`USE_EXACT_ALARM`) are dropped as a proposal unless a device test with this fix still shows late delivery. This also keeps the manifest free of a Play-restricted permission.
+- Not changed, flagged: repeating reminders pass `every` without `repeats`, and 6.x plugin repeat paths use a non-waking `RTC` alarm. Recurrence needs a device check before it is trusted; a fix would schedule the next occurrences ahead, re-synced on each app open.
+
+**98. Play Store distribution deferred.** Revisit when the app is fully ready; sideload APK stays the only channel until then.
+- Open items for that review: signed AAB output, target API 36 (Capacitor upgrade), hardware back handling, removal of the in-app GitHub update check in a Play build, permission and Data Safety declarations, privacy policy link, and Play's restrictions on exact-alarm permissions.
