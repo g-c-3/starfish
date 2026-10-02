@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 78**
+
+Reported: a reminder due 5:20 am did not notify while the app was closed and appeared once the app was opened, though earlier tests fired on time (Decision 101).
+- Cause: `allowWhileIdle` alarms are inexact; under Doze they can be held for minutes. The earlier on-time results were not a guarantee.
+- Fix: `USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` added to `scripts/patch-manifest.js`, so the plugin schedules with `setExactAndAllowWhileIdle`. Still a banner, no alarm UI. `native-setup.md` updated.
+- Finding: the reference app's reminders fall at random times in multi-hour windows, so its closed-app delivery says nothing about punctuality.
+
+Decisions made: 101.
+
+Verified: `node --check`, patch script run against a sample manifest (inserts both, second run is a no-op), plugin source read for the exact-alarm branch. Not run through CI or on device; the exact delivery was not exercised.
+
+Device checks: install the new build, set a reminder 2 minutes ahead, close the app from recents, turn the screen off; the banner appears at the set minute. Repeat after the phone has sat idle for 30+ minutes. If it is still late, set Dumpzone to unrestricted battery use and allow autostart in the phone's app settings, then retest, and report phone make and Android version.
+
+Open: phone-maker battery limits (battery-optimisation prompt not built). Repeating reminders unverified. Notification small icon drawable. Play distribution: both exact-alarm permissions are restricted there.
+
+Next session start point: Phase 16 C (voice recorder and player), after the device pass on Sessions 59 to 78. Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 77**
 
 Device result (Session 75 build; Session 76 files not yet committed): Snooze 10 min fired its second notification. Done also opened the app (Decision 100).

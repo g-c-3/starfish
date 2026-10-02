@@ -517,8 +517,9 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 - **Reminder notifications, not alarms** — implemented via `@capacitor/local-notifications` (`notifications.js`),
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
   `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
-  and Snooze (10 min) / Done action buttons. Schedules use `allowWhileIdle: true` (inexact, wakes the phone in
-  Doze; Decision 97). Snooze/Done buttons always launch the
+  and Snooze (10 min) / Done action buttons. Schedules use `allowWhileIdle: true`, and the manifest carries
+  `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` so the plugin sets an exact alarm that wakes the phone in Doze
+  (Decisions 97, 101). Snooze/Done buttons always launch the
   app (plugin uses activity intents) and run from the database; Snooze stores `snoozed_until`, giving a `snoozed`
   status that stays active (Decision 99). After acting, the app minimises when the button launched it (Decision 100).
 - **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Dumpzone from

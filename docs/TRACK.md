@@ -82,3 +82,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-03 | Session 75 | Decisions 97, 98 | Reminders scheduled with allowWhileIdle so they fire while closed; Play distribution deferred until app is ready |
 | 2026-10-03 | Session 76 | Decision 99 | Snoozed reminder state: row stays active with snooze time instead of greying out |
 | 2026-10-03 | Session 77 | Decision 100 | Snooze delivery confirmed on device; app returns to previous screen after a notification Snooze/Done |
+| 2026-10-03 | Session 78 | Decision 101 | Exact-alarm permissions added so reminders fire on time while closed |

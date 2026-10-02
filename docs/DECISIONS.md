@@ -1593,3 +1593,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - After a Snooze or Done is handled, the app calls `App.minimizeApp()` when that button launched it, so the person returns to the launcher or previous app instead of staying in Dumpzone. Backgrounding locks the app as usual.
 - Launch detection: the action arrives within 6 seconds of the app last coming to the foreground (`lastResumeAt`, set at load and on every resume). A button tapped from the shade over an app already in use does not minimise.
 - Limits: the app still appears briefly, since the launch itself cannot be prevented without a native receiver. The 6-second window is a heuristic; a cold start slower than that leaves the app open.
+
+---
+
+**101. Reminders use exact delivery.** Supersedes the "exact alarms dropped" line in Decision 97; the rest of Decision 97 stands.
+- Device result: with `allowWhileIdle` only, a reminder due about a minute after creation reached the shade only once the app was opened (earlier tests on the same build fired on time). `allowWhileIdle` alarms are still inexact, so Doze and battery saving may hold them. The reference app's reminders land at random times inside multi-hour windows, so they show that delivery happens, not that it is on time.
+- `USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` added to `REQUIRED_PERMISSIONS` in `scripts/patch-manifest.js`. In `@capacitor/local-notifications` 6.x, `setExactIfPossible` then uses `setExactAndAllowWhileIdle(RTC_WAKEUP)`; with neither permission it silently falls back to the inexact call. Banner channel, default sound and Snooze/Done are unchanged: no alarm screen, no alarm sound.
+- Android 13+ grants `USE_EXACT_ALARM` at install, with no prompt. Android 12 grants `SCHEDULE_EXACT_ALARM` by default. On Android 14+ the second permission alone is denied by default, so the first is the one that matters there.
+- Cost: Google Play restricts both permissions to alarm and calendar apps (Decision 98 open item). Sideload is unaffected.
+- Not fixed by this: phone-maker background limits that stop an app's alarms (battery "restricted" mode, autostart off, a swipe-away treated as force-stop). The battery-optimisation prompt stays an open item.

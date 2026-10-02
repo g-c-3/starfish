@@ -244,7 +244,8 @@
   39, Decision 64) — a real Settings toggle (off by default), `@capacitor-community/privacy-screen`
   (pinned `5.2.0` for Capacitor 6 compatibility) blanking the recents preview and blocking screenshots
   together, replacing Session 37/38's build-time-only `MainActivity` patch (Decisions 62/63) entirely
-  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Notification buttons return the app to the background (Session 77, Decision 100)** — not run on a device; snooze delivery confirmed on device.
+  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Exact reminder delivery via exact-alarm permissions (Session 78, Decision 101)** — not run on a device.
+  **Notification buttons return the app to the background (Session 77, Decision 100)** — not run on a device; snooze delivery confirmed on device.
   **Snoozed reminder state (Session 76, Decision 99)** — not run on a device.
   **Reminders fire while closed: `allowWhileIdle` (Session 75, Decision 97)** — not run on a device.
   **Reminder banner channel, default sound (Session 74, Decision 96)** — not run on a device.
