@@ -67,6 +67,10 @@ function clearSecretInputs(ids = null) {
   const els = ids ? ids.map((id) => document.getElementById(id)) : document.querySelectorAll('input[type="password"]');
   els.forEach((el) => { if (el) el.value = ''; });
 }
+// When the app last came to the foreground (module load counts: a cold start from a notification button). Used to tell
+// a launch caused by a notification button from the person already using the app (Decision 100).
+let lastResumeAt = Date.now();
+const NOTIFICATION_LAUNCH_WINDOW_MS = 6000;
 const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vault-biometric-confirm-pin'];
 
 function showScreen(id, { tab } = {}) {
@@ -210,8 +214,8 @@ async function bootstrap() {
   listenForReminderActions(async (actionId, entryId) => {
     try {
       const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
-      if (!row) return;
-      if (actionId === 'done') await markReminderDone(entryId);
+      if (!row) { /* entry gone: nothing to change */ }
+      else if (actionId === 'done') await markReminderDone(entryId);
       else if (actionId === 'snooze') {
         await snoozeReminder(row, 10);
         // Persisted so the row shows "Snoozed until" rather than greyed-out "Fired" (Decision 99).
@@ -219,6 +223,9 @@ async function bootstrap() {
       }
       window.dispatchEvent(new Event('dumpzone-reminders-changed'));
     } catch { /* a failed action leaves the reminder as it was */ }
+    // The button launched the app only to deliver the action; send it back where the person was (Decision 100).
+    // Skipped when the app was already in use, so tapping a button from the shade over the open app stays put.
+    if (Date.now() - lastResumeAt < NOTIFICATION_LAUNCH_WINDOW_MS) { try { await App.minimizeApp(); } catch { /* not supported: app stays open */ } }
   });
   await purgeOldTrash(db); // purges BOTH bins — same 30-day rule, filtered by is_private only when listing
   await registerBackgroundLock();
@@ -248,7 +255,7 @@ async function bootstrap() {
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
-    if (isActive) return; // only act on going TO background, not returning from it
+    if (isActive) { lastResumeAt = Date.now(); return; } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });
