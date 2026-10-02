@@ -4,6 +4,27 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 71**
+
+Phase 16 F (Decision 93).
+- Location rows open in a viewer on the shared shell: coordinates as degrees with N/S and E/W, a grid plot of the point, label, decimal values, description, tags, saved time. Pencil edits details.
+- Actions: Open in Maps (`geo:` URI, phone's maps app) and Copy (coordinates to clipboard). Share stays on the row.
+- The plot is inline SVG: 30° grid, equator and prime meridian stronger, a ring and pin at longitude and latitude. No tiles, no coastlines, no network.
+- An entry with no stored coordinates shows a plain notice and no actions.
+- Main app only; Vault Location has no capture yet, so it still shows the toast.
+
+Decisions made: 93.
+
+Verified: `node --check`, `vite build`, helper test for coordinate formatting and pin placement (including the poles and antimeridian clamp). Not run through CI or on device; the viewer render, `geo:` hand-off and clipboard were not exercised.
+
+Device checks: save a location and tap its row; coordinates and pin look right in both themes; Open in Maps launches the maps app at the point; Copy then paste elsewhere; edit name, tags and description from the pencil; locking the app while the viewer is open closes it; back button closes the viewer.
+
+Open: `scripts/patch-mainactivity.js` is still in the repo; delete it on GitHub (Decision 64).
+
+Next session start point: Phase 16 C (voice recorder and player). Open choices still to confirm for G (file-opener plugin) and H (PDF viewer). Money capture shape still to be given. Device pass on Sessions 59 to 71.
+
+---
+
 **Session 70**
 
 Phase 16 E (Decision 92).

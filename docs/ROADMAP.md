@@ -18,7 +18,7 @@
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; C voice recorder + playback, D image viewer, E reminder detail done — Session 70, F location detail, G open Files with phone app, H PDF viewer)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + playback, D image viewer, G open Files with phone app, H PDF viewer)
 
 ## Detailed
 
@@ -359,7 +359,9 @@ individual items) can be picked up in any order once prerequisites are met.
     Reschedule; greyed out and struck through in lists once done or fired; reminder time and repeat are part of the
     Save dialog (old reminder pop-up removed). Notification Done/Snooze buttons now work; delete cancels the
     notification, restore reschedules.
-  - [ ] F — Location: coordinates card, offline plot, copy, hand off to the phone's maps app.
+  - [x] F — Location (Session 71): detail view with coordinates (N/S, E/W and decimal), a grid plot drawn from them
+    (30° lines, no map data), Copy, and Open in Maps via a `geo:` hand-off. Main entries only; Vault Location
+    still has no capture.
   - [ ] G — Files: open with the phone's matching app.
   - [ ] H — PDF: in-app viewer.
   - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,

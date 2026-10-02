@@ -1533,3 +1533,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Reminder date/time and repeat are fields of `openSaveDialog({ reminder })`; the standalone reminder pop-up is removed. The dialog compares times to the minute and keeps the stored value when unchanged.
 - `openViewer()` is the shared full-screen shell for entry viewers: header with back and edit, scrolling body, closed by lock like the editor.
 
+---
+
+**93. Location detail.** Implements Decision 90's location rule.
+- `openLocation()` on the shared `openViewer()` shell. Main entries only.
+- Coordinates shown as degrees with hemisphere letters, plus decimal values to six places.
+- Plot: inline SVG on a 30° latitude/longitude grid, x = longitude + 180, y = 90 − latitude, pin clamped 6 units inside the frame. No map tiles or coastline data, so nothing is fetched and the single-network-call rule holds.
+- Open in Maps: `geo:lat,lng?q=lat,lng(label)` through `window.location.assign`, as in Decision 77. Dumpzone makes no request; the phone's maps app does whatever it does. Leaving the app triggers the normal background lock.
+- Copy: `navigator.clipboard`, no plugin added.
+- No stored coordinates: notice only, no actions.

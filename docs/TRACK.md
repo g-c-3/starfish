@@ -75,3 +75,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-02 | Session 68 | Decision 90 | Planning: Phase 16 (open & edit) and requirements recorded; no code |
 | 2026-10-02 | Session 69 | Decision 91 | Phase 16 A+B: unified Save dialog (name, 2 tags, description), text editor, rows open on tap, description in schema/backup/Vault |
 | 2026-10-02 | Session 70 | Decision 92 | Phase 16 E: reminder viewer, done/fired greyed out, reminder time in Save dialog, notification Done/Snooze handled, delete cancels notification |
+| 2026-10-02 | Session 71 | Decision 93 | Phase 16 F: location viewer with coordinates, grid plot, Copy and Open in Maps hand-off |

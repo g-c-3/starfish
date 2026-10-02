@@ -39,7 +39,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | PDF | OCR'd | label + OCR text | ocr_text |
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
-| Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link |
+| Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
 | Money | none yet | label only | placeholder — capture flow not yet defined (Decision 55); deliberately a separate type from Expense below, not a reuse of it |
 | Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
 
@@ -533,7 +533,7 @@ default name, no tags, no description; picked files keep their phone name. Tag c
 entries in the same scope only (main dialog: non-private; Vault dialog: private). Text notes are written in a
 full-screen editor that leads into the dialog. Both overlays close when the app locks (all) or the Vault locks
 (Vault ones); a capture loop that sees a lock stops instead of reopening the editor. Description is searchable in
-the same FTS column as the body. Tapping a row opens it; text notes and reminders have viewers so far.
+the same FTS column as the body. Tapping a row opens it; text notes, reminders and locations have viewers so far.
 
 ### Reminders: completion and notification actions (Decision 92)
 `reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
@@ -543,6 +543,12 @@ sets `completed_at` and cancels; Snooze schedules a one-off 10 minutes out under
 is not replaced. Both run from the database alone, so they work while the app is locked; a plain tap on the
 notification does nothing, so content is never opened ahead of the lock screen. Deleting a reminder cancels its
 notifications; restoring a pending one reschedules it.
+
+### Location detail (Decision 93)
+Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG
+grid plot (30° lines, no map data). Open in Maps hands a `geo:` URI to the phone's maps app; Copy writes the decimal
+pair to the clipboard. Dumpzone makes no network request for either. Main entries only; an entry with no coordinates
+shows a notice and no actions.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
