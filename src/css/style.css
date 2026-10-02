@@ -598,7 +598,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .hero-when { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .hero-sub { font-size: 14px; color: var(--muted); }
 .status-pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-.status-pill.upcoming { background: var(--brand-tint); color: var(--brand-ink); }
+.status-pill.upcoming, .status-pill.snoozed { background: var(--brand-tint); color: var(--brand-ink); }
 .status-pill.done, .status-pill.fired { background: var(--surface-2); color: var(--muted); }
 .detail-hero.inactive .hero-when, .detail-hero.inactive .row-icon { opacity: 0.5; }
 .detail-list { margin: 0 0 14px; padding: 4px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
