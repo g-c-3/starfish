@@ -3,7 +3,7 @@
 // capture-to-intent pipeline, digest). Wire up to your actual DOM/UI framework of choice.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
-import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory } from './db.js';
+import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { scheduleReminder, requestPermissions, registerActionTypes } from './notifications.js';
@@ -61,6 +61,7 @@ function recordLocation(loc) {
 const NAV_SCREENS = { 'main-screen': 'home', 'vault-screen': 'vault' }; // which screens the bottom nav covers, and which tab that maps to by default
 
 function showScreen(id, { tab } = {}) {
+  if (id === 'lock-screen') dismissOverlays(false); // an open editor/dialog must never sit above the lock screen
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
@@ -144,6 +145,8 @@ function closeVaultFolder() {
 //   Home:  Settings -> Home landing; open folder -> Home landing; Home landing -> nothing.
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 function backAction() {
+  if (activeSaveDialog) return () => activeSaveDialog.finish(null);
+  if (activeEditor) return () => activeEditor.requestBack();
   if (currentLocation === 'vault') {
     if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
@@ -555,21 +558,21 @@ function promptExpenseFollowup(entryId) {
 }
 
 // ---- Notes (including private notes) ----
-async function saveNote(text, { isPrivate = false, label, tags = [] } = {}) {
+async function saveNote(text, { isPrivate = false, label, tags = [], description = '' } = {}) {
   if (isPrivate) {
     // Delegates to the vault's own save path rather than duplicating it — one way to create a
     // private text entry, not two that could quietly drift apart (this was the pre-vault-pivot
     // private-notes path; kept as a thin wrapper so existing callers of saveNote(..., {isPrivate}) don't break).
-    return captureToVault({ type: 'note', label: label || text.slice(0, 40), tags, text });
+    return captureToVault({ type: 'note', label: label || text.slice(0, 40), tags, description, text });
   }
   const id = crypto.randomUUID();
-  await insertEntry(db, { id, type: 'note', label: label || text.slice(0, 40), body_text: text });
+  await insertEntry(db, { id, type: 'note', label: label || text.slice(0, 40), body_text: text, description: description || null });
   await applyTags(id, tags);
   return id;
 }
 
 async function applyTags(entryId, tagNames) {
-  for (const name of tagNames) {
+  for (const name of tagNames.slice(0, MAX_TAGS)) { // Decision 90
     await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [name]);
     const row = await db.query(`SELECT id FROM tags WHERE name=?`, [name]);
     const tagId = row.values[0].id;
@@ -580,7 +583,7 @@ async function applyTags(entryId, tagNames) {
 // ---- Non-text capture (voice/image/pdf/file) — didn't exist at all until now; captureText/saveNote
 // only ever handled typed text. Mirrors vault.js's captureToVault() but unencrypted, matching the
 // file-storage convention (Directory.Data/files/<uuid>.<ext>) already established for backup/restore. ----
-async function captureFile(type, { label, tags = [], fileData, extension, autoCategory = null }) {
+async function captureFile(type, { label, tags = [], description = '', fileData, extension, autoCategory = null }) {
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const id = crypto.randomUUID();
   const filePath = `files/${id}.${extension || 'bin'}`;
@@ -591,7 +594,7 @@ async function captureFile(type, { label, tags = [], fileData, extension, autoCa
   // that lands rather than pretending OCR ran; searching by label/tags still works meanwhile.
   await insertEntry(db, {
     id, type, label: label || `${VAULT_TYPE_LABELS[type] || type} ${new Date().toLocaleDateString()}`,
-    file_path: filePath, extension, auto_category: autoCategory
+    file_path: filePath, extension, auto_category: autoCategory, description: description || null
   });
   await applyTags(id, tags);
   return id;
@@ -601,7 +604,7 @@ async function captureFile(type, { label, tags = [], fileData, extension, autoCa
 // (Decision 84). files: array of { fileData (base64), extension }, in selection order.
 // Numbering continues from the baseLabel's counter row in label_history, so a later batch picks up
 // where the last one stopped ("Invoice 4" after "Invoice 1..3"). Each file is an independent entry.
-async function batchAddWithCommonLabel(type, baseLabel, files, tags = []) {
+async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], description = '') {
   const historyRow = await db.query(
     `SELECT use_count FROM label_history WHERE type=? AND label=?`,
     [type, baseLabel]
@@ -621,7 +624,7 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = []) {
   const createdIds = [];
   for (let i = 0; i < files.length; i++) {
     createdIds.push(await captureFile(type, {
-      label: labels[i], tags, fileData: files[i].fileData, extension: files[i].extension
+      label: labels[i], tags, description, fileData: files[i].fileData, extension: files[i].extension
     }));
   }
 
@@ -660,6 +663,7 @@ async function unlockVault(pin) {
 }
 
 function lockVault() {
+  dismissOverlays(true);
   privateSessionKey = null;
   clearVaultIndex();
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
@@ -753,10 +757,10 @@ async function showMainTimeline(types = null) {
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
 // since spec asks for the vault to be "an exact replica of the home screen function" apart from what
 // stays private-at-rest and the Share/Download restriction being lifted (both, same as non-vault). ----
-async function captureToVault({ type, label, tags = [], text, fileData, extension, ocrText, autoCategory }) {
+async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory }) {
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
-  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, text, fileData, extension, ocrText, autoCategory });
+  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory });
   await buildVaultIndex(db, privateSessionKey); // rebuild so the new item is immediately searchable/listed
   return id;
 }
@@ -975,7 +979,7 @@ function formatEntryDate(ms) {
 function entryRowHtml({ id, type, label, meta = '', tags = [] }, actionPrefix = null) {
   const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
   return `
-    <div class="entry-row" data-type="${escapeHtml(type)}">
+    <div class="entry-row" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
       <span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
@@ -989,6 +993,175 @@ function emptyStateHtml(kind = 'folder') {
   return kind === 'search'
     ? `<div class="empty-state">${iconSvg('search')}<strong>No matches</strong><span>Try a different word.</span></div>`
     : `<div class="empty-state">${iconSvg('plus')}<strong>Nothing here yet</strong><span>Tap New to add the first one.</span></div>`;
+}
+
+// ---- Toast, Save dialog, text editor (Decision 91). Top-level so a lock can force-close them. ----
+let toastTimer = null;
+function toast(message) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+}
+
+let activeSaveDialog = null; // { finish, isVault }
+let activeEditor = null;     // { finish, requestBack, isVault }
+let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
+
+// vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
+function dismissOverlays(vaultOnly = false) {
+  const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault));
+  if (hadAny) overlayAbortCount++;
+  if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
+  if (activeEditor && (!vaultOnly || activeEditor.isVault)) activeEditor.finish(null);
+}
+
+// Resolves { name, tags, description, mode } or null (cancelled). An untouched Save returns the default
+// name, no tags, no description. count > 1 shows the naming switch: mode 'own' (each file keeps its own
+// name; name is null) or 'number' (one common name, numbered).
+function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null } = {}) {
+  return new Promise(async (resolve) => {
+    const $ = (id) => document.getElementById(id);
+    const dlg = $('save-dialog'), nameEl = $('sd-name'), descEl = $('sd-desc'), newTagEl = $('sd-new-tag');
+    const chipsEl = $('sd-tag-chips'), countEl = $('sd-tag-count'), modeEl = $('sd-mode');
+    let selected = tags.slice(0, MAX_TAGS);
+    let known = [];
+    try { known = await listTagsForScope(db, isVault); } catch { known = []; }
+    let mode = 'own';
+
+    $('sd-heading').textContent = heading;
+    descEl.value = description || '';
+    newTagEl.value = '';
+    $('sd-cancel-btn').textContent = discardLabel || 'Cancel';
+
+    const applyMode = () => {
+      modeEl.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+      const own = count > 1 && mode === 'own';
+      nameEl.disabled = own;
+      nameEl.value = own ? '' : (name ?? defaultName);
+      nameEl.placeholder = own ? 'Each file keeps its own name' : defaultName;
+    };
+    modeEl.classList.toggle('hidden', count <= 1);
+    modeEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; applyMode(); }; });
+    applyMode();
+
+    const has = (list, t) => list.some((x) => x.toLowerCase() === t.toLowerCase());
+    const renderChips = () => {
+      const names = [...known, ...selected.filter((t) => !has(known, t))];
+      chipsEl.innerHTML = names.map((t) => {
+        const on = has(selected, t);
+        const off = !on && selected.length >= MAX_TAGS;
+        return `<button type="button" class="${on ? 'selected' : ''}${off ? ' disabled' : ''}" data-tag="${escapeHtml(t)}" aria-pressed="${on}">${escapeHtml(t)}</button>`;
+      }).join('');
+      countEl.textContent = `${selected.length} / ${MAX_TAGS}`;
+      chipsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => {
+        const t = b.dataset.tag;
+        if (has(selected, t)) selected = selected.filter((x) => x.toLowerCase() !== t.toLowerCase());
+        else if (selected.length >= MAX_TAGS) { toast(`An entry can have up to ${MAX_TAGS} tags`); return; }
+        else selected.push(t);
+        renderChips();
+      }; });
+    };
+    renderChips();
+
+    const addTag = () => {
+      const t = newTagEl.value.trim();
+      if (!t) return true;
+      if (has(selected, t)) { newTagEl.value = ''; return true; }
+      if (selected.length >= MAX_TAGS) { toast(`An entry can have up to ${MAX_TAGS} tags`); return false; }
+      selected.push(known.find((k) => k.toLowerCase() === t.toLowerCase()) || t);
+      newTagEl.value = '';
+      renderChips();
+      return true;
+    };
+    $('sd-add-tag-btn').onclick = addTag;
+    newTagEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } };
+
+    const finish = (result) => {
+      dlg.classList.add('hidden');
+      document.activeElement?.blur?.();
+      activeSaveDialog = null;
+      updateBackButtonState();
+      resolve(result);
+    };
+    $('sd-save-btn').onclick = () => {
+      addTag(); // a tag typed but not yet added still counts
+      const typed = nameEl.value.trim();
+      const own = count > 1 && mode === 'own';
+      finish({
+        name: own ? null : (typed || defaultName),
+        tags: selected.slice(0, MAX_TAGS),
+        description: descEl.value.trim(),
+        mode: count > 1 ? mode : 'single'
+      });
+    };
+    $('sd-cancel-btn').onclick = () => finish(null);
+    dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) finish(null); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
+    activeSaveDialog = { finish, isVault };
+    dlg.classList.remove('hidden');
+    updateBackButtonState();
+  });
+}
+
+// Resolves the text on Save, or null on leave. Leaving with unsaved changes needs a second Back within 3 s.
+function openTextEditor({ title = 'New note', text = '', isVault = false } = {}) {
+  return new Promise((resolve) => {
+    const $ = (id) => document.getElementById(id);
+    const screen = $('editor-screen'), ta = $('editor-text');
+    let dirty = false, armed = false, armTimer = null;
+    $('editor-title').textContent = title;
+    ta.value = text;
+    const updateCount = () => {
+      const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
+      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${ta.value.length} characters`;
+    };
+    updateCount();
+    const finish = (result) => {
+      clearTimeout(armTimer);
+      screen.classList.add('hidden');
+      ta.blur();
+      ta.oninput = null;
+      activeEditor = null;
+      updateBackButtonState();
+      resolve(result);
+    };
+    const requestBack = () => {
+      if (!dirty || armed) { finish(null); return; }
+      armed = true;
+      toast('Unsaved changes — tap back again to discard');
+      armTimer = setTimeout(() => { armed = false; }, 3000);
+    };
+    ta.oninput = () => { dirty = ta.value !== text; updateCount(); };
+    $('editor-back-btn').onclick = requestBack;
+    $('editor-save-btn').onclick = () => {
+      if (!ta.value.trim()) { toast('Nothing to save yet'); return; }
+      finish(ta.value);
+    };
+    activeEditor = { finish, requestBack, isVault };
+    screen.classList.remove('hidden');
+    updateBackButtonState();
+    if (!text) setTimeout(() => ta.focus(), 60);
+  });
+}
+
+async function getEntryTags(entryId) {
+  const r = await db.query(
+    `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ? ORDER BY t.name`, [entryId]
+  );
+  return (r.values || []).map((x) => x.name);
+}
+
+// Replaces an entry's tags (max two). Tag rows no entry uses any more stay in `tags` but are never listed.
+async function setEntryTags(entryId, names) {
+  await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [entryId]);
+  await applyTags(entryId, names);
+}
+
+function defaultNoteName(text) {
+  const firstLine = (text || '').split('\n').map((l) => l.trim()).find(Boolean) || '';
+  return firstLine.slice(0, 40) || `Note ${new Date().toLocaleDateString()}`;
 }
 
 // ---- Google Drive backup UI (optional, opt-in — Phase 13) ----
@@ -1504,6 +1677,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('vault-folder-list');
     const items = browseVault(openVaultFolderType);
     container.innerHTML = vaultRowsHtml(items);
+    container.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async (e) => {
+      if (e.target.closest('.row-actions')) return;
+      await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
+      renderVault();
+    }));
     container.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
     container.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
     container.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
@@ -1522,6 +1700,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!term) { list.innerHTML = ''; return; }
     const items = searchVault(term);
     list.innerHTML = items.map((e2) => entryRowHtml({ id: e2.id, type: e2.type, label: e2.label, tags: e2.tags, meta: `${typeLabelFor(e2.type)} · ${formatBytes(e2.sizeBytes)}` })).join('') || emptyStateHtml('search');
+    list.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
+      await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
+      renderVault();
+    }));
   }
 
   // Call only while unlocked (browseVault/searchVault throw otherwise).
@@ -1534,36 +1716,52 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-search-input').addEventListener('input', renderVaultSearch);
 
   async function startVaultCapture(type) {
-    if (type === 'note') {
-      const text = prompt('Vault note text:');
-      if (!text) return;
-      const tags = await promptForTags(); // declared below — hoisted within this same DOMContentLoaded scope
-      await captureToVault({ type: 'note', label: text.slice(0, 40), tags, text });
-      renderVault();
-    } else if (type === 'voice') {
-      await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
-        const tags = await promptForTags();
-        const label = await promptForLabel('voice', `Voice ${new Date().toLocaleTimeString()}`);
-        await captureToVault({ type: 'voice', label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+    try {
+      if (type === 'note') {
+        let text = '', d = null;
+        const mark = overlayAbortCount;
+        while (!d) {
+          const res = await openTextEditor({ title: 'New vault note', text, isVault: true });
+          if (res === null) return;
+          text = res;
+          d = await openSaveDialog({ heading: 'Save vault note', defaultName: defaultNoteName(text), isVault: true, discardLabel: 'Back to editing' });
+          if (!d && overlayAbortCount !== mark) return;
+        }
+        await captureToVault({ type: 'note', label: d.name, tags: d.tags, description: d.description, text });
         renderVault();
-      });
-    } else if (type === 'reminder' || type === 'location' || type === 'money') {
-      alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
-    } else {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = acceptForType(type);
-      input.onchange = async () => {
-        const file = input.files[0];
-        if (!file) return;
-        const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-        const tags = await promptForTags();
-        await captureToVault({ type, label: file.name, tags, fileData, extension: file.name.split('.').pop() });
-        renderVault();
-      };
-      beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
-      input.click();
-    }
+        toast('Saved to the Vault');
+      } else if (type === 'voice') {
+        await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
+          try {
+            const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard' });
+            if (!d) { toast('Recording discarded'); return; }
+            await captureToVault({ type: 'voice', label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+            renderVault();
+            toast('Saved to the Vault');
+          } catch (err) { toast(`Could not save: ${err.message || err}`); }
+        });
+      } else if (type === 'reminder' || type === 'location' || type === 'money') {
+        toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
+      } else {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = acceptForType(type);
+        input.onchange = async () => {
+          const file = input.files[0];
+          if (!file) return;
+          try {
+            const [f] = await readPicked([file]);
+            const d = await openSaveDialog({ heading: `Save ${typeLabelFor(type).toLowerCase()}`, defaultName: f.name, isVault: true, discardLabel: 'Discard' });
+            if (!d) return;
+            await captureToVault({ type, label: d.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+            renderVault();
+            toast('Saved to the Vault');
+          } catch (err) { toast(`Could not save: ${err.message || err}`); }
+        };
+        beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
+        input.click();
+      }
+    } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
   async function openVaultFolder(type, btn) {
@@ -1798,57 +1996,74 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
+  // Reads picked files to base64 (shared by the Home and Vault pickers).
+  const readPicked = (picked) => Promise.all(picked.map((file) => new Promise((res) => {
+    const r = new FileReader();
+    r.onloadend = () => res({ name: file.name, fileData: r.result.split(',')[1], extension: file.name.split('.').pop() });
+    r.readAsDataURL(file);
+  })));
+
   async function startCapture(type) {
     if (type === 'note') {
-      const text = prompt('Note text:');
-      if (!text) return;
-      const tags = await promptForTags();
-      await captureText(text, 'note', { tags });
+      // Editor, then the Save dialog. Backing out of the dialog returns to the editor with the text kept.
+      let text = '', d = null;
+      const mark = overlayAbortCount;
+      while (!d) {
+        const res = await openTextEditor({ title: 'New note', text });
+        if (res === null) return;
+        text = res;
+        d = await openSaveDialog({ heading: 'Save note', defaultName: defaultNoteName(text), discardLabel: 'Back to editing' });
+        if (!d && overlayAbortCount !== mark) return; // locked meanwhile
+      }
+      await captureText(text, 'note', { label: d.name, tags: d.tags, description: d.description });
       await renderMainTimeline();
+      toast('Note saved');
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
-        const tags = await promptForTags();
-        const label = await promptForLabel('voice', `Voice ${new Date().toLocaleTimeString()}`);
-        await captureFile('voice', { label, tags, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+        const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
+        if (!d) { toast('Recording discarded'); return; }
+        await captureFile('voice', { label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
+        toast('Recording saved');
       });
     } else if (type === 'reminder') {
       const reminder = await promptForReminder();
       if (!reminder) return;
-      const tags = await promptForTags();
+      const d = await openSaveDialog({ heading: 'Save reminder', defaultName: reminder.label, discardLabel: 'Discard' });
+      if (!d) return;
       const id = crypto.randomUUID();
-      await insertEntry(db, { id, type: 'reminder', ...reminder });
-      await applyTags(id, tags);
+      const saved = { ...reminder, label: d.name };
+      await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
+      await applyTags(id, d.tags);
       try {
-        await scheduleReminder({ id, ...reminder });
+        await scheduleReminder({ id, ...saved });
+        toast('Reminder saved');
       } catch (err) {
-        alert(`Reminder saved, but scheduling its notification failed: ${err.message || err}`);
+        toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
       }
       await renderMainTimeline();
     } else if (type === 'location') {
-      // Current GPS fix → entry with latitude/longitude → optional share (Decision 79). The fix
-      // stays on-device; only the explicit Share step sends anything out.
+      // Current GPS fix → entry with latitude/longitude (Decision 79). The fix stays on-device;
+      // Share (row action) is the only step that sends anything out.
       let coords;
       try {
         await Geolocation.requestPermissions();
         coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
       } catch (err) {
-        alert(`Could not get your location: ${err.message || err}`);
+        toast(`Could not get your location: ${err.message || err}`);
         return;
       }
-      const label = await promptForLabel('location', `Location ${new Date().toLocaleTimeString()}`, 'location');
-      const tags = await promptForTags();
+      const d = await openSaveDialog({ heading: 'Save location', defaultName: `Location ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
+      if (!d) return;
       const id = crypto.randomUUID();
-      await insertEntry(db, { id, type: 'location', label, latitude: coords.latitude, longitude: coords.longitude });
-      await applyTags(id, tags);
+      await insertEntry(db, { id, type: 'location', label: d.name, latitude: coords.latitude, longitude: coords.longitude, description: d.description || null });
+      await applyTags(id, d.tags);
       await renderMainTimeline();
-      if (confirm('Location saved. Share it now?')) {
-        try { await shareEntry(db, id); } catch (err) { if (!/cancel/i.test(err.message || '')) alert(`Share failed: ${err.message || err}`); }
-      }
+      toast('Location saved');
     } else if (type === 'money') {
       // Placeholder — capture flow not yet defined. Explicit branch so it doesn't silently fall
       // into the generic file-picker case below, which would be wrong for it.
-      alert(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
+      toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
     } else {
       const input = document.createElement('input');
       input.type = 'file';
@@ -1857,22 +2072,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       input.onchange = async () => {
         const picked = Array.from(input.files || []);
         if (!picked.length) return;
-        const files = [];
-        for (const file of picked) {
-          const fileData = await new Promise((res) => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-          files.push({ name: file.name, fileData, extension: file.name.split('.').pop() });
-        }
-        const batch = files.length > 1
-          && confirm(`${files.length} files selected.\nOK: batch add with one common label, auto-numbered.\nCancel: add individually, each named by its file.`);
-        if (batch) {
-          const baseLabel = (await promptForLabel(type, VAULT_TYPE_LABELS[type] || type, 'batch') || '').trim();
-          if (!baseLabel) return;
-          const tags = await promptForTags();
-          const { ids, first, last } = await batchAddWithCommonLabel(type, baseLabel, files, tags);
-          alert(`${ids.length} files added as '${first}' to '${last}'.`);
+        const files = await readPicked(picked);
+        const single = files.length === 1;
+        // Picked files keep the name they have on the phone (Decision 91). Several files: the dialog
+        // offers keep-each-name or one common name, numbered (Decision 84).
+        const d = await openSaveDialog({
+          heading: single ? `Save ${typeLabelFor(type).toLowerCase()}` : `Save ${files.length} files`,
+          defaultName: single ? files[0].name : (VAULT_TYPE_LABELS[type] || type),
+          count: files.length, discardLabel: 'Discard'
+        });
+        if (!d) return;
+        if (!single && d.mode === 'number') {
+          const { ids, first, last } = await batchAddWithCommonLabel(type, d.name, files, d.tags, d.description);
+          toast(`${ids.length} files added: ${first} to ${last}`);
         } else {
-          const tags = await promptForTags();
-          for (const f of files) await captureFile(type, { label: f.name, tags, fileData: f.fileData, extension: f.extension });
+          for (const f of files) await captureFile(type, { label: single ? d.name : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+          toast(single ? 'Saved' : `${files.length} files added`);
         }
         await renderMainTimeline();
       };
@@ -1910,6 +2125,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
     }, 'main')).join('') || emptyStateHtml('folder');
 
+    document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
+      if (e.target.closest('.row-actions')) return;
+      await openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id));
+      await renderMainTimeline();
+    }));
     document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
     document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
     document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
@@ -2040,31 +2260,68 @@ document.addEventListener('DOMContentLoaded', async () => {
   // vault scope is Text/Voice/Image/PDF/Files only, so the expense/reminder branches below simply
   // never apply to a vault item, not a data gap. Text content for a vault note comes from
   // searchableText, which vault.js's index already stores as the note's own decrypted text. ----
+  // Edit button: details dialog (name, tags, description) for every type; text notes go through the editor.
   async function editEntryUI(item, isVault) {
-    const newLabel = prompt('New label:', item.label);
-    if (newLabel === null) return; // cancelled
-    const fields = { label: newLabel };
+    if (item.type === 'note') return openNote(item, isVault);
+    const tags = item.tags || await getEntryTags(item.id);
+    const d = await openSaveDialog({ heading: 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault });
+    if (!d) return;
+    const fields = { label: d.name, description: d.description };
 
-    if (item.type === 'note') {
-      const currentText = isVault ? item.searchableText : (item.body_text || '');
-      const newText = prompt('New text:', currentText);
-      if (newText !== null) fields.text = newText;
-    } else if (item.type === 'expense' && !isVault) {
+    if (item.type === 'expense' && !isVault) {
       const newAmount = prompt('New amount:', item.amount);
       if (newAmount !== null && newAmount !== '') fields.amount = parseFloat(newAmount);
       const newCategory = prompt('New category:', item.expense_category || '');
       if (newCategory !== null) fields.expense_category = newCategory;
     } else if (item.type === 'reminder' && !isVault) {
-      const newWhen = prompt('New date/time:', item.fire_at ? new Date(item.fire_at).toLocaleString() : '');
+      const newWhen = prompt('New date/time (leave blank to keep):', item.fire_at ? new Date(item.fire_at).toLocaleString() : '');
       if (newWhen) {
         const parsed = new Date(newWhen).getTime();
         if (!isNaN(parsed)) fields.fire_at = parsed;
-        else alert('Could not parse that date/time — label saved, time unchanged.');
+        else toast('Could not parse that date/time — details saved, time unchanged.');
       }
     }
 
-    const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
-    await window.Dumpzone.editEntry(item.id, fields, opts);
+    try {
+      const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
+      await window.Dumpzone.editEntry(item.id, fields, opts);
+      await setEntryTags(item.id, d.tags);
+      if (isVault) await buildVaultIndex(db, privateSessionKey); // list/search read this in-memory index
+      toast('Saved');
+    } catch (err) { toast(`Could not save: ${err.message || err}`); }
+  }
+
+  // Text note: editor, then the Save dialog prefilled with name, tags and description.
+  async function openNote(item, isVault) {
+    const tags = item.tags || await getEntryTags(item.id);
+    let text = isVault ? (item.searchableText || '') : (item.body_text || ''), d = null;
+    const mark = overlayAbortCount;
+    while (!d) {
+      const res = await openTextEditor({ title: item.label, text, isVault });
+      if (res === null) return;
+      text = res;
+      d = await openSaveDialog({ heading: 'Save changes', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault, discardLabel: 'Back to editing' });
+      if (!d && overlayAbortCount !== mark) return;
+    }
+    try {
+      await window.Dumpzone.editEntry(item.id, { label: d.name, text, description: d.description }, {});
+      await setEntryTags(item.id, d.tags);
+      if (isVault) await buildVaultIndex(db, privateSessionKey);
+      toast('Saved');
+    } catch (err) { toast(`Could not save: ${err.message || err}`); }
+  }
+
+  // Tapping a row opens it. Only text notes have a viewer so far; the other types follow (Phase 16 B–H).
+  async function openEntry(id, isVault, known = null) {
+    let item = known;
+    if (!item) {
+      item = isVault
+        ? (getVaultIndex() || []).find((e) => e.id === id)
+        : ((await db.query(`SELECT * FROM entries WHERE id=? AND deleted_at IS NULL`, [id])).values || [])[0];
+    }
+    if (!item) return;
+    if (item.type === 'note') await openNote(item, isVault);
+    else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
   document.getElementById('search-input').addEventListener('input', async (e) => {
@@ -2075,6 +2332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       id: row.id, type: row.type, label: row.label, tags: row.tags,
       meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · ')
     })).join('') || emptyStateHtml('search');
+    document.querySelectorAll('#timeline .entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
   });
 
   // Auto-biometric on the app-open lock screen (Decision 56/58) — deliberately the very last

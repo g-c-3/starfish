@@ -35,7 +35,7 @@ function parseVaultPlaintext(type, plaintext) {
 // ---------------------------------------------------------------------------
 // Save — file_path always NULL for vault entries; bytes live only inside encrypted_body.
 // ---------------------------------------------------------------------------
-async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], extension = null, autoCategory = null, ...content }) {
+async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], description = '', extension = null, autoCategory = null, ...content }) {
   if (!VAULT_TYPES.includes(type)) throw new Error(`Type not supported in Private Vault: ${type}`);
   const plaintext = buildVaultPlaintext(type, content);
   const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
@@ -46,10 +46,12 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], e
   // autocomplete. Vault's own search/autocomplete comes from the in-memory index below instead.
   await insertEntry(db, {
     id, type, label, body_text: null, is_private: 1, encrypted_body: encryptedBody,
-    file_path: null, extension, auto_category: autoCategory
+    file_path: null, extension, auto_category: autoCategory,
+    // Description is encrypted like the body: label is the only plaintext a Vault row carries.
+    encrypted_description: description ? await encryptPrivateNote(privateSessionKey, description) : null
   });
 
-  for (const tagName of tags) {
+  for (const tagName of tags.slice(0, 2)) { // MAX_TAGS (Decision 90)
     await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
     const tagRow = (await db.query(`SELECT id FROM tags WHERE name=?`, [tagName])).values[0];
     await db.run(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)`, [id, tagRow.id]);
@@ -93,7 +95,10 @@ async function buildVaultIndex(db, privateSessionKey) {
       `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
     )).values || [];
     const tags = tagRows.map((t) => t.name);
-    let searchableText = '', sizeBytes = 0;
+    let searchableText = '', sizeBytes = 0, description = '';
+    try {
+      if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
+    } catch { description = ''; }
     try {
       const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
       if (row.type === 'note') {
@@ -107,7 +112,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, tags, searchableText, sizeBytes, createdAt: row.created_at });
+    index.push({ id: row.id, type: row.type, label: row.label, tags, description, searchableText, sizeBytes, createdAt: row.created_at });
   }
   vaultIndexCache = index;
   return index;
@@ -128,6 +133,7 @@ function searchVaultIndex(term) {
   return vaultIndexCache.filter((e) =>
     e.label.toLowerCase().includes(t) ||
     e.tags.some((tag) => tag.toLowerCase().includes(t)) ||
+    (e.description || '').toLowerCase().includes(t) ||
     e.searchableText.toLowerCase().includes(t)
   );
 }

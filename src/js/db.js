@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS entries (
   noise_reduction INTEGER,           -- voice only
   latitude REAL,
   longitude REAL,
+  description TEXT,                  -- optional free text (Decision 91). NULL for Vault entries — see encrypted_description
+  encrypted_description BLOB,        -- Private Vault only: description encrypted under the Vault key
 
   -- expense-specific
   amount REAL,
@@ -119,6 +121,8 @@ async function initDb(sqlite) {
   // fresh DB (columns already there from SCHEMA_SQL, no-ops) and an existing one (adds them
   // once, then no-ops from then on). Reuse this for any future column addition instead of only
   // editing SCHEMA_SQL — see Decision 50.
+  await ensureColumn(db, 'entries', 'description', 'TEXT');
+  await ensureColumn(db, 'entries', 'encrypted_description', 'BLOB');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
   await ensureColumn(db, 'credentials', 'biometric_vault_enabled', 'INTEGER DEFAULT 0');
   // Three independent lock triggers per lock (Decision 74), replacing "idle timer + always-on
@@ -153,17 +157,18 @@ async function insertEntry(db, entry) {
     id, type, label, body_text = null, is_private = 0, encrypted_body = null,
     file_path = null, extension = null, auto_category = null, noise_reduction = null,
     latitude = null, longitude = null, amount = null, expense_category = null,
-    replied = 1, fire_at = null, repeat_rule = null
+    replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null
   } = entry;
   const now = Date.now();
 
   await db.run(
     `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path,
       extension, auto_category, noise_reduction, latitude, longitude, amount, expense_category,
-      replied, fire_at, repeat_rule, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      replied, fire_at, repeat_rule, description, encrypted_description, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, type, label, body_text, is_private, encrypted_body, file_path, extension, auto_category,
-     noise_reduction, latitude, longitude, amount, expense_category, replied, fire_at, repeat_rule, now, now]
+     noise_reduction, latitude, longitude, amount, expense_category, replied, fire_at, repeat_rule,
+     description, encrypted_description, now, now]
   );
 
   // Private Vault entries are excluded from BOTH the searchable index and label autocomplete —
@@ -172,7 +177,8 @@ async function insertEntry(db, entry) {
   // in the normal (non-vault) capture bar. Vault search/autocomplete instead comes from the
   // in-memory index vault.js builds fresh on unlock — see vault.js's buildVaultIndex().
   if (!is_private) {
-    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, body_text || '']);
+    // The description is searchable alongside the body, in the same FTS column (contentless table, so no new column).
+    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, [body_text, description].filter(Boolean).join(' ')]);
     await db.run(
       `INSERT INTO label_history (type, label) VALUES (?,?)
        ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
@@ -255,7 +261,27 @@ async function listLabelHistory(db, type, limit = 8) {
   return rows.values || [];
 }
 
+// Tags offered as chips in the Save dialog. Scoped: the main dialog only ever lists tags used by
+// non-private entries, the Vault dialog only tags used by private ones, so a Vault tag name never
+// shows up outside the Vault. Tags no live entry uses are not listed. Most-used first.
+async function listTagsForScope(db, isPrivate) {
+  const rows = await db.query(
+    `SELECT t.name AS name, COUNT(*) AS use_count
+     FROM tags t
+     JOIN entry_tags et ON et.tag_id = t.id
+     JOIN entries e ON e.id = et.entry_id
+     WHERE e.is_private = ? AND e.deleted_at IS NULL
+     GROUP BY t.id
+     ORDER BY use_count DESC, t.name ASC`,
+    [isPrivate ? 1 : 0]
+  );
+  return (rows.values || []).map((r) => r.name);
+}
+
+const MAX_TAGS = 2; // Decision 90 — an entry holds at most two tags
+
 export {
+  MAX_TAGS, listTagsForScope,
   initDb, insertEntry, searchEntries, softDelete,
   listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
   listAllTags, listLabelHistory, SCHEMA_SQL

@@ -267,6 +267,7 @@ async function restoreBackup(db, opts) {
 
     let bodyText = entry.body_text;
     let encryptedBody = entry.encrypted_body;
+    let encryptedDescription = entry.encrypted_description || null;
     if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
       // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
       // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
@@ -277,6 +278,9 @@ async function restoreBackup(db, opts) {
       const { key: sourceKey } = await deriveAesKey(opts.sourcePin, payload.privateVaultSalt);
       const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
       encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
+      if (entry.encrypted_description) {
+        encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
+      }
     }
 
     if (entry.fileData) {
@@ -289,18 +293,19 @@ async function restoreBackup(db, opts) {
     await db.run(
       `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
         auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
-        fire_at, repeat_rule, snoozed_until, notified, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fire_at, repeat_rule, snoozed_until, notified, description, encrypted_description, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
        entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
        entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
-       entry.snoozed_until, entry.notified || 0, entry.created_at || Date.now(), Date.now()]
+       entry.snoozed_until, entry.notified || 0, entry.description || null, encryptedDescription,
+       entry.created_at || Date.now(), Date.now()]
     );
     // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts
     // and label_history entirely, not just their body — indexing even the label would leak a
     // vault item's existence/title into ordinary, no-PIN search and autocomplete.
     if (!entry.is_private) {
-      await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, bodyText || '']);
+      await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, [bodyText, entry.description].filter(Boolean).join(' ')]);
       await db.run(
         `INSERT INTO label_history (type, label) VALUES (?,?)
          ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,

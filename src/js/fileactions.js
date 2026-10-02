@@ -131,6 +131,15 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
 
   const updates = { updated_at: Date.now() };
   if (fields.label !== undefined) updates.label = fields.label;
+  if (fields.description !== undefined) {
+    if (row.is_private) {
+      if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
+      const { encryptPrivateNote } = await import('./crypto.js');
+      updates.encrypted_description = fields.description ? await encryptPrivateNote(privateSessionKey, fields.description) : null;
+    } else {
+      updates.description = fields.description || null;
+    }
+  }
   // Non-vault notes: accept the same `fields.text` name the vault side uses, mapped to the
   // body_text column here — was previously only accepting `fields.body_text`, a mismatch that
   // meant calling this consistently from one UI would silently no-op whichever side didn't match.
@@ -150,8 +159,10 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   if (!row.is_private && updates.label !== undefined) {
     await db.run(`UPDATE entries_fts SET label=? WHERE id=?`, [updates.label, entryId]);
   }
-  if (!row.is_private && updates.body_text !== undefined) {
-    await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [updates.body_text, entryId]);
+  if (!row.is_private && (updates.body_text !== undefined || updates.description !== undefined)) {
+    const body = updates.body_text !== undefined ? updates.body_text : row.body_text;
+    const desc = updates.description !== undefined ? updates.description : row.description;
+    await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [[body, desc].filter(Boolean).join(' '), entryId]);
   }
   if (cat === 'reminders' && (fields.fire_at !== undefined || fields.repeat_rule !== undefined) && rescheduleReminder) {
     await rescheduleReminder({ ...row, ...updates, id: entryId }); // caller supplies notifications.js's scheduleReminder
