@@ -1510,3 +1510,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Existing entries with more than two tags are left as they are until edited.
 - Money capture shape: to be specified by the owner.
 
+---
+
+**91. Save dialog, tags and description.** Implements Decision 90's save rules.
+- One bottom sheet, `openSaveDialog()`: name, tags, description, Save. Resolves null on cancel. Capture uses Discard and ignores outside taps; edits use Cancel.
+- Names: default is what each type used before. A picked file keeps its phone name (Image, PDF, Files). Several picked files: `mode` is `own` (each keeps its name) or `number` (one name, numbered under Decision 84's counter).
+- Tags: max two (`MAX_TAGS`), enforced in the dialog, `applyTags` and `saveVaultEntry`. Chips are `listTagsForScope`: tags used by live entries of the same privacy scope, most used first. Editing an entry with more than two tags keeps the first two. `setEntryTags` replaces an entry's tags.
+- Description: `description TEXT` for ordinary entries, `encrypted_description BLOB` for Vault entries (plaintext column stays NULL). Searchable: appended to the body in the FTS column for ordinary entries; held in the in-memory index for the Vault. Backup carries both; append-mode re-keying also re-encrypts `encrypted_description`.
+- Text editor: full-screen `openTextEditor()`; Save returns the text and the caller opens the dialog; the dialog's back-out returns to the editor with the text kept.
+- Overlays are closed by `dismissOverlays()` on app lock (all) and Vault lock (Vault only); `overlayAbortCount` stops capture loops after that.
+- Rows carry `data-id`; a tap outside `.row-actions` opens the entry. Text notes only until the other viewers exist.
+- `toast()` replaces `alert()` for messages in these flows. Reminder time entry and expense edit still use `prompt()` until their own steps.
+

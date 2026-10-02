@@ -73,3 +73,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-02 | Session 66 | Decision 88 | Biometric buttons relabelled with slow glow; Download update disabled until an update is found; `.hidden` display bug fixed |
 | 2026-10-02 | Session 67 | Decision 89 | Background art: cubes on unlock screens, rounded squares on Home and Vault landing; theme tokens for both modes |
 | 2026-10-02 | Session 68 | Decision 90 | Planning: Phase 16 (open & edit) and requirements recorded; no code |
+| 2026-10-02 | Session 69 | Decision 91 | Phase 16 A+B: unified Save dialog (name, 2 tags, description), text editor, rows open on tap, description in schema/backup/Vault |

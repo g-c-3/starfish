@@ -160,6 +160,9 @@ deliberate differences, all safety-necessary rather than arbitrary:
    a private note's text always used. A note's own plaintext shape is unchanged, so pre-pivot private notes
    need no migration. Content is only ever decrypted into memory (a `Blob`/object URL for files), never written
    back to disk unencrypted except at the explicit moment Download is invoked (point 3 below).
+1a. **Description is encrypted too.** A Vault entry's description lives in `encrypted_description` (same AES-GCM
+   calls); `description` stays NULL. It is decrypted into the in-memory index on unlock and is searchable there.
+   The label remains the only plaintext field a Vault row carries.
 2. **Search is a fresh in-memory index built on unlock, discarded on lock — nothing persisted, not even
    encrypted** (Decision 39). Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
    autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
@@ -276,6 +279,7 @@ Appending a backup containing private notes encrypted under a *different* PIN re
 2. Decrypt each with that source PIN's derived key, then **immediately re-encrypt under the current device's
    active private-notes key** before inserting — so every private note in the live DB ends up consistently
    encrypted under one key: whichever PIN is active on this device right now.
+   The same decrypt-and-re-encrypt applies to a Vault entry's `encrypted_description` (Decision 91).
 3. If the source PIN is unknown/forgotten, only the private notes are skipped (same "unrecoverable" logic as a
    normal forgotten-PIN case) — everything else in the backup still imports normally.
 The app-open password is unaffected either way: it lives in the `credentials` table, untouched by append mode,
@@ -522,6 +526,14 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   and an "Export Now" button (jumps straight into the backup flow). Distinct from the per-category storage
   breakdown above — this one is about making local-only data ownership visible and concrete to the user, not
   about managing storage space.
+
+### Save dialog and text editor (Decision 91)
+One sheet for every capture and edit: file name, tags (max two), description, Save. Untouched Save stores the
+default name, no tags, no description; picked files keep their phone name. Tag chips list tags used by live
+entries in the same scope only (main dialog: non-private; Vault dialog: private). Text notes are written in a
+full-screen editor that leads into the dialog. Both overlays close when the app locks (all) or the Vault locks
+(Vault ones); a capture loop that sees a lock stops instead of reopening the editor. Description is searchable in
+the same FTS column as the body. Tapping a row opens it; only text notes have a viewer so far.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

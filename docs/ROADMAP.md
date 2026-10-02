@@ -18,7 +18,7 @@
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
-- [ ] 16 — Open & edit (A unified Save dialog, B text editor, C voice recorder + playback, D image viewer, E reminder detail, F location detail, G open Files with phone app, H PDF viewer)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; C voice recorder + playback, D image viewer, E reminder detail, F location detail, G open Files with phone app, H PDF viewer)
 
 ## Detailed
 
@@ -346,11 +346,13 @@ individual items) can be picked up in any order once prerequisites are met.
   - [ ] 3 — Capture flows: replace `prompt()`/`confirm()`/`alert()` with in-app bottom sheets (touches logic).
   - [ ] 4 — Polish: transitions, haptics if the existing plugins allow, light-theme tuning.
 - [ ] **16 — Open & edit (Decision 90).** Every entry opens on tap; the four row actions stay.
-  - [ ] A — Unified Save dialog: file name, tags (max 2, previous tags as tappable chips), description,
-    one Save button; untouched Save stores a default name, no tags, no description. Replaces
-    `prompt()`/`confirm()`/`alert()` in capture (this is Phase 15 step 3). Adds a `description` column
-    (migration), included in backup/restore and the Vault.
-  - [ ] B — Viewer shell + Text editor (title, body, save/discard, same dialog for details).
+  - [x] A — Unified Save dialog (Session 69): name, tags (max 2, previous tags as chips), description, one
+    Save; untouched Save stores defaults; picked files keep their phone name; several files offer keep-names or
+    one numbered name. `description` column (+ `encrypted_description` for the Vault), in backup/restore and
+    search. Replaces `prompt()`/`confirm()`/`alert()` in capture, Vault capture and Edit details. Still using
+    `prompt()`: the reminder time (E), expense edit (Money).
+  - [x] B — Text editor (Session 69): full-screen, word count, discard guard, Save leads into the dialog; rows
+    open on tap (non-text types show a "coming later" toast until C–H).
   - [ ] C — Voice: recorder screen (timer, record/stop) then playback (play/pause, scrub, speed).
   - [ ] D — Image: thumbnail grid in the Image folder, full-screen viewer (swipe, pinch zoom).
   - [ ] E — Reminder: detail view, greyed out once completed (auto when fired, plus manual mark done).

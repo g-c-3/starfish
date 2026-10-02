@@ -4,6 +4,29 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 69**
+
+Phase 16 A and B (Decision 91).
+- Save dialog (bottom sheet): file name, tags with previous-tag chips (max two, count shown, new tag field), description, Save. Used by note, voice, image/PDF/Files, reminder, location, Vault capture, and Edit. Untouched Save stores the default name. Several picked files: switch between keeping each file's name and one numbered name. Capture dialogs say Discard and ignore outside taps so a stray tap cannot lose a recording.
+- Text editor: full-screen, live word and character count, leaving with unsaved changes needs a second Back. New note and editing a note both go editor, then dialog; backing out of the dialog returns to the editor with the text kept.
+- Rows open on tap (Home folders, Home search, Vault folders, Vault search). Text notes open the editor; other types show a toast until their viewers land.
+- Data: `description` and `encrypted_description` columns (migration via `ensureColumn`), written by `insertEntry`, `saveVaultEntry`, `editEntry`, backup/restore (including re-keying on cross-PIN append), FTS and the Vault index. `MAX_TAGS` = 2 enforced in `applyTags` and `saveVaultEntry`; `listTagsForScope` supplies chips per scope.
+- Overlays close on app lock and Vault lock; toast replaces `alert()` in the touched flows.
+
+Bug fixed (found while reading): Vault tag names sat in the shared `tags` table, so the old shared tag list could have shown them outside the Vault. Chips now come from scoped queries.
+
+Decisions made: 91.
+
+Verified: `node --check` on every changed file, `vite build`, and a headless test of the dialog and editor logic with stubbed tags: untouched Save, third tag blocked with a message, new tag, multi-file switch, discard guard, lock dismissal. Not run through CI or on device; the database changes and backup path were not exercised.
+
+Device checks: install over the old app (migration adds two columns, existing entries unaffected); create each type and confirm name, tags, description save; edit details; two-tag limit; chips show earlier tags; Vault dialog shows Vault tags only; backup then restore keeps descriptions (including Vault ones); lock while the editor is open closes it; Back button closes dialog then editor.
+
+Open: reminder time still asked with `prompt()`; expense edit still uses `prompt()`; 29 other `prompt/confirm/alert` calls remain in Settings, backup and Drive flows.
+
+Next session start point: Phase 16 E (reminder detail, completed state), then F, C, D, G, H. Open choices (PDF viewer, file-opener plugin, map) still to be confirmed before F, G, H. Money capture shape still to be given. Device pass on Sessions 59 to 69.
+
+---
+
 **Session 68**
 
 Planning only; no code changed. Requirements for opening and editing entries recorded as Phase 16 and Decision 90. Phase 15 step 3 (in-app sheets) is folded into 16A.
