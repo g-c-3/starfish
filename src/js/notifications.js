@@ -1,19 +1,26 @@
-// notifications.js — schedules local notifications with custom tone for reminders.
-// Uses @capacitor/local-notifications. No AlarmManager/full-screen intent — see android-notes/ for why.
+// notifications.js — schedules local notifications for reminders: a banner with the system's default sound.
+// Uses @capacitor/local-notifications. No alarm UI, no full-screen intent — see android-notes/ for why.
 
 import { LocalNotifications } from '@capacitor/local-notifications';
 
-const CHANNEL_ID = 'dumpzone_reminders';
+// An Android channel's importance and sound are fixed once created, so a changed style needs a new id (Decision 96).
+const CHANNEL_ID = 'dumpzone_reminders_v2';
+const OLD_CHANNEL_ID = 'dumpzone_reminders';
 
 async function ensureChannel() {
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: 'Reminders',
     description: 'Dumpzone reminder alerts',
-    sound: 'notify_tone.wav', // must exist at android/app/src/main/res/raw/notify_tone.wav
-    importance: 5, // max — heads-up notification + sound
+    importance: 4, // high — heads-up banner, default notification sound, no alarm behaviour
     visibility: 1  // show full content on lock screen
   });
+}
+
+// Removes the first-generation channel. Notifications already scheduled on it are dropped by Android once it is
+// gone, so the caller reschedules every upcoming reminder after this.
+async function retireOldChannel() {
+  await LocalNotifications.deleteChannel({ id: OLD_CHANNEL_ID });
 }
 
 async function requestPermissions() {
@@ -96,4 +103,4 @@ function hashIdToInt(uuid) {
   return Math.abs(hash);
 }
 
-export { scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };
+export { retireOldChannel, scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };

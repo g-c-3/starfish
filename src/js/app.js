@@ -6,7 +6,7 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
-import { scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
+import { retireOldChannel, scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
@@ -197,6 +197,15 @@ async function bootstrap() {
 
   await requestPermissions();
   await registerActionTypes();
+  // One-time move to the banner channel (Decision 96): drop the old channel, then schedule every live reminder again on the new one.
+  if ((await metaGet('reminder_channel', '1')) !== '2') {
+    try {
+      await retireOldChannel();
+      const live = (await db.query(`SELECT * FROM entries WHERE type = 'reminder' AND deleted_at IS NULL AND completed_at IS NULL`)).values || [];
+      for (const r of live) if (r.repeat_rule || r.fire_at > Date.now()) await scheduleReminder(r);
+      await metaSet('reminder_channel', '2');
+    } catch { /* retried on next launch */ }
+  }
   // Snooze / Done buttons on a reminder notification (Decision 92). Needs only the database, so it works while the app is locked.
   listenForReminderActions(async (actionId, entryId) => {
     try {
@@ -1025,6 +1034,14 @@ function emptyStateHtml(kind = 'folder') {
 
 // ---- Toast, Save dialog, text editor (Decision 91). Top-level so a lock can force-close them. ----
 let toastTimer = null;
+// Save confirmation for a reminder: the chosen time plus how far away it is, so an AM/PM slip is visible at once (Decision 95).
+function reminderSetText(ms) {
+  const mins = Math.max(0, Math.round((ms - Date.now()) / 60000));
+  const away = mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${Math.floor(mins / 1440)} d ${Math.floor((mins % 1440) / 60)} h`;
+  const when = new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  return `Reminder set for ${when} · in ${away}`;
+}
+
 function toast(message) {
   const el = document.getElementById('toast');
   if (!el) return;
@@ -2073,7 +2090,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await applyTags(id, d.tags);
       try {
         await scheduleReminder({ id, ...saved });
-        toast('Reminder saved');
+        toast(saved.repeat_rule ? 'Reminder saved' : reminderSetText(saved.fire_at));
       } catch (err) {
         toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
       }
@@ -2328,7 +2345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await window.Dumpzone.editEntry(item.id, fields, opts);
       await setEntryTags(item.id, d.tags);
       if (isVault) await buildVaultIndex(db, privateSessionKey); // list/search read this in-memory index
-      toast('Saved');
+      toast(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
