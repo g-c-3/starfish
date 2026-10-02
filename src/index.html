@@ -35,6 +35,9 @@
       <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/></symbol>
       <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></symbol>
       <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-fingerprint" viewBox="0 0 24 24"><path d="M5 11.5A7.5 7.5 0 0 1 12 4a7.4 7.4 0 0 1 7 4.5"/><path d="M8 8a5.5 5.5 0 0 1 9.5 3c0 1.4 0 3-.4 4.5"/><path d="M12 11a2 2 0 0 0-2 2c0 2.5-.5 4.5-1.5 6.5"/><path d="M14 13c0 3-.5 5.5-1.8 8"/><path d="M5.2 15.5c.5-1.3.8-2.6.8-4"/></symbol>
       <!-- Decorative background art (Decision 89). Colors come from --art-* tokens so one drawing serves both themes. -->
 <linearGradient id="art-grad-a" gradientUnits="userSpaceOnUse" x1="360" y1="0" x2="0" y2="780">
@@ -365,6 +368,44 @@
       <button id="select-files-close-btn" class="secondary-btn">Close</button>
     </div>
   </div>
+
+  <!-- Save dialog (Decision 91): name, tags (max 2), description, one Save. Reused by every capture and edit. -->
+  <div id="save-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="sd-heading">
+    <div class="modal-box">
+      <h3 id="sd-heading">Save</h3>
+      <div id="sd-mode" class="seg hidden" role="group" aria-label="Naming">
+        <button type="button" data-mode="own" class="active">Keep file names</button>
+        <button type="button" data-mode="number">Number under one name</button>
+      </div>
+      <label class="field-label" for="sd-name">File name</label>
+      <input id="sd-name" type="text" autocomplete="off" maxlength="120" />
+      <div class="field-row"><span class="field-label">Tags</span><span id="sd-tag-count" class="field-hint">0 / 2</span></div>
+      <div id="sd-tag-chips" class="tag-chips"></div>
+      <div class="tag-add">
+        <input id="sd-new-tag" type="text" placeholder="New tag" autocomplete="off" maxlength="30" />
+        <button id="sd-add-tag-btn" type="button" class="secondary-btn">Add</button>
+      </div>
+      <label class="field-label" for="sd-desc">Description</label>
+      <textarea id="sd-desc" rows="3" placeholder="Optional"></textarea>
+      <div class="sheet-actions">
+        <button id="sd-cancel-btn" type="button" class="secondary-btn">Cancel</button>
+        <button id="sd-save-btn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Text editor (Decision 91): full-screen; Save leads into the Save dialog. -->
+  <div id="editor-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Text editor">
+    <header class="editor-bar">
+      <button id="editor-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <span id="editor-title">New note</span>
+      <button id="editor-save-btn" class="editor-save">Save</button>
+    </header>
+    <textarea id="editor-text" placeholder="Start typing…" spellcheck="true"></textarea>
+    <div id="editor-count" class="editor-count"></div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <div id="new-chooser-modal" class="modal-overlay hidden">
     <div class="modal-box">
