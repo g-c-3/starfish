@@ -61,8 +61,16 @@ function recordLocation(loc) {
 // shows the one requested. ----
 const NAV_SCREENS = { 'main-screen': 'home', 'vault-screen': 'vault' }; // which screens the bottom nav covers, and which tab that maps to by default
 
+// Typed credentials never outlive the screen that took them (Decision 94). Called when either lock engages and
+// right after a successful unlock.
+function clearSecretInputs(ids = null) {
+  const els = ids ? ids.map((id) => document.getElementById(id)) : document.querySelectorAll('input[type="password"]');
+  els.forEach((el) => { if (el) el.value = ''; });
+}
+const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vault-biometric-confirm-pin'];
+
 function showScreen(id, { tab } = {}) {
-  if (id === 'lock-screen') dismissOverlays(false); // an open editor/dialog must never sit above the lock screen
+  if (id === 'lock-screen') { dismissOverlays(false); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
@@ -675,6 +683,7 @@ async function unlockVault(pin) {
 
 function lockVault() {
   dismissOverlays(true);
+  clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
   clearVaultIndex();
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
@@ -1483,7 +1492,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('unlock-btn').addEventListener('click', async () => {
     const result = await window.attemptUnlock(document.getElementById('password-input').value);
-    if (!result.success) document.getElementById('password-hint').textContent = 'Wrong password.';
+    if (result.success) clearSecretInputs(['password-input']);
+    else document.getElementById('password-hint').textContent = 'Wrong password.';
   });
   const bioUnlockBtn = document.getElementById('biometric-unlock-btn');
   if (bioUnlockBtn) {
@@ -1618,7 +1628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('vault-unlock-btn').addEventListener('click', async () => {
     const result = await unlockVault(document.getElementById('vault-pin-input').value);
-    if (result.success) { await refreshVaultGateView(); renderVault(); }
+    if (result.success) { clearSecretInputs(VAULT_SECRET_INPUT_IDS); await refreshVaultGateView(); renderVault(); }
     else if (result.setupNeeded) await refreshVaultGateView();
     else alert('Wrong PIN.');
   });
@@ -1701,8 +1711,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // exclusions, in showScreen() and refreshVaultGateView() above) are themselves already-unlocked
   // states — there's no case where this button needs to show a "locked" appearance.
   document.getElementById('lock-toggle-btn').addEventListener('click', async () => {
-    const vaultUnlocked = !document.getElementById('vault-content').classList.contains('hidden');
-    if (vaultUnlocked) {
+    // Decided by the screen on view, not by #vault-content's class: that class is only reset when the Vault gate
+    // is next shown, so it stayed visible after leaving the Vault and made this button act on the Vault from Home
+    // and Settings (Decision 94).
+    if (currentLocation === 'vault') {
       lockVault();
       // Immediate, synchronous navigation, same fix Session 31 made for the old vault-lock-btn —
       // no awaiting an async gate refresh first, which would delay the actual screen switch.
