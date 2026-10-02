@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 76**
+
+Reported: reminder fired on time with the app closed. Tapping Snooze 10 min on the notification opened the app, and the row went grey; unclear whether the snooze would fire (Decision 99).
+- Opening the app is plugin behavior (action buttons are activity intents in 6.x). Snooze itself is scheduled from the database before unlock, so it does not depend on the lock state.
+- Added a `snoozed` reminder state using the existing `snoozed_until` column. The row shows "Snoozed until <time>" and stays active; the viewer shows a Snoozed pill. Done or a new time clears it.
+- The list redraws when a notification action arrives while the app is open.
+
+Decisions made: 99.
+
+Verified: `node --check`, `vite build`, status helper test (one-off past, snoozed, expired snooze, future, done, repeating snoozed). Not run through CI or on device; the snooze notification firing and the row display were not exercised.
+
+Device checks: let a reminder fire, tap Snooze 10 min, unlock; the row is not grey and reads "Snoozed until" about 10 minutes ahead; close the app and wait; a second banner appears near that time; afterwards the row reads Fired. Tap Done on a snoozed one: row greys as Done and no second banner appears. Repeat with the app already open and unlocked: the row updates without reopening the folder.
+
+Open: Snooze and Done still open the app (see Decision 99); removing that needs a native receiver patch.
+Open: repeating reminders unverified (Session 75). Battery-optimisation prompt, "X scheduled" indicator, notification small icon drawable.
+
+Next session start point: Phase 16 C (voice recorder and player), after the device pass on Sessions 59 to 76. Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 75**
 
 Reported: another app's reminders fire while closed and under battery saving; asked to compare and to record that Play distribution is revisited when the app is ready (Decisions 97, 98).

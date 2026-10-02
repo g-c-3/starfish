@@ -1575,3 +1575,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **98. Play Store distribution deferred.** Revisit when the app is fully ready; sideload APK stays the only channel until then.
 - Open items for that review: signed AAB output, target API 36 (Capacitor upgrade), hardware back handling, removal of the in-app GitHub update check in a Play build, permission and Data Safety declarations, privacy policy link, and Play's restrictions on exact-alarm permissions.
+
+---
+
+**99. Snoozed state; notification buttons open the app.** Extends Decision 92.
+- Reported: Snooze on the notification opened the app, and the reminder row went grey like a finished one.
+- The app opening is the plugin: `@capacitor/local-notifications` 6.x builds every action button with `PendingIntent.getActivity`, so Snooze and Done always launch the app (to the lock screen if locked). The handler runs from the database and needs no unlock. Avoiding the launch needs a native broadcast receiver; not built.
+- The grey row was correct under Decision 92 (a one-off whose time has passed is "fired") but misleading after a snooze. New status `snoozed`: `snoozed_until` (existing column, previously unused) set to now + 10 minutes by the Snooze action.
+- A snoozed reminder is active: not greyed, meta reads "Snoozed until <time>", the viewer shows a Snoozed pill and "Mark done". After the snooze time it returns to the plain rule (one-off: fired; repeating: upcoming). Done and a new time both clear `snoozed_until`.
+- A Snooze or Done from a notification while the app is open redraws the list through the `dumpzone-reminders-changed` event.
+- The snooze notification itself uses `allowWhileIdle` (Decision 97).

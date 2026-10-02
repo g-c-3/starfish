@@ -518,7 +518,9 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
   `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
   and Snooze (10 min) / Done action buttons. Schedules use `allowWhileIdle: true` (inexact, wakes the phone in
-  Doze; Decision 97).
+  Doze; Decision 97). Snooze/Done buttons always launch the
+  app (plugin uses activity intents) and run from the database; Snooze stores `snoozed_until`, giving a `snoozed`
+  status that stays active (Decision 99).
 - **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Dumpzone from
   battery optimization, with a plain explanation ("so Android doesn't delay or kill your reminder"). The
   reminders list/settings screen shows a simple trust indicator — "X reminders scheduled" — so the user has a
