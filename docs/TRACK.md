@@ -81,3 +81,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-02 | Session 74 | Decision 96 | Reminders moved to a banner channel with the default sound; late delivery traced to inexact scheduling |
 | 2026-10-03 | Session 75 | Decisions 97, 98 | Reminders scheduled with allowWhileIdle so they fire while closed; Play distribution deferred until app is ready |
 | 2026-10-03 | Session 76 | Decision 99 | Snoozed reminder state: row stays active with snooze time instead of greying out |
+| 2026-10-03 | Session 77 | Decision 100 | Snooze delivery confirmed on device; app returns to previous screen after a notification Snooze/Done |

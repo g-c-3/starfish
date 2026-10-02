@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 77**
+
+Device result (Session 75 build; Session 76 files not yet committed): Snooze 10 min fired its second notification. Done also opened the app (Decision 100).
+- Snooze delivery confirmed: Decision 97's `allowWhileIdle` works for the snooze notification.
+- Cause for Done opening the app is the same as Snooze (Decision 99): the plugin's action buttons are activity intents.
+- Change: after a Snooze or Done is handled, `App.minimizeApp()` returns the person to where they were, only when the button launched the app (6-second window since last resume). Open-app taps are left alone.
+
+Decisions made: 100.
+
+Verified: `node --check`, `vite build`, `minimizeApp` present in `@capacitor/app` 6 types. Not run through CI or on device; the minimise behavior and the window heuristic were not exercised.
+
+Device checks: with the app closed, tap Done and Snooze on a banner; the app flashes briefly then goes back to the launcher or previous app. With the app open and unlocked, pull the shade and tap Done; the app stays open and the row updates. Reopen the app after either: it shows the lock screen if a password is set.
+
+Open: the brief flash remains; removing it needs a native receiver patch. Repeating reminders unverified. Battery-optimisation prompt, "X scheduled" indicator, notification small icon drawable.
+
+Next session start point: Phase 16 C (voice recorder and player), after the device pass on Sessions 59 to 77. Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 76**
 
 Reported: reminder fired on time with the app closed. Tapping Snooze 10 min on the notification opened the app, and the row went grey; unclear whether the snooze would fire (Decision 99).

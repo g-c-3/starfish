@@ -1585,3 +1585,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A snoozed reminder is active: not greyed, meta reads "Snoozed until <time>", the viewer shows a Snoozed pill and "Mark done". After the snooze time it returns to the plain rule (one-off: fired; repeating: upcoming). Done and a new time both clear `snoozed_until`.
 - A Snooze or Done from a notification while the app is open redraws the list through the `dumpzone-reminders-changed` event.
 - The snooze notification itself uses `allowWhileIdle` (Decision 97).
+
+---
+
+**100. Notification buttons send the app back after acting.** Follows Decision 99.
+- Device result: Snooze 10 min fires its second notification (Decisions 96 and 97 build). Done also opens the app, same plugin cause as Snooze.
+- After a Snooze or Done is handled, the app calls `App.minimizeApp()` when that button launched it, so the person returns to the launcher or previous app instead of staying in Dumpzone. Backgrounding locks the app as usual.
+- Launch detection: the action arrives within 6 seconds of the app last coming to the foreground (`lastResumeAt`, set at load and on every resume). A button tapped from the shade over an app already in use does not minimise.
+- Limits: the app still appears briefly, since the launch itself cannot be prevented without a native receiver. The 6-second window is a heuristic; a cold start slower than that leaves the app open.
