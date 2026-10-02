@@ -516,8 +516,8 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   label in place; no reply within the window leaves it as `uncategorized` — nothing is ever blocked on the answer.
 - **Reminder notifications, not alarms** — implemented via `@capacitor/local-notifications` (`notifications.js`),
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
-  `android-notes/native-setup.md`. Includes a custom tone, a notification channel, and Snooze (10 min) / Done
-  action buttons.
+  `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
+  and Snooze (10 min) / Done action buttons.
 - **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Dumpzone from
   battery optimization, with a plain explanation ("so Android doesn't delay or kill your reminder"). The
   reminders list/settings screen shows a simple trust indicator — "X reminders scheduled" — so the user has a
@@ -619,7 +619,7 @@ dumpzone/
       db.js             -> SQLite schema + FTS5 setup
       crypto.js         -> KDF + AES helpers for private notes & backups
       intents.js         -> rule-based reminder/expense detector + OCR label suggestion
-      notifications.js  -> local notification scheduling (tone, snooze/done actions)
+      notifications.js  -> local notification scheduling (banner channel, snooze/done actions)
       ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)

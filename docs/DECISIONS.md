@@ -1549,3 +1549,17 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `clearSecretInputs()` empties password inputs: all of them when the lock screen shows (`showScreen('lock-screen')`, which every app-lock path uses), the Vault ones (`vault-pin-input`, `vault-setup-pin-input`, `vault-biometric-confirm-pin`) in `lockVault()`, and the relevant field right after a successful unlock.
 - Lock button (`#lock-toggle-btn`): Vault screen locks the Vault and returns Home; Home and Settings lock the app. Chosen by `currentLocation`, not by `#vault-content`'s class, which is only reset when the Vault gate is next shown.
 - The two locks stay independent (Decision 65): the button locks only what is on screen.
+
+---
+
+**95. Reminder save confirmation shows the time and its distance.**
+- One-time reminders: toast reads "Reminder set for <weekday, date, time> · in <duration>" on create and on edit. Repeating reminders keep the plain toast.
+- Reason: the date-time picker is 12-hour; a wrong AM/PM saves a valid future time and nothing fails visibly.
+- No change to scheduling. Exact-alarm delivery is unchanged and still open (see Session 73).
+
+---
+
+**96. Reminders are subtle banners with the default sound.** Replaces the "with a tone" part of Decision 3; the rest of Decision 3 stands.
+- Channel `dumpzone_reminders_v2`: importance 4 (heads-up banner), no custom sound. Snooze and Done actions unchanged.
+- A channel's importance and sound cannot change after creation, so the style change uses a new id. On first launch after the update the old channel is deleted and every live reminder is scheduled again on the new one (`reminder_channel` = 2 in app meta; retried next launch if it fails). A pending snooze on the old channel is lost.
+- Not changed: scheduling stays inexact. A banner does not make delivery earlier; late delivery under battery saving remains open (Session 74).

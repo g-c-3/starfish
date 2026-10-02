@@ -244,7 +244,9 @@
   39, Decision 64) — a real Settings toggle (off by default), `@capacitor-community/privacy-screen`
   (pinned `5.2.0` for Capacitor 6 compatibility) blanking the recents preview and blocking screenshots
   together, replacing Session 37/38's build-time-only `MainActivity` patch (Decisions 62/63) entirely
-  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Typed credentials cleared on lock (Session 72, Decision 94)** — password and PIN fields are emptied when
+  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Reminder banner channel, default sound (Session 74, Decision 96)** — not run on a device.
+  **Reminder save toast with distance (Session 73, Decision 95)** — not run on a device.
+  **Typed credentials cleared on lock (Session 72, Decision 94)** — password and PIN fields are emptied when
   either lock engages and after a successful unlock; not run on a device. JS
   obfuscation, ProGuard/R8, startup signature check: still documented, not implemented.
 - [ ] **11 — CI/CD.** `build-android.yml` committed; signing-path and fail-fast fixes applied

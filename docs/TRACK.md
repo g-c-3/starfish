@@ -77,3 +77,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-02 | Session 70 | Decision 92 | Phase 16 E: reminder viewer, done/fired greyed out, reminder time in Save dialog, notification Done/Snooze handled, delete cancels notification |
 | 2026-10-02 | Session 71 | Decision 93 | Phase 16 F: location viewer with coordinates, grid plot, Copy and Open in Maps hand-off |
 | 2026-10-02 | Session 72 | Decision 94 | Bug fixes: typed password/PIN cleared when the app or Vault locks; lock button on Home/Settings now locks the app instead of acting on the Vault |
+| 2026-10-02 | Session 73 | Decision 95 | Reminder save toast shows time and distance; cause of missed reminder traced to stored time |
+| 2026-10-02 | Session 74 | Decision 96 | Reminders moved to a banner channel with the default sound; late delivery traced to inexact scheduling |

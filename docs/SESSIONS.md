@@ -4,6 +4,45 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 74**
+
+Reported: a reminder due 5:39 pm showed in the shade only after the app was opened at 5:40; wanted a subtle banner like a calendar reminder, no alarm behaviour (Decision 96).
+- Reminders now use a high-importance banner channel with the system's default sound (`dumpzone_reminders_v2`). The old channel is deleted once and live reminders are scheduled again on the new one at launch.
+- Finding: the lateness is not caused by the notification style. Scheduling is inexact (no exact-alarm permission), so Android can hold it back under battery saving until the app wakes. Two compensations documented in ARCHITECTURE (battery-optimisation exemption prompt, "X reminders scheduled" indicator) are not built; nothing in `src/` implements them.
+- Finding: the notification shows a generic blue info icon. `capacitor.config.json` names `ic_stat_notify`, but no step in the repo creates that drawable.
+
+Decisions made: 96.
+
+Verified: `node --check`, `vite build`. Not run through CI or on device; the channel migration and the banner look were not exercised.
+
+Device checks: install over the existing app, set a reminder 2 minutes ahead, leave the app; a banner with the default sound should appear. Check Settings, Apps, Dumpzone, Notifications: only "Reminders" listed, set to pop on screen. An old reminder still upcoming before the update should still fire.
+
+Open (needs approval): exact timing via `USE_EXACT_ALARM` in `patch-manifest.js`. Same plain banner, no alarm screen or sound; only the time becomes reliable. Reverses the "inexact" part of Decision 3.
+Open: battery-optimisation prompt and "X scheduled" indicator (documented, not built).
+Open: notification small icon drawable `ic_stat_notify` needs a CI step.
+
+Next session start point: Phase 16 C (voice recorder and player), unless the open items above are chosen first. Open choices for G and H. Money capture shape still to be given. Device pass on Sessions 59 to 74.
+
+---
+
+**Session 73**
+
+Reported: a reminder did not notify (Decision 95).
+- Finding: the screenshot shows the reminder stored as due 11:46 pm, about 11 hours after the screenshot time (12:46 pm). Scheduling and time parsing read correctly in code; nothing was due. Most likely the AM/PM field of the date-time picker was left on PM.
+- Change: saving a one-time reminder now confirms the time and the distance to it, e.g. "Reminder set for Fri 2 Oct, 11:46 pm · in 11 h". Applies on create and on edit.
+
+Decisions made: 95.
+
+Verified: `node --check`, `vite build`, helper output for minutes, hours and days. Not run through CI or on device. The cause is inferred from the screenshot; a reminder that is genuinely due and silent has not been reproduced.
+
+Device checks: create a reminder 2 minutes ahead with the app closed and the screen off; the toast shows "in 2 min"; confirm a notification appears and its tone plays. If it does not, report phone make and Android version.
+
+Open (needs approval): `SCHEDULE_EXACT_ALARM` is deliberately not requested (native-setup.md), so on Android 12+ delivery uses inexact scheduling and can run late under battery saving. Vendor battery optimisation can also hold it back. Say if the notification should be requested as exact (adds `USE_EXACT_ALARM`; reverses part of the reminders-are-notifications rule).
+
+Next session start point: Phase 16 C (voice recorder and player). Open choices for G and H. Money capture shape still to be given. Device pass on Sessions 59 to 73.
+
+---
+
 **Session 72**
 
 Three reported bugs from device recordings (Decision 94).
