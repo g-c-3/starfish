@@ -303,3 +303,17 @@ this codebase since the FLAG_SECURE patch, and unlike that one, it's on by defau
 commented-out step to flip). The screen-off toggle itself defaults **off** in the database (see
 Decision 74) specifically because of this — turning it on is an explicit, informed choice until a
 real build confirms the event actually reaches the WebView as expected.
+
+## 15. Reminder Snooze/Done without launching the app (Decision 102)
+`@capacitor/local-notifications` 6.x builds every action button with `PendingIntent.getActivity`, so a tap always
+starts the app. `scripts/patch-reminder-actions.js` (CI, after `npm install` and `cap add android`, before Gradle):
+1. writes `ReminderActionReceiver.java` into `MainActivity`'s package;
+2. registers it in `AndroidManifest.xml` with `android:exported="false"`;
+3. patches `node_modules/@capacitor/local-notifications/.../LocalNotificationManager.java` so the `snooze` and `done`
+   buttons use `PendingIntent.getBroadcast` to that receiver (explicit component). Other action ids are unchanged.
+
+The receiver uses the plugin's own classes (`LocalNotificationManager`, `NotificationStorage`, `TimedNotificationPublisher`)
+to dismiss, cancel and schedule, and writes `dz_ra:*` keys into the `CapacitorStorage` SharedPreferences group that
+`@capacitor/preferences` reads. Notification ids use the same 31-multiplier hash as `hashIdToInt` in `notifications.js`.
+The script aborts if the plugin block is not in the expected shape (a plugin upgrade may need it adjusted) and is a
+no-op on a second run. Not compiled against Android in the authoring environment.
