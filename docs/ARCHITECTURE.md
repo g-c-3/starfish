@@ -563,6 +563,11 @@ grid plot (30° lines, no map data). Open in Maps hands a `geo:` URI to the phon
 pair to the clipboard. Dumpzone makes no network request for either. Main entries only; an entry with no coordinates
 shows a notice and no actions.
 
+### Voice recorder and player (Decision 103)
+Both use the shared viewer shell. Recorder: ready, recording, review; review plays the take before the Save dialog, and a
+lock discards it. Saved voice opens in a viewer with the player (play/pause, scrub, speed). Vault audio is decrypted into
+an in-memory blob URL for the life of the viewer and revoked on close or lock. Playback re-arms the matching idle lock.
+
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
 - **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially

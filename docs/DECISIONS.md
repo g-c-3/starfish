@@ -1613,3 +1613,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Credentials: unchanged. The queue holds no entry content and no credential; nothing here needs an unlock.
 - Notifications scheduled before this build keep the old buttons. One reschedule of live reminders runs once (`reminder_actions` in `meta`); the old JS listener and the minimise rule (Decision 100) stay as the fallback for any that remain.
 - Limits: the row changes when the app next drains the queue, not at the tap. Not run through CI or on a device. Plugin updates may change the patched block.
+
+---
+
+**103. Voice recorder screen and player.** Implements Decision 90's voice rule.
+- Both run on the shared viewer shell. The shell gains `onClose` (runs on every close, including a lock's forced close), `guard` (may refuse Back) and hides Edit when a viewer has none.
+- Recorder: ready, recording (timer from the clock), review. Review plays the take with the player; Save hands it to the existing Save dialog, Record again and Discard drop it. Microphone permission is asked before the screen opens, because the system prompt pauses the app and a lock would read that as backgrounding.
+- Back during recording or review needs a second tap within 3 seconds. A lock discards the take, the same as unsaved editor text; nothing is kept in memory or on disk.
+- Player: one `<audio>` element on an in-memory blob URL. Play/pause, scrub, speed cycling 1, 1.25, 1.5, 2, 0.75. Containers with no length use the recorder's duration, or a far seek to find it. Playback keeps the idle lock armed (app or Vault) while playing.
+- Saved voice opens from Home folders and the Vault list. Vault audio is decrypted on open into a blob URL held only while the viewer is open, then revoked; closing or locking stops playback. Home audio is read from `Directory.Data`.
+- No new plugin, permission or network use. Credentials unchanged.
+- Limits: a recording is held in memory as base64 until saved or discarded. Not run on a device; `<audio>` support for each recorder container (aac, webm) is unconfirmed.

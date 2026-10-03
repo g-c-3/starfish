@@ -86,3 +86,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-03 | Session 79 | none | Device pass: exact delivery, snooze and done confirmed working with the app closed |
 | 2026-10-03 | Session 80 | Decision 102 | Phase 16-pre built: Snooze and Done handled by a native receiver without launching the app; queue applied by the app; not compiled or device-tested |
 | 2026-10-03 | Session 81 | none | Phase 16-pre closed: Snooze and Done without opening the app confirmed on device |
+| 2026-10-03 | Session 82 | Decision 103 | Phase 16 C built: voice recorder screen with review, and player (play/pause, scrub, speed) for Home and Vault; not device-tested |

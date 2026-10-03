@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 82**
+
+Phase 16 C: voice recorder screen and player (Decision 103).
+- `app.js`: top-level `createAudioPlayer()` (play/pause, scrub, speed); `startVoiceRecordingUI()` rebuilt as a recorder screen (ready, recording, review, then the Save dialog) for Home and the Vault; `openVoice()` viewer for saved recordings, wired into `openEntry`. Viewer shell gained `onClose`, `guard` and a hidden Edit button when unused; Back goes through the guard. Vault MIME map now knows aac and webm.
+- `style.css`: player and recorder styles.
+
+Decisions made: 103.
+
+Verified: `app.js` syntax check, `vite build`, player behaviour run against a stub audio element in a scratch DOM (play/pause label, seek, no jump while dragging, speed, replay after end, fallback length). Not run through CI, not run on a device.
+
+Device checks: Home, Voice, Record: timer counts, Stop opens review, play, scrub, 2× speed, Save, name it; the row opens the player and the audio plays. Back during recording asks twice. Repeat in the Vault (open, play, lock: playback stops). Check that the saved aac plays; if the player reports an error, note the recorder's mime type from the file extension.
+
+Open: whether `<audio>` plays every recorder container on the device. A lock during recording discards the take. Picked audio files are still saved as plain Files (no player). Repeating reminders unverified. Battery-optimisation prompt and "X scheduled" indicator not built. Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: device-check Session 82, then Phase 16 D (image thumbnail grid and viewer). Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 81**
 
 Device pass on Session 80 (Decision 102). No code changed.

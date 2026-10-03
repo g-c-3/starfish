@@ -19,7 +19,7 @@
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + playback, D image viewer, G open Files with phone app, H PDF viewer)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + player built — Session 82, D image viewer, G open Files with phone app, H PDF viewer)
 
 ## Detailed
 
@@ -361,7 +361,8 @@ individual items) can be picked up in any order once prerequisites are met.
     `prompt()`: the reminder time (E), expense edit (Money).
   - [x] B — Text editor (Session 69): full-screen, word count, discard guard, Save leads into the dialog; rows
     open on tap (non-text types show a "coming later" toast until C–H).
-  - [ ] C — Voice: recorder screen (timer, record/stop) then playback (play/pause, scrub, speed).
+  - [~] C — Voice (Session 82, Decision 103): recorder screen (timer, Record/Stop), review with the player before
+    Save, then the saved-entry viewer (play/pause, scrub, speed 0.75 to 2×), Home and Vault. Not run on a device.
   - [ ] D — Image: thumbnail grid in the Image folder, full-screen viewer (swipe, pinch zoom).
   - [x] E — Reminder (Session 70): detail view (when, repeat, status, description, tags), Mark done / Reopen /
     Reschedule; greyed out and struck through in lists once done or fired; reminder time and repeat are part of the
