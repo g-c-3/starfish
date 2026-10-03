@@ -537,6 +537,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .field-row { display: flex; align-items: baseline; justify-content: space-between; }
 .field-hint { margin: 14px 2px 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #save-dialog { align-items: flex-end; padding: 0; z-index: 11; }
+#yesno-dialog { z-index: 12; } /* above the Save dialog (11), which it confirms over */
 #save-dialog .modal-box {
   max-width: 560px; max-height: 92vh; overflow-y: auto; border-radius: 28px 28px 0 0;
   padding: 22px 18px calc(18px + env(safe-area-inset-bottom, 0px));
