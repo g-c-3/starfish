@@ -189,7 +189,15 @@ async function insertEntry(db, entry) {
   }
 }
 
+// Typed text -> safe FTS5 query: each word quoted (so '.', '-', quotes are not syntax) and matched as a word prefix.
+// Raw text made names like "photo.png" a syntax error and "1001" miss "1001073062".
+function toFtsQuery(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).map((t) => `"${t.replace(/"/g, '""')}"*`).join(' ');
+}
+
 async function searchEntries(db, queryText, opts = {}) {
+  const match = toFtsQuery(queryText);
+  if (!match) return [];
   // Rank label matches above body matches using bm25 weighting (label column weighted higher).
   const rows = await db.query(
     `SELECT e.*, bm25(entries_fts, 2.0, 1.0) AS rank
@@ -197,7 +205,7 @@ async function searchEntries(db, queryText, opts = {}) {
      JOIN entries e ON e.id = entries_fts.id
      WHERE entries_fts MATCH ? AND e.deleted_at IS NULL
      ORDER BY rank LIMIT ?`,
-    [queryText, opts.limit || 50]
+    [match, opts.limit || 50]
   );
   return rows.values || [];
 }

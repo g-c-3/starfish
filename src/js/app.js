@@ -3049,7 +3049,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('search-input').addEventListener('input', async (e) => {
     const term = e.target.value;
     if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
-    const rows = await searchEntries(db, term);
+    let rows = [];
+    try { rows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }
     document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
