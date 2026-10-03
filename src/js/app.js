@@ -1034,6 +1034,12 @@ async function handleLocalRestore() {
     ? `Done — added ${result.summary.added}, skipped ${result.summary.skippedExactDup} exact duplicates, ` +
       `${result.summary.restoredLabeled} restored under "(Restored)".`
     : `Restore failed: ${result.reason || 'unknown error'}.`;
+  if (result.ok) {
+    // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
+    // Vault entries show without a relock. Locked Vault: nothing to do, unlock builds it fresh.
+    if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+    window.dispatchEvent(new Event('dumpzone-data-restored'));
+  }
 }
 
 function formatBytes(n) {
@@ -2647,7 +2653,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
   // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
-  window.addEventListener('dumpzone-reminders-changed', () => { renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {}); });
+  window.addEventListener('dumpzone-data-restored', () => {
+    renderMainTimeline().catch(() => {});
+    if (privateSessionKey) renderVault();
+  });
+    window.addEventListener('dumpzone-reminders-changed', () => { renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {}); });
   document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
 
   document.getElementById('vault-settings-card').addEventListener('toggle', updateBackButtonState);

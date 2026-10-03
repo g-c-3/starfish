@@ -250,13 +250,17 @@ async function restoreBackup(db, opts) {
     let label = entry.label;
 
     if (mode === 'append') {
-      const existing = (await db.query(`SELECT id FROM entries WHERE id=?`, [entry.id])).values || [];
+      const existing = (await db.query(`SELECT id FROM entries WHERE id=? AND deleted_at IS NULL`, [entry.id])).values || [];
       if (existing.length > 0) {
         summary.skippedExactDup += 1;
-        continue; // exact UUID match — caller can offer "restore anyway" as a forced re-run with a fresh UUID
+        continue; // exact UUID match among live entries — caller can offer "restore anyway" as a forced re-run with a fresh UUID
       }
+      // Trashed rows are not duplicates (Decision 110). A trashed row still owns the primary key, so the
+      // restored copy takes a fresh id; the trashed one stays in Trash untouched.
+      const trashedSameId = (await db.query(`SELECT id FROM entries WHERE id=?`, [entry.id])).values || [];
+      if (trashedSameId.length > 0) targetId = crypto.randomUUID();
       const labelMatch = (await db.query(
-        `SELECT id FROM entries WHERE label=? AND id != ?`, [entry.label, entry.id]
+        `SELECT id FROM entries WHERE label=? AND id != ? AND deleted_at IS NULL`, [entry.label, entry.id]
       )).values || [];
       if (labelMatch.length > 0) {
         targetId = crypto.randomUUID();
