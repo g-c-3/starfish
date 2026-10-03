@@ -88,6 +88,7 @@ public class ${RECEIVER} extends BroadcastReceiver {
             JSONObject notification = new JSONObject(source);
             JSONObject extra = notification.optJSONObject("extra");
             String entryId = extra == null ? "" : extra.optString("entryId", "");
+            boolean repeating = extra != null && extra.optBoolean("repeating", false);
             if (entryId.isEmpty()) return;
 
             long now = System.currentTimeMillis();
@@ -97,10 +98,13 @@ public class ${RECEIVER} extends BroadcastReceiver {
             NotificationManagerCompat.from(context).cancel(shownId);
 
             if ("done".equals(action)) {
-                // Same effect as cancelReminder() in notifications.js: the reminder and its snooze both go.
-                int[] ids = new int[MAX_OCCURRENCES + 1];
-                ids[0] = snoozeId;
-                for (int k = 0; k < MAX_OCCURRENCES; k++) ids[k + 1] = k == 0 ? mainId : hashIdToInt(entryId + ":r" + k); // repeating occurrences
+                // Same effect as cancelReminder() / cancelSnooze() in notifications.js.
+                // A repeating reminder is done for this time only (Decision 108): its occurrences stay scheduled.
+                int[] ids = repeating ? new int[] { snoozeId } : new int[MAX_OCCURRENCES + 1];
+                if (!repeating) {
+                    ids[0] = snoozeId;
+                    for (int k = 0; k < MAX_OCCURRENCES; k++) ids[k + 1] = k == 0 ? mainId : hashIdToInt(entryId + ":r" + k);
+                }
                 for (int id : ids) {
                     NotificationManagerCompat.from(context).cancel(id);
                     cancelTimer(context, id);
