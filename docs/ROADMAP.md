@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app, H PDF viewer)
-- [ ] DP — Device pass backlog (Sessions 55 to 74; run first, next session)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending)
 
 ## Detailed
 
@@ -387,29 +387,31 @@ individual items) can be picked up in any order once prerequisites are met.
     visible. Built by CI and confirmed on a device: reminder fires, Snooze and Done
     act with no app launch. Shade tap with the app open confirmed Session 85. Row state lags the tap until the
     queue is drained.
-- [ ] **DP — Device pass backlog (Sessions 55 to 74).** Built and reasoned from code, never confirmed on a device. Run
+- [~] **DP — Device pass backlog (Sessions 55 to 74).** Built and reasoned from code, never confirmed on a device. Run
   one by one, newest risk first; mark each with the session that confirms it.
-  - [ ] DP1 — Backup and restore (Session 69, Decision 91): install over an older build, existing entries survive the
+  - [x] DP1 — Backup and restore (Session 69, Decision 91): install over an older build, existing entries survive the
     migration; backup, then restore in append mode and in overwrite mode, keeps name, tags and description.
-  - [ ] DP2 — Credentials and lock (Sessions 65, 72): app password field empty after the lock button, idle lock, app
+  - [x] DP2 — Credentials and lock (Sessions 65, 72): app password field empty after the lock button, idle lock, app
     switch and screen off; Vault PIN field empty after the Vault locks; the lock button on Home and Settings shows the
     lock screen; first-run Continue still saves.
-  - [ ] DP3 — Biometrics (Sessions 65, 66): buttons hidden when none are enrolled; shown and working when enrolled.
-  - [ ] DP4 — Location capture (Session 57): permission dialog, a fix outdoors and indoors, timeout notice with no fix,
+  - [x] DP3 — Biometrics (Sessions 65, 66): buttons hidden when none are enrolled; shown and working when enrolled.
+  - [x] DP4 — Location capture (Session 57): permission dialog, a fix outdoors and indoors, timeout notice with no fix,
     Share sheet.
-  - [ ] DP5 — Location viewer (Session 71): coordinates and pin in both themes, Open in Maps launches the maps app,
+  - [x] DP5 — Location viewer (Session 71): coordinates and pin in both themes, Open in Maps launches the maps app,
     Copy, rename and tags from the pencil, locking the app with the viewer open.
-  - [ ] DP6 — Updates (Sessions 55, 58, 66): Check for updates names the newest build; Download update stays disabled
+  - [x] DP6 — Updates (Sessions 55, 58, 66): Check for updates names the newest build; Download update stays disabled
     until a check finds a newer one, then hands off to the download and completes.
-  - [ ] DP7 — Look (Sessions 64, 67): Inter font loads, tiles fit the screen width, light theme, no sideways scroll on
+  - [x] DP7 — Look (Sessions 64, 67): Inter font loads, tiles fit the screen width, light theme, no sideways scroll on
     Home or Vault, background art does not hurt legibility in either theme.
-  - [ ] DP8 — Batch add (Session 62): a second batch with the same label continues the numbering; Cancel saves nothing.
-  - [ ] DP9 — Row actions (Session 61): four actions in order on Home and Vault rows; Select files offers Share.
-  - [ ] DP10 — Home folders and counts (Sessions 59, 63): counts on the cards after capture; the Vault mirrors Home.
-  - [ ] DP11 — Reminder dialog (Session 70): preset chips, a past time refused, a fired one-off offers Reschedule only,
+  - [x] DP8 — Batch add (Session 62): a second batch with the same label continues the numbering; Cancel saves nothing.
+  - [x] DP9 — Row actions (Session 61): four actions in order on Home and Vault rows; Select files offers Share.
+  - [x] DP10 — Home folders and counts (Sessions 59, 63): counts on the cards after capture; the Vault mirrors Home.
+  - [x] DP11 — Reminder dialog (Session 70): preset chips, a past time refused, a fired one-off offers Reschedule only,
     deleting a reminder before it is due stops its notification.
-  - [ ] DP12 — Install over an older build with a reminder pending (Sessions 75 to 78): it still fires, buttons work.
-  - [ ] DP13 — Repeating reminders beyond the first day (Decisions 107, 108): a daily one fires again the next day;
+  - [x] DP12 — Install over an older build with a reminder pending (Sessions 75 to 78): it still fires, buttons work.
+  - [~] DP13 — Repeating reminders beyond the first day (Decisions 107, 108): a daily one fires again the next day;
     weekly and monthly ones; Done for now keeps the series; Repeat set to none stops it.
+  - Session 86: DP1 to DP12 confirmed on device. DP4 timeout notice (no fix) not tried. DP13: Done for now and Repeat
+    set to none confirmed; the next-day fire of daily, weekly and monthly repeats is still pending.
   - Confirmed in passing, Session 85: Save dialog and tags (Session 69), Back (Sessions 60, 83), Home multi-select
     (Session 62), reminder notification, Done and Snooze (Sessions 70, 73, 74).

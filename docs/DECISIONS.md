@@ -1668,3 +1668,28 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The stage is a fixed-size flex box, so tall and wide images fit entirely.
 - The Vault's file pickers set `multiple`, like Home (Decision 84): one file keeps its name; several offer keep-each-name or one numbered name (`name 1`, `name 2`). Vault entries keep no label history.
 - Bug fixed with it: `toBase64` in `crypto.js` spread the whole buffer into `String.fromCharCode`, which overflowed the call stack from roughly 100 KB, so a photo could not be encrypted into the Vault. It now converts in 32 KB chunks.
+
+---
+
+**110. Restore file picker accepts any file type.**
+- Cause: `#restore-file-input` used `accept=".dz,.dzbackup,application/json"`. Android's chooser maps the filter to MIME types; `.dz` has none, so only JSON stayed selectable and a `.dz` backup showed greyed out.
+- Fix: `accept="*/*"`. `handleLocalRestore()` already rejects a non-backup file (`JSON.parse`) and a wrong passkey fails decryption, so no new validation is needed.
+
+**111. Restore refreshes the Vault index and the lists.**
+- Cause: the Vault list reads an in-memory index built at unlock (Decision 39); restore never rebuilt it, so restored Vault entries stayed hidden until a relock.
+- Fix: after a successful restore, `buildVaultIndex` runs if the Vault is unlocked, then a `dumpzone-data-restored` event redraws Home counts and folder and the Vault lists. A locked Vault needs nothing: unlock builds the index fresh.
+
+**112. Append restore does not treat trashed entries as duplicates.** Refines Decision 7.
+- Cause: the exact-UUID and same-label checks read every row, so an entry sitting in Trash made its restored copy skip, or take a "(Restored)" suffix.
+- Rule: both checks count live rows only (`deleted_at IS NULL`). A live exact match is skipped as before. If the UUID exists only in Trash, the restored copy takes a fresh UUID (the trashed row still owns the primary key) and keeps its label; the trashed row stays in Trash.
+- Consequence: restoring an entry that is also in Trash, then restoring the trashed one, leaves two copies. Accepted.
+
+**113. Location capture shows progress and blocks repeat taps.**
+- Cause: a GPS fix takes up to 15 seconds with nothing on screen, so repeated taps looked reasonable.
+- Rule: while the fix is pending, a sticky "Fetching location…" message shows, the Home New buttons (`#folder-new-btn`, `#universal-new-btn`) are disabled, and a second Location capture is ignored. Both clear in a `finally` on success, timeout or refused permission. Failures keep their own notice.
+- `toast(message, sticky)` gained a sticky mode and `hideToast()`.
+
+**114. Discarding a capture asks Yes/No.**
+- Rule: in a Save dialog opened with the Discard label (voice, image, PDF, file, reminder, location), both the Discard button and Back ask "Discard? Yes, discard / No, keep it" before dropping the take. Dialogs labelled Cancel or Back to editing (edits, text notes) leave at once, as before.
+- `askYesNo()` and `#yesno-dialog`: one at a time; Back answers No and is checked first in the Back order (Decision 104); a lock closes it as No and the Save dialog closes through the lock path as before.
+

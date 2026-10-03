@@ -265,9 +265,10 @@ written with them anymore.
   silently taking a partial safety backup that leaves an unknown gap.
 
 ### Append-mode duplicate handling (UUID-based, since every entry has a stable id)
-- **Exact match (same UUID already exists):** skipped automatically, counted, not shown as a decision point —
+- **Exact match (same UUID already exists among live entries; trashed rows do not count, Decision 112):** skipped automatically, counted, not shown as a decision point —
   but the post-restore summary includes a **"Restore these anyway"** action. Forcing one in generates a *new*
-  UUID for the forced copy and labels it `(Restored)`, exactly like a label-collision case below.
+  UUID for the forced copy and labels it `(Restored)`, exactly like a label-collision case below. An entry whose UUID exists
+  only in Trash is restored under a fresh UUID with its own label; the trashed row stays in Trash.
 - **Different UUID, same/similar label:** appended as a new entry, with its label suffixed `(Restored)` (e.g.
   "Invoice (Restored)") so it's visually distinguishable in the timeline/search. The underlying file is never at
   real risk of a filesystem-level name collision, since files are stored under internally-generated unique names
@@ -556,6 +557,13 @@ the app is locked or closed; the Decision 100 minimise rule remains only as a fa
 before Decision 102; a plain tap on the
 notification does nothing, so content is never opened ahead of the lock screen. Deleting a reminder cancels its
 notifications; restoring a pending one reschedules it.
+
+### Restore refresh and Discard confirmation (Decisions 111, 114)
+After a restore the Vault index is rebuilt when the Vault is unlocked and `dumpzone-data-restored` redraws Home and Vault lists.
+In a capture Save dialog (Discard label) Discard and Back ask Yes/No through `askYesNo()` before dropping the take.
+
+### Location capture progress (Decision 113)
+While the fix is pending a sticky "Fetching location…" message shows and the Home New buttons are disabled.
 
 ### Location detail (Decision 93)
 Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG
