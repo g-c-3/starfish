@@ -163,6 +163,7 @@ function closeVaultFolder() {
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 // Static modals and the button that dismisses each one (Decision 104). Listed top-most first by the order Back checks them.
 const BACK_MODALS = [
+  ['yesno-dialog', 'yesno-no-btn'],
   ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
   ['new-chooser-modal', 'new-chooser-cancel-btn'],
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
@@ -177,7 +178,7 @@ function openModalDismiss() {
 }
 
 function backAction() {
-  if (activeSaveDialog) return () => activeSaveDialog.finish(null);
+  if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
   const modal = openModalDismiss();
   if (modal) return modal;
   if (activeEditor) return () => activeEditor.requestBack();
@@ -1115,13 +1116,37 @@ function hideToast() {
   document.getElementById('toast')?.classList.add('hidden');
 }
 
-let activeSaveDialog = null; // { finish, isVault }
+let activeSaveDialog = null; // { finish, isVault, requestLeave }
+let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
+
+// Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
+function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
+  if (activeYesNo) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const dlg = document.getElementById('yesno-dialog');
+    document.getElementById('yesno-title').textContent = title;
+    document.getElementById('yesno-text').textContent = text;
+    document.getElementById('yesno-yes-btn').textContent = yes;
+    document.getElementById('yesno-no-btn').textContent = no;
+    const finish = (v) => {
+      if (!activeYesNo) return;
+      activeYesNo = null;
+      dlg.classList.add('hidden');
+      resolve(v);
+    };
+    document.getElementById('yesno-yes-btn').onclick = () => finish(true);
+    document.getElementById('yesno-no-btn').onclick = () => finish(false);
+    activeYesNo = { finish };
+    dlg.classList.remove('hidden');
+  });
+}
 let activeEditor = null;     // { finish, requestBack, isVault }
 let activeViewer = null;     // { finish, back, isVault } — entry viewer shell (Decision 92); back honours the viewer's guard
 let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
 
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
 function dismissOverlays(vaultOnly = false) {
+  if (activeYesNo) activeYesNo.finish(false);
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
@@ -1239,9 +1264,15 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       }
       finish(result);
     };
-    $('sd-cancel-btn').onclick = () => finish(null);
+    // Capture dialogs (Discard) ask Yes/No before dropping the take; Cancel and Back to editing leave at once.
+    const requestLeave = async () => {
+      if (discardLabel !== 'Discard') { finish(null); return; }
+      const yes = await askYesNo({ title: 'Discard?', text: 'Nothing will be saved.', yes: 'Yes, discard', no: 'No, keep it' });
+      if (yes) finish(null);
+    };
+    $('sd-cancel-btn').onclick = requestLeave;
     dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) finish(null); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
-    activeSaveDialog = { finish, isVault };
+    activeSaveDialog = { finish, isVault, requestLeave };
     dlg.classList.remove('hidden');
     updateBackButtonState();
   });
