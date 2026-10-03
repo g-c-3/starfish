@@ -161,7 +161,7 @@ function closeVaultFolder() {
 function backAction() {
   if (activeSaveDialog) return () => activeSaveDialog.finish(null);
   if (activeEditor) return () => activeEditor.requestBack();
-  if (activeViewer) return () => activeViewer.finish();
+  if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
   if (currentLocation === 'vault') {
     if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
@@ -843,9 +843,13 @@ async function openVaultEntry(entryId) {
   const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeForVaultRow(row));
   return { row, blobUrl, ocrText: content.ocrText }; // caller must URL.revokeObjectURL(blobUrl) when done
 }
+// Extensions extensionForMimeType() can produce for a recording, plus the picked-audio ones.
+function audioMimeForExtension(ext) {
+  return { aac: 'audio/aac', webm: 'audio/webm', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext] || 'audio/aac';
+}
 function mimeTypeForVaultRow(row) {
   const byExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-    pdf: 'application/pdf', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
+    pdf: 'application/pdf', aac: 'audio/aac', webm: 'audio/webm', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
   return byExt[row.extension] || 'application/octet-stream';
 }
 
@@ -1079,7 +1083,7 @@ function toast(message) {
 
 let activeSaveDialog = null; // { finish, isVault }
 let activeEditor = null;     // { finish, requestBack, isVault }
-let activeViewer = null;     // { finish } — entry viewer shell (Decision 92)
+let activeViewer = null;     // { finish, back, isVault } — entry viewer shell (Decision 92); back honours the viewer's guard
 let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
 
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
@@ -1248,6 +1252,87 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
     updateBackButtonState();
     if (!text) setTimeout(() => ta.focus(), 60);
   });
+}
+
+// ---- Audio player (Phase 16 C, Decision 103). Shared by the voice viewer and the recorder's review step.
+// Plain <audio> on an in-memory blob URL: play/pause, scrub, speed. The caller owns the URL and revokes it.
+const PLAYER_SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+const ICON_PLAY = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
+function formatClock(sec) {
+  const s = Math.floor(isFinite(sec) && sec > 0 ? sec : 0);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+// fallbackMs: known length for containers that report none. onActivity: called while playing (keeps idle locks armed).
+function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null } = {}) {
+  container.innerHTML = `<div class="audio-player">
+    <button type="button" class="play-btn" aria-label="Play">${ICON_PLAY}</button>
+    <div class="player-track">
+      <input type="range" class="scrub" min="0" max="1000" value="0" step="1" aria-label="Seek">
+      <div class="player-times"><span class="p-cur">0:00</span><span class="p-dur">0:00</span></div>
+    </div>
+    <button type="button" class="speed-btn secondary-btn" aria-label="Playback speed">1×</button>
+  </div>`;
+  const q = (sel) => container.querySelector(sel);
+  const playBtn = q('.play-btn'), scrub = q('.scrub'), cur = q('.p-cur'), dur = q('.p-dur'), speedBtn = q('.speed-btn');
+  const audio = new Audio();
+  audio.preload = 'metadata';
+  let scrubbing = false, speedIdx = 0, dead = false;
+  const length = () => (isFinite(audio.duration) && audio.duration > 0 ? audio.duration : fallbackMs / 1000);
+  const paint = () => {
+    const d = length();
+    if (!scrubbing) {
+      scrub.value = d ? String(Math.min(1000, Math.round((audio.currentTime / d) * 1000))) : '0';
+      cur.textContent = formatClock(audio.currentTime);
+    }
+    dur.textContent = formatClock(d);
+  };
+  const showPlay = () => { playBtn.innerHTML = ICON_PLAY; playBtn.setAttribute('aria-label', 'Play'); };
+  audio.addEventListener('loadedmetadata', () => {
+    if (audio.duration === Infinity) { // no length in the container: a far seek makes the browser find it
+      const settle = () => { audio.removeEventListener('timeupdate', settle); audio.currentTime = 0; paint(); };
+      audio.addEventListener('timeupdate', settle);
+      audio.currentTime = 1e101;
+    }
+    paint();
+  });
+  audio.addEventListener('durationchange', paint);
+  audio.addEventListener('timeupdate', () => { paint(); if (!audio.paused && onActivity) onActivity(); });
+  audio.addEventListener('play', () => { playBtn.innerHTML = ICON_PAUSE; playBtn.setAttribute('aria-label', 'Pause'); });
+  audio.addEventListener('pause', showPlay);
+  audio.addEventListener('ended', () => { showPlay(); paint(); });
+  audio.addEventListener('error', () => { if (!dead) toast('Could not play this recording'); });
+  audio.src = url;
+  paint();
+
+  playBtn.onclick = () => {
+    if (!audio.paused) { audio.pause(); return; }
+    const d = length();
+    if (d && audio.currentTime >= d - 0.05) audio.currentTime = 0; // finished: play from the start
+    audio.play().catch(() => toast('Could not play this recording'));
+  };
+  scrub.addEventListener('pointerdown', () => { scrubbing = true; });
+  scrub.addEventListener('pointercancel', () => { scrubbing = false; paint(); });
+  scrub.addEventListener('input', () => { cur.textContent = formatClock((Number(scrub.value) / 1000) * length()); });
+  scrub.addEventListener('change', () => {
+    const d = length();
+    if (d) audio.currentTime = (Number(scrub.value) / 1000) * d;
+    scrubbing = false;
+    paint();
+  });
+  speedBtn.onclick = () => {
+    speedIdx = (speedIdx + 1) % PLAYER_SPEEDS.length;
+    audio.defaultPlaybackRate = audio.playbackRate = PLAYER_SPEEDS[speedIdx];
+    speedBtn.textContent = `${PLAYER_SPEEDS[speedIdx]}×`;
+  };
+  return {
+    destroy() {
+      dead = true;
+      try { audio.pause(); } catch { /* already stopped */ }
+      audio.removeAttribute('src');
+      audio.load();
+    }
+  };
 }
 
 // Reminder completion (Decision 92). Top-level: notification actions call these before the UI exists.
@@ -1887,7 +1972,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderVault();
             toast('Saved to the Vault');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
-        });
+        }, { isVault: true });
       } else if (type === 'reminder' || type === 'location' || type === 'money') {
         toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
       } else {
@@ -2061,47 +2146,105 @@ document.addEventListener('DOMContentLoaded', async () => {
     const map = { 'audio/aac': 'aac', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
     return map[mimeType] || map[mimeType?.split(';')[0]] || 'aac';
   }
-  let activeRecordingTimer = null;
-  async function startVoiceRecordingUI(onStopped) {
-    const hasPerm = await VoiceRecorder.hasAudioRecordingPermission();
-    if (!hasPerm.value) {
-      const req = await VoiceRecorder.requestAudioRecordingPermission();
-      if (!req.value) { alert('Microphone permission denied.'); return; }
-    }
+  // Recorder screen: ready -> recording -> review (player) -> Save hands the take to onStopped (the Save dialog).
+  // Backing out of a take asks twice; a lock discards it, as it drops unsaved editor text (Decision 103).
+  async function startVoiceRecordingUI(onStopped, { isVault = false } = {}) {
+    // Asked before the screen opens: the system prompt pauses the app, which a lock would treat as backgrounding.
     try {
-      const started = await VoiceRecorder.startRecording();
-      if (!started.value) { alert('Could not start recording.'); return; }
-    } catch (err) {
-      alert(`Could not start recording: ${err.message || err}`); // e.g. MICROPHONE_BEING_USED
-      return;
+      const has = await VoiceRecorder.hasAudioRecordingPermission();
+      if (!has.value && !(await VoiceRecorder.requestAudioRecordingPermission()).value) { toast('Microphone permission denied'); return; }
+    } catch (err) { toast(`Microphone unavailable: ${err.message || err}`); return; }
+
+    let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
+    let armed = false, armTimer = null, bodyEl = null, closeFn = null;
+    const dropReview = () => {
+      if (player) { player.destroy(); player = null; }
+      if (url) { URL.revokeObjectURL(url); url = null; }
+    };
+    const cleanup = () => {
+      const was = state;
+      state = 'closed';
+      clearInterval(timer); clearTimeout(armTimer);
+      dropReview();
+      if (was === 'recording') VoiceRecorder.stopRecording().catch(() => {}); // take discarded
+    };
+    const guard = () => {
+      if (state === 'ready' || state === 'closed' || armed) return true;
+      armed = true;
+      toast(state === 'recording' ? 'Recording in progress — tap back again to discard it' : 'Recording not saved — tap back again to discard it');
+      armTimer = setTimeout(() => { armed = false; }, 3000);
+      return false;
+    };
+    const tick = () => {
+      const el = bodyEl && bodyEl.querySelector('#rec-timer');
+      if (el) el.textContent = formatClock((Date.now() - startedAt) / 1000);
+    };
+    const start = async () => {
+      try {
+        const r = await VoiceRecorder.startRecording();
+        if (!r.value) { toast('Could not start recording'); return; }
+      } catch (err) { toast(`Could not start recording: ${err.message || err}`); return; } // e.g. MICROPHONE_BEING_USED
+      if (state === 'closed') { VoiceRecorder.stopRecording().catch(() => {}); return; }
+      state = 'recording'; startedAt = Date.now();
+      timer = setInterval(tick, 250);
+      draw();
+    };
+    const stop = async () => {
+      clearInterval(timer);
+      state = 'stopping';
+      try {
+        const res = (await VoiceRecorder.stopRecording()).value; // { recordDataBase64, msDuration, mimeType }
+        if (state === 'closed') return;
+        taken = { base64: res.recordDataBase64, mimeType: res.mimeType, ms: res.msDuration || (Date.now() - startedAt) };
+        url = base64ToBlobUrl(taken.base64, taken.mimeType || 'audio/aac');
+        state = 'review';
+      } catch (err) {
+        if (state === 'closed') return;
+        toast(`Recording failed: ${err.message || err}`); // e.g. EMPTY_RECORDING if stopped instantly
+        state = 'ready';
+      }
+      draw();
+    };
+    function draw() {
+      const body = bodyEl;
+      if (!body || state === 'closed') return;
+      if (state === 'review') {
+        body.innerHTML = `
+          <div class="detail-hero" data-type="voice">
+            <span class="row-icon">${iconSvg('voice')}</span>
+            <div class="hero-when">${formatClock(taken.ms / 1000)}</div>
+            <div class="hero-sub">Review before saving</div>
+          </div>
+          <div id="rec-player"></div>
+          <div class="detail-actions">
+            <button id="rec-save-btn">Save</button>
+            <button id="rec-again-btn" class="secondary-btn">Record again</button>
+          </div>
+          <div class="detail-actions rec-discard"><button id="rec-discard-btn" class="secondary-btn">Discard</button></div>`;
+        player = createAudioPlayer(body.querySelector('#rec-player'), url, { fallbackMs: taken.ms });
+        body.querySelector('#rec-save-btn').onclick = () => { saved = taken; closeFn(); };
+        body.querySelector('#rec-again-btn').onclick = () => { dropReview(); taken = null; state = 'ready'; draw(); };
+        body.querySelector('#rec-discard-btn').onclick = () => { toast('Recording discarded'); closeFn(); };
+        return;
+      }
+      const recording = state === 'recording' || state === 'stopping';
+      body.innerHTML = `
+        <div class="detail-hero rec-hero${recording ? ' live' : ''}" data-type="voice">
+          <span class="row-icon">${iconSvg('voice')}</span>
+          <div class="hero-when" id="rec-timer">0:00</div>
+          <div class="hero-sub">${recording ? 'Recording…' : 'Tap Record to start'}</div>
+        </div>
+        <div class="detail-actions">
+          <button id="rec-main-btn" class="${recording ? 'rec-stop' : ''}"${state === 'stopping' ? ' disabled' : ''}>${recording ? 'Stop' : 'Record'}</button>
+        </div>`;
+      body.querySelector('#rec-main-btn').onclick = recording ? stop : start;
     }
 
-    const banner = document.createElement('div');
-    banner.className = 'modal-overlay';
-    banner.innerHTML = `
-      <div class="modal-box">
-        <h3>🔴 Recording… <span id="recording-timer">0:00</span></h3>
-        <button id="recording-stop-btn">Stop</button>
-      </div>`;
-    document.body.appendChild(banner);
-    let seconds = 0;
-    activeRecordingTimer = setInterval(() => {
-      seconds += 1;
-      const el = document.getElementById('recording-timer');
-      if (el) el.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-    }, 1000);
-
-    document.getElementById('recording-stop-btn').addEventListener('click', async () => {
-      clearInterval(activeRecordingTimer);
-      banner.remove();
-      try {
-        const result = await VoiceRecorder.stopRecording();
-        await onStopped(result.value); // { recordDataBase64, msDuration, mimeType } — verified against
-        // the plugin's actual shipped type definitions, not just its (inconsistent) README
-      } catch (err) {
-        alert(`Recording failed: ${err.message || err}`); // e.g. EMPTY_RECORDING if stopped instantly
-      }
-    }, { once: true });
+    await openViewer({
+      title: 'Record voice', isVault, guard, onClose: cleanup,
+      render: async (body, { close }) => { bodyEl = body; closeFn = close; draw(); }
+    });
+    if (saved) await onStopped({ recordDataBase64: saved.base64, mimeType: saved.mimeType, msDuration: saved.ms });
   }
 
   // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
@@ -2426,22 +2569,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Entry viewer shell (Decision 92). render(bodyEl, helpers) fills the body; call helpers.refresh() after a change.
-  function openViewer({ title, isVault = false, render, onEdit }) {
+  // onClose runs on every close, including a lock's forced close. guard() (optional) is asked on Back only and may refuse.
+  function openViewer({ title, isVault = false, render, onEdit, onClose = null, guard = null }) {
     return new Promise((resolve) => {
       const $ = (id) => document.getElementById(id);
       const screen = $('viewer-screen'), body = $('viewer-body');
       $('viewer-title').textContent = title;
       const finish = () => {
+        if (onClose) { try { onClose(); } catch { /* closing anyway */ } }
         screen.classList.add('hidden');
         body.innerHTML = '';
         activeViewer = null;
         updateBackButtonState();
         resolve();
       };
+      const back = () => { if (!guard || guard()) finish(); };
       const refresh = async () => { await render(body, { refresh, close: finish }); };
-      $('viewer-back-btn').onclick = finish;
+      $('viewer-back-btn').onclick = back;
+      $('viewer-edit-btn').classList.toggle('hidden', !onEdit);
       $('viewer-edit-btn').onclick = async () => { if (onEdit) { await onEdit(); await refresh(); } };
-      activeViewer = { finish, isVault };
+      activeViewer = { finish, back, isVault };
       screen.classList.remove('hidden');
       updateBackButtonState();
       refresh();
@@ -2543,7 +2690,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tapping a row opens it. Text, reminder and location have viewers; the other types follow (Phase 16 C, D, G, H).
+  // Saved voice entry: player plus details. Vault audio is decrypted on open into an in-memory URL, revoked on close.
+  async function openVoice(item, isVault) {
+    let url = null, player = null;
+    const fresh = async () => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    const source = async () => {
+      if (url) return url;
+      if (isVault) { url = (await openVaultEntry(item.id)).blobUrl; return url; }
+      const row = await fresh();
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
+      url = base64ToBlobUrl(data, audioMimeForExtension(row.extension));
+      return url;
+    };
+    await openViewer({
+      title: 'Voice', isVault,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      onClose: () => { if (player) { player.destroy(); player = null; } if (url) { URL.revokeObjectURL(url); url = null; } },
+      render: async (body) => {
+        const row = await fresh();
+        const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
+        const saved = isVault ? row.createdAt : row.created_at;
+        body.innerHTML = `
+          <div class="detail-hero" data-type="voice">
+            <span class="row-icon">${iconSvg('voice')}</span>
+            <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
+            <div class="hero-sub">Voice recording</div>
+          </div>
+          <div id="vv-player"></div>
+          <dl class="detail-list">
+            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
+            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
+          </dl>`;
+        if (player) { player.destroy(); player = null; }
+        try {
+          player = createAudioPlayer(body.querySelector('#vv-player'), await source(), { onActivity: isVault ? armVaultAutoLock : armAppAutoLock });
+        } catch (err) {
+          body.querySelector('#vv-player').innerHTML = `<div class="hero-note">Could not open this recording: ${escapeHtml(String(err.message || err))}</div>`;
+        }
+      }
+    });
+  }
+
+  // Tapping a row opens it. Text, reminder, location and voice have viewers; the other types follow (Phase 16 C, D, G, H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -2555,6 +2747,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (item.type === 'note') await openNote(item, isVault);
     else if (item.type === 'reminder' && !isVault) await openReminder(item);
     else if (item.type === 'location' && !isVault) await openLocation(item);
+    else if (item.type === 'voice') await openVoice(item, isVault);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
