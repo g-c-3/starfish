@@ -637,3 +637,21 @@ textarea { resize: none; line-height: 1.5; display: block; }
 #rec-main-btn.rec-stop { background: var(--danger); color: #fff; }
 @keyframes rec-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.5); } 50% { box-shadow: 0 0 0 12px rgba(217, 83, 79, 0); } }
 @media (prefers-reduced-motion: reduce) { .rec-hero.live .row-icon { animation: none; } }
+
+/* ---- Back stays visible everywhere (Decision 104). Back-only: lock, first-run, ad gate, and above any overlay. ---- */
+#bottom-nav.back-only, body.overlay-open #bottom-nav {
+  left: 50%; right: auto; transform: translateX(-50%); gap: 0; padding: 0;
+  background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+#bottom-nav.back-only [data-nav], body.overlay-open #bottom-nav [data-nav] { display: none; }
+#bottom-nav.back-only #nav-back-btn, body.overlay-open #bottom-nav #nav-back-btn {
+  margin: 0; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+body.overlay-open #bottom-nav { z-index: 30; } /* above the Save dialog (11) and toast-free zone; the toast sits at the top */
+/* Keep each overlay's own controls clear of the floating button. */
+body.overlay-open #viewer-body { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+body.overlay-open #editor-screen { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+body.overlay-open .editor-count { padding-bottom: 6px; }
+body.overlay-open .modal-overlay, body.overlay-open #save-dialog, body.overlay-open #new-chooser-modal { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+body.overlay-open #save-dialog .modal-box, body.overlay-open #new-chooser-modal .modal-box { border-radius: 24px; }
+body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
