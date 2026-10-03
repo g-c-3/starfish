@@ -75,6 +75,7 @@ public class ${RECEIVER} extends BroadcastReceiver {
     private static final String PREFS = "CapacitorStorage"; // the Capacitor Preferences store, read by app.js
     private static final String KEY_PREFIX = "dz_ra:";
     private static final long SNOOZE_MS = 10L * 60L * 1000L;
+    private static final int MAX_OCCURRENCES = 30; // same as notifications.js
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -97,7 +98,9 @@ public class ${RECEIVER} extends BroadcastReceiver {
 
             if ("done".equals(action)) {
                 // Same effect as cancelReminder() in notifications.js: the reminder and its snooze both go.
-                int[] ids = { mainId, snoozeId };
+                int[] ids = new int[MAX_OCCURRENCES + 1];
+                ids[0] = snoozeId;
+                for (int k = 0; k < MAX_OCCURRENCES; k++) ids[k + 1] = k == 0 ? mainId : hashIdToInt(entryId + ":r" + k); // repeating occurrences
                 for (int id : ids) {
                     NotificationManagerCompat.from(context).cancel(id);
                     cancelTimer(context, id);
