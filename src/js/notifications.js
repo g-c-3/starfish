@@ -28,32 +28,65 @@ async function requestPermissions() {
   return perm.display === 'granted';
 }
 
-async function scheduleReminder(entry) {
+// Repeating reminders (Decision 106): the plugin fires an `at` notification once and ignores `every` beside it, so a
+// repeating reminder is scheduled as its next occurrences, each an ordinary exact one-off. The app tops the window up
+// on launch and resume (refillRepeatingReminders). Occurrence k > 0 has id hash(`<entryId>:r<k>`); k = 0 keeps the plain id.
+const REPEAT_WINDOW = { daily: 30, weekly: 26, monthly: 12 };
+const MAX_OCCURRENCES = 30;
+const ALARM_BUDGET = 400; // Android allows 500 alarms per app; stay clear of it across all repeating reminders
+const occurrenceId = (entryId, k) => hashIdToInt(k === 0 ? entryId : `${entryId}:r${k}`);
+
+// The first `count` occurrences strictly after `after`, stepping from the original time. Daily and weekly keep the
+// local clock time across clock changes; monthly keeps the original day of month, clamped to short months.
+function nextOccurrences(fireAt, rule, after, count) {
+  const start = new Date(fireAt);
+  const out = [];
+  for (let n = 0; out.length < count && n < 5000; n++) {
+    const d = new Date(start);
+    if (rule === 'daily') d.setDate(start.getDate() + n);
+    else if (rule === 'weekly') d.setDate(start.getDate() + 7 * n);
+    else if (rule === 'monthly') {
+      d.setDate(1);
+      d.setMonth(start.getMonth() + n);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(start.getDate(), last));
+    } else return out;
+    if (d.getTime() > after) out.push(d.getTime());
+  }
+  return out;
+}
+
+async function scheduleReminder(entry, { windowSize = null } = {}) {
   // entry: { id, label, fire_at, repeat_rule }
   await ensureChannel();
-
+  const base = { title: 'Dumpzone Reminder', body: entry.label, channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id } };
   // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
-  const schedule = { at: new Date(entry.fire_at), allowWhileIdle: true };
-  if (entry.repeat_rule === 'daily') schedule.every = 'day';
-  if (entry.repeat_rule === 'weekly') schedule.every = 'week';
-  if (entry.repeat_rule === 'monthly') schedule.every = 'month';
-
+  const times = REPEAT_WINDOW[entry.repeat_rule]
+    ? nextOccurrences(entry.fire_at, entry.repeat_rule, Date.now() + 1000, Math.min(windowSize || REPEAT_WINDOW[entry.repeat_rule], MAX_OCCURRENCES))
+    : [entry.fire_at];
+  // Occurrences past the new window (or left over from when this was a repeating reminder) are dropped; the ones being
+  // scheduled replace their own ids, and a pending snooze is left alone.
+  const stale = [];
+  for (let k = times.length; k < MAX_OCCURRENCES; k++) stale.push({ id: occurrenceId(entry.id, k) });
+  await LocalNotifications.cancel({ notifications: stale });
+  if (!times.length) return;
   await LocalNotifications.schedule({
-    notifications: [{
-      id: hashIdToInt(entry.id),
-      title: 'Dumpzone Reminder',
-      body: entry.label,
-      channelId: CHANNEL_ID,
-      schedule,
-      actionTypeId: 'REMINDER_ACTIONS',
-      extra: { entryId: entry.id }
-    }]
+    notifications: times.map((at, k) => ({ ...base, id: occurrenceId(entry.id, k), schedule: { at: new Date(at), allowWhileIdle: true } }))
   });
+}
+
+// Tops up every live repeating reminder's window. Called on launch and on resume (throttled by the caller).
+async function refillRepeatingReminders(rows) {
+  const repeating = rows.filter((r) => REPEAT_WINDOW[r.repeat_rule]);
+  const windowSize = Math.max(1, Math.min(30, Math.floor(ALARM_BUDGET / Math.max(1, repeating.length))));
+  for (const r of repeating) await scheduleReminder(r, { windowSize });
 }
 
 async function cancelReminder(entryId) {
   // The snooze notification has its own id, so cancelling a reminder cancels both.
-  await LocalNotifications.cancel({ notifications: [{ id: hashIdToInt(entryId) }, { id: hashIdToInt(`${entryId}:snooze`) }] });
+  const ids = [{ id: hashIdToInt(`${entryId}:snooze`) }];
+  for (let k = 0; k < MAX_OCCURRENCES; k++) ids.push({ id: occurrenceId(entryId, k) }); // every repeating occurrence too
+  await LocalNotifications.cancel({ notifications: ids });
 }
 
 // One-off notification N minutes from now. Separate id so snoozing a repeating reminder
@@ -104,4 +137,4 @@ function hashIdToInt(uuid) {
   return Math.abs(hash);
 }
 
-export { retireOldChannel, scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };
+export { retireOldChannel, scheduleReminder, refillRepeatingReminders, nextOccurrences, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };

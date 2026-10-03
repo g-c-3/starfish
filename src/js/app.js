@@ -6,7 +6,7 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
-import { retireOldChannel, scheduleReminder, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
+import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
@@ -239,6 +239,8 @@ async function bootstrap() {
       await metaSet('reminder_actions', '2');
     } catch { /* retried on next launch */ }
   }
+  // Repeating reminders are scheduled as a window of upcoming occurrences (Decision 106): top it up now and on resume.
+  refillRepeating();
   // Snooze / Done tapped while the app was closed or locked: applied before any screen shows, no unlock needed. The poll
   // covers a tap from the shade while the app is open (no resume event fires then).
   await drainQueuedReminderActions();
@@ -288,7 +290,7 @@ async function bootstrap() {
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
-    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); return; } // only act on going TO background, not returning from it
+    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); return; } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });
@@ -1523,6 +1525,16 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
 async function markReminderDone(id) {
   await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
   try { await cancelReminder(id); } catch { /* nothing scheduled */ }
+}
+// Re-arms the window for repeating reminders, at most every 6 hours; never blocks the UI.
+let lastRefillAt = 0;
+async function refillRepeating() {
+  if (!db || Date.now() - lastRefillAt < 6 * 60 * 60 * 1000) return;
+  lastRefillAt = Date.now();
+  try {
+    const live = (await db.query(`SELECT * FROM entries WHERE type = 'reminder' AND deleted_at IS NULL AND completed_at IS NULL AND repeat_rule IS NOT NULL`)).values || [];
+    await refillRepeatingReminders(live);
+  } catch { lastRefillAt = 0; /* retried on the next resume */ }
 }
 // Snooze / Done taps handled natively with the app closed or locked (Decision 102). The receiver only queues
 // {a: action, e: entryId, t: time} under dz_ra:* keys in the Preferences store; the database changes here, in tap order.
