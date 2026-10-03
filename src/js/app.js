@@ -2964,7 +2964,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openViewer({
       title: items[index]?.label || 'Image', isVault,
       onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
-      onClose: () => { token++; viewerScreen.classList.remove('image-mode'); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      onClose: () => { token++; viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
       render: async (body, { close, refresh }) => {
         openViewerRefresh = refresh;
         if (!items.length) { close(); return; }
@@ -2975,13 +2975,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="img-stage"><img class="img-full" alt="" draggable="false">
             <div class="img-loading">Loading…</div>
             ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
-          </div>
-          <div class="img-counter">${index + 1} / ${items.length}</div>
-          <div class="img-actions">
-            <button type="button" id="img-share-btn" class="icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>
-            <button type="button" id="img-download-btn" class="icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>
-            <button type="button" id="img-delete-btn" class="icon-btn" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>
           </div>`;
+        // Count and actions sit in the thin header, left of the existing Edit (rename) button.
+        viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove());
+        const editBtn = document.getElementById('viewer-edit-btn');
+        const hdr = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const n = t.content.firstChild; editBtn.before(n); return n; };
+        hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
+        const shareBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>`);
+        const downloadBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>`);
+        const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
         const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
@@ -2995,9 +2997,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           b.addEventListener('pointerup', (e) => e.stopPropagation());
           b.addEventListener('click', () => go(step));
         }
-        body.querySelector('#img-share-btn').onclick = () => window.Dumpzone.shareEntry(item.id);
-        body.querySelector('#img-download-btn').onclick = () => window.Dumpzone.downloadPlain(item.id);
-        body.querySelector('#img-delete-btn').onclick = async () => {
+        shareBtn.onclick = () => window.Dumpzone.shareEntry(item.id);
+        downloadBtn.onclick = () => window.Dumpzone.downloadPlain(item.id);
+        deleteBtn.onclick = async () => {
           if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
           items.splice(index, 1);
           if (!items.length) { close(); return; }
