@@ -2976,14 +2976,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="img-loading">Loading…</div>
             ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
           </div>`;
-        // Count and actions sit in the thin header, left of the existing Edit (rename) button.
+        // Header order in image mode: back, name, Edit (rename), Share, Download, Delete, count. Appended after Edit.
         viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove());
         const editBtn = document.getElementById('viewer-edit-btn');
-        const hdr = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const n = t.content.firstChild; editBtn.before(n); return n; };
-        hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
+        const hdr = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const n = t.content.firstChild; editBtn.parentNode.append(n); return n; };
         const shareBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>`);
         const downloadBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>`);
         const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
+        hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
         const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
