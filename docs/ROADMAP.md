@@ -18,6 +18,7 @@
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
+- [ ] 16-pre — Snooze and Done from the notification without opening the app (next)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + playback, D image viewer, G open Files with phone app, H PDF viewer)
 
 ## Detailed
@@ -244,9 +245,9 @@
   39, Decision 64) — a real Settings toggle (off by default), `@capacitor-community/privacy-screen`
   (pinned `5.2.0` for Capacitor 6 compatibility) blanking the recents preview and blocking screenshots
   together, replacing Session 37/38's build-time-only `MainActivity` patch (Decisions 62/63) entirely
-  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Exact reminder delivery via exact-alarm permissions (Session 78, Decision 101)** — not run on a device.
-  **Notification buttons return the app to the background (Session 77, Decision 100)** — not run on a device; snooze delivery confirmed on device.
-  **Snoozed reminder state (Session 76, Decision 99)** — not run on a device.
+  — that approach is gone, not just superseded in docs; `scripts/patch-mainactivity.js` deleted. **Exact reminder delivery via exact-alarm permissions (Session 78, Decision 101)** — device-verified Session 79: fires with the app closed and battery saver on.
+  **Notification buttons return the app to the background (Session 77, Decision 100)** — device-verified Session 79; the app still shows for about a second first.
+  **Snoozed reminder state (Session 76, Decision 99)** — device-verified Session 79: Snooze shows "Snoozed until", Done greys the row.
   **Reminders fire while closed: `allowWhileIdle` (Session 75, Decision 97)** — not run on a device.
   **Reminder banner channel, default sound (Session 74, Decision 96)** — not run on a device.
   **Reminder save toast with distance (Session 73, Decision 95)** — not run on a device.
@@ -376,3 +377,7 @@ individual items) can be picked up in any order once prerequisites are met.
     (Vault files get a short-lived decrypted copy in app cache); a real map needs network tiles, which
     would break the single-network-call rule, so F uses coordinates plus hand-off.
   - Suggested order: A, B, E, F, C, D, G, H.
+  - **Next, before C: notification Snooze and Done without opening the app.** Today both buttons launch the app for
+    about a second (plugin activity intents, Decision 99) and Decision 100 sends it back. Goal: act on the tap
+    with no app launch. Needs a native receiver patched in by CI. Open: how the receiver updates the database and
+    reschedules the snooze. Not started.

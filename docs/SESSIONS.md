@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 79**
+
+Device pass on the reminder work from Sessions 75 to 78; screen recordings reviewed. No code changed.
+- Reminder fired on time with the app closed and battery saver on (Decisions 97, 101).
+- Snooze 10 min: app appears for about a second, then returns to the launcher; the row reads "Snoozed until <time>" and stays active (Decisions 99, 100).
+- Done: same brief appearance and return; the row greys as Done.
+- A reminder that had already fired earlier and was snoozed from its notification shows its own snooze time, as intended.
+
+Decisions made: none.
+
+Open: the brief appearance on Snooze and Done is the plugin's activity intent; removing it needs a native receiver patch (not built). Repeating reminders unverified. Battery-optimisation prompt and "X scheduled" indicator not built. Notification small icon drawable. Play distribution deferred (Decision 98); both exact-alarm permissions are restricted there.
+
+Next session start point: snooze and Done from the notification without opening the app (native receiver patch in CI; handle the database update natively or by a background-safe route; keep the lock rules, the snoozed state and the `allowWhileIdle`/exact scheduling intact; check against ARCHITECTURE.md Credentials first). Then Phase 16 C (voice recorder and player). Open choices for G and H. Money capture shape still to be given. Device pass on Sessions 59 to 74 still pending outside reminders.
+
+---
+
 **Session 78**
 
 Reported: a reminder due 5:20 am did not notify while the app was closed and appeared once the app was opened, though earlier tests fired on time (Decision 101).

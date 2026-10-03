@@ -83,3 +83,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-03 | Session 76 | Decision 99 | Snoozed reminder state: row stays active with snooze time instead of greying out |
 | 2026-10-03 | Session 77 | Decision 100 | Snooze delivery confirmed on device; app returns to previous screen after a notification Snooze/Done |
 | 2026-10-03 | Session 78 | Decision 101 | Exact-alarm permissions added so reminders fire on time while closed |
+| 2026-10-03 | Session 79 | none | Device pass: exact delivery, snooze and done confirmed working with the app closed |
