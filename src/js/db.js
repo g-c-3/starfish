@@ -207,18 +207,32 @@ function toFtsQuery(text) {
 }
 
 async function searchEntries(db, queryText, opts = {}) {
-  const match = toFtsQuery(queryText);
-  if (!match) return [];
-  // Rank label matches above body matches using bm25 weighting (label column weighted higher).
-  const rows = await db.query(
-    `SELECT e.*, bm25(entries_fts, 2.0, 1.0) AS rank
-     FROM entries_fts
-     JOIN entries e ON e.id = entries_fts.id
-     WHERE entries_fts MATCH ? AND e.deleted_at IS NULL
-     ORDER BY rank LIMIT ?`,
-    [match, opts.limit || 50]
-  );
-  return rows.values || [];
+  const limit = opts.limit || 50;
+  const terms = String(queryText || '').trim().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  // 1. Ranked word-prefix matches (label weighted above body).
+  let ranked = [];
+  try {
+    ranked = (await db.query(
+      `SELECT e.*, bm25(entries_fts, 2.0, 1.0) AS rank
+       FROM entries_fts
+       JOIN entries e ON e.id = entries_fts.id
+       WHERE entries_fts MATCH ? AND e.deleted_at IS NULL
+       ORDER BY rank LIMIT ?`,
+      [toFtsQuery(queryText), limit]
+    )).values || [];
+  } catch { /* unreadable query: fall through to the substring pass */ }
+  // 2. Substring matches anywhere in label, body or description, like the Vault's search ("1073" finds "1001073062.png").
+  //    Private entries are excluded, as they are from the index.
+  const like = (t) => `%${t.replace(/[\\%_]/g, '\\$&')}%`;
+  const clause = `(COALESCE(label,'') || ' ' || COALESCE(body_text,'') || ' ' || COALESCE(description,'')) LIKE ? ESCAPE '\\'`;
+  const sub = (await db.query(
+    `SELECT * FROM entries WHERE is_private = 0 AND deleted_at IS NULL AND ${terms.map(() => clause).join(' AND ')}
+     ORDER BY created_at DESC LIMIT ?`,
+    [...terms.map(like), limit]
+  )).values || [];
+  const seen = new Set(ranked.map((r) => r.id));
+  return ranked.concat(sub.filter((r) => !seen.has(r.id))).slice(0, limit);
 }
 
 async function softDelete(db, id) {
