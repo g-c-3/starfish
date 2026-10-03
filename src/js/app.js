@@ -18,6 +18,7 @@ import {
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
 import { App } from '@capacitor/app';
+import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
@@ -210,7 +211,19 @@ async function bootstrap() {
       await metaSet('reminder_channel', '2');
     } catch { /* retried on next launch */ }
   }
-  // Snooze / Done buttons on a reminder notification (Decision 92). Needs only the database, so it works while the app is locked.
+  // One-time reschedule (Decision 102): notifications built before the native receiver carry the old launch-the-app buttons.
+  if ((await metaGet('reminder_actions', '1')) !== '2') {
+    try {
+      const live = (await db.query(`SELECT * FROM entries WHERE type = 'reminder' AND deleted_at IS NULL AND completed_at IS NULL`)).values || [];
+      for (const r of live) if (r.repeat_rule || r.fire_at > Date.now()) await scheduleReminder(r);
+      await metaSet('reminder_actions', '2');
+    } catch { /* retried on next launch */ }
+  }
+  // Snooze / Done tapped while the app was closed or locked: applied before any screen shows, no unlock needed. The poll
+  // covers a tap from the shade while the app is open (no resume event fires then).
+  await drainQueuedReminderActions();
+  setInterval(() => { if (document.visibilityState === 'visible') drainQueuedReminderActions(); }, 4000);
+  // Snooze / Done buttons on a reminder notification (Decision 92). Fallback for notifications scheduled before Decision 102: those buttons still launch the app. Needs only the database, so it works while the app is locked.
   listenForReminderActions(async (actionId, entryId) => {
     try {
       const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
@@ -255,7 +268,7 @@ async function bootstrap() {
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
-    if (isActive) { lastResumeAt = Date.now(); return; } // only act on going TO background, not returning from it
+    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); return; } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });
@@ -1242,6 +1255,34 @@ async function markReminderDone(id) {
   await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
   try { await cancelReminder(id); } catch { /* nothing scheduled */ }
 }
+// Snooze / Done taps handled natively with the app closed or locked (Decision 102). The receiver only queues
+// {a: action, e: entryId, t: time} under dz_ra:* keys in the Preferences store; the database changes here, in tap order.
+const QUEUED_ACTION_PREFIX = 'dz_ra:';
+const SNOOZE_MS = 10 * 60 * 1000;
+let drainingQueuedActions = false;
+async function drainQueuedReminderActions() {
+  if (drainingQueuedActions || !db) return;
+  drainingQueuedActions = true;
+  try {
+    const { keys } = await Preferences.keys();
+    const mine = keys.filter((k) => k.startsWith(QUEUED_ACTION_PREFIX));
+    if (!mine.length) return;
+    const items = [];
+    for (const key of mine) {
+      const { value } = await Preferences.get({ key });
+      try { items.push(JSON.parse(value)); } catch { /* unreadable: dropped with the rest below */ }
+    }
+    items.sort((x, y) => x.t - y.t);
+    for (const it of items) {
+      if (it.a === 'done') await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t, it.t, it.e]);
+      else if (it.a === 'snooze') await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t + SNOOZE_MS, it.t, it.e]);
+    }
+    for (const key of mine) await Preferences.remove({ key }); // after the writes: a failure above is retried, same result
+    window.dispatchEvent(new Event('dumpzone-reminders-changed'));
+  } catch { /* retried on the next tick */ }
+  finally { drainingQueuedActions = false; }
+}
+
 async function reopenReminder(id) {
   await db.run(`UPDATE entries SET completed_at = NULL, updated_at = ? WHERE id = ?`, [Date.now(), id]);
   const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
