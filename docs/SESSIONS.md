@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 84**
+
+Phase 16 D: image thumbnail grid and full-screen viewer (Decision 105).
+- `app.js`: thumbnail pipeline (lazy tiles, two decodes at a time, 320 px JPEG; Home cached in the cache directory, Vault in memory only and emptied by `lockVault()`); `attachZoomPan()` (pinch, pan, double-tap, swipe); `openImageViewer()` with Share, Download, Delete, Edit; image folders in Home and the Vault render a grid; `openEntry` opens image rows from search.
+- `style.css`: grid, stage, arrows, counter.
+
+Decisions made: 105.
+
+Verified: `app.js` syntax check, `vite build`, gesture logic in a scratch DOM (swipe, short drag ignored, pinch, clamped pan, double-tap in and out, cancel). Not run through CI, not run on a device.
+
+Device checks: Home, Image folder: tiles fill in as you scroll; tap one; swipe left and right, use the arrows; pinch in, drag, double-tap out; Share, Download; Edit a name and see the title change; Delete lands in Trash and moves to the next image. Reopen the folder: thumbnails appear faster. Vault: same, then lock while the viewer is open: it closes and nothing remains. Search for an image name and open it. Check a large camera photo and a portrait photo (orientation).
+
+Open: first open of a large folder is slow. Full-size images are not downscaled in the viewer. Picked audio has no player. Repeating reminders unverified. Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: device-check Session 84, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
+
+---
+
 **Session 83**
 
 Device pass on Session 82: voice recorder and player confirmed working. Then Back visible and working on every screen (Decision 104).

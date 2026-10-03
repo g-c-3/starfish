@@ -1634,3 +1634,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Dimmed where there is nothing to go back to: Home and Vault landing (unchanged), the lock screen, first-run, a locked Vault gate. Back never unlocks or skips anything.
 - Back while the scheduled-backup prompt is open acts as "Skip this time".
 - Limits: the lock and power buttons are still covered by overlays. Not run on a device.
+
+---
+
+**105. Image grid and viewer.** Implements Decision 90's image rule.
+- The Image folder, Home and Vault, shows a 3-column grid of square thumbnails instead of rows. Tiles load as they scroll into view, two decodes at a time; a tile keeps an icon placeholder until its thumbnail is ready or if it fails.
+- Thumbnail: longest side 320 px, JPEG. Home thumbnails are also cached as files in the app's cache directory (`thumbs/<id>.jpg`); the OS may clear them and they are rebuilt. Vault thumbnails are never written to disk: they live in an in-memory map that `lockVault()` empties, and a decode that finishes after a lock is discarded.
+- Viewer, on the shared shell: the folder's images in grid order. Swipe (a horizontal drag of over 20% of the width at scale 1) or the arrows move between images; pinch zooms to 6×, drag pans within the image, double-tap toggles 2.5×. Share, Download, Delete (to Trash, as the row buttons did) and header Edit (name, tags, description) replace the old row buttons. A search result for an image opens the same viewer on that one image.
+- One full-size image is held at a time as an in-memory blob URL, revoked on every change, on close and on a lock's forced close. Vault images are decrypted on demand for the grid and viewer only. Gestures re-arm the matching idle lock.
+- Credentials and the Decision 104 Back behaviour unchanged.
+- Limits: a grid of many large photos decodes slowly the first time. The viewer loads full-size images with no downscale. Not run on a device.

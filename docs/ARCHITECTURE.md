@@ -573,6 +573,11 @@ The nav's Back stays visible on every screen: alone on the lock, first-run and a
 overlay (`body.overlay-open`). It dismisses the top-most layer: Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
 
+### Image grid and viewer (Decision 105)
+The Image folder (Home and Vault) is a thumbnail grid. Home thumbnails are cached as files in the cache directory; Vault
+thumbnails exist only in memory and are dropped on lock. The viewer (shared shell) pages through the folder with swipe or
+arrows, zooms with pinch and double-tap, and holds one full-size blob URL at a time, revoked on change, close or lock.
+
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
 - **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially
