@@ -519,9 +519,8 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
   and Snooze (10 min) / Done action buttons. Schedules use `allowWhileIdle: true`, and the manifest carries
   `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` so the plugin sets an exact alarm that wakes the phone in Doze
-  (Decisions 97, 101). Snooze/Done buttons always launch the
-  app (plugin uses activity intents) and run from the database; Snooze stores `snoozed_until`, giving a `snoozed`
-  status that stays active (Decision 99). After acting, the app minimises when the button launched it (Decision 100).
+  (Decisions 97, 101). Snooze/Done run in a native receiver with no app launch (Decision 102, see the section below);
+  Snooze stores `snoozed_until`, giving a `snoozed` status that stays active (Decision 99).
 - **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Dumpzone from
   battery optimization, with a plain explanation ("so Android doesn't delay or kill your reminder"). The
   reminders list/settings screen shows a simple trust indicator — "X reminders scheduled" — so the user has a
@@ -548,7 +547,13 @@ the same FTS column as the body. Tapping a row opens it; text notes, reminders a
 has passed; otherwise `upcoming`. Done and fired are greyed out in lists. A repeating reminder only becomes inactive
 through Mark done. The reminder's date, time and repeat are fields of the Save dialog. Notification buttons: Done
 sets `completed_at` and cancels; Snooze schedules a one-off 10 minutes out under its own id, so a repeating schedule
-is not replaced. Both run from the database alone, so they work while the app is locked; a plain tap on the
+is not replaced. Both are handled natively (Decision 102): `ReminderActionReceiver` (written by
+`scripts/patch-reminder-actions.js`, which also points the plugin's `snooze`/`done` buttons at it) dismisses the
+notification, cancels or schedules the alarms, and queues `{a, e, t}` under `dz_ra:*` keys in the Capacitor Preferences
+store. `drainQueuedReminderActions()` (`app.js`) writes `completed_at` / `snoozed_until` in tap order at startup, on
+resume and every 4 seconds while visible. No database is opened natively and no content is queued, so both work while
+the app is locked or closed; the Decision 100 minimise rule remains only as a fallback for notifications scheduled
+before Decision 102; a plain tap on the
 notification does nothing, so content is never opened ahead of the lock screen. Deleting a reminder cancels its
 notifications; restoring a pending one reschedules it.
 

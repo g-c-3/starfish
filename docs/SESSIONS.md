@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 80**
+
+Snooze and Done from the notification without launching the app (Decision 102).
+- Built `scripts/patch-reminder-actions.js`: writes `ReminderActionReceiver.java`, registers it in the manifest, and patches the plugin's action buttons to send a broadcast instead of an activity intent. Added as a CI step in `build-android.yml`, after the screen-off patch and before Gradle.
+- Receiver dismisses the notification, cancels (Done) or schedules (Snooze, 10 min, `allowWhileIdle`) natively, and queues `{a, e, t}` in the Preferences store.
+- `app.js`: `drainQueuedReminderActions()` applies the queue to the database at startup, on resume, and every 4 seconds while visible; one-time reschedule of live reminders (`reminder_actions`) so existing notifications get the new buttons; old listener and minimise rule kept as fallback.
+
+Decisions made: 102.
+
+Verified: `npm install`, `vite build`, `cap add android`, all patch scripts run in order on a scratch copy (second run of the new script is a no-op), patched plugin block and manifest entry read back, `javac` syntax pass with only missing-symbol errors, `app.js` syntax check, workflow YAML parses. Not compiled against Android, not run through CI, not run on a device.
+
+Device checks: install the build, set a reminder 2 minutes ahead, close the app from recents, tap Snooze on the banner: no app appears, a second banner arrives 10 minutes later, opening the app shows "Snoozed until <time>". Repeat with Done: row greys. Also tap a button from the shade while the app is open: the row updates within a few seconds. Install over an older build with a pending reminder: it still works (old buttons) until rescheduled.
+
+Open: row state lags the tap until the app drains the queue. Repeating reminders unverified; reading the plugin suggests `every` is ignored when `at` is set (no `repeats` flag passed), so a repeat may not recur. Battery-optimisation prompt and "X scheduled" indicator not built. Notification small icon drawable. Play distribution deferred (Decision 98). Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: device-check Session 80, then Phase 16 C (voice recorder and player). Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 79**
 
 Device pass on the reminder work from Sessions 75 to 78; screen recordings reviewed. No code changed.

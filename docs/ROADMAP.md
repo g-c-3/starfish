@@ -18,7 +18,7 @@
 - [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
-- [ ] 16-pre — Snooze and Done from the notification without opening the app (next)
+- [~] 16-pre — Snooze and Done from the notification without opening the app (built Session 80, not compiled or device-tested)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + playback, D image viewer, G open Files with phone app, H PDF viewer)
 
 ## Detailed
@@ -377,7 +377,8 @@ individual items) can be picked up in any order once prerequisites are met.
     (Vault files get a short-lived decrypted copy in app cache); a real map needs network tiles, which
     would break the single-network-call rule, so F uses coordinates plus hand-off.
   - Suggested order: A, B, E, F, C, D, G, H.
-  - **Next, before C: notification Snooze and Done without opening the app.** Today both buttons launch the app for
-    about a second (plugin activity intents, Decision 99) and Decision 100 sends it back. Goal: act on the tap
-    with no app launch. Needs a native receiver patched in by CI. Open: how the receiver updates the database and
-    reschedules the snooze. Not started.
+  - [~] **Before C: notification Snooze and Done without opening the app (Session 80, Decision 102).** A native
+    receiver patched in by CI handles both buttons: no app launch. It dismisses, cancels or schedules the alarms, and
+    queues the action; the app applies the queue to the database at startup, on resume and every 4 seconds while
+    visible. Not compiled against Android, not run through CI, not run on a device. Open: row state lags the tap until
+    the queue is drained; repeating reminders unverified.

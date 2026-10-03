@@ -1602,3 +1602,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Android 13+ grants `USE_EXACT_ALARM` at install, with no prompt. Android 12 grants `SCHEDULE_EXACT_ALARM` by default. On Android 14+ the second permission alone is denied by default, so the first is the one that matters there.
 - Cost: Google Play restricts both permissions to alarm and calendar apps (Decision 98 open item). Sideload is unaffected.
 - Not fixed by this: phone-maker background limits that stop an app's alarms (battery "restricted" mode, autostart off, a swipe-away treated as force-stop). The battery-optimisation prompt stays an open item.
+
+---
+
+**102. Snooze and Done run in a native receiver, not the Activity.** Supersedes the launch behaviour in Decisions 99 and 100; the snoozed state (Decision 99) is unchanged.
+- Cause of the app appearing: `@capacitor/local-notifications` 6.x builds each action button with `PendingIntent.getActivity`.
+- `scripts/patch-reminder-actions.js` (CI, after `npm install` and `cap add android`, before Gradle) patches the plugin source so the `snooze` and `done` buttons send a broadcast to `ReminderActionReceiver`, written next to `MainActivity.java` and registered not exported. Other action ids keep the stock intent. The script aborts if the plugin's code shape differs.
+- Receiver, no app launch: dismisses the notification. Done cancels the reminder's and the snooze's alarms and stored copies (same ids as `cancelReminder`). Snooze copies the notification JSON under the snooze id, schedules it 10 minutes out with `allowWhileIdle`, and leaves a repeating schedule alone. Ids use the same hash as `hashIdToInt`.
+- The database is not opened natively. The receiver queues `{a, e, t}` under `dz_ra:*` keys in the Capacitor Preferences store (entry id, action, time; no content). `drainQueuedReminderActions()` in `app.js` applies them in tap order: Done sets `completed_at`, Snooze sets `snoozed_until` to tap time + 10 minutes. It runs at startup before the lock screen, on resume, and every 4 seconds while visible (a shade tap over the open app fires no resume event). Keys are removed only after the writes, so a failure retries with the same result.
+- Credentials: unchanged. The queue holds no entry content and no credential; nothing here needs an unlock.
+- Notifications scheduled before this build keep the old buttons. One reschedule of live reminders runs once (`reminder_actions` in `meta`); the old JS listener and the minimise rule (Decision 100) stay as the fallback for any that remain.
+- Limits: the row changes when the app next drains the queue, not at the tap. Not run through CI or on a device. Plugin updates may change the patched block.
