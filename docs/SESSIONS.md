@@ -16,9 +16,9 @@ Decisions made: 106, 107, 108, 109.
 
 Verified in the authoring environment: syntax checks, `vite build`, gesture, search and occurrence logic against real SQLite and a scratch DOM, `javac` syntax pass on the receiver. Device-confirmed: everything listed as passed above.
 
-Open: the day after a daily reminder's first fire, confirm it fires again (not yet seen). Weekly and monthly repeats untested. An install over an older build with a pending reminder not specifically checked. The Android picker app "Photos and videos" crashes if a screenshot is taken while it is open; it is the system app, not Dumpzone. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built. Device pass on Sessions 59 to 74 still pending outside reminders.
+Open: the Device pass backlog (ROADMAP, DP1 to DP13), including the day-after fire of a daily repeat and weekly and monthly repeats. The Android picker app "Photos and videos" crashes if a screenshot is taken while it is open; it is the system app, not Dumpzone. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: confirm the next-day repeat fired, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
+Next session start point: run the Device pass backlog (ROADMAP DP1 to DP13) one check at a time, as one question per check, before any new work. Then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
 
 ---
 
