@@ -317,3 +317,8 @@ to dismiss, cancel and schedule, and writes `dz_ra:*` keys into the `CapacitorSt
 `@capacitor/preferences` reads. Notification ids use the same 31-multiplier hash as `hashIdToInt` in `notifications.js`.
 The script aborts if the plugin block is not in the expected shape (a plugin upgrade may need it adjusted) and is a
 no-op on a second run. Not compiled against Android in the authoring environment.
+
+Reminder notifications carry `extra: { entryId, repeating }` (Decision 108). A repeating reminder is scheduled as several
+occurrence ids (`hashIdToInt(entryId)`, then `entryId:r1` to `entryId:r29`, Decision 107); on Done the receiver cancels all
+of them for a one-off and only the snooze id when `repeating` is true. `MAX_OCCURRENCES` (30) is the same constant as in
+`notifications.js`.
