@@ -2183,17 +2183,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = acceptForType(type);
+        input.multiple = true; // same as Home (Decision 84): several files offer keep-each-name or one numbered name
         input.onchange = async () => {
-          const file = input.files[0];
-          if (!file) return;
+          const picked = Array.from(input.files || []);
+          if (!picked.length) return;
           try {
-            const [f] = await readPicked([file]);
-            const d = await openSaveDialog({ heading: `Save ${typeLabelFor(type).toLowerCase()}`, defaultName: f.name, isVault: true, discardLabel: 'Discard' });
+            const files = await readPicked(picked);
+            const single = files.length === 1;
+            const d = await openSaveDialog({
+              heading: single ? `Save ${typeLabelFor(type).toLowerCase()}` : `Save ${files.length} files`,
+              defaultName: single ? files[0].name : (VAULT_TYPE_LABELS[type] || type),
+              count: files.length, isVault: true, discardLabel: 'Discard'
+            });
             if (!d) return;
-            await captureToVault({ type, label: d.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+            const numbered = !single && d.mode === 'number';
+            for (let i = 0; i < files.length; i++) {
+              const f = files[i];
+              await captureToVault({ type, label: single ? d.name : numbered ? `${d.name} ${i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+            }
             renderVault();
-            toast('Saved to the Vault');
-          } catch (err) { toast(`Could not save: ${err.message || err}`); }
+            toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
+          } catch (err) { toast(`Could not save: ${err.message || err}`); renderVault(); }
         };
         beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
         input.click();

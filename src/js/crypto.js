@@ -4,7 +4,11 @@ const ENC = new TextEncoder();
 const DEC = new TextDecoder();
 
 function toBase64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+  // Chunked: spreading a whole photo into String.fromCharCode overflows the call stack (~100 KB and up).
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
 }
 function fromBase64(b64) {
   return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
