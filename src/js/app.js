@@ -1101,13 +1101,18 @@ function reminderSetText(ms) {
   return `Reminder set for ${when} · in ${away}`;
 }
 
-function toast(message) {
+// sticky: stays until hideToast() or the next toast (used while a slow step runs, e.g. a GPS fix).
+function toast(message, sticky = false) {
   const el = document.getElementById('toast');
   if (!el) return;
   el.textContent = message;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  if (!sticky) toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+}
+function hideToast() {
+  clearTimeout(toastTimer);
+  document.getElementById('toast')?.classList.add('hidden');
 }
 
 let activeSaveDialog = null; // { finish, isVault }
@@ -2496,6 +2501,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     r.readAsDataURL(file);
   })));
 
+  let locationFetching = false; // true while a GPS fix is pending; blocks a second Location capture
+
   async function startCapture(type) {
     if (type === 'note') {
       // Editor, then the Save dialog. Backing out of the dialog returns to the editor with the text kept.
@@ -2536,13 +2543,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (type === 'location') {
       // Current GPS fix → entry with latitude/longitude (Decision 79). The fix stays on-device;
       // Share (row action) is the only step that sends anything out.
+      if (locationFetching) return; // a fix is already in progress
+      locationFetching = true;
+      const newBtns = ['folder-new-btn', 'universal-new-btn'].map((id) => document.getElementById(id)).filter(Boolean);
+      newBtns.forEach((b) => { b.disabled = true; });
+      toast('Fetching location…', true);
       let coords;
       try {
         await Geolocation.requestPermissions();
         coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
+        hideToast();
       } catch (err) {
         toast(`Could not get your location: ${err.message || err}`);
         return;
+      } finally {
+        locationFetching = false;
+        newBtns.forEach((b) => { b.disabled = false; });
       }
       const d = await openSaveDialog({ heading: 'Save location', defaultName: `Location ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
       if (!d) return;
