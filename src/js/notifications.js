@@ -49,7 +49,7 @@ async function scheduleReminder(entry, { windowSize = null } = {}) {
   // scheduled replace their own ids, and a pending snooze is left alone.
   const stale = [];
   for (let k = times.length; k < MAX_OCCURRENCES; k++) stale.push({ id: occurrenceId(entry.id, k) });
-  await LocalNotifications.cancel({ notifications: stale });
+  if (stale.length) await LocalNotifications.cancel({ notifications: stale }); // the plugin rejects an empty list
   if (!times.length) return;
   await LocalNotifications.schedule({
     notifications: times.map((at, k) => ({ ...base, id: occurrenceId(entry.id, k), schedule: { at: new Date(at), allowWhileIdle: true } }))
