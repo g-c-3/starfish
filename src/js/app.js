@@ -163,7 +163,6 @@ function closeVaultFolder() {
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 // Static modals and the button that dismisses each one (Decision 104). Listed top-most first by the order Back checks them.
 const BACK_MODALS = [
-  ['yesno-dialog', 'yesno-no-btn'],
   ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
   ['new-chooser-modal', 'new-chooser-cancel-btn'],
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
@@ -178,6 +177,7 @@ function openModalDismiss() {
 }
 
 function backAction() {
+  if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
   const modal = openModalDismiss();
   if (modal) return modal;
