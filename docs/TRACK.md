@@ -89,3 +89,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-03 | Session 82 | Decision 103 | Phase 16 C built: voice recorder screen with review, and player (play/pause, scrub, speed) for Home and Vault; not device-tested |
 | 2026-10-03 | Session 83 | Decision 104 | Phase 16 C confirmed on device; Back visible on every screen and dismisses editors, viewers, dialogs and modals; not device-tested |
 | 2026-10-03 | Session 84 | Decision 105 | Phase 16 D built: image thumbnail grid (Home and Vault) and full-screen viewer with swipe, pinch zoom, Share, Download, Delete; not device-tested |
+| 2026-10-03 | Session 85 | Decisions 106–109 | Device pass on Sessions 83–84; image viewer layout; Vault photo save and multi-pick fixed; Home search rebuilt; repeating reminders fixed (window of occurrences, Done = this time); Phase 16 D closed |

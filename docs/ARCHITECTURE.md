@@ -544,9 +544,9 @@ the same FTS column as the body. Tapping a row opens it; text notes, reminders a
 
 ### Reminders: completion and notification actions (Decision 92)
 `reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
-has passed; otherwise `upcoming`. Done and fired are greyed out in lists. A repeating reminder only becomes inactive
-through Mark done. The reminder's date, time and repeat are fields of the Save dialog. Notification buttons: Done
-sets `completed_at` and cancels; Snooze schedules a one-off 10 minutes out under its own id, so a repeating schedule
+has passed; otherwise `upcoming`. Done and fired are greyed out in lists. A repeating reminder is never inactive
+through Done or time (Decisions 107 and 108): Done clears this time and it recurs until Repeat is set to none or it is deleted. The reminder's date, time and repeat are fields of the Save dialog. Notification buttons: Done
+on a one-off sets `completed_at` and cancels (on a repeating one it clears the snooze only); Snooze schedules a one-off 10 minutes out under its own id, so a repeating schedule
 is not replaced. Both are handled natively (Decision 102): `ReminderActionReceiver` (written by
 `scripts/patch-reminder-actions.js`, which also points the plugin's `snooze`/`done` buttons at it) dismisses the
 notification, cancels or schedules the alarms, and queues `{a, e, t}` under `dz_ra:*` keys in the Capacitor Preferences
@@ -573,10 +573,20 @@ The nav's Back stays visible on every screen: alone on the lock, first-run and a
 overlay (`body.overlay-open`). It dismisses the top-most layer: Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
 
-### Image grid and viewer (Decision 105)
+### Repeating reminders (Decisions 107, 108)
+A repeating reminder is its next occurrences (daily 30, weekly 26, monthly 12), each an exact wake-from-idle one-off, ids
+hash(`<entryId>:r<k>`), at most 30 per reminder. The window is topped up on launch, on resume (at most every 6 hours) and
+after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, shared by the scheduler and the row display.
+
+### Search (Decision 106)
+`entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
+word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
+
+### Image grid and viewer (Decision 105, layout Decision 109)
 The Image folder (Home and Vault) is a thumbnail grid. Home thumbnails are cached as files in the cache directory; Vault
 thumbnails exist only in memory and are dropped on lock. The viewer (shared shell) pages through the folder with swipe or
 arrows, zooms with pinch and double-tap, and holds one full-size blob URL at a time, revoked on change, close or lock.
+The image fills the screen under a thin header that carries Edit, Share, Download, Delete and the count.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

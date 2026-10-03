@@ -1644,3 +1644,27 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - One full-size image is held at a time as an in-memory blob URL, revoked on every change, on close and on a lock's forced close. Vault images are decrypted on demand for the grid and viewer only. Gestures re-arm the matching idle lock.
 - Credentials and the Decision 104 Back behaviour unchanged.
 - Limits: a grid of many large photos decodes slowly the first time. The viewer loads full-size images with no downscale. Not run on a device.
+
+---
+
+**106. Home search: stored index, safe word-prefix query, substring pass.**
+- Cause of "no results": `entries_fts` was contentless (`content=''`), where every column reads back NULL, so the join on `entries_fts.id` in `searchEntries` matched nothing, and the `UPDATE` / `DELETE ... WHERE id = ?` calls on it matched nothing either. Typed text also went to FTS5 raw, so a dot in "photo.png" was a syntax error and "1001" never matched "1001073062".
+- The index now stores its columns. `initDb` drops an existing contentless table once and rebuilds it from `entries` (non-private rows only; label plus body text plus description). Private entries stay out, as before.
+- `searchEntries`: each typed word is quoted and matched as a word prefix, ranked (label above body); then a second pass adds substring matches in label, body or description, so Home matches like the Vault does ("1073" finds "1001073062.png"). Private and trashed entries are excluded from both. An unreadable query shows no results instead of failing.
+
+**107. Repeating reminders are scheduled as a window of exact occurrences.**
+- Cause: the plugin fires an `at` notification once and ignores `every` beside it, so a repeating reminder fired once and, rescheduled with a past time, never again. Its own cron form re-arms with a non-waking alarm, which Doze delays (Decision 97).
+- `scheduleReminder` now schedules the next occurrences as ordinary exact, wake-from-idle one-offs: daily 30, weekly 26, monthly 12, stepping from the original time (daily and weekly keep the local clock time; monthly keeps the day of month, clamped to short months). Occurrence 0 keeps the plain id; occurrence k has id hash(`<entryId>:r<k>`), at most 30 ids per reminder.
+- The window is topped up on launch and on resume, at most every 6 hours, and again after any Done. The total across all repeating reminders is held under 400 alarms (Android allows 500 per app).
+- Limit: if the app is not opened for longer than the window (30 days for daily), occurrences stop until it is. Not yet confirmed past the first day on a device.
+
+**108. Done on a repeating reminder means this time only.** Supersedes Decision 92 for repeating reminders.
+- Done (notification button or in-app) dismisses the notification and clears any snooze. `completed_at` stays empty and the later occurrences stay scheduled. One-off reminders are unchanged: Done completes and cancels.
+- The row and the viewer show the next due time for a repeating reminder; the viewer button reads "Done for now". A series ends by editing Repeat to none, or by deleting it.
+- Notification extra carries `repeating`, so the native receiver (Decision 102) cancels only the snooze for a repeating reminder. Notifications scheduled before this carry no flag; the top-up after launch or Done restores any series they cut short.
+
+**109. Image viewer layout; Vault pickers take several files.** Refines Decision 105.
+- The viewer image fills the screen under a thin header: back, name, Edit (rename), Share, Download, Delete, then the count. The header extras exist only while the image viewer is open. Tags are not shown in the viewer (still editable through Edit).
+- The stage is a fixed-size flex box, so tall and wide images fit entirely.
+- The Vault's file pickers set `multiple`, like Home (Decision 84): one file keeps its name; several offer keep-each-name or one numbered name (`name 1`, `name 2`). Vault entries keep no label history.
+- Bug fixed with it: `toBase64` in `crypto.js` spread the whole buffer into `String.fromCharCode`, which overflowed the call stack from roughly 100 KB, so a photo could not be encrypted into the Vault. It now converts in 32 KB chunks.

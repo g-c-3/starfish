@@ -19,7 +19,7 @@
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + player done — Sessions 82–83, D image grid + viewer built — Session 84, G open Files with phone app, H PDF viewer)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app, H PDF viewer)
 
 ## Detailed
 
@@ -363,8 +363,9 @@ individual items) can be picked up in any order once prerequisites are met.
     open on tap (non-text types show a "coming later" toast until C–H).
   - [x] C — Voice (Session 82, Decision 103; device-confirmed Session 83): recorder screen (timer, Record/Stop), review
     with the player before Save, then the saved-entry viewer (play/pause, scrub, speed 0.75 to 2×), Home and Vault.
-  - [~] D — Image (Session 84, Decision 105): thumbnail grid in the Image folder (Home and Vault), full-screen viewer
-    with swipe or arrows between images, pinch and double-tap zoom, Share, Download, Delete, Edit. Not run on a device.
+  - [x] D — Image (Sessions 84–85, Decisions 105 and 109): thumbnail grid in the Image folder (Home and Vault), full-screen
+    viewer with swipe or arrows between images, pinch and double-tap zoom, and a thin header carrying Edit (rename),
+    Share, Download, Delete and the image count. Device-confirmed Session 85, Home and Vault.
   - [x] E — Reminder (Session 70): detail view (when, repeat, status, description, tags), Mark done / Reopen /
     Reschedule; greyed out and struck through in lists once done or fired; reminder time and repeat are part of the
     Save dialog (old reminder pop-up removed). Notification Done/Snooze buttons now work; delete cancels the

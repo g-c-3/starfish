@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 85**
+
+Device pass on Sessions 83 and 84, with fixes found along the way (Decisions 106 to 109). Passed on device: Back over the editor, the Save dialog and the lock screen; Home image grid; viewer gestures, rename, delete; Vault images and lock; open an image from search; Snooze and Done from the shade with the app open; daily repeating reminder firing, Done, Snooze.
+- `style.css`, `app.js`: viewer stage fixed so tall images fit; viewer made full-bleed; Share, Download, Delete, Edit and the count moved into a thin header (Decision 109).
+- `crypto.js`: `toBase64` chunked; a photo could not be saved to the Vault (call stack overflow). Vault pickers now take several files (Decision 109).
+- `db.js`, `app.js`: Home search rebuilt: stored index, safe word-prefix query, substring pass (Decision 106).
+- `notifications.js`, `reminders.js`, `app.js`, `patch-reminder-actions.js`: repeating reminders scheduled as a window of occurrences and topped up on launch and resume (Decision 107); Done on a repeating reminder is this time only, with the next due shown (Decision 108). First build scheduled nothing for a full window because the plugin rejects an empty cancel list; guarded.
+
+Decisions made: 106, 107, 108, 109.
+
+Verified in the authoring environment: syntax checks, `vite build`, gesture, search and occurrence logic against real SQLite and a scratch DOM, `javac` syntax pass on the receiver. Device-confirmed: everything listed as passed above.
+
+Open: the day after a daily reminder's first fire, confirm it fires again (not yet seen). Weekly and monthly repeats untested. An install over an older build with a pending reminder not specifically checked. The Android picker app "Photos and videos" crashes if a screenshot is taken while it is open; it is the system app, not Dumpzone. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built. Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: confirm the next-day repeat fired, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
+
+---
+
 **Session 84**
 
 Phase 16 D: image thumbnail grid and full-screen viewer (Decision 105).
