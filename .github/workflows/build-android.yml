@@ -52,6 +52,11 @@ jobs:
       - name: Patch MainActivity.java (screen-off receiver for app/vault lock)
         run: node scripts/patch-screenlock.js
 
+      # Decision 102 — Snooze/Done from the notification without launching the app. Patches the plugin source in
+      # node_modules and writes the receiver into android/, so it runs after both exist and before Gradle compiles.
+      - name: Patch reminder notification actions (native receiver)
+        run: node scripts/patch-reminder-actions.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
