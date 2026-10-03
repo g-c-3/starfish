@@ -100,11 +100,14 @@ function showScreen(id, { tab } = {}) {
   const nav = document.getElementById('bottom-nav');
   if (!nav) return;
   const navKey = NAV_SCREENS[id];
-  nav.classList.toggle('hidden', !navKey);
+  // Back stays visible on every screen (Decision 104); Home/Vault tabs only where they navigate.
+  nav.classList.remove('hidden');
+  nav.classList.toggle('back-only', !navKey);
   // Defaults to Home (e.g. every unlock-success call site just says showScreen('main-screen'), and
   // expects Home) — an explicit tab (from the bottom nav) overrides that default.
   if (id === 'main-screen') switchMainTab(tab || 'home');
-  else setActiveNavTab(navKey);
+  else if (navKey) setActiveNavTab(navKey);
+  updateBackButtonState();
 }
 
 // Lock/unlock toggle's "disabled" appearance (Decision 66) — only meaningful in the main-app
@@ -158,8 +161,25 @@ function closeVaultFolder() {
 // One level up inside the current section, or null when already on its landing page (Decision 82).
 //   Home:  Settings -> Home landing; open folder -> Home landing; Home landing -> nothing.
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
+// Static modals and the button that dismisses each one (Decision 104). Listed top-most first by the order Back checks them.
+const BACK_MODALS = [
+  ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
+  ['new-chooser-modal', 'new-chooser-cancel-btn'],
+  ['auto-backup-due-banner', 'auto-backup-skip-btn'],
+  ['select-files-screen', 'select-files-close-btn']
+];
+function openModalDismiss() {
+  for (const [id, btn] of BACK_MODALS) {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden')) return () => document.getElementById(btn)?.click();
+  }
+  return null;
+}
+
 function backAction() {
   if (activeSaveDialog) return () => activeSaveDialog.finish(null);
+  const modal = openModalDismiss();
+  if (modal) return modal;
   if (activeEditor) return () => activeEditor.requestBack();
   if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
   if (currentLocation === 'vault') {
@@ -1843,6 +1863,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     goBack();
   });
   navBackBtn.addEventListener('animationend', () => navBackBtn.classList.remove('glow'));
+
+  // Overlays (editor, viewer, Save dialog, modals) cover the page, so while one is open the nav shrinks to just Back
+  // above it (CSS: body.overlay-open) and Back dismisses it (Decision 104). Class changes cover every open/close path,
+  // including a lock's forced close.
+  const syncOverlayChrome = () => {
+    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), .modal-overlay:not(.hidden)');
+    document.body.classList.toggle('overlay-open', open);
+    updateBackButtonState();
+  };
+  new MutationObserver(syncOverlayChrome).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  syncOverlayChrome();
 
   // Power button (Decision 61, confirmation removed in Decision 62) — small, fixed, present on
   // every screen except the app-open lock screen (handled in showScreen() above) since it lives
