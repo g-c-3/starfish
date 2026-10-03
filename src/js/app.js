@@ -739,6 +739,7 @@ function lockVault() {
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
+  clearVaultThumbs();
   clearVaultIndex();
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
   vaultAutoLockTimer = null;
@@ -1272,6 +1273,169 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
     updateBackButtonState();
     if (!text) setTimeout(() => ta.focus(), 60);
   });
+}
+
+// ---- Image thumbnails and zoom/pan (Phase 16 D, Decision 105) ----
+// Thumbnails: longest side THUMB_PX, JPEG. Home ones are also cached as files in Directory.Cache (the OS may clear
+// them; they are rebuilt). Vault ones live only in this map, which lockVault() empties; nothing is written to disk.
+const THUMB_PX = 320;
+const thumbMem = new Map(); // 'h:<id>' | 'v:<id>' -> data URL
+function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k.startsWith('v:')) thumbMem.delete(k); }
+let thumbActive = 0;
+const thumbQueue = [];
+function runThumbJob(job) { // two decodes at a time: full-size photos are large
+  return new Promise((resolve, reject) => {
+    thumbQueue.push(() => job().then(resolve, reject));
+    pumpThumbs();
+  });
+}
+function pumpThumbs() {
+  while (thumbActive < 2 && thumbQueue.length) {
+    const next = thumbQueue.shift();
+    thumbActive++;
+    next().finally(() => { thumbActive--; pumpThumbs(); });
+  }
+}
+async function downscaleToDataUrl(blobUrl, maxSide) {
+  const img = new Image();
+  img.src = blobUrl;
+  await img.decode();
+  const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.naturalWidth * k));
+  c.height = Math.max(1, Math.round(img.naturalHeight * k));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.72);
+}
+// Full-size blob URL for an image entry; the caller revokes it.
+async function imageBlobUrl(item, isVault) {
+  if (isVault) return (await openVaultEntry(item.id)).blobUrl;
+  const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+  if (!row) throw new Error('Image not found');
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
+  return base64ToBlobUrl(data, mimeTypeForVaultRow({ extension: row.extension }));
+}
+async function thumbFor(item, isVault) {
+  const key = `${isVault ? 'v' : 'h'}:${item.id}`;
+  if (thumbMem.has(key)) return thumbMem.get(key);
+  const cachePath = `thumbs/${item.id}.jpg`;
+  let FS = null, dataUrl = null;
+  if (!isVault) {
+    FS = await import('@capacitor/filesystem');
+    try { dataUrl = `data:image/jpeg;base64,${(await FS.Filesystem.readFile({ path: cachePath, directory: FS.Directory.Cache })).data}`; } catch { /* not cached yet */ }
+  }
+  if (!dataUrl) {
+    const url = await imageBlobUrl(item, isVault);
+    try { dataUrl = await downscaleToDataUrl(url, THUMB_PX); } finally { URL.revokeObjectURL(url); }
+    if (FS) FS.Filesystem.writeFile({ path: cachePath, data: dataUrl.split(',')[1], directory: FS.Directory.Cache, recursive: true }).catch(() => {});
+  }
+  if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
+  thumbMem.set(key, dataUrl);
+  return dataUrl;
+}
+let thumbObserver = null;
+// Fills a grid of .thumb-tile[data-id] as tiles scroll into view.
+function loadThumbsInto(container, items, isVault) {
+  if (thumbObserver) thumbObserver.disconnect();
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const load = async (tile) => {
+    const item = byId.get(tile.dataset.id);
+    if (!item) return;
+    try {
+      const src = await runThumbJob(async () => (tile.isConnected ? thumbFor(item, isVault) : null));
+      if (src && tile.isConnected) tile.innerHTML = `<img src="${src}" alt="" draggable="false">`;
+    } catch { /* tile keeps its placeholder */ }
+  };
+  thumbObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { thumbObserver.unobserve(e.target); load(e.target); }
+  }, { rootMargin: '200px' });
+  container.querySelectorAll('.thumb-tile').forEach((t) => thumbObserver.observe(t));
+}
+function thumbGridHtml(items) {
+  return `<div class="thumb-grid">${items.map((i) => `<button type="button" class="thumb-tile" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg('image')}</button>`).join('')}</div>`;
+}
+
+// Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
+const ZOOM_MAX = 6, ZOOM_DOUBLE = 2.5;
+function clampPan(tx, ty, scale, stage, img) {
+  const mx = Math.max(0, (img.clientWidth * scale - stage.clientWidth) / 2);
+  const my = Math.max(0, (img.clientHeight * scale - stage.clientHeight) / 2);
+  return [Math.min(mx, Math.max(-mx, tx)), Math.min(my, Math.max(-my, ty))];
+}
+function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
+  let scale = 1, tx = 0, ty = 0, swipeDx = 0;
+  const pts = new Map();
+  let pinch = null, lastTap = null, moved = false;
+  const apply = (animate = false) => {
+    img.style.transition = animate ? 'transform 0.18s ease-out' : 'none';
+    img.style.transform = `translate(${tx + swipeDx}px, ${ty}px) scale(${scale})`;
+  };
+  const rect = () => stage.getBoundingClientRect();
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  const down = (e) => {
+    stage.setPointerCapture?.(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    moved = false;
+    if (pts.size === 2) pinch = { d: dist(), scale, m: mid(), tx, ty };
+    if (onActivity) onActivity();
+  };
+  const move = (e) => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (Math.abs(e.clientX - p.sx) + Math.abs(e.clientY - p.sy) > 8) moved = true;
+    if (pts.size === 2 && pinch) {
+      scale = Math.min(ZOOM_MAX, Math.max(1, pinch.scale * (dist() / pinch.d)));
+      const m = mid();
+      [tx, ty] = clampPan(pinch.tx + (m.x - pinch.m.x), pinch.ty + (m.y - pinch.m.y), scale, stage, img);
+      apply();
+    } else if (pts.size === 1) {
+      if (scale > 1) { [tx, ty] = clampPan(tx + dx, ty + dy, scale, stage, img); apply(); }
+      else if (Math.abs(e.clientX - p.sx) > Math.abs(e.clientY - p.sy)) { swipeDx = e.clientX - p.sx; apply(); }
+    }
+    if (onActivity) onActivity();
+  };
+  const up = (e) => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 1 && scale > 1) { const [q] = pts.values(); q.sx = q.x; q.sy = q.y; } // finger left after a pinch: keep panning
+    if (pts.size > 0) return;
+    if (scale < 1.02) { scale = 1; tx = ty = 0; }
+    const dx = swipeDx;
+    swipeDx = 0;
+    if (scale === 1 && Math.abs(dx) > stage.clientWidth * 0.2 && onSwipe) { apply(false); onSwipe(dx < 0 ? 1 : -1); return; }
+    if (!moved) { // a tap: a second one close by is a double tap
+      const now = Date.now();
+      if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+        lastTap = null;
+        if (scale > 1) { scale = 1; tx = ty = 0; }
+        else {
+          const r = rect();
+          scale = ZOOM_DOUBLE;
+          [tx, ty] = clampPan((r.left + r.width / 2 - e.clientX) * (scale - 1), (r.top + r.height / 2 - e.clientY) * (scale - 1), scale, stage, img);
+        }
+      } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+    apply(true);
+  };
+  const cancel = (e) => { pts.delete(e.pointerId); pinch = null; swipeDx = 0; if (!pts.size) apply(true); };
+  stage.addEventListener('pointerdown', down);
+  stage.addEventListener('pointermove', move);
+  stage.addEventListener('pointerup', up);
+  stage.addEventListener('pointercancel', cancel);
+  return {
+    reset() { scale = 1; tx = ty = 0; swipeDx = 0; pts.clear(); pinch = null; apply(false); },
+    scale: () => scale,
+    destroy() {
+      stage.removeEventListener('pointerdown', down); stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', cancel);
+    }
+  };
 }
 
 // ---- Audio player (Phase 16 C, Decision 103). Shared by the voice viewer and the recorder's review step.
@@ -1940,6 +2104,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderVaultFolderList() {
     const container = document.getElementById('vault-folder-list');
     const items = browseVault(openVaultFolderType);
+    if (openVaultFolderType === 'image') { // thumbnail grid, decoded in memory only (Decision 105)
+      container.innerHTML = items.length ? thumbGridHtml(items) : emptyStateHtml('folder');
+      container.querySelectorAll('.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
+        await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), true);
+        renderVault();
+      }));
+      loadThumbsInto(container, items, true);
+      return;
+    }
     container.innerHTML = vaultRowsHtml(items);
     container.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async (e) => {
       if (e.target.closest('.row-actions')) return;
@@ -2401,6 +2574,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderFolderCounts();
     if (!openFolderType) return;
     const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
+    if (openFolderType === 'image') { // thumbnail grid (Decision 105)
+      const box = document.getElementById('folder-list');
+      box.innerHTML = rows.length ? thumbGridHtml(rows) : emptyStateHtml('folder');
+      box.querySelectorAll('.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
+        await openImageViewer(rows, rows.findIndex((r) => r.id === t.dataset.id), false);
+        await renderMainTimeline();
+      }));
+      loadThumbsInto(box, rows, false);
+      return;
+    }
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
     }, 'main')).join('') || emptyStateHtml('folder');
@@ -2766,7 +2949,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tapping a row opens it. Text, reminder, location and voice have viewers; the other types follow (Phase 16 C, D, G, H).
+  // Full-screen image viewer over a list (the folder's images, in grid order): swipe or arrows to move, pinch and
+  // double-tap to zoom. One full-size blob URL at a time, revoked on every change and on close or lock (Decision 105).
+  async function openImageViewer(list, startIndex, isVault) {
+    const items = list.slice();
+    let index = Math.max(0, Math.min(startIndex, items.length - 1));
+    let url = null, zoom = null, token = 0, openViewerRefresh = () => {};
+    const drop = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+    const fresh = async (item) => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    await openViewer({
+      title: items[index]?.label || 'Image', isVault,
+      onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
+      onClose: () => { token++; if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      render: async (body, { close, refresh }) => {
+        openViewerRefresh = refresh;
+        if (!items.length) { close(); return; }
+        const item = await fresh(items[index]);
+        items[index] = item;
+        document.getElementById('viewer-title').textContent = item.label || 'Image';
+        const tags = isVault ? (item.tags || []) : await getEntryTags(item.id);
+        body.innerHTML = `
+          <div class="img-stage"><img class="img-full" alt="" draggable="false">
+            <div class="img-loading">Loading…</div>
+            ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
+          </div>
+          <div class="img-counter">${index + 1} / ${items.length}</div>
+          ${tags.length ? `<div class="tag-wrap img-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+          <div class="detail-actions">
+            <button type="button" id="img-share-btn" class="secondary-btn">Share</button>
+            <button type="button" id="img-download-btn" class="secondary-btn">Download</button>
+            <button type="button" id="img-delete-btn" class="secondary-btn">Delete</button>
+          </div>`;
+        const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
+        const arm = isVault ? armVaultAutoLock : armAppAutoLock;
+        const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
+        const render2 = () => body.isConnected && openViewerRefresh();
+        if (zoom) zoom.destroy();
+        zoom = attachZoomPan(stage, img, { onSwipe: go, onActivity: arm });
+        for (const [sel, step] of [['.img-prev', -1], ['.img-next', 1]]) {
+          const b = body.querySelector(sel);
+          if (!b) continue;
+          b.addEventListener('pointerdown', (e) => e.stopPropagation()); // arrows are not part of the gesture area
+          b.addEventListener('pointerup', (e) => e.stopPropagation());
+          b.addEventListener('click', () => go(step));
+        }
+        body.querySelector('#img-share-btn').onclick = () => window.Dumpzone.shareEntry(item.id);
+        body.querySelector('#img-download-btn').onclick = () => window.Dumpzone.downloadPlain(item.id);
+        body.querySelector('#img-delete-btn').onclick = async () => {
+          if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
+          items.splice(index, 1);
+          if (!items.length) { close(); return; }
+          index = Math.min(index, items.length - 1);
+          openViewerRefresh();
+        };
+        const mine = ++token;
+        drop();
+        try {
+          const u = await imageBlobUrl(item, isVault);
+          if (mine !== token) { URL.revokeObjectURL(u); return; } // moved on or closed while loading
+          url = u;
+          await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not display this image')); img.src = u; });
+          loading.remove();
+        } catch (err) { if (mine === token) loading.textContent = String(err.message || err); }
+      }
+    });
+  }
+
+  // Tapping a row opens it. Text, reminder, location, voice and image have viewers; the other types follow (Phase 16 C, D, G, H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -2779,6 +3030,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'reminder' && !isVault) await openReminder(item);
     else if (item.type === 'location' && !isVault) await openLocation(item);
     else if (item.type === 'voice') await openVoice(item, isVault);
+    else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
