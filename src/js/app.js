@@ -2956,31 +2956,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
     let url = null, zoom = null, token = 0, openViewerRefresh = () => {};
     const drop = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+    const viewerScreen = document.getElementById('viewer-screen');
+    viewerScreen.classList.add('image-mode'); // image fills the screen below the header (Decision 105)
     const fresh = async (item) => isVault
       ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
       : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
     await openViewer({
       title: items[index]?.label || 'Image', isVault,
       onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
-      onClose: () => { token++; if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      onClose: () => { token++; viewerScreen.classList.remove('image-mode'); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
       render: async (body, { close, refresh }) => {
         openViewerRefresh = refresh;
         if (!items.length) { close(); return; }
         const item = await fresh(items[index]);
         items[index] = item;
         document.getElementById('viewer-title').textContent = item.label || 'Image';
-        const tags = isVault ? (item.tags || []) : await getEntryTags(item.id);
         body.innerHTML = `
           <div class="img-stage"><img class="img-full" alt="" draggable="false">
             <div class="img-loading">Loading…</div>
             ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
           </div>
           <div class="img-counter">${index + 1} / ${items.length}</div>
-          ${tags.length ? `<div class="tag-wrap img-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-          <div class="detail-actions">
-            <button type="button" id="img-share-btn" class="secondary-btn">Share</button>
-            <button type="button" id="img-download-btn" class="secondary-btn">Download</button>
-            <button type="button" id="img-delete-btn" class="secondary-btn">Delete</button>
+          <div class="img-actions">
+            <button type="button" id="img-share-btn" class="icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>
+            <button type="button" id="img-download-btn" class="icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>
+            <button type="button" id="img-delete-btn" class="icon-btn" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>
           </div>`;
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
