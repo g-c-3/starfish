@@ -1692,4 +1692,5 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 **114. Discarding a capture asks Yes/No.**
 - Rule: in a Save dialog opened with the Discard label (voice, image, PDF, file, reminder, location), both the Discard button and Back ask "Discard? Yes, discard / No, keep it" before dropping the take. Dialogs labelled Cancel or Back to editing (edits, text notes) leave at once, as before.
 - `askYesNo()` and `#yesno-dialog`: one at a time; Back answers No and is checked first in the Back order (Decision 104); a lock closes it as No and the Save dialog closes through the lock path as before.
+- Fix after first device check: `#save-dialog` has `z-index: 11` over `.modal-overlay`'s 10, so the sheet opened behind it and Discard and Back seemed to do nothing. `#yesno-dialog` is `z-index: 12`. Back answers No through an `activeYesNo` check ahead of the Save dialog; the `BACK_MODALS` entry was removed as unreachable.
 

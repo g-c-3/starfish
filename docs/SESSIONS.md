@@ -8,16 +8,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 Device pass DP1 to DP12, with fixes found along the way (Decisions 110 to 114). Passed on device: backup and restore in Append and Overwrite (name, tags, description kept); credentials and lock; biometrics; location capture and viewer; update check; look; batch add numbering; row actions; folder counts; reminder dialog; install over an older build with a reminder pending; Done for now and Repeat set to none.
 - `index.html`: restore file input accepts any type, so Android lists `.dz` backups (Decision 110). New Yes/No sheet (`#yesno-dialog`) (Decision 114).
-- `app.js`: after a restore the Vault index is rebuilt and Home and Vault lists redraw (Decision 111). Location capture shows "Fetching location…" and disables the New buttons while a fix is pending (Decision 113). Discard and Back in a capture Save dialog ask Yes/No (Decision 114). `toast()` gained a sticky mode and `hideToast()`.
+- `app.js`: after a restore the Vault index is rebuilt and Home and Vault lists redraw (Decision 111). Location capture shows "Fetching location…" and disables the New buttons while a fix is pending (Decision 113). Discard and Back in a capture Save dialog ask Yes/No (Decision 114). `toast()` gained a sticky mode and `hideToast()`. Back answers No while the Yes/No sheet is open.
+- `style.css`: `#yesno-dialog` raised to `z-index: 12`; it first opened behind the Save dialog (11), so Discard and Back looked dead (Decision 114).
 - `backup.js`: Append restore ignores trashed rows in both the UUID and label checks; a trashed id gets a fresh UUID for the restored copy (Decision 112).
 
 Decisions made: 110, 111, 112, 113, 114.
 
-Verified in the authoring environment: syntax checks on every changed file. Device-confirmed: restore picker, Vault refresh after Append, Append with a trashed duplicate, and everything listed as passed above. Decisions 113 and 114 were delivered after the last device check, so they are not yet run through CI or on a device.
+Verified in the authoring environment: syntax checks on every changed file. Device-confirmed: restore picker, Vault refresh after Append, Append with a trashed duplicate, and everything listed as passed above. Decision 113 (Location fetching message) device-confirmed. Decision 114 failed its first device check (sheet hidden behind the Save dialog); fixed with a z-index, not yet re-checked.
 
 Open: DP13 next-day fire of daily, weekly and monthly repeats. DP4 no-fix timeout notice not tried. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: device-check Decisions 113 and 114 (Location New buttons and message while fetching; Discard Yes/No in Image, PDF, Voice, Reminder and Location captures, and Back in those dialogs), finish DP13, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
+Next session start point: re-check Decision 114 (Discard Yes/No in Image, PDF, Voice, Reminder and Location captures, and Back in those dialogs), finish DP13, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
 
 ---
 
