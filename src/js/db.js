@@ -76,8 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_entries_fire_at ON entries(fire_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
   id UNINDEXED,
   label,
-  body_text,
-  content=''
+  body_text
 );
 
 -- ===== Tags (many-to-many) =====
@@ -114,6 +113,18 @@ async function initDb(sqlite) {
   const db = await sqlite.createConnection('dumpzone.db', false, 'no-encryption', SCHEMA_VERSION, false);
   await db.open();
   await db.execute(SCHEMA_SQL);
+
+  // Decision 106: the index used to be contentless (content=''), where every column reads back NULL — so the join
+  // on entries_fts.id in searchEntries() matched nothing, and the UPDATE/DELETE ... WHERE id=? calls hit nothing.
+  // It now stores its columns. An existing contentless table is dropped and rebuilt once from entries; private
+  // entries stay out of it (see insertEntry).
+  const ftsDef = ((await db.query(`SELECT sql FROM sqlite_master WHERE name='entries_fts'`)).values || [])[0];
+  if (ftsDef && /content\s*=\s*''/.test(ftsDef.sql || '')) {
+    await db.execute(`DROP TABLE entries_fts`);
+    await db.execute(`CREATE VIRTUAL TABLE entries_fts USING fts5(id UNINDEXED, label, body_text)`);
+    await db.execute(`INSERT INTO entries_fts (id, label, body_text)
+      SELECT id, label, TRIM(COALESCE(body_text, '') || ' ' || COALESCE(description, '')) FROM entries WHERE is_private = 0`);
+  }
 
   // First real migration this app has needed: CREATE TABLE IF NOT EXISTS only helps fresh
   // installs — an existing on-device DB from before a column was added never gets it, since the
