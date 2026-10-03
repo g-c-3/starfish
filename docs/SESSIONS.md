@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 81**
+
+Device pass on Session 80 (Decision 102). No code changed.
+- CI built and signed the APK with the patched plugin and receiver.
+- Reminder fired; Snooze and Done each acted from the notification without the app opening.
+
+Decisions made: none.
+
+Open: shade tap while the app is open (row update within a few seconds) and an install over an older build with a pending reminder not yet checked. Repeating reminders unverified; the plugin appears to ignore `every` when `at` is set. Battery-optimisation prompt and "X scheduled" indicator not built. Notification small icon drawable. Play distribution deferred (Decision 98). Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: Phase 16 C (voice recorder and player). Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 80**
 
 Snooze and Done from the notification without launching the app (Decision 102).
