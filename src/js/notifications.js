@@ -2,6 +2,7 @@
 // Uses @capacitor/local-notifications. No alarm UI, no full-screen intent — see android-notes/ for why.
 
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { nextOccurrences } from './reminders.js';
 
 // An Android channel's importance and sound are fixed once created, so a changed style needs a new id (Decision 96).
 const CHANNEL_ID = 'dumpzone_reminders_v2';
@@ -36,30 +37,10 @@ const MAX_OCCURRENCES = 30;
 const ALARM_BUDGET = 400; // Android allows 500 alarms per app; stay clear of it across all repeating reminders
 const occurrenceId = (entryId, k) => hashIdToInt(k === 0 ? entryId : `${entryId}:r${k}`);
 
-// The first `count` occurrences strictly after `after`, stepping from the original time. Daily and weekly keep the
-// local clock time across clock changes; monthly keeps the original day of month, clamped to short months.
-function nextOccurrences(fireAt, rule, after, count) {
-  const start = new Date(fireAt);
-  const out = [];
-  for (let n = 0; out.length < count && n < 5000; n++) {
-    const d = new Date(start);
-    if (rule === 'daily') d.setDate(start.getDate() + n);
-    else if (rule === 'weekly') d.setDate(start.getDate() + 7 * n);
-    else if (rule === 'monthly') {
-      d.setDate(1);
-      d.setMonth(start.getMonth() + n);
-      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      d.setDate(Math.min(start.getDate(), last));
-    } else return out;
-    if (d.getTime() > after) out.push(d.getTime());
-  }
-  return out;
-}
-
 async function scheduleReminder(entry, { windowSize = null } = {}) {
   // entry: { id, label, fire_at, repeat_rule }
   await ensureChannel();
-  const base = { title: 'Dumpzone Reminder', body: entry.label, channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id } };
+  const base = { title: 'Dumpzone Reminder', body: entry.label, channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
   // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
   const times = REPEAT_WINDOW[entry.repeat_rule]
     ? nextOccurrences(entry.fire_at, entry.repeat_rule, Date.now() + 1000, Math.min(windowSize || REPEAT_WINDOW[entry.repeat_rule], MAX_OCCURRENCES))
@@ -82,6 +63,11 @@ async function refillRepeatingReminders(rows) {
   for (const r of repeating) await scheduleReminder(r, { windowSize });
 }
 
+// Done on a repeating reminder (Decision 108): only a pending snooze goes; the occurrences stay scheduled.
+async function cancelSnooze(entryId) {
+  await LocalNotifications.cancel({ notifications: [{ id: hashIdToInt(`${entryId}:snooze`) }] });
+}
+
 async function cancelReminder(entryId) {
   // The snooze notification has its own id, so cancelling a reminder cancels both.
   const ids = [{ id: hashIdToInt(`${entryId}:snooze`) }];
@@ -101,7 +87,7 @@ async function snoozeReminder(entry, minutes = 10) {
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + minutes * 60 * 1000), allowWhileIdle: true },
       actionTypeId: 'REMINDER_ACTIONS',
-      extra: { entryId: entry.id }
+      extra: { entryId: entry.id, repeating: !!entry.repeat_rule }
     }]
   });
 }
@@ -137,4 +123,4 @@ function hashIdToInt(uuid) {
   return Math.abs(hash);
 }
 
-export { retireOldChannel, scheduleReminder, refillRepeatingReminders, nextOccurrences, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };
+export { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes, ensureChannel };

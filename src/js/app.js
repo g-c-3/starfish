@@ -6,8 +6,8 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
-import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
-import { reminderStatus, isReminderActive, repeatLabel } from './reminders.js';
+import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
+import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
@@ -1061,7 +1061,7 @@ function formatEntryDate(ms) {
 function rowMeta(row) {
   if (row.type !== 'reminder') return { meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · '), done: false };
   const st = reminderStatus(row);
-  const when = formatEntryDate(row.fire_at);
+  const when = formatEntryDate(reminderNextDue(row));
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
   const timing = st === 'snoozed' ? `Snoozed until ${formatEntryDate(row.snoozed_until)}` : `${lead} ${when}`;
   return { meta: ['Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
@@ -1522,7 +1522,15 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
 }
 
 // Reminder completion (Decision 92). Top-level: notification actions call these before the UI exists.
+// Done: a one-off is finished and cancelled. A repeating reminder is only done for this time (Decision 108): its
+// snooze is cleared and the later occurrences stay scheduled.
 async function markReminderDone(id) {
+  const row = ((await db.query(`SELECT repeat_rule FROM entries WHERE id = ?`, [id])).values || [])[0];
+  if (row && row.repeat_rule) {
+    await db.run(`UPDATE entries SET snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), id]);
+    try { await cancelSnooze(id); } catch { /* no snooze pending */ }
+    return;
+  }
   await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), Date.now(), id]);
   try { await cancelReminder(id); } catch { /* nothing scheduled */ }
 }
@@ -1555,11 +1563,12 @@ async function drainQueuedReminderActions() {
     }
     items.sort((x, y) => x.t - y.t);
     for (const it of items) {
-      if (it.a === 'done') await db.run(`UPDATE entries SET completed_at = ?, snoozed_until = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t, it.t, it.e]);
+      if (it.a === 'done') await db.run(`UPDATE entries SET completed_at = CASE WHEN repeat_rule IS NULL THEN ? ELSE NULL END, snoozed_until = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t, it.t, it.e]);
       else if (it.a === 'snooze') await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t + SNOOZE_MS, it.t, it.e]);
     }
     for (const key of mine) await Preferences.remove({ key }); // after the writes: a failure above is retried, same result
     window.dispatchEvent(new Event('dumpzone-reminders-changed'));
+    if (items.some((it) => it.a === 'done')) { lastRefillAt = 0; refillRepeating(); } // re-arm a series a pre-Decision-108 notification cut short
   } catch { /* retried on the next tick */ }
   finally { drainingQueuedActions = false; }
 }
@@ -2842,10 +2851,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const st = reminderStatus(row);
         const stLabel = { upcoming: 'Upcoming', snoozed: 'Snoozed', done: 'Done', fired: 'Fired' }[st];
         const active = st === 'upcoming' || st === 'snoozed';
-        const when = new Date(row.fire_at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const when = new Date(reminderNextDue(row)).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
         // A fired one-off can't simply be reopened (its time is past): offer Reschedule instead.
         const canToggle = active || row.completed_at;
-        const toggleLabel = active ? 'Mark done' : 'Reopen';
+        const toggleLabel = active ? (row.repeat_rule ? 'Done for now' : 'Mark done') : 'Reopen';
         body.innerHTML = `
           <div class="detail-hero${active ? '' : ' inactive'}" data-type="reminder">
             <span class="row-icon">${iconSvg('reminder')}</span>
@@ -2865,7 +2874,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
           </div>`;
         const t = document.getElementById('rv-toggle-btn');
-        if (t) t.onclick = async () => { if (active) await markReminderDone(row.id); else await reopenReminder(row.id); await refresh(); };
+        if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); await refresh(); };
         document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
       }
     });
