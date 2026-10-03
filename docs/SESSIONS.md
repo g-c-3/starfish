@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 83**
+
+Device pass on Session 82: voice recorder and player confirmed working. Then Back visible and working on every screen (Decision 104).
+- `app.js`: bottom nav no longer hidden on the lock, first-run and ad-gate screens (Back only there); a class observer sets `overlay-open` while the editor, viewer, Save dialog or any modal is open; `backAction()` now closes the static modals through their own cancel or close buttons before the existing order.
+- `style.css`: Back-only nav layout, raised above overlays, and bottom padding on each overlay so its controls stay clear of the button.
+
+Decisions made: 104.
+
+Verified: `app.js` syntax check, `vite build`, the observer and disabled-state logic in a scratch DOM (opens, closes, no feedback loop). Not run through CI, not run on a device.
+
+Device checks: open a note editor, a reminder, a voice entry, the Save dialog, the New chooser and Select files; Back shows centred at the bottom each time and dismisses that layer, with no control hidden behind it (check the editor's last line and the Save dialog's buttons). Lock screen and first-run: Back is visible and dimmed. Home and Vault landing: dimmed as before. Vault gate locked: dimmed. Keyboard open in the editor: Back should not cover the text being typed.
+
+Open: lock and power buttons are still hidden behind overlays. Picked audio files have no player. Repeating reminders unverified. Device pass on Sessions 59 to 74 still pending outside reminders.
+
+Next session start point: device-check Session 83, then Phase 16 D (image thumbnail grid and viewer). Open choices for G and H. Money capture shape still to be given.
+
+---
+
 **Session 82**
 
 Phase 16 C: voice recorder screen and player (Decision 103).

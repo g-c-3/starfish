@@ -1624,3 +1624,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Saved voice opens from Home folders and the Vault list. Vault audio is decrypted on open into a blob URL held only while the viewer is open, then revoked; closing or locking stops playback. Home audio is read from `Directory.Data`.
 - No new plugin, permission or network use. Credentials unchanged.
 - Limits: a recording is held in memory as base64 until saved or discarded. Not run on a device; `<audio>` support for each recorder container (aac, webm) is unconfirmed.
+
+---
+
+**104. Back is visible on every screen and dismisses whatever is open.** Extends Decisions 65 and 82.
+- Cause of the gap: the editor, viewer, Save dialog and modals are full-screen layers above the bottom nav, and the nav was hidden on the lock, first-run and ad-gate screens.
+- The nav is never hidden after start. On the lock, first-run and ad-gate screens it shows Back alone (`back-only`). While any overlay is open (`body.overlay-open`, set by a class observer, so every open and close path including a lock's forced close is covered) it shows Back alone, centred above the overlay; each overlay pads its own controls clear of it.
+- Back order: Save dialog, then the static modals (overwrite confirm, new-entry chooser, scheduled-backup prompt, Select files, each through its own cancel or close button), then editor, then viewer (through the viewer's guard), then the Decision 82 hierarchy.
+- Dimmed where there is nothing to go back to: Home and Vault landing (unchanged), the lock screen, first-run, a locked Vault gate. Back never unlocks or skips anything.
+- Back while the scheduled-backup prompt is open acts as "Skip this time".
+- Limits: the lock and power buttons are still covered by overlays. Not run on a device.

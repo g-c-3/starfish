@@ -568,6 +568,11 @@ Both use the shared viewer shell. Recorder: ready, recording, review; review pla
 lock discards it. Saved voice opens in a viewer with the player (play/pause, scrub, speed). Vault audio is decrypted into
 an in-memory blob URL for the life of the viewer and revoked on close or lock. Playback re-arms the matching idle lock.
 
+### Back button everywhere (Decision 104)
+The nav's Back stays visible on every screen: alone on the lock, first-run and ad-gate screens, and alone above any open
+overlay (`body.overlay-open`). It dismisses the top-most layer: Save dialog, static modal, editor, viewer (through its
+guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
+
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
 - **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially
