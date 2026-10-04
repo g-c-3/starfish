@@ -20,6 +20,7 @@ import { checkForUpdate } from './update-check.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
+import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -163,6 +164,8 @@ function closeVaultFolder() {
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 // Static modals and the button that dismisses each one (Decision 104). Listed top-most first by the order Back checks them.
 const BACK_MODALS = [
+  ['coords-dialog', 'coords-cancel-btn'],
+  ['loc-source-dialog', 'loc-source-cancel-btn'],
   ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
   ['new-chooser-modal', 'new-chooser-cancel-btn'],
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
@@ -1118,6 +1121,8 @@ function hideToast() {
 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
+let activeLocSource = null;  // { finish } — New location: current fix or coordinates
+let activeCoords = null;     // { finish } — paste coordinates / map link dialog
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
@@ -1147,6 +1152,8 @@ let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so cap
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
 function dismissOverlays(vaultOnly = false) {
   if (activeYesNo) activeYesNo.finish(false);
+  if (activeCoords) activeCoords.finish(null);      // clears the pasted text too
+  if (activeLocSource) activeLocSource.finish(null);
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
@@ -2535,6 +2542,86 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let locationFetching = false; // true while a GPS fix is pending; blocks a second Location capture
 
+  // New location (Decisions 116, 117): choose current fix or pasted coordinates.
+  function askLocationSource() {
+    const $ = (id) => document.getElementById(id);
+    return new Promise((resolve) => {
+      const dlg = $('loc-source-dialog');
+      const finish = (v) => {
+        if (!activeLocSource) return;
+        activeLocSource = null;
+        dlg.classList.add('hidden');
+        resolve(v);
+      };
+      $('loc-source-current-btn').onclick = () => finish('current');
+      $('loc-source-coords-btn').onclick = () => finish('coords');
+      $('loc-source-cancel-btn').onclick = () => finish(null);
+      activeLocSource = { finish };
+      dlg.classList.remove('hidden');
+    });
+  }
+
+  // Paste dialog. Parsing is offline and live. A short link needs the person's tap on Verify link, the one network step.
+  // Resolves { lat, lng, name, text } on Continue, null on Cancel or lock.
+  function openCoordsDialog(text = '') {
+    const $ = (id) => document.getElementById(id);
+    return new Promise((resolve) => {
+      const dlg = $('coords-dialog'), input = $('coords-input'), status = $('coords-status');
+      const preview = $('coords-preview'), verify = $('coords-verify'), verifyBtn = $('coords-verify-btn'), cont = $('coords-continue-btn');
+      let parsed = null;
+      const finish = (v) => {
+        if (!activeCoords) return;
+        activeCoords = null;
+        dlg.classList.add('hidden');
+        input.value = '';
+        preview.innerHTML = '';
+        resolve(v);
+      };
+      const render = (r, note = '') => {
+        parsed = r && r.ok ? r : null;
+        verify.classList.toggle('hidden', !(r && r.short));
+        preview.classList.toggle('hidden', !parsed);
+        cont.disabled = !parsed;
+        if (parsed) {
+          preview.innerHTML = `<div class="hero-coords">${escapeHtml(formatCoords(parsed.lat, parsed.lng))}</div>${locationPlotSvg(parsed.lat, parsed.lng)}<div class="hero-note">${parsed.name ? `${escapeHtml(parsed.name)}. ` : ''}Grid plot, 30° lines.</div>`;
+          status.textContent = note || 'Coordinates found.';
+        } else {
+          preview.innerHTML = '';
+          status.textContent = note || (!r || r.empty ? '' : r.short ? 'Short link: no coordinates inside.' : r.error);
+        }
+      };
+      input.oninput = () => render(parseCoordinates(input.value));
+      verifyBtn.onclick = async () => {
+        const r = parseCoordinates(input.value);
+        if (!r.short) return;
+        if (navigator.onLine === false) { status.textContent = 'No internet connection.'; return; }
+        verifyBtn.disabled = true;
+        status.textContent = 'Contacting Google…';
+        const { CapacitorHttp } = await import('@capacitor/core');
+        const res = await resolveShortLink(r.url, (u) => CapacitorHttp.get({ url: u, disableRedirects: true, connectTimeout: 8000, readTimeout: 8000 }));
+        verifyBtn.disabled = false;
+        if (!activeCoords) return; // locked or closed meanwhile
+        if (res.ok) render(res, 'Link verified.');
+        else render({ ok: false, short: true }, `${res.error} Or open the link in Maps and paste the full link or the coordinates.`);
+      };
+      cont.onclick = () => { if (parsed) finish({ lat: parsed.lat, lng: parsed.lng, name: parsed.name || '', text: input.value }); };
+      $('coords-cancel-btn').onclick = () => finish(null);
+      input.value = text;
+      activeCoords = { finish };
+      dlg.classList.remove('hidden');
+      render(parseCoordinates(text));
+      input.focus();
+    });
+  }
+
+  async function saveLocation(d, latitude, longitude) {
+    const id = crypto.randomUUID();
+    await insertEntry(db, { id, type: 'location', label: d.name, latitude, longitude, description: d.description || null });
+    await applyTags(id, d.tags);
+    await renderMainTimeline();
+    toast('Location saved');
+  }
+
   async function startCapture(type) {
     if (type === 'note') {
       // Editor, then the Save dialog. Backing out of the dialog returns to the editor with the text kept.
@@ -2573,32 +2660,45 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       await renderMainTimeline();
     } else if (type === 'location') {
-      // Current GPS fix → entry with latitude/longitude (Decision 79). The fix stays on-device;
-      // Share (row action) is the only step that sends anything out.
-      if (locationFetching) return; // a fix is already in progress
-      locationFetching = true;
-      const newBtns = ['folder-new-btn', 'universal-new-btn'].map((id) => document.getElementById(id)).filter(Boolean);
-      newBtns.forEach((b) => { b.disabled = true; });
-      toast('Fetching location…', true);
-      let coords;
-      try {
-        await Geolocation.requestPermissions();
-        coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
-        hideToast();
-      } catch (err) {
-        toast(`Could not get your location: ${err.message || err}`);
-        return;
-      } finally {
-        locationFetching = false;
-        newBtns.forEach((b) => { b.disabled = false; });
+      // Current GPS fix (Decision 79) or pasted coordinates / map link (Decisions 116, 117). The saved entry stays
+      // on-device; Share (row action) is the only step that sends anything out.
+      const source = await askLocationSource();
+      if (!source) return;
+      let coords, suggested = '';
+      if (source === 'current') {
+        if (locationFetching) return; // a fix is already in progress
+        locationFetching = true;
+        const newBtns = ['folder-new-btn', 'universal-new-btn'].map((id) => document.getElementById(id)).filter(Boolean);
+        newBtns.forEach((b) => { b.disabled = true; });
+        toast('Fetching location…', true);
+        try {
+          await Geolocation.requestPermissions();
+          coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
+          hideToast();
+        } catch (err) {
+          toast(`Could not get your location: ${err.message || err}`);
+          return;
+        } finally {
+          locationFetching = false;
+          newBtns.forEach((b) => { b.disabled = false; });
+        }
+        const d = await openSaveDialog({ heading: 'Save location', defaultName: `Location ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
+        if (!d) return;
+        await saveLocation(d, coords.latitude, coords.longitude);
+      } else {
+        // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
+        let text = '', d = null, pick = null;
+        const mark = overlayAbortCount;
+        while (!d) {
+          pick = await openCoordsDialog(text);
+          if (!pick) return;
+          text = pick.text;
+          suggested = pick.name || `Location ${new Date().toLocaleTimeString()}`;
+          d = await openSaveDialog({ heading: 'Save location', defaultName: suggested, discardLabel: 'Back to coordinates' });
+          if (!d && overlayAbortCount !== mark) return; // locked meanwhile
+        }
+        await saveLocation(d, pick.lat, pick.lng);
       }
-      const d = await openSaveDialog({ heading: 'Save location', defaultName: `Location ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
-      if (!d) return;
-      const id = crypto.randomUUID();
-      await insertEntry(db, { id, type: 'location', label: d.name, latitude: coords.latitude, longitude: coords.longitude, description: d.description || null });
-      await applyTags(id, d.tags);
-      await renderMainTimeline();
-      toast('Location saved');
     } else if (type === 'money') {
       // Placeholder — capture flow not yet defined. Explicit branch so it doesn't silently fall
       // into the generic file-picker case below, which would be wrong for it.
