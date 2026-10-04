@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 and DP15 pending)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 pending)
 
 ## Detailed
 
@@ -425,6 +425,12 @@ individual items) can be picked up in any order once prerequisites are met.
     zoom in and out keeps your place and allows sideways scroll; rotate the phone; a password-protected PDF shows the message and
     Open with app works; a Vault PDF opens, then lock the app with it open and confirm it closes; rename from the pencil keeps the
     page. Check a PDF with unusual fonts or a scan.
+  - [ ] DP16 — Long-press multi-select and nav alignment (Session 87, Decisions 122, 123): long press a row in a Home folder, a Vault folder
+    and a search list (text, reminder, voice, location, image tile, PDF, file); more taps add and remove; Select all; Share, Download and
+    Delete act on the selection; Back and the cancel button leave selection mode; locking leaves it; the Home | Back | Vault bar sits
+    low enough that its Back circle lines up with the floating Back in folders and viewers.
+  - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count). Password-protected PDF, Vault PDF and
+    rename-keeps-place still unchecked.
   - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.
     Still unchecked: a Vault file, a type with no app, and the empty `cache/open/` after returning.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat

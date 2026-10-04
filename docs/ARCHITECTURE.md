@@ -606,6 +606,11 @@ thumbnails exist only in memory and are dropped on lock. The viewer (shared shel
 arrows, zooms with pinch and double-tap, and holds one full-size blob URL at a time, revoked on change, close or lock.
 The image fills the screen under a thin header that carries Edit, Share, Download, Delete and the count.
 
+### Multi-select (Decision 122)
+Long press on a row or image tile in `#folder-list`, `#timeline`, `#vault-folder-list` or `#vault-list` starts selection (module state
+`selection`, bar `#select-bar`). A capture-phase click handler turns taps into toggles while selecting, so open handlers never run.
+Actions call `runBulkFileAction` (the Select files path). Ended by Back, folder close, screen change, Vault lock or finishing an action.
+
 ### PDF viewer (Decision 121)
 Entries of type PDF open in `pdfviewer.js`, built on a bundled pdf.js (legacy build, pinned) and loaded on the first PDF open. Pages are
 drawn lazily and released off screen; zoom is 1 to 3 times fit-to-width by buttons; the header carries rename and the page count.

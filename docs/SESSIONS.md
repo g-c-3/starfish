@@ -17,15 +17,19 @@ Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays 
 - Phase 16 H: in-app PDF viewer (Decision 121). `pdfviewer.js` and `pdfmath.js` (NEW); `app.js`: `openPdf()` for PDF rows, Home and Vault, zoom buttons, page count, Open with app fallback for unreadable files; `style.css`: PDF mode; `package.json`: `pdfjs-dist` 4.10.38.
 - Device feedback on G: Home file opens directly and the extension icon shows (confirmed).
 
-Decisions made: 118, 119, 120, 121.
+- Device feedback: PDF viewer confirmed on a Home PDF.
+- Long-press multi-select in every folder and search list, Home and Vault (Decision 122): `app.js` (`selection` state, `paintSelection`, `exitSelection`, long-press wiring, bar actions), `index.html` (`#select-bar`), `style.css`.
+- Bottom bar lowered so its Back circle matches the floating Back (Decision 123): `style.css`.
 
-Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Drawing onto a canvas was not run here: not run through CI, not run on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
+Decisions made: 118, 119, 120, 121, 122, 123.
+
+Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Drawing onto a canvas was not run here: not run through CI, not run on a device. Multi-select: a simulated page test covered tap-opens, long press starts, the click after a long press is swallowed, taps toggle, row actions are ignored, movement cancels, Select all, bulk delete ids, exit on finish, exit on deselecting the last item, cancel, and a stale long press not eating the next tap. Nav alignment is a CSS change measured from your screenshots (Back circle 44 px up against 32 px, at 1.5 pixel density); not seen on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
 
 Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on; tap a row and the matching app opens at once (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
 
 Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: device-check DP15 (PDF viewer), the rest of DP14 and DP13. Then Money capture (shape still to be given) or Phase 16 close-out. If the PDF viewer misbehaves on a real phone, the likely causes are the worker start and canvas size; check `pdfviewer.js` first.
+Next session start point: device-check DP16 (multi-select, nav alignment), the rest of DP15 and DP14, and DP13. Then Money capture (shape still to be given) or Phase 16 close-out. If the PDF viewer misbehaves on a real phone, the likely causes are the worker start and canvas size; check `pdfviewer.js` first.
 
 ---
 

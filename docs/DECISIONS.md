@@ -1742,3 +1742,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A PDF that cannot be read (password-protected or damaged) shows a plain message and an Open with app button using the Decision 118 path.
 - PDFs saved as Files (type `file`, extension pdf) still open in the phone's app (Decision 120); only entries of type PDF use this viewer.
 - No network call and no new permission.
+
+**122. Long-press multi-select inside folders and search lists.**
+- Cause: bulk actions existed only on the Select files screen; rows inside a folder could not be selected together.
+- Rule: a long press (about half a second, finger still) on a row or image tile in a Home folder, a Vault folder, or either search list starts selection mode with that item selected. In selection mode a tap toggles an item instead of opening it, row actions are hidden, and each item shows a ring that fills with a tick when chosen. Deselecting the last item leaves the mode.
+- Bar: a bar over the top of the screen shows the count, Select all, Share, Download and Delete, and a cancel button. Select all covers the lists currently visible in that section.
+- Scope: one section at a time, Home or Vault, never mixed. Leaving the folder, switching screens, locking, Back, or finishing an action ends the mode. Android Back and the in-app Back leave selection mode before anything else.
+- Actions reuse the Select files path: items are processed one after another, so Share opens one share sheet per item (the existing limit). Delete asks Yes/No first and moves items to trash, not permanent. The result is a one-line message.
+- Vault: selecting and acting count as activity for the Vault auto-lock; the Vault index is rebuilt after a delete.
+- No new plugin, permission or network call.
+
+**123. The Home | Back | Vault bar sits lower so its Back circle matches the floating Back.**
+- Cause: the bar was taller and 10 px up, so its Back circle sat about 12 px higher than the floating Back used in folders, viewers and editors.
+- Rule: the bar is a fixed 56 px high, 5 px above the bottom edge (plus the system inset), so the circle centre is 33 px up, the same as the floating Back. Home and Vault buttons use tighter vertical padding to fit. Back-only and overlay modes are unchanged.
