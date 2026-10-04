@@ -560,7 +560,7 @@ notifications; restoring a pending one reschedules it.
 
 ### Restore refresh and Discard confirmation (Decisions 111, 114)
 After a restore the Vault index is rebuilt when the Vault is unlocked and `dumpzone-data-restored` redraws Home and Vault lists.
-In a capture Save dialog (Discard label) Discard and Back ask Yes/No through `askYesNo()` before dropping the take.
+In a capture Save dialog (Discard label) Discard and Back ask Yes/No through `askYesNo()` before dropping the take. The text editor (changed text) and the voice recorder (recording or review) do the same on Back (Decision 115); the tap-twice rule is gone.
 
 ### Location capture progress (Decision 113)
 While the fix is pending a sticky "Fetching location…" message shows and the Home New buttons are disabled.

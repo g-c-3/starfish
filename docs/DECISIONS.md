@@ -1694,3 +1694,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `askYesNo()` and `#yesno-dialog`: one at a time; Back answers No and is checked first in the Back order (Decision 104); a lock closes it as No and the Save dialog closes through the lock path as before.
 - Fix after first device check: `#save-dialog` has `z-index: 11` over `.modal-overlay`'s 10, so the sheet opened behind it and Discard and Back seemed to do nothing. `#yesno-dialog` is `z-index: 12`. Back answers No through an `activeYesNo` check ahead of the Save dialog; the `BACK_MODALS` entry was removed as unreachable.
 
+**115. Leaving the text editor or voice recorder with unsaved content asks Yes/No.** Supersedes the tap-twice rule in Decisions 91 and 103.
+- Cause of the change: Back showed a toast, then discarded on a second tap within 3 seconds; unclear and easy to trigger by accident.
+- Rule: one Back opens the Yes/No sheet (Decision 114). Text editor: shown only when the text changed ("Discard changes?"). Voice recorder: shown while recording or in review ("Discard recording?"); nothing in the ready state. Yes leaves and drops the content, No keeps it.
+- Mechanism: `requestBack` (editor) and the recorder's `guard` are async; the viewer shell's `back` awaits `guard()`. A lock closes the sheet as No and force-closes the screen as before.
+
