@@ -154,6 +154,8 @@ workflow — this version is a real runtime toggle instead.
 
 ## 3b. Private Vault (pivot — was notes-only "private notes," now spans five types)
 
+The Vault is opt-in: no Vault PIN means off; setting one turns it on, and it cannot be turned off afterwards (Decision 119).
+
 Text, Voice, Image, PDF, and Files can all be private now, gated by the one Vault PIN (§3). The Vault is meant
 to be **an exact functional replica of the main app** — same capture, same edit, same tags/label autocomplete,
 same search, same trash-with-30-day-restore, same four per-file actions in the same order — with three
@@ -604,9 +606,9 @@ thumbnails exist only in memory and are dropped on lock. The viewer (shared shel
 arrows, zooms with pinch and double-tap, and holds one full-size blob URL at a time, revoked on change, close or lock.
 The image fills the screen under a thin header that carries Edit, Share, Download, Delete and the count.
 
-### Open a file with another app (Decision 118)
-A Files row opens a detail view with an Open with app button (`fileopen.js`). Home files are handed over from their stored
-path. Vault files are decrypted in memory, written to `cache/open/<id>.<ext>` and handed over; that folder is emptied on
+### Open a file with another app (Decisions 118, 120)
+Tapping a Files row hands the file straight to the phone's matching app, with no detail step (`fileopen.js`, Decision 120);
+the row icon shows the file's extension. Home files are handed over from their stored path. Vault files are decrypted in memory, written to `cache/open/<id>.<ext>` and handed over; that folder is emptied on
 launch, on resume and before each open, never on close or lock (the other app may still be reading). The copy leaves the
 Vault's encryption, as with Share and Download. Opening another app locks as a normal background event (Decision 93).
 No network, no new permission.

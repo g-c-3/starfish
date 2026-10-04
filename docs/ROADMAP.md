@@ -376,9 +376,10 @@ individual items) can be picked up in any order once prerequisites are met.
     still has no capture.
     - Session 86: New offers current location or pasted coordinates / map link; optional Verify link for short links
       (Decisions 116, 117). Confirmed on device — Session 86.
-  - [~] G — Files: open with the phone's matching app (Session 87, Decision 118; built, `vite build` passed, not run through CI, not
-    device-tested). Tap a Files row: detail view with an Open with app button. Home files open from their stored path; Vault files
-    open from a decrypted copy in cache, removed on the next launch or resume. Plugin: `@capacitor-community/file-opener` 6.x.
+  - [~] G — Files: open with the phone's matching app (Session 87, Decisions 118 and 120; built, `vite build` passed, not run through CI,
+    not device-tested). Tap a Files row: the file opens straight in the phone's app, no detail step (Decision 120). Rows show the
+    file extension (PDF, DOCX, ZIP) in place of the folder icon. Home files open from their stored path; Vault files open from a
+    decrypted copy in cache, removed on the next launch or resume. Plugin: `@capacitor-community/file-opener` 6.x.
   - [ ] H — PDF: in-app viewer.
   - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,
     about 1.3 MB larger APK) or by handing off to the phone's PDF app; a real map needs network tiles, which
@@ -414,8 +415,9 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP12 — Install over an older build with a reminder pending (Sessions 75 to 78): it still fires, buttons work.
   - [~] DP13 — Repeating reminders beyond the first day (Decisions 107, 108): a daily one fires again the next day;
     weekly and monthly ones; Done for now keeps the series; Repeat set to none stops it.
-  - [ ] DP14 — Open Files with the phone's app (Session 87, Decision 118): Home file opens in a matching app; a Vault file opens and
-    the Vault locks per its settings; no matching app shows a plain message; after returning, `cache/open/` is empty.
+  - [ ] DP14 — Open Files with the phone's app (Session 87, Decisions 118, 120): tapping a Home file opens it in a matching app with no
+    detail step; the row icon shows the extension; a Vault file does the same and the Vault locks per its settings; no matching app
+    shows a plain message; after returning, `cache/open/` is empty.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat
     set to none confirmed; the next-day fire of daily, weekly and monthly repeats is still pending.
   - Confirmed in passing, Session 85: Save dialog and tags (Session 69), Back (Sessions 60, 83), Home multi-select

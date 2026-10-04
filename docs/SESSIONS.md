@@ -11,11 +11,14 @@ Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays 
 - `app.js`: `openFile()` viewer (details plus Open with app); `openEntry` routes `file` rows to it; `cache/open/` purged on launch and on resume.
 - `package.json`: added `@capacitor-community/file-opener` `^6.0.1`.
 
-Decisions made: 118.
+- Device feedback: the detail step was unnecessary. `app.js`: `openFile()` now opens the file at once (Decision 120); the viewer is removed. Rows show the extension in place of the folder icon (`rowIconHtml`, `.ext-badge`). `vault.js`: the index carries `extension`. `style.css`: badge sizes.
+- Vault direction confirmed: keep it, opt-in by PIN, permanent once on (Decision 119). No code change.
 
-Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup in Node. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
+Decisions made: 118, 119, 120.
 
-Device checks (DP14): Home, Files folder: tap a row, Open with app launches a matching app (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
+Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
+
+Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on; tap a row and the matching app opens at once (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
 
 Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 

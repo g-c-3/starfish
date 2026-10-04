@@ -94,3 +94,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-04 | Session 86 (continued) | Decision 115 | Text editor and voice recorder Back ask Yes/No instead of tap-twice; Discard sheet stacking fixed |
 | 2026-10-04 | Session 86 (continued, 2) | Decisions 116–117 | Location: add by pasted coordinates or map link; optional Verify link for short links |
 | 2026-10-04 | Session 87 | Decision 118 | Phase 16 G built: Files open with the phone's matching app (Vault copies in cache, purged on launch and resume); not compiled in CI or device-tested; DP14 added |
+| 2026-10-04 | Session 87 (continued) | Decisions 119–120 | Vault confirmed opt-in and permanent; Files rows open directly in the phone's app and show the file extension; not compiled in CI or device-tested |

@@ -1721,3 +1721,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Lock behaviour: opening another app is a background event and locks as the person's lock settings say, the same as Open in Maps. No picker exemption is used.
 - No new network call, permission or manifest change: the plugin brings its own file provider for app data and cache.
 - PDF entries keep the "coming later" toast until Phase 16 H.
+
+**119. The Vault stays: opt-in by setting a PIN, permanent once on.**
+- Rule: with no Vault PIN the Vault is off and the Vault tab shows only the PIN setup view. Setting a PIN, at first-run or later, turns it on. There is no feature to turn it off or remove the PIN; a PIN can be changed, not removed.
+- First-run keeps the optional Vault PIN field; no new setting or switch is added.
+- The three credentials stay independent (ARCHITECTURE §3).
+
+**120. A Files row opens the file directly; rows show the extension.** Refines Decision 118.
+- Cause: the detail view added a step between the tap and the file.
+- Rule: tapping a Files row (Home folder, Vault folder, either search list) hands the file to the phone's matching app at once. Name, tags and description are changed through the row's Edit action. A second tap while a launch is pending is ignored. Failures show a plain message.
+- Row icon: a Files row shows its extension, upper case and at most four characters (PDF, DOCX, XLSX, ZIP), in place of the folder icon. No extension keeps the folder icon. Other types keep their icons. The Vault index carries `extension` so Vault rows match Home.
+- Decision 118's detail view is removed; its Vault copy and purge rules are unchanged.
