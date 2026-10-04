@@ -16,6 +16,8 @@ import {
   restoreFromDrive, checkAndRunAutoBackupIfDue
 } from './gdrive.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
+import * as Money from './money.js';
+import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { checkForUpdate } from './update-check.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
@@ -146,6 +148,7 @@ function switchMainTab(tab) {
   updateLockButtonDisabledState(false);
 }
 
+let moneyMonth = null; // { y, m } month shown in the Money folder header; null means the current month
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
@@ -1097,7 +1100,20 @@ function formatEntryDate(ms) {
 // actionPrefix: 'main' | 'vault' renders Share/Download/Edit/Delete icon buttons wired by their existing
 // ${prefix}-*-btn classes; null renders a plain (search-result) row.
 // Meta line and greyed-out flag for a full entry row (Home folders and search).
+let currencySymbol = Money.DEFAULT_SYMBOL; // one symbol for the whole app (Decision 124); meta key currency_symbol
+async function loadCurrencySymbol() {
+  currencySymbol = Money.cleanSymbol(await metaGet('currency_symbol', Money.DEFAULT_SYMBOL));
+  return currencySymbol;
+}
 function rowMeta(row) {
+  if (row.type === 'money' || row.type === 'expense') {
+    const d = Money.fromRow(row);
+    if (d) {
+      const st = Money.status(d);
+      const state = st === 'partly returned' ? `${Money.STATUS_LABELS[st]}, ${Money.formatAmount(Money.remaining(d), currencySymbol)} left` : (st ? Money.STATUS_LABELS[st] : '');
+      return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
+    }
+  }
   if (row.type !== 'reminder') return { meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · '), done: false };
   const st = reminderStatus(row);
   const when = formatEntryDate(reminderNextDue(row));
@@ -1159,6 +1175,8 @@ let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
 let activeLocSource = null;  // { finish } — New location: current fix or coordinates
 let activeCoords = null;     // { finish } — paste coordinates / map link dialog
+let activeMoney = null;      // { finish } — Money form or repayment dialog
+const moneyHooks = { open: (finish) => { activeMoney = { finish }; }, close: () => { activeMoney = null; } };
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
@@ -1190,6 +1208,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeYesNo) activeYesNo.finish(false);
   if (activeCoords) activeCoords.finish(null);      // clears the pasted text too
   if (activeLocSource) activeLocSource.finish(null);
+  if (activeMoney) activeMoney.finish(null);
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
@@ -2740,9 +2759,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveLocation(d, pick.lat, pick.lng);
       }
     } else if (type === 'money') {
-      // Placeholder — capture flow not yet defined. Explicit branch so it doesn't silently fall
-      // into the generic file-picker case below, which would be wrong for it.
-      toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`);
+      // Form, then the Save dialog (name defaults to the readable summary; tags; the description is the note).
+      await loadCurrencySymbol();
+      const items = await moneyItems();
+      let details = null, d = null;
+      const mark = overlayAbortCount;
+      while (!d) {
+        details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: moneyHooks });
+        if (!details) return;
+        d = await openSaveDialog({ heading: 'Save money entry', defaultName: Money.summary(details), discardLabel: 'Back to amount' });
+        if (!d && overlayAbortCount !== mark) return; // locked meanwhile
+      }
+      await saveMoneyEntry(details, d);
     } else {
       const input = document.createElement('input');
       input.type = 'file';
@@ -2797,6 +2825,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function renderMainTimeline() {
     await renderFolderCounts();
+    await loadCurrencySymbol();
+    await renderMoneySummary();
     if (!openFolderType) return;
     const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
     if (openFolderType === 'image') { // thumbnail grid (Decision 105)
@@ -2833,6 +2863,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   async function openFolder(type, btn) {
     openFolderType = type;
+    if (type === 'money') moneyMonth = null; // the month header starts on the current month
     updateBackButtonState();
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
@@ -3047,6 +3078,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Edit button: details dialog (name, tags, description) for every type; text notes go through the editor.
   async function editEntryUI(item, isVault) {
     if (item.type === 'note') return openNote(item, isVault);
+    if (item.type === 'money' && !isVault) return editMoney(item);
     const tags = item.tags || await getEntryTags(item.id);
     const isReminder = item.type === 'reminder' && !isVault;
     const d = await openSaveDialog({
@@ -3125,6 +3157,137 @@ document.addEventListener('DOMContentLoaded', async () => {
       screen.classList.remove('hidden');
       updateBackButtonState();
       refresh();
+    });
+  }
+
+  // ---- Money on Home (Decision 126). Details live in money_json; the label is the readable summary and the
+  // description is the note, so search finds both. Legacy expense rows are read as Spent (money.js fromRow). ----
+  async function moneyItems() {
+    const rows = (await db.query(`SELECT type, amount, expense_category, created_at, money_json FROM entries WHERE deleted_at IS NULL AND is_private=0 AND type IN ('money','expense')`)).values || [];
+    return rows.map((r) => Money.fromRow(r)).filter(Boolean);
+  }
+
+  async function renderMoneySummary() {
+    const box = document.getElementById('money-summary');
+    if (openFolderType !== 'money') { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    if (!moneyMonth) { const n = new Date(); moneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
+    const items = await moneyItems();
+    const t = Money.monthTotals(items, moneyMonth.y, moneyMonth.m);
+    const l = Money.loanTotals(items);
+    const fmt = (n) => Money.formatAmount(n, currencySymbol);
+    const title = new Date(moneyMonth.y, moneyMonth.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    box.innerHTML = `
+      <div class="ms-head">
+        <button type="button" id="ms-prev" class="icon-btn" aria-label="Previous month">‹</button>
+        <span class="ms-title">${escapeHtml(title)}</span>
+        <button type="button" id="ms-next" class="icon-btn" aria-label="Next month">›</button>
+      </div>
+      <div class="ms-grid">
+        <div><span>Spent</span><b>${escapeHtml(fmt(t.spent))}</b></div>
+        <div><span>Received</span><b>${escapeHtml(fmt(t.received))}</b></div>
+        <div><span>Net</span><b class="${t.net < 0 ? 'neg' : ''}">${escapeHtml(fmt(t.net))}</b></div>
+      </div>
+      <div class="ms-loans">
+        <div><span>Owed to you</span><b>${escapeHtml(fmt(l.owedToYou))}</b></div>
+        <div><span>You owe</span><b>${escapeHtml(fmt(l.youOwe))}</b></div>
+      </div>`;
+    box.classList.remove('hidden');
+    const shift = (delta) => async () => {
+      const d = new Date(moneyMonth.y, moneyMonth.m + delta, 1);
+      moneyMonth = { y: d.getFullYear(), m: d.getMonth() };
+      await renderMoneySummary();
+    };
+    document.getElementById('ms-prev').onclick = shift(-1);
+    document.getElementById('ms-next').onclick = shift(1);
+  }
+
+  async function saveMoneyEntry(details, d) {
+    const id = crypto.randomUUID();
+    await insertEntry(db, { id, type: 'money', label: d.name, description: d.description || null, money_json: Money.toJson(details) });
+    await applyTags(id, d.tags);
+    await renderMainTimeline();
+    toast('Saved');
+  }
+
+  // Edit: form, then the Save dialog. A name still equal to the old summary follows the new details; a typed name is kept.
+  async function editMoney(item) {
+    const old = Money.fromRow(item);
+    if (!old) { toast('This entry has no readable amount.'); return; }
+    await loadCurrencySymbol();
+    const items = await moneyItems();
+    const tags = item.tags || await getEntryTags(item.id);
+    const autoName = item.label === Money.summary(old);
+    let details = old, d = null;
+    const mark = overlayAbortCount;
+    while (!d) {
+      details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: moneyHooks });
+      if (!details) return;
+      const next = Money.summary(details);
+      d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', discardLabel: 'Back to amount' });
+      if (!d && overlayAbortCount !== mark) return; // locked meanwhile
+    }
+    try {
+      await window.Dumpzone.editEntry(item.id, { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
+      await setEntryTags(item.id, d.tags);
+      toast('Saved');
+    } catch (err) { toast(`Could not save: ${err.message || err}`); }
+  }
+
+  async function openMoney(item) {
+    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    await openViewer({
+      title: 'Money',
+      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      render: async (body, { refresh }) => {
+        const row = await fresh();
+        const d = Money.fromRow(row);
+        if (!d) { body.innerHTML = '<p class="screen-sub">This entry has no readable amount.</p>'; return; }
+        await loadCurrencySymbol();
+        const fmt = (n) => Money.formatAmount(n, currencySymbol);
+        const tags = await getEntryTags(row.id);
+        const loan = Money.isLoan(d);
+        const st = Money.status(d);
+        const pill = st === 'partly returned' ? 'partly' : st;
+        const full = (ms) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const line = (k, v) => (v ? `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>` : '');
+        const reps = (d.repayments || []).map((r) => `<div><dt>${escapeHtml(formatEntryDate(r.at))}${r.note ? ` · ${escapeHtml(r.note)}` : ''}</dt><dd>${escapeHtml(fmt(r.amount))}</dd></div>`).join('');
+        body.innerHTML = `
+          <div class="detail-hero${st === 'settled' ? ' inactive' : ''}" data-type="money">
+            <span class="row-icon">${iconSvg('money')}</span>
+            <div class="hero-when">${escapeHtml(fmt(d.amount))}</div>
+            <div class="hero-sub">${escapeHtml(row.label)}</div>
+            ${loan ? `<span class="status-pill ${pill}">${escapeHtml(Money.STATUS_LABELS[st])}</span>` : ''}
+          </div>
+          <dl class="detail-list">
+            ${line('Kind', Money.KIND_LABELS[d.kind])}
+            ${line('Date', full(d.at))}
+            ${line('Person', d.person)}
+            ${line('Category', d.category)}
+            ${line('Payment method', d.method)}
+            ${line('Due', d.due ? new Date(d.due).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')}
+            ${loan ? line('Returned', fmt(Money.repaid(d))) + line('Remaining', fmt(Money.remaining(d))) : ''}
+            ${line('Description', row.description)}
+            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
+          </dl>
+          ${loan ? `<p class="settings-group">Repayments</p><dl class="detail-list">${reps || '<div><dt>None yet</dt><dd></dd></div>'}</dl>` : ''}
+          <div class="detail-actions">
+            ${loan && st !== 'settled' ? '<button id="mv-repay-btn">Add repayment</button>' : ''}
+            <button id="mv-edit-btn" class="secondary-btn">Edit</button>
+          </div>`;
+        const add = document.getElementById('mv-repay-btn');
+        if (add) add.onclick = async () => {
+          const cur = Money.fromRow(await fresh());
+          if (!cur) return;
+          const next = await openRepayDialog({ details: cur, symbol: currencySymbol, hooks: moneyHooks });
+          if (!next) return;
+          try {
+            await window.Dumpzone.editEntry(row.id, { money_json: Money.toJson(next) }, {});
+            toast('Repayment added');
+          } catch (err) { toast(`Could not save: ${err.message || err}`); }
+          await refresh();
+        };
+        document.getElementById('mv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
+      }
     });
   }
 
@@ -3452,6 +3615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
+    else if ((item.type === 'money' || item.type === 'expense') && !isVault) await openMoney(item);
     else if (item.type === 'reminder' && !isVault) await openReminder(item);
     else if (item.type === 'location' && !isVault) await openLocation(item);
     else if (item.type === 'voice') await openVoice(item, isVault);
@@ -3466,6 +3630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
     let rows = [];
     try { rows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }
+    await loadCurrencySymbol();
     document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
