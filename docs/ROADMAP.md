@@ -375,7 +375,7 @@ individual items) can be picked up in any order once prerequisites are met.
     (30° lines, no map data), Copy, and Open in Maps via a `geo:` hand-off. Main entries only; Vault Location
     still has no capture.
     - Session 86: New offers current location or pasted coordinates / map link; optional Verify link for short links
-      (Decisions 116, 117). Awaiting device check.
+      (Decisions 116, 117). Confirmed on device — Session 86.
   - [ ] G — Files: open with the phone's matching app.
   - [ ] H — PDF: in-app viewer.
   - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,
@@ -413,7 +413,7 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP12 — Install over an older build with a reminder pending (Sessions 75 to 78): it still fires, buttons work.
   - [~] DP13 — Repeating reminders beyond the first day (Decisions 107, 108): a daily one fires again the next day;
     weekly and monthly ones; Done for now keeps the series; Repeat set to none stops it.
-  - Session 86: DP1 to DP12 confirmed on device. DP4 timeout notice (no fix) not tried. DP13: Done for now and Repeat
+  - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat
     set to none confirmed; the next-day fire of daily, weekly and monthly repeats is still pending.
   - Confirmed in passing, Session 85: Save dialog and tags (Session 69), Back (Sessions 60, 83), Home multi-select
     (Session 62), reminder notification, Done and Snooze (Sessions 70, 73, 74).

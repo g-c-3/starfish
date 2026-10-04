@@ -16,11 +16,11 @@ Device pass DP1 to DP12, with fixes found along the way (Decisions 110 to 114). 
 
 Decisions made: 110, 111, 112, 113, 114, 115, 116, 117.
 
-Verified in the authoring environment: syntax checks on every changed file. Device-confirmed: restore picker, Vault refresh after Append, Append with a trashed duplicate, and everything listed as passed above. Decision 113 (Location fetching message) device-confirmed. Decision 114 failed its first device check (sheet hidden behind the Save dialog); fixed with a z-index, not yet re-checked. Decisions 115, 116, 117 not yet run through CI or on a device. Unverified on device: that `CapacitorHttp.get` with `disableRedirects` returns the `Location` header for a real `maps.app.goo.gl` link.
+Verified in the authoring environment: syntax checks on every changed file. Device-confirmed: restore picker, Vault refresh after Append, Append with a trashed duplicate, and everything listed as passed above. Decision 113 (Location fetching message) device-confirmed. Decision 114 failed its first device check (sheet hidden behind the Save dialog); fixed with a z-index and then device-confirmed. Decision 115 device-confirmed. Decisions 116 and 117 device-confirmed: the New chooser, the paste dialog, Verify link on a real `maps.app.goo.gl` link (`CapacitorHttp.get` with `disableRedirects` returned the redirect; preview showed the coordinates and place name), Continue into Save, a bad pair rejected, Verify link with no internet, Back to coordinates keeping the text.
 
-Open: DP13 next-day fire of daily, weekly and monthly repeats. DP4 no-fix timeout notice not tried. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
+Open: DP13 next-day fire of daily, weekly and monthly repeats. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: check Decisions 116 and 117 (New in Location chooser; paste coordinates, a long link and a short link; Verify link with and without internet; Back to coordinates keeps the text), re-check Decisions 114 and 115 (Discard Yes/No in Image, PDF, Voice, Reminder and Location captures and Back in those dialogs; Back in the text editor after typing; Back while recording and in review), finish DP13, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
+Next session start point: finish DP13, then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
 
 ---
 
