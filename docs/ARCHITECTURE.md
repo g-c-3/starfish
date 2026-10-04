@@ -41,7 +41,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
-| Money | none yet (design: Decision 124, `money_json`) | label only | placeholder until built; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are no longer auto-detected |
+| Money | none (details in `money_json`, Decisions 124, 126) | label (readable summary) + description (note) | Home built; Vault Money still a placeholder; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are no longer auto-detected (removal pending, step 5) |
 | Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
 
 `is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Reminder/Location/Money/Files
@@ -624,6 +624,13 @@ the row icon shows the file's extension. Home files are handed over from their s
 launch, on resume and before each open, never on close or lock (the other app may still be reading). The copy leaves the
 Vault's encryption, as with Share and Download. Opening another app locks as a normal background event (Decision 93).
 No network, no new permission.
+
+### Money on Home (Decisions 124, 126)
+- Form and repayment dialogs: `moneyui.js`. Maths, totals and JSON: `money.js`. Saving, rows and the viewer: `app.js`.
+- Capture and edit: form, then the Save dialog. Label defaults to the summary, description is the note.
+- Month header and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
+- Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted.
+- Not built: Settings symbol control, expense detection removal, Vault Money, repayment edit or delete.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

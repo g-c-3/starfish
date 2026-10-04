@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (Money capture: model, schema and backup built — Session 88 (steps 1 and 2 of Decision 124), UI not built; 5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
+- [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124), Settings symbol, detection removal and Vault Money not built; 5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Vault Money; Reminder Session 56 and Location Session 57 built, main only)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87; DP17 confirmed except lock-with-prompt)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87; DP17 confirmed except lock-with-prompt; DP18 added — Session 89)
 
 ## Detailed
 
@@ -429,10 +429,11 @@ individual items) can be picked up in any order once prerequisites are met.
     and a search list (text, reminder, voice, location, image tile, PDF, file); more taps add and remove; Select all; Share, Download and
     Delete act on the selection; Back and the cancel button leave selection mode; locking leaves it; the Home | Back | Vault bar sits
     low enough that its Back circle lines up with the floating Back in folders and viewers.
-  - [~] **Money capture (Session 87, Decision 124; steps 1 and 2 built Session 88, not run through CI or on a device).** Build order: (1) done: `money.js`: model, repayment maths, month totals,
-    currency list, Node-tested; (2) done: schema: `money_json` column via `ensureColumn`, backup restore writes it (export already `SELECT *`); (3) Home: form,
-    list rows, month header, repayment dialog, edit, search; (4) Settings: currency symbol; (5) remove expense detection from `captureText`;
+  - [~] **Money capture (Session 87, Decision 124; steps 1 and 2 built Session 88, step 3 built Session 89, Decision 126; not run through CI or on a device).** Build order: (1) done: `money.js`: model, repayment maths, month totals,
+    currency list, Node-tested; (2) done: schema: `money_json` column via `ensureColumn`, backup restore writes it (export already `SELECT *`); (3) done: Home: form,
+    list rows, month header, repayment dialog, edit, viewer (search reads the summary and note); (4) Settings: currency symbol; (5) remove expense detection from `captureText`;
     (6) Vault Money (JSON in `encrypted_body`). Open question: reminder text detection stays unless told otherwise.
+  - [ ] DP18 — Money on Home (Session 89, Decision 126): add one of each kind; the row meta shows kind, amount, status, date; Lent shows the person and due date; Add repayment pre-fills the remaining amount, a partial one shows "Partly returned" and what is left, a full one settles and greys the row; an overrun is refused; edit keeps repayments and fixes the kind; the month header totals and previous and next move; loans stay out of Net; search finds an entry by summary and by note; lock with a Money dialog open closes it.
   - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count), rename keeps the page, and the protected-PDF
     message and Open with app fallback (Home and Vault). A Vault PDF that opens normally and locking with it open are still unchecked.
   - [~] DP17 — In-app PDF password (Session 87, Decision 125). Confirmed on device in Home and the Vault: right password opens, wrong

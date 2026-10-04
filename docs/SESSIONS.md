@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 89**
+
+Phase 4 Money capture, step 3 of Decision 124's build order (Home UI). Fresh session; Tier 1 and the Money parts of the Tier 2 docs read.
+- `moneyui.js` (NEW): `openMoneyForm` (kind, amount, person and due date for loans, category and method chips from recent values, date) and `openRepayDialog` (pre-filled with the remaining amount).
+- `index.html`: `#money-dialog`, `#repay-dialog`, `#money-summary`.
+- `app.js`: Home Money capture (form, then Save dialog), `editMoney`, `openMoney` viewer with repayments and Add repayment, month header with previous and next, Money row meta (settled greyed), expense rows open in the same viewer, symbol read from meta, dialogs close on lock.
+- `fileactions.js`: `editEntry` writes `money_json`.
+- `style.css`: month header, loan status pills.
+
+Decisions made: 126.
+
+Verified in the authoring environment: syntax checks, `vite build`, 28 checks on both dialogs in a simulated page against the real `index.html` (empty and invalid amounts, loan block, chips, kind fixed with repayments, amount below returned refused, unchanged date kept, overrun refused, partial then full return, cancel, forced close, hooks). Not run: INSERT and UPDATE against real SQLite, the viewer and month header on a device, search for a Money entry, CI.
+
+Open: Settings symbol control (step 4). Expense detection still in `captureText` (step 5). Vault Money still a placeholder (step 6). Back does not close the Money dialogs. A repayment cannot be edited or removed. Device checks pending: DP17 remainder, DP13, rest of DP14 and DP15. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
+
+Next session start point: commit `moneyui.js`, `fileactions.js`, `index.html`, `style.css`, `app.js`; device-check Money on Home (add each kind, repayment to settled, edit, month header, search). Then step 4 (Settings: currency symbol), 5 (remove expense detection from `captureText`), 6 (Vault Money). Reminder text detection stays unless the person says otherwise.
+
+---
+
 **Session 88**
 
 Phase 4 Money capture, steps 1 and 2 of Decision 124's build order. Fresh session; all docs read first.

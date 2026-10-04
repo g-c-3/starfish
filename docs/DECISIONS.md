@@ -1773,3 +1773,17 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Password handling: kept in the field and passed to pdf.js for that open only. The field is emptied on use and on leaving; the password is never written to the database, a file, the clipboard or any setting, and nothing is remembered between opens. Home and Vault behave the same; typing counts as activity for the matching auto-lock, and locking the Vault closes the viewer and the prompt.
 - Logic lives in `pdfopen.js` with pdf.js passed in, so it is tested in Node against a real encrypted file (right password, wrong then right, give up, no prompt for an unprotected file).
 - No network call and no new permission.
+
+**126. Money on Home: form, rows, month header, repayments, edit.** Builds Decision 124 step 3.
+- Capture: New in the Money folder opens the form (kind, amount, person and due date for Lent and Borrowed, category, payment method, date), then the Save dialog. The name defaults to the readable summary, the description is the note, tags as elsewhere. Back from the Save dialog returns to the form with the values kept.
+- Edit: the same two steps. A name still equal to the old summary follows the new details; a typed name is kept.
+- Kind is fixed once repayments exist. Cause: changing it would change what the repayments mean.
+- Repayments: Add repayment on the detail view, pre-filled with the remaining amount; an overrun is refused. A repayment cannot yet be edited or removed.
+- Month header: Money folder only, starts on the current month each time the folder opens. The list is not filtered by month. Totals read every Home Money and expense row, not just the 200 the list shows.
+- Rows: kind, amount with the symbol, status (a partly returned loan shows what is left), event date. A settled loan is greyed.
+- Expense rows from before Decision 124 open in the same viewer as Spent. Their Edit stays on the earlier prompts.
+- Symbol: read from the `currency_symbol` meta key, default ₹. The Settings control is step 4.
+- Dialogs close when the app locks. Back does not close them; Cancel does.
+- Logic lives in `moneyui.js`; `app.js` only wires it. `editEntry` writes `money_json`.
+- No network call and no new permission.
+
