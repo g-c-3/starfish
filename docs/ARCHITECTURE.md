@@ -615,7 +615,8 @@ Actions call `runBulkFileAction` (the Select files path). Ended by Back, folder 
 Entries of type PDF open in `pdfviewer.js`, built on a bundled pdf.js (legacy build, pinned) and loaded on the first PDF open. Pages are
 drawn lazily and released off screen; zoom is 1 to 3 times fit-to-width by buttons; the header carries rename and the page count.
 Home bytes come from the stored path; Vault bytes are decrypted in memory only and dropped on close or lock. Layout maths lives in
-`pdfmath.js` (no DOM, tested in Node). No text layer or search; an unreadable PDF offers the phone's app. No network.
+`pdfmath.js` (no DOM, tested in Node). A protected PDF asks for its password in the viewer (`pdfopen.js`, Decision 125; memory only,
+never stored). No text layer or search; a damaged PDF or a cancelled prompt offers the phone's app. No network.
 
 ### Open a file with another app (Decisions 118, 120)
 Tapping a Files row hands the file straight to the phone's matching app, with no detail step (`fileopen.js`, Decision 120);
@@ -698,6 +699,7 @@ dumpzone/
       fileopen.js       -> hand a saved file to the phone's matching app (Vault copies in cache/open/, purged)
       pdfviewer.js      -> in-app PDF viewer on bundled pdf.js (lazy-loaded; pages drawn on demand)
       pdfmath.js        -> pure helpers for the PDF viewer: fit scale, pixel budget, page-at-scroll, zoom steps
+      pdfopen.js        -> opens a PDF, asking for a password only when needed (memory only; testable in Node)
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.

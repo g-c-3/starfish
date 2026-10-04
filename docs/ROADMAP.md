@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87; DP17 pending)
 
 ## Detailed
 
@@ -383,8 +383,8 @@ individual items) can be picked up in any order once prerequisites are met.
   - [~] H — PDF: in-app viewer (Session 87, Decision 121; built, `vite build` passed, page layout and parsing tested in Node, drawing not
     run through CI or on a device). Tap a PDF row: full-screen viewer on a bundled pdf.js (legacy build, pinned 4.10.38), pages
     drawn lazily and released off screen, page count in the header, zoom buttons (1, 1.5, 2, 3 times), rename from the header. Home
-    and Vault; Vault bytes stay in memory and are dropped on close or lock. A document that cannot be read (password-protected,
-    damaged) offers Open with app. No text layer, no search inside a PDF, no bundled fonts or character maps.
+    and Vault; Vault bytes stay in memory and are dropped on close or lock. A password-protected PDF asks for the password inside the viewer (Decision 125);
+    a damaged one, or a cancelled prompt, offers Open with app. No text layer, no search inside a PDF, no bundled fonts or character maps.
   - Choice made: PDF by bundling pdf.js, offline (Decision 121). A real map needs network tiles, which would break the
     single-network-call rule, so F uses coordinates plus hand-off.
   - Suggested order: A, B, E, F, C, D, G, H.
@@ -433,8 +433,11 @@ individual items) can be picked up in any order once prerequisites are met.
     currency list, with Node tests; (2) schema: `money_json` column via `ensureColumn`, backup export and import carry it; (3) Home: form,
     list rows, month header, repayment dialog, edit, search; (4) Settings: currency symbol; (5) remove expense detection from `captureText`;
     (6) Vault Money (JSON in `encrypted_body`). Open question: reminder text detection stays unless told otherwise.
-  - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count). Password-protected PDF, Vault PDF and
-    rename-keeps-place still unchecked.
+  - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count), rename keeps the page, and the protected-PDF
+    message and Open with app fallback (Home and Vault). A Vault PDF that opens normally and locking with it open are still unchecked.
+  - [ ] DP17 — In-app PDF password (Session 87, Decision 125): a protected PDF in Home shows a password field; a wrong password says so
+    and asks again; the right one opens it; Cancel shows the message with Open with app; same in the Vault; Back during the prompt closes
+    the viewer; locking the Vault with the prompt open closes it; reopening asks again (nothing remembered).
   - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.
     Still unchecked: a Vault file, a type with no app, and the empty `cache/open/` after returning.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat

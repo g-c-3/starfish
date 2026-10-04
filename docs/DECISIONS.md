@@ -1766,3 +1766,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Storage: Home entries keep the details in a new `money_json` column added through the existing column migration; the label is a readable summary and the note is the description, so search finds them. Backup export and import must carry the column. Vault entries keep the same details as JSON inside the encrypted body, replacing the placeholder text shape; Vault totals come only from the unlocked index and are never mixed with Home.
 - Not included: charts, budgets, recurring entries, per-entry currency, conversion, reminders from due dates, CSV export (a later step).
 - Build order is in the roadmap.
+
+**125. Password-protected PDFs open in the viewer after the password is typed.** Refines Decision 121.
+- Cause: the viewer only showed a message and Open with app for a protected PDF.
+- Rule: when pdf.js reports that a document needs a password, the viewer shows a password field in place of the pages, with Open and Cancel. A wrong password says so and asks again. Cancel, or leaving the viewer, shows the protected-PDF message with Open with app.
+- Password handling: kept in the field and passed to pdf.js for that open only. The field is emptied on use and on leaving; the password is never written to the database, a file, the clipboard or any setting, and nothing is remembered between opens. Home and Vault behave the same; typing counts as activity for the matching auto-lock, and locking the Vault closes the viewer and the prompt.
+- Logic lives in `pdfopen.js` with pdf.js passed in, so it is tested in Node against a real encrypted file (right password, wrong then right, give up, no prompt for an unprotected file).
+- No network call and no new permission.

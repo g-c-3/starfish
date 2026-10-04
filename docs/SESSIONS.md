@@ -23,16 +23,18 @@ Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays 
 
 - Device feedback: multi-select and nav alignment confirmed (DP16).
 - Money capture designed with the person (Decision 124); no code written for it. Built next session so it gets a fresh context.
+- Device feedback: protected-PDF message and fallback confirmed in Home and Vault; rename keeps the page (DP15).
+- In-app PDF password (Decision 125): `pdfopen.js` (NEW), `pdfviewer.js` (`askPassword` option), `app.js` (inline prompt, closes with the viewer), `style.css`.
 
-Decisions made: 118, 119, 120, 121, 122, 123, 124.
+Decisions made: 118, 119, 120, 121, 122, 123, 124, 125.
 
-Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Drawing onto a canvas was not run here: not run through CI, not run on a device. Multi-select: a simulated page test covered tap-opens, long press starts, the click after a long press is swallowed, taps toggle, row actions are ignored, movement cancels, Select all, bulk delete ids, exit on finish, exit on deselecting the last item, cancel, and a stale long press not eating the next tap. Nav alignment is a CSS change measured from your screenshots (Back circle 44 px up against 32 px, at 1.5 pixel density); not seen on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
+Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Password open: tested in Node against a real encrypted PDF (right password, wrong then right, give up, a throwing callback, an unprotected file never asks, garbage still errors); the prompt screen itself is not run on a device. Drawing onto a canvas was not run here: not run through CI, not run on a device. Multi-select: a simulated page test covered tap-opens, long press starts, the click after a long press is swallowed, taps toggle, row actions are ignored, movement cancels, Select all, bulk delete ids, exit on finish, exit on deselecting the last item, cancel, and a stale long press not eating the next tap. Nav alignment is a CSS change measured from your screenshots (Back circle 44 px up against 32 px, at 1.5 pixel density); not seen on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
 
 Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on; tap a row and the matching app opens at once (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
 
 Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: device-check DP13 (6 am repeat), the rest of DP14 and DP15. Then build Money (Decision 124) in the roadmap order, starting with `money.js` and its tests. Reminder text detection stays unless the person says otherwise.
+Next session start point: device-check DP17 (PDF password), DP13 (6 am repeat), the rest of DP14 and DP15. Then build Money (Decision 124) in the roadmap order, starting with `money.js` and its tests. Reminder text detection stays unless the person says otherwise.
 
 ---
 
