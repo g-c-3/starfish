@@ -24,6 +24,7 @@ Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays 
 - Device feedback: multi-select and nav alignment confirmed (DP16).
 - Money capture designed with the person (Decision 124); no code written for it. Built next session so it gets a fresh context.
 - Device feedback: protected-PDF message and fallback confirmed in Home and Vault; rename keeps the page (DP15).
+- Device feedback: in-app PDF password confirmed in Home and the Vault (right password, wrong password, Cancel).
 - In-app PDF password (Decision 125): `pdfopen.js` (NEW), `pdfviewer.js` (`askPassword` option), `app.js` (inline prompt, closes with the viewer), `style.css`.
 
 Decisions made: 118, 119, 120, 121, 122, 123, 124, 125.

@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87; DP17 pending)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87; DP17 confirmed except lock-with-prompt)
 
 ## Detailed
 
@@ -435,7 +435,9 @@ individual items) can be picked up in any order once prerequisites are met.
     (6) Vault Money (JSON in `encrypted_body`). Open question: reminder text detection stays unless told otherwise.
   - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count), rename keeps the page, and the protected-PDF
     message and Open with app fallback (Home and Vault). A Vault PDF that opens normally and locking with it open are still unchecked.
-  - [ ] DP17 — In-app PDF password (Session 87, Decision 125): a protected PDF in Home shows a password field; a wrong password says so
+  - [~] DP17 — In-app PDF password (Session 87, Decision 125). Confirmed on device in Home and the Vault: right password opens, wrong
+    password says so and asks again, Cancel shows the message with Open with app. Unchecked: Back during the prompt, locking the Vault
+    with the prompt open, and reopening asking again. Original check: a protected PDF in Home shows a password field; a wrong password says so
     and asks again; the right one opens it; Cancel shows the message with Open with app; same in the Vault; Back during the prompt closes
     the viewer; locking the Vault with the prompt open closes it; reopening asks again (nothing remembered).
   - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.

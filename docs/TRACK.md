@@ -99,3 +99,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-04 | Session 87 (continued, 3) | Decisions 122–123 | Long-press multi-select in folders and search lists; bottom bar aligned with floating Back; DP15 Home PDF confirmed; DP16 added; not compiled in CI or device-tested |
 | 2026-10-04 | Session 87 (closed) | Decision 124 | DP16 confirmed on device; Money capture designed (kinds, repayments, month totals, currency symbol, no auto-detection); build deferred to the next session |
 | 2026-10-04 | Session 87 (addendum) | Decision 125 | In-app password prompt for protected PDFs, Home and Vault; protected-PDF fallback and rename-keeps-page confirmed on device; DP17 added; not compiled in CI or device-tested |
+| 2026-10-04 | Session 87 (addendum, 2) | Decision 125 | In-app PDF password confirmed on device in Home and Vault; lock-with-prompt, Back during the prompt and reopen unchecked |
