@@ -18,6 +18,7 @@ import {
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
+import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
@@ -3238,7 +3239,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     finally { openingFile = false; }
   }
 
-  // Tapping a row opens it. Text, reminder, location, voice and image have viewers; a file opens in the phone's app; PDF follows (Phase 16 H).
+  // PDF entry: in-app viewer on a bundled pdf.js, loaded on first open (Phase 16 H, Decision 121). Vault bytes are
+  // decrypted into memory only and dropped on close or lock. A document that cannot be read offers the phone's app.
+  async function openPdf(item, isVault) {
+    const viewerScreen = document.getElementById('viewer-screen');
+    let view = null, token = 0;
+    const arm = isVault ? armVaultAutoLock : armAppAutoLock;
+    const fresh = async () => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    const clearHeader = () => viewerScreen.querySelectorAll('.pdf-hdr').forEach((n) => n.remove());
+    viewerScreen.classList.add('pdf-mode');
+    await openViewer({
+      title: item.label || 'PDF', isVault,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      onClose: () => { token++; viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (view) { view.destroy(); view = null; } },
+      render: async (body) => {
+        const row = await fresh();
+        document.getElementById('viewer-title').textContent = row.label || 'PDF';
+        if (view) return; // rename only: keep the open document and its scroll position
+        const mine = ++token;
+        body.innerHTML = '<div class="pdf-scroll"><div class="pdf-msg">Loading…</div></div>';
+        const scroll = body.querySelector('.pdf-scroll');
+        let b64 = null, dbRow = null;
+        try {
+          if (isVault) {
+            if (!privateSessionKey) throw new Error('Vault locked');
+            armVaultAutoLock();
+            const loaded = await loadVaultEntryContent(db, privateSessionKey, item.id);
+            b64 = loaded.content.fileData;
+          } else {
+            dbRow = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+            if (!dbRow) throw new Error('PDF not found');
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            b64 = (await Filesystem.readFile({ path: dbRow.file_path, directory: Directory.Data })).data;
+          }
+          const { createPdfView } = await import('./pdfviewer.js');
+          const next = await createPdfView(scroll, base64ToBytes(b64), {
+            onActivity: arm,
+            onPage: (n) => { const c = viewerScreen.querySelector('.pdf-count'); if (c && view) c.textContent = `${n}/${view.pageCount}`; }
+          });
+          if (mine !== token || !body.isConnected) { next.destroy(); return; } // closed or locked while loading
+          view = next;
+          clearHeader();
+          viewerScreen.querySelector('#viewer-edit-btn').parentNode.append(Object.assign(document.createElement('span'), { className: 'pdf-hdr img-count pdf-count', textContent: `1/${view.pageCount}` }));
+          body.insertAdjacentHTML('beforeend', `<div class="pdf-zoom"><button type="button" class="pdf-zin" aria-label="Zoom in">+</button><button type="button" class="pdf-zout" aria-label="Zoom out">−</button></div>`);
+          body.querySelector('.pdf-zin').onclick = () => { arm(); view?.zoomIn(); };
+          body.querySelector('.pdf-zout').onclick = () => { arm(); view?.zoomOut(); };
+        } catch (err) {
+          if (mine !== token) return;
+          scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}<button type="button" class="pdf-fallback">Open with app</button></div>`;
+          scroll.querySelector('.pdf-fallback').onclick = async () => {
+            try {
+              if (isVault) { if (!b64) throw new Error('Vault locked'); await openDecryptedFile(item.id, 'pdf', b64); }
+              else if (dbRow) await openStoredFile(dbRow);
+            } catch (e2) { toast(String(e2.message || e2)); }
+          };
+        }
+      }
+    });
+  }
+
+  // Tapping a row opens it. Text, reminder, location, voice, image and PDF have viewers; a file opens in the phone's app.
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -3253,6 +3315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'voice') await openVoice(item, isVault);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') await openFile(item, isVault);
+    else if (item.type === 'pdf') await openPdf(item, isVault);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
