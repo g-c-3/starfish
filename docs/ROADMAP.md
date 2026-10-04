@@ -19,7 +19,7 @@
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71, C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app, H PDF viewer)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app, H PDF viewer)
 - [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending)
 
 ## Detailed
@@ -374,6 +374,8 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] F — Location (Session 71): detail view with coordinates (N/S, E/W and decimal), a grid plot drawn from them
     (30° lines, no map data), Copy, and Open in Maps via a `geo:` hand-off. Main entries only; Vault Location
     still has no capture.
+    - Session 86: New offers current location or pasted coordinates / map link; optional Verify link for short links
+      (Decisions 116, 117). Awaiting device check.
   - [ ] G — Files: open with the phone's matching app.
   - [ ] H — PDF: in-app viewer.
   - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,

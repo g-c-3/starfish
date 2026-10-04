@@ -12,9 +12,10 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 ## 1. Core principles
 - 100% local storage (SQLite) by default. No account or server is required for capture, search,
   reminders, expenses, or local backup/restore.
-- The only network calls this app will ever make are the ad SDK (deferred — see below) and, only if
-  the person explicitly opts in, Google Drive backup (§4b). Neither is reachable from, or required
-  by, local-only use.
+- The only network calls this app will ever make are the ad SDK (deferred — see below), only if
+  the person explicitly opts in, Google Drive backup (§4b), and two actions the person starts with a
+  tap: Check for updates and Verify link (short map link, Decision 117). None is reachable from, or
+  required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
@@ -561,6 +562,13 @@ notifications; restoring a pending one reschedules it.
 ### Restore refresh and Discard confirmation (Decisions 111, 114)
 After a restore the Vault index is rebuilt when the Vault is unlocked and `dumpzone-data-restored` redraws Home and Vault lists.
 In a capture Save dialog (Discard label) Discard and Back ask Yes/No through `askYesNo()` before dropping the take. The text editor (changed text) and the voice recorder (recording or review) do the same on Back (Decision 115); the tap-twice rule is gone.
+
+### Add location by coordinates (Decisions 116, 117)
+New in Location asks: Save current location or I have coordinates. Coordinates opens a paste dialog (`#coords-dialog`) that parses
+live with `geoparse.js` (decimal pair, N/S/E/W, `geo:`, full Google Maps links) and shows the decimal and degree text plus the grid
+plot before Continue opens the Save dialog. A short map link shows Verify link: one tap, one request to Google through
+`CapacitorHttp` (redirects read one hop at a time, Google https hosts only, stops at the first hop with coordinates). Open in Maps
+is not offered here because leaving the app triggers the background lock.
 
 ### Location capture progress (Decision 113)
 While the fix is pending a sticky "Fetching location…" message shows and the Home New buttons are disabled.

@@ -1699,3 +1699,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Rule: one Back opens the Yes/No sheet (Decision 114). Text editor: shown only when the text changed ("Discard changes?"). Voice recorder: shown while recording or in review ("Discard recording?"); nothing in the ready state. Yes leaves and drops the content, No keeps it.
 - Mechanism: `requestBack` (editor) and the recorder's `guard` are async; the viewer shell's `back` awaits `guard()`. A lock closes the sheet as No and force-closes the screen as before.
 
+**116. New in Location offers two sources: current location or pasted coordinates.**
+- Rule: New opens a chooser (Save current location / I have coordinates). Current location behaves as before (Decisions 79, 113). Coordinates opens a paste dialog, then the Save dialog; Back to coordinates in the Save dialog returns to the paste dialog with the text kept.
+- Accepted input, parsed on the phone with no network (`geoparse.js`, `parseCoordinates`): decimal pair separated by comma, semicolon or space (latitude first); decimal degrees with N/S/E/W; `geo:` URIs; full Google Maps links, reading `!3d…!4d…` (place pin) before `@lat,lng` (view centre) before `q`, `query`, `ll`, `sll`, `center`, `destination`, `daddr`. A `/maps/place/<name>` segment becomes the default entry name.
+- Checks: finite numbers, latitude within ±90, longitude within ±180. A swapped pair that falls outside the range is rejected, never guessed. The check shown to the person is the decimal and degree text plus the grid plot (Decision 93); no map data is fetched.
+- Not in the paste dialog: Open in Maps. Leaving the app triggers the background lock (Decision 93) and would drop the pasted text. It stays in the saved entry's viewer.
+- Not supported: degrees-minutes-seconds.
+
+**117. Verify link: an optional, per-tap network step for short map links.** Extends the network rule in Decision 1 (ARCHITECTURE §1).
+- Cause: a short link (`maps.app.goo.gl`, `goo.gl/maps`) holds no coordinates; they exist only in its redirect.
+- Rule: the Verify link button appears only when the pasted text is a short link, with a note that it contacts Google once and sends nothing else. Nothing runs until it is tapped. No internet, an unreadable link or a refused redirect shows a plain message and the person can paste the full link or coordinates instead.
+- Mechanism: `resolveShortLink` follows redirects one hop at a time (`CapacitorHttp.get` with `disableRedirects`, 8 s timeouts, 5 hops at most) and stops at the first hop that carries coordinates, so the destination page is never fetched. Only https hosts on Google domains are contacted; any other redirect target aborts before a request is made. The result is shown in the same preview and still needs Continue.
+- Network calls now: ad SDK (deferred), opt-in Drive backup, Check for updates, Verify link. The last two run only on a tap.
+

@@ -92,4 +92,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-03 | Session 85 | Decisions 106–109 | Device pass on Sessions 83–84; image viewer layout; Vault photo save and multi-pick fixed; Home search rebuilt; repeating reminders fixed (window of occurrences, Done = this time); Phase 16 D closed |
 | 2026-10-04 | Session 86 | Decisions 110–114 | Device pass DP1 to DP12 confirmed (DP13 next-day fire pending); restore picker lists .dz files; Vault refresh after restore; Append ignores trashed duplicates; Location fetching indicator; Discard Yes/No |
 | 2026-10-04 | Session 86 (continued) | Decision 115 | Text editor and voice recorder Back ask Yes/No instead of tap-twice; Discard sheet stacking fixed |
+| 2026-10-04 | Session 86 (continued, 2) | Decisions 116–117 | Location: add by pasted coordinates or map link; optional Verify link for short links |
 
