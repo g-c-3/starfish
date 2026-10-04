@@ -17,6 +17,7 @@ import {
 } from './gdrive.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import { checkForUpdate } from './update-check.js';
+import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
@@ -294,7 +295,7 @@ async function bootstrap() {
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
-    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); return; } // only act on going TO background, not returning from it
+    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); purgeOpenCopies(); return; } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });
@@ -1820,6 +1821,7 @@ window.Dumpzone = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await bootstrap();
+  purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than
   // calling armAppAutoLock() from every capture/search/browse function individually. Harmless
@@ -3208,7 +3210,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Tapping a row opens it. Text, reminder, location, voice and image have viewers; the other types follow (Phase 16 C, D, G, H).
+  // Saved file: details plus a button that hands it to the phone's matching app (Phase 16 G, Decision 118).
+  // Vault files are decrypted into cache/open/ for that hand-off; the copy is removed on the next launch or resume.
+  async function openFile(item, isVault) {
+    const meta = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || null;
+    const fresh = async () => isVault ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item) : (await meta()) || item;
+    await openViewer({
+      title: 'File', isVault,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      render: async (body) => {
+        const row = await fresh();
+        const dbRow = await meta();
+        const ext = (dbRow?.extension || '').toUpperCase();
+        const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
+        const saved = isVault ? row.createdAt : row.created_at;
+        let size = isVault ? row.sizeBytes : null;
+        if (!isVault && dbRow?.file_path) {
+          try {
+            const { Filesystem, Directory } = await import('@capacitor/filesystem');
+            size = (await Filesystem.stat({ path: dbRow.file_path, directory: Directory.Data })).size;
+          } catch { size = null; }
+        }
+        const kind = [ext ? `${ext} file` : 'File', size ? formatBytes(size) : ''].filter(Boolean).join(' · ');
+        body.innerHTML = `
+          <div class="detail-hero" data-type="file">
+            <span class="row-icon">${iconSvg('file')}</span>
+            <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
+            <div class="hero-sub">${escapeHtml(kind)}</div>
+          </div>
+          <dl class="detail-list">
+            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
+            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
+          </dl>
+          <div class="detail-actions"><button id="fv-open-btn">Open with app</button></div>
+          <div class="hero-note">Opens in another app on this phone. Leaving Dumpzone locks it as usual.${isVault ? ' A temporary decrypted copy stays on the phone until you return.' : ''}</div>`;
+        const btn = document.getElementById('fv-open-btn');
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            if (isVault) {
+              if (!privateSessionKey) throw new Error('Vault locked');
+              armVaultAutoLock();
+              const { row: vrow, content } = await loadVaultEntryContent(db, privateSessionKey, item.id);
+              await openDecryptedFile(item.id, vrow.extension, content.fileData);
+            } else {
+              if (!dbRow) throw new Error('File not found');
+              await openStoredFile(dbRow);
+            }
+          } catch (err) { toast(String(err.message || err)); }
+          finally { btn.disabled = false; }
+        };
+      }
+    });
+  }
+
+  // Tapping a row opens it. Text, reminder, location, voice, image and file have viewers; PDF follows (Phase 16 H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -3222,6 +3279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'location' && !isVault) await openLocation(item);
     else if (item.type === 'voice') await openVoice(item, isVault);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
+    else if (item.type === 'file') await openFile(item, isVault);
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
