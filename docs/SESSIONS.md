@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 88**
+
+Phase 4 Money capture, steps 1 and 2 of Decision 124's build order. Fresh session; all docs read first.
+- `money.js` (NEW): amount parsing to whole minor units, formatting (Indian grouping for ₹ and Rs only), kinds, repayments with derived status, normalize, JSON round trip, label summary, row mapper (legacy expense rows count as Spent), month totals (Net is Received minus Spent, loans excluded), loan totals, recent-values lists, currency list and symbol check.
+- `db.js`: `money_json TEXT` added through `ensureColumn`; `insertEntry` writes it.
+- `backup.js`: restore insert writes `money_json`. Export needed no change (`SELECT *`).
+- `scripts/patch-mainactivity.js` deleted on GitHub (Decision 64 cleanup). Stale comments still name it in `build-android.yml`, `patch-screenlock.js`, `privacy-screen.js` and `native-setup.md`.
+
+Decisions made: none.
+
+Verified in the authoring environment: syntax checks, 11 Node test groups on `money.js` (parsing, formatting, normalize, repayment limits and status, JSON round trip, summary, row mapper, month boundaries, loan totals, recent values), INSERT column and placeholder counts, `vite build`. `money.js` is not imported yet, so it is not in the bundle. INSERTs not run against real SQLite; migration and restore not run on a device. Not run through CI.
+
+Open: `editEntry()` in `fileactions.js` does not carry `money_json` yet (step 3). Device checks pending: DP17 (Back during the prompt, lock with the prompt open, reopen), DP13 (next-day fire), rest of DP14 and DP15 (Vault PDF, lock with it open). Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
+
+Next session start point: commit `money.js`, `db.js`, `backup.js`; then Money step 3, Home: form, list rows, month header, repayment dialog, edit, search (touches `app.js`, `index.html`, `style.css`, `fileactions.js`). Then steps 4 to 6. Reminder text detection stays unless the person says otherwise.
+
+---
+
 **Session 87**
 
 Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays pending: its test reminder was cancelled, so the next-day fire of daily, weekly and monthly repeats is unconfirmed.

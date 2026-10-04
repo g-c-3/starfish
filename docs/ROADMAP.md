@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (Money capture designed — Session 87, Decision 124, not built; 5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
+- [~] 4 — App shell & control flow (Money capture: model, schema and backup built — Session 88 (steps 1 and 2 of Decision 124), UI not built; 5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
@@ -429,8 +429,8 @@ individual items) can be picked up in any order once prerequisites are met.
     and a search list (text, reminder, voice, location, image tile, PDF, file); more taps add and remove; Select all; Share, Download and
     Delete act on the selection; Back and the cancel button leave selection mode; locking leaves it; the Home | Back | Vault bar sits
     low enough that its Back circle lines up with the floating Back in folders and viewers.
-  - [ ] **Money capture (Session 87, Decision 124; designed, not built).** Build order: (1) `money.js`: model, repayment maths, month totals,
-    currency list, with Node tests; (2) schema: `money_json` column via `ensureColumn`, backup export and import carry it; (3) Home: form,
+  - [~] **Money capture (Session 87, Decision 124; steps 1 and 2 built Session 88, not run through CI or on a device).** Build order: (1) done: `money.js`: model, repayment maths, month totals,
+    currency list, Node-tested; (2) done: schema: `money_json` column via `ensureColumn`, backup restore writes it (export already `SELECT *`); (3) Home: form,
     list rows, month header, repayment dialog, edit, search; (4) Settings: currency symbol; (5) remove expense detection from `captureText`;
     (6) Vault Money (JSON in `encrypted_body`). Open question: reminder text detection stays unless told otherwise.
   - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count), rename keeps the page, and the protected-PDF
