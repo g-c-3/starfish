@@ -292,8 +292,8 @@ input[type="search"], #search-input, #vault-search-input {
 
 /* ---- Bottom nav: floating translucent bar. Home | Back | Vault (Decisions 61, 65). ---- */
 #bottom-nav {
-  position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5;
-  display: flex; align-items: center; gap: 4px; padding: 6px;
+  position: fixed; left: 12px; right: 12px; bottom: calc(5px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+  display: flex; align-items: center; gap: 4px; padding: 4px 6px; height: 56px; box-sizing: border-box; /* back circle centre sits 33px up, same as the floating Back (Decision 123) */
   background: var(--nav-bg); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3);
   border: 1px solid var(--border); border-radius: 26px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
@@ -302,7 +302,7 @@ input[type="search"], #search-input, #vault-search-input {
 #bottom-nav button {
   flex: 1; width: auto; background: none; box-shadow: none;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 9px 4px 8px; margin: 0; border-radius: 20px; border: none;
+  padding: 4px 4px 3px; margin: 0; border-radius: 20px; border: none;
   color: var(--muted); font-weight: 600;
 }
 #bottom-nav .nav-icon { display: grid; place-items: center; line-height: 0; }
@@ -647,7 +647,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 
 /* ---- Back stays visible everywhere (Decision 104). Back-only: lock, first-run, ad gate, and above any overlay. ---- */
 #bottom-nav.back-only, body.overlay-open #bottom-nav {
-  left: 50%; right: auto; transform: translateX(-50%); gap: 0; padding: 0;
+  left: 50%; right: auto; transform: translateX(-50%); gap: 0; padding: 0; height: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 #bottom-nav.back-only [data-nav], body.overlay-open #bottom-nav [data-nav] { display: none; }
@@ -699,3 +699,21 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 .pdf-zoom { position: absolute; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; }
 .pdf-zoom button { width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; font-size: 22px; line-height: 1;
   background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
+
+/* ---- Long-press multi-select (Decision 122) ---- */
+.entry-row, .thumb-tile { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.entry-row { position: relative; }
+#select-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 8; display: flex; align-items: center; gap: 2px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 8px 8px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+#select-bar .icon-btn { flex: none; width: 40px; height: 40px; margin: 0; padding: 0; display: grid; place-items: center; border-radius: 12px; border: none; background: transparent; color: var(--fg); box-shadow: none; }
+#select-bar .icon-btn.warning-text { color: var(--danger); }
+#select-bar .icon-btn:disabled { opacity: 0.35; }
+#sel-count { flex: 1; min-width: 0; padding: 0 6px; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.selecting .row-actions { display: none; }
+body.selecting .entry-row { padding-right: 46px; }
+body.selecting .entry-row::after, body.selecting .thumb-tile::after {
+  content: ""; position: absolute; top: 50%; right: 14px; width: 22px; height: 22px; margin-top: -11px; box-sizing: border-box;
+  border: 2px solid var(--muted); border-radius: 50%; background: transparent; color: #fff; font-size: 13px; font-weight: 800; line-height: 18px; text-align: center; }
+body.selecting .thumb-tile::after { top: 8px; right: 8px; margin-top: 0; background: rgba(0, 0, 0, 0.35); border-color: #fff; }
+.entry-row.is-selected, .thumb-tile.is-selected { outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-tint); }
+body.selecting .is-selected::after { content: "\2713"; background: var(--brand); border-color: var(--brand); }
