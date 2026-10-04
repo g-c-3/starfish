@@ -201,6 +201,8 @@ input[type="search"], #search-input, #vault-search-input {
   background: rgba(var(--tc-rgb, 139, 124, 246), 0.16); color: var(--tc-ink, var(--brand-ink));
 }
 .capture-cards .card-icon .ic { width: 21px; height: 21px; }
+.row-icon.ext-badge { font-size: 12px; font-weight: 800; letter-spacing: 0.02em; line-height: 1; text-transform: uppercase; }
+.row-icon.ext-badge[data-len="4"] { font-size: 10.5px; letter-spacing: 0; }
 .capture-cards .card-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .capture-cards .card-count { /* notification-style badge on the icon chip's corner: costs the label no width */
   position: absolute; top: 6px; left: 39px; box-sizing: border-box;
