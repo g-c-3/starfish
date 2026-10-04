@@ -717,3 +717,6 @@ body.selecting .entry-row::after, body.selecting .thumb-tile::after {
 body.selecting .thumb-tile::after { top: 8px; right: 8px; margin-top: 0; background: rgba(0, 0, 0, 0.35); border-color: #fff; }
 .entry-row.is-selected, .thumb-tile.is-selected { outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-tint); }
 body.selecting .is-selected::after { content: "\2713"; background: var(--brand); border-color: var(--brand); }
+.pdf-pw { min-height: 50%; }
+.pdf-pw input { width: 100%; max-width: 320px; box-sizing: border-box; text-align: center; }
+.pdf-pw button { width: 100%; max-width: 320px; margin: 0; }
