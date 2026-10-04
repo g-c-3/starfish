@@ -459,6 +459,30 @@
     </div>
   </div>
 
+  <div id="loc-source-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="loc-source-title">
+    <div class="modal-box">
+      <h3 id="loc-source-title">New location</h3>
+      <button id="loc-source-current-btn">Save current location</button>
+      <button id="loc-source-coords-btn" class="secondary-btn">I have coordinates</button>
+      <button id="loc-source-cancel-btn" class="secondary-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="coords-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="coords-title">
+    <div class="modal-box">
+      <h3 id="coords-title">Add coordinates</h3>
+      <textarea id="coords-input" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="11.2416577, 76.963275&#10;or a Google Maps link"></textarea>
+      <div id="coords-status" class="status-line" aria-live="polite"></div>
+      <div id="coords-preview" class="hidden"></div>
+      <div id="coords-verify" class="hidden">
+        <p class="field-hint">Short links hold no coordinates. Verify link contacts Google once to read it. Nothing else is sent.</p>
+        <button id="coords-verify-btn" class="secondary-btn">Verify link</button>
+      </div>
+      <button id="coords-continue-btn" disabled>Continue</button>
+      <button id="coords-cancel-btn" class="secondary-btn">Cancel</button>
+    </div>
+  </div>
+
   <div id="overwrite-confirm-dialog" class="modal-overlay hidden">
     <div class="modal-box">
       <h3>Overwrite — this can't be undone</h3>
