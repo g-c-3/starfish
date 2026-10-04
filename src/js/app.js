@@ -78,6 +78,7 @@ const NOTIFICATION_LAUNCH_WINDOW_MS = 6000;
 const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vault-biometric-confirm-pin'];
 
 function showScreen(id, { tab } = {}) {
+  exitSelection();
   if (id === 'lock-screen') { dismissOverlays(false); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
@@ -147,6 +148,7 @@ function switchMainTab(tab) {
 
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
+  exitSelection();
   openFolderType = null;
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
@@ -155,6 +157,7 @@ function closeFolder() {
 
 let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
 function closeVaultFolder() {
+  exitSelection();
   openVaultFolderType = null;
   document.getElementById('vault-folder-view')?.classList.add('hidden');
   document.getElementById('vault-main')?.classList.remove('hidden');
@@ -181,8 +184,31 @@ function openModalDismiss() {
   return null;
 }
 
+// ---- Multi-select inside a folder or a search list: long press a row to start (Decision 122). ----
+let selection = null; // { isVault, ids: Set } while selecting, else null
+const SELECTABLE_ROOTS = ['folder-list', 'timeline', 'vault-folder-list', 'vault-list'];
+function paintSelection() {
+  const ids = selection ? selection.ids : null;
+  for (const rootId of SELECTABLE_ROOTS) {
+    document.getElementById(rootId)?.querySelectorAll('.entry-row, .thumb-tile')
+      .forEach((el) => el.classList.toggle('is-selected', !!ids && ids.has(el.dataset.id)));
+  }
+  const count = document.getElementById('sel-count');
+  if (count) count.textContent = ids ? `${ids.size} selected` : '';
+  document.querySelectorAll('#select-bar .sel-act').forEach((b) => { b.disabled = !ids || ids.size === 0; });
+}
+function exitSelection() {
+  if (!selection) return;
+  selection = null;
+  document.body.classList.remove('selecting');
+  document.getElementById('select-bar')?.classList.add('hidden');
+  paintSelection();
+  updateBackButtonState();
+}
+
 function backAction() {
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
+  if (selection) return exitSelection; // Back leaves selection mode first (Decision 122)
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
   const modal = openModalDismiss();
   if (modal) return modal;
@@ -744,6 +770,7 @@ async function unlockVault(pin) {
 }
 
 function lockVault() {
+  exitSelection();
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
@@ -2190,6 +2217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderVault();
       }));
       loadThumbsInto(container, items, true);
+      paintSelection();
       return;
     }
     container.innerHTML = vaultRowsHtml(items);
@@ -2208,6 +2236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await deleteVaultEntry(b.dataset.id);
       renderVault();
     }));
+    paintSelection();
   }
 
   function renderVaultSearch() {
@@ -2220,6 +2249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
       renderVault();
     }));
+    paintSelection();
   }
 
   // Call only while unlocked (browseVault/searchVault throw otherwise).
@@ -2777,6 +2807,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await renderMainTimeline();
       }));
       loadThumbsInto(box, rows, false);
+      paintSelection();
       return;
     }
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
@@ -2798,6 +2829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.main-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await softDelete(db, b.dataset.id); await renderMainTimeline();
     }));
+    paintSelection();
   }
   async function openFolder(type, btn) {
     openFolderType = type;
@@ -2817,6 +2849,94 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
     window.addEventListener('dumpzone-reminders-changed', () => { renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {}); });
   document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
+
+  // ---- Long-press multi-select (Decision 122): Home folders, Vault folders and both search lists. ----
+  (function wireSelection() {
+    const LONG_MS = 450, SLOP = 10;
+    const arm = () => { if (selection?.isVault) armVaultAutoLock(); };
+    function toggleSelected(id) {
+      if (!selection) return;
+      if (selection.ids.has(id)) selection.ids.delete(id); else selection.ids.add(id);
+      arm();
+      if (selection.ids.size === 0) { exitSelection(); return; } // deselecting the last item leaves selection mode
+      paintSelection();
+    }
+    for (const [rootId, isVault] of [['folder-list', false], ['timeline', false], ['vault-folder-list', true], ['vault-list', true]]) {
+      const root = document.getElementById(rootId);
+      if (!root) continue;
+      let timer = null, startX = 0, startY = 0, swallow = false;
+      const rowOf = (t) => t.closest('.entry-row, .thumb-tile');
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      root.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.row-actions') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        const row = rowOf(e.target);
+        if (!row) return;
+        swallow = false; cancel();
+        startX = e.clientX; startY = e.clientY;
+        const id = row.dataset.id;
+        timer = setTimeout(() => {
+          timer = null;
+          if (selection && selection.isVault !== isVault) return;
+          swallow = true; // the click that follows this press must not open the entry
+          if (!selection) {
+            selection = { isVault, ids: new Set() };
+            document.body.classList.add('selecting');
+            document.getElementById('select-bar')?.classList.remove('hidden');
+            updateBackButtonState();
+          }
+          selection.ids.add(id);
+          arm();
+          paintSelection();
+        }, LONG_MS);
+      });
+      root.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > SLOP) cancel(); });
+      const end = () => { cancel(); if (swallow) setTimeout(() => { swallow = false; }, 350); }; // a press that raises no click must not eat the next tap
+      root.addEventListener('pointerup', end);
+      root.addEventListener('pointercancel', end);
+      root.addEventListener('contextmenu', (e) => { if (rowOf(e.target)) e.preventDefault(); });
+      root.addEventListener('click', (e) => {
+        if (swallow) { swallow = false; e.preventDefault(); e.stopPropagation(); return; }
+        const row = rowOf(e.target);
+        if (!selection || !row || e.target.closest('.row-actions')) return;
+        e.preventDefault(); e.stopPropagation(); // capture phase: the normal open handler never runs while selecting
+        toggleSelected(row.dataset.id);
+      }, true);
+    }
+
+    document.getElementById('sel-cancel').addEventListener('click', exitSelection);
+    document.getElementById('sel-all').addEventListener('click', () => {
+      if (!selection) return;
+      for (const rootId of SELECTABLE_ROOTS) {
+        const root = document.getElementById(rootId);
+        if (!root || root.closest('.hidden') || (rootId.startsWith('vault') !== selection.isVault)) continue; // skip lists on hidden screens
+        root.querySelectorAll('.entry-row, .thumb-tile').forEach((el) => selection.ids.add(el.dataset.id));
+      }
+      arm();
+      paintSelection();
+    });
+
+    async function runSelection(action) {
+      if (!selection || selection.ids.size === 0) return;
+      const { isVault } = selection;
+      const ids = [...selection.ids];
+      arm();
+      if (action === 'delete') {
+        const ok = await askYesNo({ title: `Delete ${ids.length} item${ids.length > 1 ? 's' : ''}?`, text: 'They go to trash, not permanent.', yes: 'Delete', no: 'Cancel' });
+        if (!ok) return;
+      }
+      const results = await runBulkFileAction(action, ids);
+      const failed = results.filter((r) => !r.ok);
+      exitSelection();
+      if (isVault) renderVault();
+      else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
+      const done = results.length - failed.length;
+      const verb = action === 'delete' ? 'moved to trash' : action === 'share' ? 'shared' : 'downloaded';
+      toast(failed.length ? `${done} ${verb}, ${failed.length} failed: ${failed[0].error}` : `${done} ${verb}`);
+    }
+    document.getElementById('sel-share').addEventListener('click', () => runSelection('share'));
+    document.getElementById('sel-download').addEventListener('click', () => runSelection('download'));
+    document.getElementById('sel-delete').addEventListener('click', () => runSelection('delete'));
+  })();
 
   document.getElementById('vault-settings-card').addEventListener('toggle', updateBackButtonState);
   updateBackButtonState();
@@ -3328,6 +3448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
     document.querySelectorAll('#timeline .entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
+    paintSelection();
   });
 
   // Auto-biometric on the app-open lock screen (Decision 56/58) — deliberately the very last
