@@ -129,6 +129,7 @@
       <div id="folder-view" class="hidden">
         <h2 id="folder-title"></h2>
         <button id="folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
+        <div id="money-summary" class="money-summary hidden"></div>
         <div id="folder-list"></div>
       </div>
     </div>
@@ -489,6 +490,57 @@
       </div>
       <button id="coords-continue-btn" disabled>Continue</button>
       <button id="coords-cancel-btn" class="secondary-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="money-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="mf-heading">
+    <div class="modal-box">
+      <h3 id="mf-heading">New money entry</h3>
+      <div id="mf-kind" class="seg" role="group" aria-label="Kind">
+        <button type="button" data-kind="spent" class="active">Spent</button>
+        <button type="button" data-kind="lent">Lent</button>
+        <button type="button" data-kind="received">Received</button>
+        <button type="button" data-kind="borrowed">Borrowed</button>
+      </div>
+      <label class="field-label" for="mf-amount">Amount (<span id="mf-symbol"></span>)</label>
+      <input id="mf-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+      <div id="mf-loan" class="hidden">
+        <label class="field-label" for="mf-person">Person</label>
+        <input id="mf-person" type="text" autocomplete="off" maxlength="60" placeholder="Optional" />
+        <label class="field-label" for="mf-due">Due date</label>
+        <input id="mf-due" type="date" />
+      </div>
+      <label class="field-label" for="mf-category">Category</label>
+      <input id="mf-category" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
+      <div id="mf-cat-chips" class="tag-chips"></div>
+      <label class="field-label" for="mf-method">Payment method</label>
+      <input id="mf-method" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
+      <div id="mf-method-chips" class="tag-chips"></div>
+      <label class="field-label" for="mf-when">Date</label>
+      <input id="mf-when" type="datetime-local" />
+      <div id="mf-status" class="status-line" aria-live="polite"></div>
+      <div class="sheet-actions">
+        <button id="mf-cancel-btn" type="button" class="secondary-btn">Cancel</button>
+        <button id="mf-continue-btn" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="repay-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rp-heading">
+    <div class="modal-box">
+      <h3 id="rp-heading">Add repayment</h3>
+      <p id="rp-hint" class="field-hint"></p>
+      <label class="field-label" for="rp-amount">Amount</label>
+      <input id="rp-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+      <label class="field-label" for="rp-when">Date</label>
+      <input id="rp-when" type="datetime-local" />
+      <label class="field-label" for="rp-note">Note</label>
+      <input id="rp-note" type="text" autocomplete="off" maxlength="120" placeholder="Optional" />
+      <div id="rp-status" class="status-line" aria-live="polite"></div>
+      <div class="sheet-actions">
+        <button id="rp-cancel-btn" type="button" class="secondary-btn">Cancel</button>
+        <button id="rp-add-btn" type="button">Add</button>
+      </div>
     </div>
   </div>
 
