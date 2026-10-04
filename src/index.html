@@ -348,6 +348,15 @@
     <svg class="bg-art bg-cubes" aria-hidden="true" focusable="false"><use href="#art-cubes"/></svg>
   </div>
 
+  <div id="select-bar" class="hidden" role="toolbar" aria-label="Selection">
+    <button id="sel-cancel" class="icon-btn" aria-label="Cancel selection" title="Cancel"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+    <span id="sel-count">0 selected</span>
+    <button id="sel-all" class="icon-btn" aria-label="Select all" title="Select all"><svg class="ic" aria-hidden="true"><use href="#i-select"/></svg></button>
+    <button id="sel-share" class="icon-btn sel-act" aria-label="Share" title="Share"><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg></button>
+    <button id="sel-download" class="icon-btn sel-act" aria-label="Download" title="Download"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></button>
+    <button id="sel-delete" class="icon-btn sel-act warning-text" aria-label="Delete" title="Delete"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
+  </div>
+
   <nav id="bottom-nav" class="hidden">
     <button data-nav="home" class="active"><span class="nav-icon"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span><span class="nav-label">Home</span></button>
     <button id="nav-back-btn" aria-label="Back" title="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H9"/></svg></button>
