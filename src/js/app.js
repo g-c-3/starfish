@@ -1283,7 +1283,7 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
   return new Promise((resolve) => {
     const $ = (id) => document.getElementById(id);
     const screen = $('editor-screen'), ta = $('editor-text');
-    let dirty = false, armed = false, armTimer = null;
+    let dirty = false;
     $('editor-title').textContent = title;
     ta.value = text;
     const updateCount = () => {
@@ -1292,7 +1292,6 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
     };
     updateCount();
     const finish = (result) => {
-      clearTimeout(armTimer);
       screen.classList.add('hidden');
       ta.blur();
       ta.oninput = null;
@@ -1300,11 +1299,11 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
       updateBackButtonState();
       resolve(result);
     };
-    const requestBack = () => {
-      if (!dirty || armed) { finish(null); return; }
-      armed = true;
-      toast('Unsaved changes — tap back again to discard');
-      armTimer = setTimeout(() => { armed = false; }, 3000);
+    // Unsaved changes: one Back asks Yes/No (replaces the earlier tap-twice-within-3-seconds rule).
+    const requestBack = async () => {
+      if (!dirty) { finish(null); return; }
+      const yes = await askYesNo({ title: 'Discard changes?', text: 'Your text has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
+      if (yes && activeEditor) finish(null);
     };
     ta.oninput = () => { dirty = ta.value !== text; updateCount(); };
     $('editor-back-btn').onclick = requestBack;
@@ -2433,7 +2432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { toast(`Microphone unavailable: ${err.message || err}`); return; }
 
     let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
-    let armed = false, armTimer = null, bodyEl = null, closeFn = null;
+    let bodyEl = null, closeFn = null;
     const dropReview = () => {
       if (player) { player.destroy(); player = null; }
       if (url) { URL.revokeObjectURL(url); url = null; }
@@ -2441,16 +2440,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cleanup = () => {
       const was = state;
       state = 'closed';
-      clearInterval(timer); clearTimeout(armTimer);
+      clearInterval(timer);
       dropReview();
       if (was === 'recording') VoiceRecorder.stopRecording().catch(() => {}); // take discarded
     };
-    const guard = () => {
-      if (state === 'ready' || state === 'closed' || armed) return true;
-      armed = true;
-      toast(state === 'recording' ? 'Recording in progress — tap back again to discard it' : 'Recording not saved — tap back again to discard it');
-      armTimer = setTimeout(() => { armed = false; }, 3000);
-      return false;
+    // Back with a take in memory asks Yes/No (replaces the earlier tap-twice rule). Resolves true to leave.
+    const guard = async () => {
+      if (state === 'ready' || state === 'closed') return true;
+      return askYesNo({
+        title: 'Discard recording?',
+        text: state === 'recording' ? 'Recording is in progress and will be lost.' : 'This recording has not been saved.',
+        yes: 'Yes, discard', no: 'No, keep it'
+      });
     };
     const tick = () => {
       const el = bodyEl && bodyEl.querySelector('#rec-timer');
@@ -2885,7 +2886,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateBackButtonState();
         resolve();
       };
-      const back = () => { if (!guard || guard()) finish(); };
+      const back = async () => { if (!guard || await guard()) finish(); };
       const refresh = async () => { await render(body, { refresh, close: finish }); };
       $('viewer-back-btn').onclick = back;
       $('viewer-edit-btn').classList.toggle('hidden', !onEdit);
