@@ -19,8 +19,8 @@
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app built — Session 87, not device-tested, H PDF viewer)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 file open pending)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 and DP15 pending)
 
 ## Detailed
 
@@ -380,10 +380,13 @@ individual items) can be picked up in any order once prerequisites are met.
     not device-tested). Tap a Files row: the file opens straight in the phone's app, no detail step (Decision 120). Rows show the
     file extension (PDF, DOCX, ZIP) in place of the folder icon. Home files open from their stored path; Vault files open from a
     decrypted copy in cache, removed on the next launch or resume. Plugin: `@capacitor-community/file-opener` 6.x.
-  - [ ] H — PDF: in-app viewer.
-  - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,
-    about 1.3 MB larger APK) or by handing off to the phone's PDF app; a real map needs network tiles, which
-    would break the single-network-call rule, so F uses coordinates plus hand-off.
+  - [~] H — PDF: in-app viewer (Session 87, Decision 121; built, `vite build` passed, page layout and parsing tested in Node, drawing not
+    run through CI or on a device). Tap a PDF row: full-screen viewer on a bundled pdf.js (legacy build, pinned 4.10.38), pages
+    drawn lazily and released off screen, page count in the header, zoom buttons (1, 1.5, 2, 3 times), rename from the header. Home
+    and Vault; Vault bytes stay in memory and are dropped on close or lock. A document that cannot be read (password-protected,
+    damaged) offers Open with app. No text layer, no search inside a PDF, no bundled fonts or character maps.
+  - Choice made: PDF by bundling pdf.js, offline (Decision 121). A real map needs network tiles, which would break the
+    single-network-call rule, so F uses coordinates plus hand-off.
   - Suggested order: A, B, E, F, C, D, G, H.
   - [x] **Before C: notification Snooze and Done without opening the app (Session 80, Decision 102; device-confirmed Session 81).** A native
     receiver patched in by CI handles both buttons: no app launch. It dismisses, cancels or schedules the alarms, and
@@ -418,6 +421,12 @@ individual items) can be picked up in any order once prerequisites are met.
   - [ ] DP14 — Open Files with the phone's app (Session 87, Decisions 118, 120): tapping a Home file opens it in a matching app with no
     detail step; the row icon shows the extension; a Vault file does the same and the Vault locks per its settings; no matching app
     shows a plain message; after returning, `cache/open/` is empty.
+  - [ ] DP15 — PDF viewer (Session 87, Decision 121): a Home PDF opens and draws; scrolling a long one stays smooth; page count updates;
+    zoom in and out keeps your place and allows sideways scroll; rotate the phone; a password-protected PDF shows the message and
+    Open with app works; a Vault PDF opens, then lock the app with it open and confirm it closes; rename from the pencil keeps the
+    page. Check a PDF with unusual fonts or a scan.
+  - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.
+    Still unchecked: a Vault file, a type with no app, and the empty `cache/open/` after returning.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat
     set to none confirmed; the next-day fire of daily, weekly and monthly repeats is still pending.
   - Confirmed in passing, Session 85: Save dialog and tags (Session 69), Back (Sessions 60, 83), Home multi-select

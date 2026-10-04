@@ -95,3 +95,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-04 | Session 86 (continued, 2) | Decisions 116–117 | Location: add by pasted coordinates or map link; optional Verify link for short links |
 | 2026-10-04 | Session 87 | Decision 118 | Phase 16 G built: Files open with the phone's matching app (Vault copies in cache, purged on launch and resume); not compiled in CI or device-tested; DP14 added |
 | 2026-10-04 | Session 87 (continued) | Decisions 119–120 | Vault confirmed opt-in and permanent; Files rows open directly in the phone's app and show the file extension; not compiled in CI or device-tested |
+| 2026-10-04 | Session 87 (continued, 2) | Decision 121 | Phase 16 H built: in-app PDF viewer on bundled pdf.js for Home and Vault; DP14 partly confirmed on device; DP15 added; not compiled in CI or device-tested |

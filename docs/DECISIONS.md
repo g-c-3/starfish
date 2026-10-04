@@ -1732,3 +1732,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Rule: tapping a Files row (Home folder, Vault folder, either search list) hands the file to the phone's matching app at once. Name, tags and description are changed through the row's Edit action. A second tap while a launch is pending is ignored. Failures show a plain message.
 - Row icon: a Files row shows its extension, upper case and at most four characters (PDF, DOCX, XLSX, ZIP), in place of the folder icon. No extension keeps the folder icon. Other types keep their icons. The Vault index carries `extension` so Vault rows match Home.
 - Decision 118's detail view is removed; its Vault copy and purge rules are unchanged.
+
+**121. PDF entries open in an in-app viewer on a bundled pdf.js.**
+- Cause: PDF rows had no viewer. Handing off to the phone's app was the alternative; the person chose an offline in-app viewer at the cost of a larger APK.
+- Library: `pdfjs-dist` 4.10.38, legacy build, pinned exactly (the legacy build runs on older system web views). Its worker is bundled by Vite and started on the first PDF open; the viewer code is loaded then too, so startup is unchanged. APK growth: about 1.7 MB of script before the APK's own compression.
+- Viewer: full-screen under a thin header with Edit (rename) and the page count. Pages are placeholders sized from the first page, drawn when within one screen of the view and released beyond it, one draw at a time. Pixel ratio is capped at 2 and by a per-page pixel budget. Zoom steps 1, 1.5, 2 and 3 times the fit-to-width size, by + and − buttons, keeping the centre of the view; wider pages scroll sideways.
+- Not included: text layer, selection, search inside a PDF, bundled fonts and character maps (so a PDF that relies on fonts it does not embed may show substitutes), annotations, forms.
+- Home PDFs are read from their stored path. Vault PDFs are decrypted into memory only, never written to disk, and dropped on close or lock. Scrolling and zoom count as activity for the matching auto-lock.
+- A PDF that cannot be read (password-protected or damaged) shows a plain message and an Open with app button using the Decision 118 path.
+- PDFs saved as Files (type `file`, extension pdf) still open in the phone's app (Decision 120); only entries of type PDF use this viewer.
+- No network call and no new permission.
