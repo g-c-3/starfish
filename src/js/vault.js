@@ -112,7 +112,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, tags, description, searchableText, sizeBytes, createdAt: row.created_at });
+    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, createdAt: row.created_at });
   }
   vaultIndexCache = index;
   return index;

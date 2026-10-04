@@ -1077,11 +1077,18 @@ function rowMeta(row) {
   const timing = st === 'snoozed' ? `Snoozed until ${formatEntryDate(row.snoozed_until)}` : `${lead} ${when}`;
   return { meta: ['Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
 }
-function entryRowHtml({ id, type, label, meta = '', tags = [], done = false }, actionPrefix = null) {
+// Files show their extension (PDF, DOCX, ZIP) in place of the folder icon; no extension keeps the icon.
+function rowIconHtml(type, ext) {
+  const e = type === 'file' ? String(ext || '').replace(/^\./, '').toUpperCase().slice(0, 4) : '';
+  return e
+    ? `<span class="row-icon ext-badge" data-len="${e.length}">${escapeHtml(e)}</span>`
+    : `<span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>`;
+}
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '' }, actionPrefix = null) {
   const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
   return `
     <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
-      <span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>
+      ${rowIconHtml(type, ext)}
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
         <span class="row-meta">${escapeHtml(meta)}</span>
@@ -2158,7 +2165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
   function vaultRowsHtml(items) {
     return items.map((e) => entryRowHtml({
-      id: e.id, type: e.type, label: e.label, tags: e.tags,
+      id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension,
       meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`
     }, 'vault')).join('') || emptyStateHtml('folder');
   }
@@ -2207,7 +2214,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('vault-list');
     if (!term) { list.innerHTML = ''; return; }
     const items = searchVault(term);
-    list.innerHTML = items.map((e2) => entryRowHtml({ id: e2.id, type: e2.type, label: e2.label, tags: e2.tags, meta: `${typeLabelFor(e2.type)} · ${formatBytes(e2.sizeBytes)}` })).join('') || emptyStateHtml('search');
+    list.innerHTML = items.map((e2) => entryRowHtml({ id: e2.id, type: e2.type, label: e2.label, tags: e2.tags, ext: e2.extension, meta: `${typeLabelFor(e2.type)} · ${formatBytes(e2.sizeBytes)}` })).join('') || emptyStateHtml('search');
     list.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
       await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
       renderVault();
@@ -2772,7 +2779,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     }, 'main')).join('') || emptyStateHtml('folder');
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -3210,62 +3217,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Saved file: details plus a button that hands it to the phone's matching app (Phase 16 G, Decision 118).
+  // Tapping a Files row hands the file straight to the phone's matching app (Phase 16 G, Decision 118).
   // Vault files are decrypted into cache/open/ for that hand-off; the copy is removed on the next launch or resume.
+  let openingFile = false;
   async function openFile(item, isVault) {
-    const meta = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || null;
-    const fresh = async () => isVault ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item) : (await meta()) || item;
-    await openViewer({
-      title: 'File', isVault,
-      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      render: async (body) => {
-        const row = await fresh();
-        const dbRow = await meta();
-        const ext = (dbRow?.extension || '').toUpperCase();
-        const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
-        const saved = isVault ? row.createdAt : row.created_at;
-        let size = isVault ? row.sizeBytes : null;
-        if (!isVault && dbRow?.file_path) {
-          try {
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            size = (await Filesystem.stat({ path: dbRow.file_path, directory: Directory.Data })).size;
-          } catch { size = null; }
-        }
-        const kind = [ext ? `${ext} file` : 'File', size ? formatBytes(size) : ''].filter(Boolean).join(' · ');
-        body.innerHTML = `
-          <div class="detail-hero" data-type="file">
-            <span class="row-icon">${iconSvg('file')}</span>
-            <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
-            <div class="hero-sub">${escapeHtml(kind)}</div>
-          </div>
-          <dl class="detail-list">
-            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
-            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
-            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
-          </dl>
-          <div class="detail-actions"><button id="fv-open-btn">Open with app</button></div>
-          <div class="hero-note">Opens in another app on this phone. Leaving Dumpzone locks it as usual.${isVault ? ' A temporary decrypted copy stays on the phone until you return.' : ''}</div>`;
-        const btn = document.getElementById('fv-open-btn');
-        btn.onclick = async () => {
-          btn.disabled = true;
-          try {
-            if (isVault) {
-              if (!privateSessionKey) throw new Error('Vault locked');
-              armVaultAutoLock();
-              const { row: vrow, content } = await loadVaultEntryContent(db, privateSessionKey, item.id);
-              await openDecryptedFile(item.id, vrow.extension, content.fileData);
-            } else {
-              if (!dbRow) throw new Error('File not found');
-              await openStoredFile(dbRow);
-            }
-          } catch (err) { toast(String(err.message || err)); }
-          finally { btn.disabled = false; }
-        };
+    if (openingFile) return; // ignore a second tap while the first is still launching
+    openingFile = true;
+    try {
+      if (isVault) {
+        if (!privateSessionKey) throw new Error('Vault locked');
+        armVaultAutoLock();
+        const { row, content } = await loadVaultEntryContent(db, privateSessionKey, item.id);
+        await openDecryptedFile(item.id, row.extension, content.fileData);
+      } else {
+        const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+        if (!row) throw new Error('File not found');
+        await openStoredFile(row);
       }
-    });
+    } catch (err) { toast(String(err.message || err)); }
+    finally { openingFile = false; }
   }
 
-  // Tapping a row opens it. Text, reminder, location, voice, image and file have viewers; PDF follows (Phase 16 H).
+  // Tapping a row opens it. Text, reminder, location, voice and image have viewers; a file opens in the phone's app; PDF follows (Phase 16 H).
   async function openEntry(id, isVault, known = null) {
     let item = known;
     if (!item) {
@@ -3289,7 +3262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let rows = [];
     try { rows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }
     document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags, ...rowMeta(row)
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
     document.querySelectorAll('#timeline .entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
   });
