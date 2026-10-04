@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 87**
+
+Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays pending: its test reminder was cancelled, so the next-day fire of daily, weekly and monthly repeats is unconfirmed.
+- `fileopen.js` (NEW): `openStoredFile`, `openDecryptedFile`, `purgeOpenCopies`, `mimeForExtension`; plain messages for no matching app and missing file.
+- `app.js`: `openFile()` viewer (details plus Open with app); `openEntry` routes `file` rows to it; `cache/open/` purged on launch and on resume.
+- `package.json`: added `@capacitor-community/file-opener` `^6.0.1`.
+
+Decisions made: 118.
+
+Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup in Node. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
+
+Device checks (DP14): Home, Files folder: tap a row, Open with app launches a matching app (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
+
+Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
+
+Next session start point: device-check DP14 and DP13, then Phase 16 H (PDF viewer; bundled pdf.js or hand-off still open, a hand-off would reuse `fileopen.js`). Money capture shape still to be given.
+
+---
+
 **Session 86**
 
 Device pass DP1 to DP12, with fixes found along the way (Decisions 110 to 114). Passed on device: backup and restore in Append and Overwrite (name, tags, description kept); credentials and lock; biometrics; location capture and viewer; update check; look; batch add numbering; row actions; folder counts; reminder dialog; install over an older build with a reminder pending; Done for now and Repeat set to none.

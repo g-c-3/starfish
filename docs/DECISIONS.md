@@ -1712,3 +1712,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Mechanism: `resolveShortLink` follows redirects one hop at a time (`CapacitorHttp.get` with `disableRedirects`, 8 s timeouts, 5 hops at most) and stops at the first hop that carries coordinates, so the destination page is never fetched. Only https hosts on Google domains are contacted; any other redirect target aborts before a request is made. The result is shown in the same preview and still needs Continue.
 - Network calls now: ad SDK (deferred), opt-in Drive backup, Check for updates, Verify link. The last two run only on a tap.
 
+**118. Files open with the phone's matching app.**
+- Cause: Files rows had no viewer; tapping showed a "coming later" toast.
+- Rule: tapping a Files row opens a detail view (name, type and size, description, tags, saved time) with an Open with app button. The button hands the file to the phone's matching app through `@capacitor-community/file-opener` 6.x (the 7.x and 8.x lines need a newer Capacitor core). Unknown or missing extension offers every app that accepts a file. No matching app, or a missing file, shows a plain message.
+- Home files: opened from their stored path; no copy is made.
+- Vault files: decrypted into memory, written to `cache/open/<id>.<ext>`, then handed off. The copy is outside the Vault's encryption from that moment, the same boundary as Share and Download. It is removed on app launch, on resume and before the next open, so it never outlives the person's return to Dumpzone.
+- Not removed on viewer close or on lock: leaving the app locks it (Decision 93) and would delete the file while the other app is still reading it.
+- Lock behaviour: opening another app is a background event and locks as the person's lock settings say, the same as Open in Maps. No picker exemption is used.
+- No new network call, permission or manifest change: the plugin brings its own file provider for app data and cache.
+- PDF entries keep the "coming later" toast until Phase 16 H.

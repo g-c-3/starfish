@@ -604,6 +604,13 @@ thumbnails exist only in memory and are dropped on lock. The viewer (shared shel
 arrows, zooms with pinch and double-tap, and holds one full-size blob URL at a time, revoked on change, close or lock.
 The image fills the screen under a thin header that carries Edit, Share, Download, Delete and the count.
 
+### Open a file with another app (Decision 118)
+A Files row opens a detail view with an Open with app button (`fileopen.js`). Home files are handed over from their stored
+path. Vault files are decrypted in memory, written to `cache/open/<id>.<ext>` and handed over; that folder is emptied on
+launch, on resume and before each open, never on close or lock (the other app may still be reading). The copy leaves the
+Vault's encryption, as with Share and Download. Opening another app locks as a normal background event (Decision 93).
+No network, no new permission.
+
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
 - **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially
@@ -675,6 +682,7 @@ dumpzone/
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
       vault.js          -> Private Vault: content bundling, save/load, in-memory search index
       fileactions.js    -> per-file actions: share, plain download, edit, delete + Select files bulk support
+      fileopen.js       -> hand a saved file to the phone's matching app (Vault copies in cache/open/, purged)
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.

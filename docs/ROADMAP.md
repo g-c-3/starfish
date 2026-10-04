@@ -19,8 +19,8 @@
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
-- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app, H PDF viewer)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending)
+- [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app built — Session 87, not device-tested, H PDF viewer)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 file open pending)
 
 ## Detailed
 
@@ -376,11 +376,12 @@ individual items) can be picked up in any order once prerequisites are met.
     still has no capture.
     - Session 86: New offers current location or pasted coordinates / map link; optional Verify link for short links
       (Decisions 116, 117). Confirmed on device — Session 86.
-  - [ ] G — Files: open with the phone's matching app.
+  - [~] G — Files: open with the phone's matching app (Session 87, Decision 118; built, `vite build` passed, not run through CI, not
+    device-tested). Tap a Files row: detail view with an Open with app button. Home files open from their stored path; Vault files
+    open from a decrypted copy in cache, removed on the next launch or resume. Plugin: `@capacitor-community/file-opener` 6.x.
   - [ ] H — PDF: in-app viewer.
   - Open choices (confirm before the step that needs them): PDF viewer by bundling pdf.js (offline,
-    about 1.3 MB larger APK) or by handing off to the phone's PDF app; adding a file-opener plugin for G
-    (Vault files get a short-lived decrypted copy in app cache); a real map needs network tiles, which
+    about 1.3 MB larger APK) or by handing off to the phone's PDF app; a real map needs network tiles, which
     would break the single-network-call rule, so F uses coordinates plus hand-off.
   - Suggested order: A, B, E, F, C, D, G, H.
   - [x] **Before C: notification Snooze and Done without opening the app (Session 80, Decision 102; device-confirmed Session 81).** A native
@@ -413,6 +414,8 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP12 — Install over an older build with a reminder pending (Sessions 75 to 78): it still fires, buttons work.
   - [~] DP13 — Repeating reminders beyond the first day (Decisions 107, 108): a daily one fires again the next day;
     weekly and monthly ones; Done for now keeps the series; Repeat set to none stops it.
+  - [ ] DP14 — Open Files with the phone's app (Session 87, Decision 118): Home file opens in a matching app; a Vault file opens and
+    the Vault locks per its settings; no matching app shows a plain message; after returning, `cache/open/` is empty.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat
     set to none confirmed; the next-day fire of daily, weekly and monthly repeats is still pending.
   - Confirmed in passing, Session 85: Save dialog and tags (Session 69), Back (Sessions 60, 83), Home multi-select
