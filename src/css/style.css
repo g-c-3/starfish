@@ -720,3 +720,17 @@ body.selecting .is-selected::after { content: "\2713"; background: var(--brand);
 .pdf-pw { min-height: 50%; }
 .pdf-pw input { width: 100%; max-width: 320px; box-sizing: border-box; text-align: center; }
 .pdf-pw button { width: 100%; max-width: 320px; margin: 0; }
+
+/* Money: month header in the Money folder, loan status pills (Decision 126). */
+.money-summary { margin: 0 0 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
+.money-summary .ms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.money-summary .ms-title { font-weight: 700; font-size: 15px; }
+.money-summary .ms-head .icon-btn { font-size: 22px; line-height: 1; }
+.money-summary .ms-grid, .money-summary .ms-loans { display: grid; gap: 8px; }
+.money-summary .ms-grid { grid-template-columns: repeat(3, 1fr); }
+.money-summary .ms-loans { grid-template-columns: repeat(2, 1fr); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.money-summary span { display: block; font-size: 12px; color: var(--muted); }
+.money-summary b { display: block; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.money-summary b.neg { color: var(--ink-money); }
+.status-pill.open, .status-pill.partly { background: var(--brand-tint); color: var(--brand-ink); }
+.status-pill.settled { background: var(--surface-2); color: var(--muted); }
