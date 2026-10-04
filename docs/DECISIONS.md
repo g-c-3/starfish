@@ -1755,3 +1755,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 **123. The Home | Back | Vault bar sits lower so its Back circle matches the floating Back.**
 - Cause: the bar was taller and 10 px up, so its Back circle sat about 12 px higher than the floating Back used in folders, viewers and editors.
 - Rule: the bar is a fixed 56 px high, 5 px above the bottom edge (plus the system inset), so the circle centre is 33 px up, the same as the floating Back. Home and Vault buttons use tighter vertical padding to fit. Back-only and overlay modes are unchanged.
+
+**124. Money capture design (not yet built). No automatic detection of expenses.**
+- Detection: the rule that turned a Home note containing "spent" and a number into an expense is removed from capture. Money entries come only from the Money form. Existing expense rows stay, remain listed in the Money folder, and count as Spent in totals. Reminder text detection is not changed by this decision.
+- Entry kinds: Spent, Lent, Received, Borrowed.
+- Fields: amount (stored as a whole number of the smallest unit, no decimals drift), kind, category (own list, recent first, nothing guessed), note, tags, date of the event (default now, editable), person (Lent and Borrowed), payment method (own list: cash, UPI, card and so on), due date (Lent and Borrowed, a plain field, no notification).
+- Repayments (Lent and Borrowed): a list of partial or full returns, each with amount, date and an optional note. Remaining = amount minus the sum. Status is derived, never typed: open, partly returned, settled. A repayment cannot exceed the remaining amount. Add repayment pre-fills the remaining amount; a full return is one repayment.
+- Month header in the Money folder, with previous and next month: Spent, Received, Net (Spent and Received only). Loans stay out of Net. Two separate lines, all time: owed to you (remaining on Lent) and you owe (remaining on Borrowed).
+- Currency: one symbol for the whole app, stored in app settings (so it travels with the App Settings backup category), default ₹. Settings offers a list of common symbols and a free text field for any other. Changing it only relabels; amounts are never converted, and the setting says so plainly.
+- Storage: Home entries keep the details in a new `money_json` column added through the existing column migration; the label is a readable summary and the note is the description, so search finds them. Backup export and import must carry the column. Vault entries keep the same details as JSON inside the encrypted body, replacing the placeholder text shape; Vault totals come only from the unlocked index and are never mixed with Home.
+- Not included: charts, budgets, recurring entries, per-entry currency, conversion, reminders from due dates, CSV export (a later step).
+- Build order is in the roadmap.

@@ -21,7 +21,10 @@ Phase 16 G: open Files with the phone's matching app (Decision 118). DP13 stays 
 - Long-press multi-select in every folder and search list, Home and Vault (Decision 122): `app.js` (`selection` state, `paintSelection`, `exitSelection`, long-press wiring, bar actions), `index.html` (`#select-bar`), `style.css`.
 - Bottom bar lowered so its Back circle matches the floating Back (Decision 123): `style.css`.
 
-Decisions made: 118, 119, 120, 121, 122, 123.
+- Device feedback: multi-select and nav alignment confirmed (DP16).
+- Money capture designed with the person (Decision 124); no code written for it. Built next session so it gets a fresh context.
+
+Decisions made: 118, 119, 120, 121, 122, 123, 124.
 
 Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Drawing onto a canvas was not run here: not run through CI, not run on a device. Multi-select: a simulated page test covered tap-opens, long press starts, the click after a long press is swallowed, taps toggle, row actions are ignored, movement cancels, Select all, bulk delete ids, exit on finish, exit on deselecting the last item, cancel, and a stale long press not eating the next tap. Nav alignment is a CSS change measured from your screenshots (Back circle 44 px up against 32 px, at 1.5 pixel density); not seen on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
 
@@ -29,7 +32,7 @@ Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on
 
 Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
-Next session start point: device-check DP16 (multi-select, nav alignment), the rest of DP15 and DP14, and DP13. Then Money capture (shape still to be given) or Phase 16 close-out. If the PDF viewer misbehaves on a real phone, the likely causes are the worker start and canvas size; check `pdfviewer.js` first.
+Next session start point: device-check DP13 (6 am repeat), the rest of DP14 and DP15. Then build Money (Decision 124) in the roadmap order, starting with `money.js` and its tests. Reminder text detection stays unless the person says otherwise.
 
 ---
 

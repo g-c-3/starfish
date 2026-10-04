@@ -41,7 +41,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
-| Money | none yet | label only | placeholder — capture flow not yet defined (Decision 55); deliberately a separate type from Expense below, not a reuse of it |
+| Money | none yet (design: Decision 124, `money_json`) | label only | placeholder until built; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are no longer auto-detected |
 | Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
 
 `is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Reminder/Location/Money/Files

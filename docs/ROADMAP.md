@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
+- [~] 4 — App shell & control flow (Money capture designed — Session 87, Decision 124, not built; 5 reported bugs fixed — Session 31; 8 capture cards, 1 still placeholder: Money; Reminder Session 56 and Location Session 57 built, main only)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 pending)
+- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 next-day fire pending; DP14 partly confirmed; DP15 Home PDF confirmed; DP16 confirmed — Session 87)
 
 ## Detailed
 
@@ -425,10 +425,14 @@ individual items) can be picked up in any order once prerequisites are met.
     zoom in and out keeps your place and allows sideways scroll; rotate the phone; a password-protected PDF shows the message and
     Open with app works; a Vault PDF opens, then lock the app with it open and confirm it closes; rename from the pencil keeps the
     page. Check a PDF with unusual fonts or a scan.
-  - [ ] DP16 — Long-press multi-select and nav alignment (Session 87, Decisions 122, 123): long press a row in a Home folder, a Vault folder
+  - [x] DP16 — confirmed on device in Session 87 (image grid selection with bar and ticks; Back circle aligned). Original check: long press a row in a Home folder, a Vault folder
     and a search list (text, reminder, voice, location, image tile, PDF, file); more taps add and remove; Select all; Share, Download and
     Delete act on the selection; Back and the cancel button leave selection mode; locking leaves it; the Home | Back | Vault bar sits
     low enough that its Back circle lines up with the floating Back in folders and viewers.
+  - [ ] **Money capture (Session 87, Decision 124; designed, not built).** Build order: (1) `money.js`: model, repayment maths, month totals,
+    currency list, with Node tests; (2) schema: `money_json` column via `ensureColumn`, backup export and import carry it; (3) Home: form,
+    list rows, month header, repayment dialog, edit, search; (4) Settings: currency symbol; (5) remove expense detection from `captureText`;
+    (6) Vault Money (JSON in `encrypted_body`). Open question: reminder text detection stays unless told otherwise.
   - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count). Password-protected PDF, Vault PDF and
     rename-keeps-place still unchecked.
   - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.
