@@ -10,25 +10,26 @@
     "generate-icons": "npx @capacitor/assets generate --android"
   },
   "dependencies": {
-    "@capacitor/core": "^6.1.2",
-    "@capacitor/android": "^6.1.2",
     "@capacitor-community/file-opener": "^6.0.1",
+    "@capacitor-community/privacy-screen": "^5.2.0",
+    "@capacitor-community/sqlite": "^6.0.2",
+    "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
     "@capacitor/filesystem": "^6.0.1",
     "@capacitor/geolocation": "^6.0.1",
     "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/preferences": "^6.0.2",
     "@capacitor/share": "^6.0.2",
-    "@capacitor-community/sqlite": "^6.0.2",
+    "@capgo/capacitor-native-biometric": "^6.0.4",
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "cap-voice-rec": "^6.0.1",
-    "@capgo/capacitor-native-biometric": "^6.0.4",
-    "@capacitor-community/privacy-screen": "^5.2.0"
+    "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.1.2",
     "@capacitor/assets": "^3.0.5",
-    "vite": "^7.3.2",
-    "javascript-obfuscator": "^4.1.1"
+    "@capacitor/cli": "^6.1.2",
+    "javascript-obfuscator": "^4.1.1",
+    "vite": "^7.3.2"
   }
 }
