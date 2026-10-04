@@ -3363,17 +3363,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   // decrypted into memory only and dropped on close or lock. A document that cannot be read offers the phone's app.
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
-    let view = null, token = 0;
+    let view = null, token = 0, pwResolve = null;
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
     const fresh = async () => isVault
       ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
       : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    // Password prompt (Decision 125): inline in the viewer, typed password kept in memory only, field emptied on use.
+    const askPassword = (wasWrong, scroll) => new Promise((resolve) => {
+      scroll.innerHTML = `<div class="pdf-msg pdf-pw"><div>${wasWrong ? 'Incorrect password. Try again.' : 'This PDF is password-protected.'}</div>
+        <input id="pdf-pw-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Password" aria-label="PDF password">
+        <button type="button" id="pdf-pw-go">Open</button>
+        <button type="button" id="pdf-pw-cancel" class="secondary-btn">Cancel</button></div>`;
+      const input = scroll.querySelector('#pdf-pw-input');
+      const done = (value) => {
+        if (!pwResolve) return;
+        pwResolve = null;
+        input.value = '';
+        if (value !== null) scroll.innerHTML = '<div class="pdf-msg">Opening…</div>';
+        resolve(value);
+      };
+      pwResolve = done;
+      const submit = () => { if (!input.value) return; arm(); done(input.value); };
+      scroll.querySelector('#pdf-pw-go').onclick = submit;
+      scroll.querySelector('#pdf-pw-cancel').onclick = () => done(null);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+      setTimeout(() => input.focus(), 50);
+    });
     const clearHeader = () => viewerScreen.querySelectorAll('.pdf-hdr').forEach((n) => n.remove());
     viewerScreen.classList.add('pdf-mode');
     await openViewer({
       title: item.label || 'PDF', isVault,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      onClose: () => { token++; viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (view) { view.destroy(); view = null; } },
+      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (view) { view.destroy(); view = null; } },
       render: async (body) => {
         const row = await fresh();
         document.getElementById('viewer-title').textContent = row.label || 'PDF';
@@ -3397,6 +3418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { createPdfView } = await import('./pdfviewer.js');
           const next = await createPdfView(scroll, base64ToBytes(b64), {
             onActivity: arm,
+            askPassword: (wasWrong) => askPassword(wasWrong, scroll),
             onPage: (n) => { const c = viewerScreen.querySelector('.pdf-count'); if (c && view) c.textContent = `${n}/${view.pageCount}`; }
           });
           if (mine !== token || !body.isConnected) { next.destroy(); return; } // closed or locked while loading

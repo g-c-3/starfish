@@ -5,6 +5,7 @@
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import PdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker';
 import { fitScale, canvasRatio, pageAt, nextZoom } from './pdfmath.js';
+import { openPdfDocument } from './pdfopen.js';
 
 let workerReady = false;
 function ensureWorker() {
@@ -14,10 +15,11 @@ function ensureWorker() {
 }
 
 // Loads bytes (Uint8Array, consumed) and builds the page stack inside `container`.
+// askPassword(wasWrong) -> Promise<string|null> is called only for a protected PDF.
 // Returns { pageCount, zoomIn, zoomOut, destroy }. onPage(n) reports the page nearest the top; onActivity() fires on scroll.
-async function createPdfView(container, bytes, { onPage = () => {}, onActivity = () => {} } = {}) {
+async function createPdfView(container, bytes, { onPage = () => {}, onActivity = () => {}, askPassword = async () => null } = {}) {
   ensureWorker();
-  const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise;
+  const doc = await openPdfDocument(pdfjs, bytes, askPassword);
   const first = await doc.getPage(1);
   const base = first.getViewport({ scale: 1 });
   const aspect = base.height / base.width;
