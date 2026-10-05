@@ -734,3 +734,13 @@ body.selecting .is-selected::after { content: "\2713"; background: var(--brand);
 .money-summary b.neg { color: var(--ink-money); }
 .status-pill.open, .status-pill.partly { background: var(--brand-tint); color: var(--brand-ink); }
 .status-pill.settled { background: var(--surface-2); color: var(--muted); }
+
+/* Money dialogs scroll when the repayment section makes the form taller than the screen (Decision 128). */
+#money-dialog .modal-box, #repay-dialog .modal-box { max-height: 92vh; overflow-y: auto; }
+body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .modal-box { max-height: calc(92vh - 76px); }
+#mf-repay { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--border); }
+#mf-repay .settings-group { margin: 10px 0 0; }
+#mf-repay .secondary-btn { margin-top: 14px; }
+.rep-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.rep-item span { min-width: 0; overflow-wrap: anywhere; }
+.rep-item .rep-del { width: 32px; height: 32px; flex: none; margin: 0; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; background: var(--surface-2); color: var(--danger); }
