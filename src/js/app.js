@@ -3175,13 +3175,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const t = Money.monthTotals(items, moneyMonth.y, moneyMonth.m);
     const l = Money.loanTotals(items);
     const fmt = (n) => Money.formatAmount(n, currencySymbol);
-    // Month and year pick separately. Years run from the oldest entry (or this year) to next year, always including the shown one.
-    const thisYear = new Date().getFullYear();
-    const years = items.map((d) => new Date(d.at).getFullYear()).filter(Number.isFinite);
-    const lo = Math.min(thisYear, moneyMonth.y, ...years), hi = Math.max(thisYear + 1, moneyMonth.y);
+    // Month and year pick separately. The year list is the shown year plus two either side, oldest first; any other year is typed.
     const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i}"${i === moneyMonth.m ? ' selected' : ''}>${escapeHtml(new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }))}</option>`).join('');
     let yearOpts = '';
-    for (let y = hi; y >= lo; y--) yearOpts += `<option value="${y}"${y === moneyMonth.y ? ' selected' : ''}>${y}</option>`;
+    for (let y = moneyMonth.y - 2; y <= moneyMonth.y + 2; y++) yearOpts += `<option value="${y}"${y === moneyMonth.y ? ' selected' : ''}>${y}</option>`;
     box.innerHTML = `
       <div class="ms-head">
         <button type="button" id="ms-prev" class="ms-step" aria-label="Previous month">‹</button>
@@ -3189,6 +3186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <select id="ms-year" aria-label="Year">${yearOpts}</select>
         <button type="button" id="ms-next" class="ms-step" aria-label="Next month">›</button>
       </div>
+      <input id="ms-year-input" class="ms-year-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Type a year, e.g. 2031" aria-label="Type a year" />
       <div class="ms-grid">
         <div><span>Spent</span><b>${escapeHtml(fmt(t.spent))}</b></div>
         <div><span>Received</span><b>${escapeHtml(fmt(t.received))}</b></div>
@@ -3204,6 +3202,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       await renderMoneySummary();
     };
     document.getElementById('ms-month').onchange = pick;
+    const yearInput = document.getElementById('ms-year-input');
+    yearInput.onchange = async () => {
+      const v = yearInput.value.trim();
+      if (/^\d{4}$/.test(v) && Number(v) >= 1900) moneyMonth = { y: Number(v), m: moneyMonth.m };
+      await renderMoneySummary(); // an invalid entry is dropped and the shown year stays
+    };
+    yearInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); yearInput.blur(); } };
     document.getElementById('ms-year').onchange = pick;
     const step = (delta) => async () => {
       const d = new Date(moneyMonth.y, moneyMonth.m + delta, 1);
