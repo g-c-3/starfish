@@ -3184,8 +3184,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (let y = hi; y >= lo; y--) yearOpts += `<option value="${y}"${y === moneyMonth.y ? ' selected' : ''}>${y}</option>`;
     box.innerHTML = `
       <div class="ms-head">
+        <button type="button" id="ms-prev" class="ms-step" aria-label="Previous month">‹</button>
         <select id="ms-month" aria-label="Month">${monthOpts}</select>
         <select id="ms-year" aria-label="Year">${yearOpts}</select>
+        <button type="button" id="ms-next" class="ms-step" aria-label="Next month">›</button>
       </div>
       <div class="ms-grid">
         <div><span>Spent</span><b>${escapeHtml(fmt(t.spent))}</b></div>
@@ -3203,6 +3205,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     document.getElementById('ms-month').onchange = pick;
     document.getElementById('ms-year').onchange = pick;
+    const step = (delta) => async () => {
+      const d = new Date(moneyMonth.y, moneyMonth.m + delta, 1);
+      moneyMonth = { y: d.getFullYear(), m: d.getMonth() };
+      await renderMoneySummary();
+    };
+    document.getElementById('ms-prev').onclick = step(-1);
+    document.getElementById('ms-next').onclick = step(1);
   }
 
   async function saveMoneyEntry(details, d) {
