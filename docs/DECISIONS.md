@@ -1838,3 +1838,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Bulk bars have no Edit; their order is Share, Download, Delete.
 - Viewers other than image show only Edit in the header; adding Share, Download and Delete to them is open.
 
+**135. Vault Money.** Builds Decision 124 step 6.
+- Storage: the details JSON (`money.js` `toJson`) sits in `encrypted_body`; the note in `encrypted_description`; `money_json` and `file_path` stay NULL. Cause: `money_json` is plaintext, which is right for Home and wrong for the Vault.
+- Name: the Save dialog defaults to `Money <time>`, never to the readable summary, and Edit never rewrites a name from the details. Cause: the label is the only plaintext a Vault row carries, and the summary holds the amount and person.
+- Index: built on unlock with the details, a search text (summary, person, category, method, repayment methods and notes) and a size; discarded on lock. Rows, month header, loan totals, search and the category and method chips read only this index and are never mixed with Home.
+- Dialogs: the Home form, repayment dialog and viewer are reused with Vault hooks. A Vault lock closes Vault Money dialogs only and leaves a Home form open; an app lock closes both.
+- Header ids use the prefix `vms` (Home keeps `ms`), so the two never collide in the page. The header is emptied when the folder closes or the Vault locks.
+- Share and Download: readable text built from the decrypted details (summary, date, method, due, returned, remaining, repayments); Download is a `.txt`. Same rule as Decision 41: the copy is plaintext once it leaves the Vault.
+- Backup: unchanged. `private_vault` carries `encrypted_body`; cross-PIN append re-keys it as for every other Vault type.
+- The Vault symbol is the app symbol (Decision 130), loaded on unlock.

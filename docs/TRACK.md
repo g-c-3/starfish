@@ -109,3 +109,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-05 | Session 91 (continued, 2) | Decision 132 | Steps 4 and 5 confirmed on device; Back closes the Money form and repayment dialog; not compiled in CI or device-tested |
 | 2026-10-05 | Session 91 (continued, 3) | Decisions 133, 134 | Back and Cancel ask Discard on unsaved input app-wide; action order Edit, Share, Download, Delete with red bin Delete; not compiled in CI or device-tested |
 | 2026-10-05 | Session 91 (closed) | none | DP14, DP15, DP18 to DP22 confirmed on device; next: Money step 6, Vault Money |
+| 2026-10-06 | Session 92 | Decision 135 | Money step 6: Vault Money built (form, rows, month header, viewer, repayments, edit, search, Share, Download); DP23 added; not compiled in CI or device-tested |

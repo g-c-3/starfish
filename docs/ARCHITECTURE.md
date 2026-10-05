@@ -41,7 +41,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
-| Money | none (details in `money_json`, Decisions 124, 126) | label (readable summary) + description (note) | Home built; Vault Money still a placeholder; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are no longer auto-detected (removal pending, step 5) |
+| Money | none (Home: details in `money_json`, Decisions 124, 126; Vault: details JSON in `encrypted_body`, Decision 135) | Home: label (readable summary) + description (note); Vault: in-memory index only | Home and Vault built; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are not auto-detected (Decision 131) |
 | Expense | amount + category | label/category | amount, category, replied (bool) — legacy rows only (detection removed, Decision 131); read as Spent in Money, no capture card, no private variant |
 
 `is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Reminder/Location/Money/Files
@@ -631,7 +631,14 @@ No network, no new permission.
 - Month header (previous, Month and Year dropdowns, next; typed year field under it, Decision 129) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
 - A repayment holds amount, date, method and note. The form edits the list of repayments; the detail view adds one at a time (Decision 128).
 - Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted. Set in Settings > Preferences > Currency: chips from `Money.CURRENCIES`, or a typed symbol of 1 to 5 visible characters (Decision 130). Part of the App Settings backup category.
-- Not built: Vault Money, editing a single repayment in place.
+- Not built: editing a single repayment in place.
+
+### Money in the Vault (Decision 135)
+- Details JSON in `encrypted_body`; note in `encrypted_description`; `money_json` and `file_path` NULL. The plaintext label is generic (`Money <time>`), never the summary.
+- The unlocked index (`vault.js`) holds the details and a search text; the Vault folder rows, month header, loan totals, search and recent chips read only it. Nothing is mixed with Home totals.
+- Same form, repayment dialog and viewer as Home, with Vault hooks: a Vault lock closes them, an app lock closes both. Header ids `vms`.
+- Share and Download: readable text from the decrypted details; Download is a `.txt`.
+- Backup: no change, the entry travels in the `private_vault` category.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

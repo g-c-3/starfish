@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 92**
+
+Phase 4 Money capture, step 6 of Decision 124's build order: Vault Money. Fresh session; Tier 1 and Tier 2 docs read.
+- `vault.js`: `buildVaultPlaintext` and `parseVaultPlaintext` carry the Money details JSON for `money` (checked with `Money.normalize` before encrypting); the index holds `money` and a search text (summary, person, category, method, repayment methods and notes) and the size.
+- `fileactions.js`: Share and Download for a Vault Money entry give readable text (`.txt`); `editEntry` treats `money` as a content field, so it is re-encrypted.
+- `app.js`: Vault New in the Money folder (form, then the Save dialog, default name `Money <time>`); rows show kind, amount, status and date; month header and loan totals from the unlocked index; viewer, Add repayment and Edit work for Vault entries. `renderMoneySummary` split into `paintMoneySummary` (ids prefixed `ms` for Home, `vms` for the Vault). `moneyHooksFor(isVault)`: a Vault lock closes only Vault Money dialogs. The Vault header is emptied when the folder closes or the Vault locks. The symbol is loaded on unlock.
+- `index.html`: `#vault-money-summary` in the Vault folder view.
+
+Decisions made: 135.
+
+Verified in the authoring environment: syntax checks, `vite build`, 27 Node checks on `vault.js` (details round trip, unreadable text gives null, invalid and overrunning details refused, ciphertext holds no amount or person, `money_json` NULL, label generic, description encrypted, index details and search by person, category, summary, repayment note and description, corrupt entry still listed, index cleared) and on the Share and Download text. Not run: the Vault UI on a device, real SQLite, backup and restore of a Vault Money entry, CI.
+
+Open: Home Money Share sends the summary only and Home Money Download writes an empty file (reads `body_text`, which is NULL for Money); not confirmed on a device, not changed. Other viewers still show only Edit in the header (Decision 134 open point), Money included. A single repayment cannot be edited in place. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing). DP13 next-day fire and the rest of DP17 still pending. DP23 added.
+
+Next session start point: commit the changed files in one commit (Decision 127), run Build Android APK on `main`, install that run, run DP23. Then decide the viewer header actions (Edit, Share, Download, Delete) for the other viewers, then Vault Reminder and Vault Location, or Phase 16 remaining items.
+
+---
+
 **Session 91**
 
 Phase 4 Money capture, steps 4 and 5 of Decision 124's build order (Settings currency symbol, expense detection removal). Fresh session; Tier 1 and the Money parts of the Tier 2 docs read.
