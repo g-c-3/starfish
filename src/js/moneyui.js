@@ -126,7 +126,7 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
       if (!r.ok) { status.textContent = r.error; return; }
       finish(r.value);
     };
-    $('mf-cancel-btn').onclick = () => finish(null);
+    $('mf-cancel-btn').onclick = () => (hooks.leave ? hooks.leave() : finish(null));
     dlg.classList.remove('hidden');
     if (hooks.open) hooks.open(finish);
   });
@@ -160,7 +160,7 @@ export function openRepayDialog({ details, items = [], symbol = '₹', hooks = {
       if (!r.ok) { status.textContent = r.error; return; }
       finish(r.value);
     };
-    $('rp-cancel-btn').onclick = () => finish(null);
+    $('rp-cancel-btn').onclick = () => (hooks.leave ? hooks.leave() : finish(null));
     dlg.classList.remove('hidden');
     if (hooks.open) hooks.open(finish);
   });

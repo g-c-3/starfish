@@ -1,4 +1,4 @@
-// fileactions.js — the four per-entry actions (ARCHITECTURE.md §5): Share, Download, Edit, Delete,
+// fileactions.js — the four per-entry actions (ARCHITECTURE.md §5), in UI order: Edit, Share, Download, Delete,
 // plus the "Select files" bulk support. Download-for-append and its import screen were removed
 // (Decision 83).
 

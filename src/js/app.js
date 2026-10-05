@@ -180,9 +180,24 @@ const BACK_MODALS = [
 function openModalDismiss() {
   for (const [id, btn] of BACK_MODALS) {
     const el = document.getElementById(id);
-    if (el && !el.classList.contains('hidden')) return () => document.getElementById(btn)?.click();
+    if (!el || el.classList.contains('hidden')) continue;
+    const typed = MODAL_PENDING[id] && document.getElementById(MODAL_PENDING[id]);
+    return async () => {
+      if (typed && typed.value && !(await askDiscard())) return;
+      document.getElementById(btn)?.click();
+    };
   }
   return null;
+}
+// Fields that hold typed-but-unused input (Decision 133). A modal's field guards that modal; Settings fields guard leaving Settings.
+const MODAL_PENDING = { 'auto-backup-due-banner': 'auto-backup-passphrase-input' };
+const SETTINGS_PENDING = ['backup-passphrase', 'backup-hint', 'restore-passphrase', 'restore-file-input', 'currency-custom', 'app-biometric-confirm-password'];
+const VAULT_SETTINGS_PENDING = ['vault-biometric-confirm-pin'];
+async function leaveIfClean(ids) {
+  const fields = ids.map((id) => document.getElementById(id)).filter((el) => el && el.value);
+  if (fields.length && !(await askDiscard())) return false;
+  fields.forEach((el) => { el.value = ''; });
+  return true;
 }
 
 // ---- Multi-select inside a folder or a search list: long press a row to start (Decision 122). ----
@@ -209,6 +224,7 @@ function exitSelection() {
 
 function backAction() {
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
+  if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
   if (selection) return exitSelection; // Back leaves selection mode first (Decision 122)
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
   const modal = openModalDismiss();
@@ -218,9 +234,9 @@ function backAction() {
   if (currentLocation === 'vault') {
     if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
-    return card && card.open ? () => { card.open = false; } : null;
+    return card && card.open ? async () => { if (await leaveIfClean(VAULT_SETTINGS_PENDING)) card.open = false; } : null;
   }
-  if (currentLocation === 'settings') return () => showScreen('main-screen', { tab: 'home' });
+  if (currentLocation === 'settings') return async () => { if (await leaveIfClean(SETTINGS_PENDING)) showScreen('main-screen', { tab: 'home' }); };
   if (openFolderType) return closeFolder;
   return null;
 }
@@ -977,6 +993,7 @@ async function handleBackupNow() {
   statusEl.textContent = result.ok
     ? `Saved as ${result.path}.`
     : `Backup failed: ${result.reason || 'unknown error'}.`;
+  if (result.ok) { document.getElementById('backup-passphrase').value = ''; document.getElementById('backup-hint').value = ''; }
 }
 
 // Shared by both local restore and Drive restore — shows the overwrite warning dialog when needed,
@@ -1032,6 +1049,8 @@ async function handleLocalRestore() {
       `${result.summary.restoredLabeled} restored under "(Restored)".`
     : `Restore failed: ${result.reason || 'unknown error'}.`;
   if (result.ok) {
+    document.getElementById('restore-passphrase').value = '';
+    fileInput.value = '';
     // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
     // Vault entries show without a relock. Locked Vault: nothing to do, unlock builds it fresh.
     if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
@@ -1058,7 +1077,7 @@ function formatEntryDate(ms) {
   if (!ms) return '';
   return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 }
-// actionPrefix: 'main' | 'vault' renders Share/Download/Edit/Delete icon buttons wired by their existing
+// actionPrefix: 'main' | 'vault' renders Edit/Share/Download/Delete icon buttons (Decision 134) wired by their existing
 // ${prefix}-*-btn classes; null renders a plain (search-result) row.
 // Meta line and greyed-out flag for a full entry row (Home folders and search).
 let currencySymbol = Money.DEFAULT_SYMBOL; // one symbol for the whole app (Decision 124); meta key currency_symbol
@@ -1099,7 +1118,7 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
         <span class="row-meta">${escapeHtml(meta)}</span>
         ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       </span>
-      ${actionPrefix ? `<span class="row-actions">${btn('share', 'Share')}${btn('download', 'Download')}${btn('edit', 'Edit')}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
+      ${actionPrefix ? `<span class="row-actions">${btn('edit', 'Edit')}${btn('share', 'Share')}${btn('download', 'Download')}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
     </div>`;
 }
 function emptyStateHtml(kind = 'folder') {
@@ -1137,7 +1156,29 @@ let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
 let activeLocSource = null;  // { finish } — New location: current fix or coordinates
 let activeCoords = null;     // { finish } — paste coordinates / map link dialog
 let activeMoney = null;      // { finish } — Money form or repayment dialog
-const moneyHooks = { open: (finish) => { activeMoney = { finish }; }, close: () => { activeMoney = null; } };
+// Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
+function askDiscard() {
+  return askYesNo({ title: 'Discard changes?', text: 'Your changes have not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
+}
+// Everything typed or chosen inside a dialog, as one string. Taken when it opens and compared on leave.
+function formState(el) {
+  if (!el) return '';
+  const vals = Array.from(el.querySelectorAll('input, select, textarea')).map((i) => (i.type === 'checkbox' || i.type === 'radio' ? String(i.checked) : i.value));
+  const lists = Array.from(el.querySelectorAll('.rep-list')).map((l) => l.textContent);
+  return JSON.stringify([vals, lists]);
+}
+// Both hooks refresh the Back button, which would otherwise stay dimmed or lit from before the dialog (Decision 132).
+// leave() is Back and Cancel: closes at once when nothing changed, else asks Discard.
+const moneyHooks = {
+  open: (finish) => {
+    const dlg = ['money-dialog', 'repay-dialog'].map((id) => document.getElementById(id)).find((d) => d && !d.classList.contains('hidden'));
+    const snap = formState(dlg);
+    activeMoney = { finish, leave: async () => { if (formState(dlg) === snap || await askDiscard()) finish(null); } };
+    updateBackButtonState();
+  },
+  close: () => { activeMoney = null; updateBackButtonState(); },
+  leave: () => (activeMoney ? activeMoney.leave() : undefined)
+};
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
@@ -1288,13 +1329,19 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       finish(result);
     };
     // Capture dialogs (Discard) ask Yes/No before dropping the take; Cancel and Back to editing leave at once.
+    // Edit dialogs ask only when a field changed since opening (Decision 133).
+    const snap = () => JSON.stringify([nameEl.value, descEl.value, selected, newTagEl.value, whenEl ? whenEl.value : '', repeatEl ? repeatEl.value : '']);
+    const startSnap = snap();
     const requestLeave = async () => {
-      if (discardLabel !== 'Discard') { finish(null); return; }
-      const yes = await askYesNo({ title: 'Discard?', text: 'Nothing will be saved.', yes: 'Yes, discard', no: 'No, keep it' });
-      if (yes) finish(null);
+      if (discardLabel === 'Discard') {
+        const yes = await askYesNo({ title: 'Discard?', text: 'Nothing will be saved.', yes: 'Yes, discard', no: 'No, keep it' });
+        if (yes) finish(null);
+        return;
+      }
+      if (snap() === startSnap || await askDiscard()) finish(null);
     };
     $('sd-cancel-btn').onclick = requestLeave;
-    dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) finish(null); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
+    dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) requestLeave(); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
     activeSaveDialog = { finish, isVault, requestLeave };
     dlg.classList.remove('hidden');
     updateBackButtonState();
@@ -2652,7 +2699,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         else render({ ok: false, short: true }, `${res.error} Or open the link in Maps and paste the full link or the coordinates.`);
       };
       cont.onclick = () => { if (parsed) finish({ lat: parsed.lat, lng: parsed.lng, name: parsed.name || '', text: input.value }); };
-      $('coords-cancel-btn').onclick = () => finish(null);
+      const leave = async () => { if (!input.value.trim() || await askDiscard()) finish(null); }; // pasted text counts as unsaved (Decision 133)
+      $('coords-cancel-btn').onclick = leave;
       input.value = text;
       activeCoords = { finish };
       dlg.classList.remove('hidden');
@@ -3470,7 +3518,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hdr = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const n = t.content.firstChild; editBtn.parentNode.append(n); return n; };
         const shareBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>`);
         const downloadBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>`);
-        const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
+        const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn warning-text" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
