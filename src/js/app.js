@@ -3175,12 +3175,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const t = Money.monthTotals(items, moneyMonth.y, moneyMonth.m);
     const l = Money.loanTotals(items);
     const fmt = (n) => Money.formatAmount(n, currencySymbol);
-    const title = new Date(moneyMonth.y, moneyMonth.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    // Month and year pick separately. Years run from the oldest entry (or this year) to next year, always including the shown one.
+    const thisYear = new Date().getFullYear();
+    const years = items.map((d) => new Date(d.at).getFullYear()).filter(Number.isFinite);
+    const lo = Math.min(thisYear, moneyMonth.y, ...years), hi = Math.max(thisYear + 1, moneyMonth.y);
+    const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i}"${i === moneyMonth.m ? ' selected' : ''}>${escapeHtml(new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }))}</option>`).join('');
+    let yearOpts = '';
+    for (let y = hi; y >= lo; y--) yearOpts += `<option value="${y}"${y === moneyMonth.y ? ' selected' : ''}>${y}</option>`;
     box.innerHTML = `
       <div class="ms-head">
-        <button type="button" id="ms-prev" class="icon-btn" aria-label="Previous month">‹</button>
-        <span class="ms-title">${escapeHtml(title)}</span>
-        <button type="button" id="ms-next" class="icon-btn" aria-label="Next month">›</button>
+        <select id="ms-month" aria-label="Month">${monthOpts}</select>
+        <select id="ms-year" aria-label="Year">${yearOpts}</select>
       </div>
       <div class="ms-grid">
         <div><span>Spent</span><b>${escapeHtml(fmt(t.spent))}</b></div>
@@ -3192,13 +3197,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div><span>You owe</span><b>${escapeHtml(fmt(l.youOwe))}</b></div>
       </div>`;
     box.classList.remove('hidden');
-    const shift = (delta) => async () => {
-      const d = new Date(moneyMonth.y, moneyMonth.m + delta, 1);
-      moneyMonth = { y: d.getFullYear(), m: d.getMonth() };
+    const pick = async () => {
+      moneyMonth = { y: Number(document.getElementById('ms-year').value), m: Number(document.getElementById('ms-month').value) };
       await renderMoneySummary();
     };
-    document.getElementById('ms-prev').onclick = shift(-1);
-    document.getElementById('ms-next').onclick = shift(1);
+    document.getElementById('ms-month').onchange = pick;
+    document.getElementById('ms-year').onchange = pick;
   }
 
   async function saveMoneyEntry(details, d) {
