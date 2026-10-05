@@ -518,6 +518,20 @@
       <div id="mf-method-chips" class="tag-chips"></div>
       <label class="field-label" for="mf-when">Date</label>
       <input id="mf-when" type="datetime-local" />
+      <div id="mf-repay" class="hidden">
+        <p class="settings-group">Repayments</p>
+        <div id="mf-rep-list" class="rep-list"></div>
+        <label class="field-label" for="mf-rep-amount">Repaid amount</label>
+        <input id="mf-rep-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
+        <label class="field-label" for="mf-rep-when">Repaid on</label>
+        <input id="mf-rep-when" type="datetime-local" />
+        <label class="field-label" for="mf-rep-method">Repaid by</label>
+        <input id="mf-rep-method" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
+        <div id="mf-rep-chips" class="tag-chips"></div>
+        <label class="field-label" for="mf-rep-note">Note</label>
+        <input id="mf-rep-note" type="text" autocomplete="off" maxlength="120" placeholder="Optional" />
+        <button id="mf-rep-add" type="button" class="secondary-btn">+ Add repayment</button>
+      </div>
       <div id="mf-status" class="status-line" aria-live="polite"></div>
       <div class="sheet-actions">
         <button id="mf-cancel-btn" type="button" class="secondary-btn">Cancel</button>
@@ -534,6 +548,9 @@
       <input id="rp-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
       <label class="field-label" for="rp-when">Date</label>
       <input id="rp-when" type="datetime-local" />
+      <label class="field-label" for="rp-method">Repaid by</label>
+      <input id="rp-method" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
+      <div id="rp-method-chips" class="tag-chips"></div>
       <label class="field-label" for="rp-note">Note</label>
       <input id="rp-note" type="text" autocomplete="off" maxlength="120" placeholder="Optional" />
       <div id="rp-status" class="status-line" aria-live="polite"></div>
