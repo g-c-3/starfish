@@ -1,5 +1,5 @@
 // pure rule-based (regex/keyword) intent detection. no automated inference, no network.
-// Runs on any text: typed notes, voice labels, OCR'd text.
+// Reminder phrases only; money entries come from the Money form (Decision 124, 131).
 
 // ---- Handler registry (extensible: add new handlers without touching the engine) ----
 const handlers = [];
@@ -78,35 +78,6 @@ registerIntentHandler({
     label: data.label,
     fire_at: data.fire_at,
     repeat_rule: null
-  })
-});
-
-// ===== Expense handler =====
-// Matches things like: "spent 500 today", "spent ₹500 on groceries", "i spent 1200"
-const EXPENSE_TRIGGER = /\bspent\b/i;
-const AMOUNT_PATTERN = /(?:₹|rs\.?|inr)?\s*(\d+(?:[.,]\d+)?)/i;
-
-function extractExpense(text) {
-  const amountMatch = text.match(AMOUNT_PATTERN);
-  const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : null;
-
-  // Look for an inline category: "spent 500 on groceries" / "spent 500 for shopping"
-  const categoryMatch = text.match(/\b(?:on|for)\s+([a-zA-Z ]+)/i);
-  const category = categoryMatch ? categoryMatch[1].trim() : null;
-
-  return { amount, category, replied: !!category };
-}
-
-registerIntentHandler({
-  name: 'expense',
-  test: (text) => EXPENSE_TRIGGER.test(text) && AMOUNT_PATTERN.test(text),
-  extract: (text) => extractExpense(text),
-  buildEntry: (data) => ({
-    type: 'expense',
-    label: data.category ? `Expense: ${data.category}` : 'Expense: uncategorized',
-    amount: data.amount,
-    expense_category: data.category || 'uncategorized',
-    replied: data.replied ? 1 : 0
   })
 });
 

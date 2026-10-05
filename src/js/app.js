@@ -1,6 +1,5 @@
 // app.js — bootstraps the app: auth gate -> ad gate -> main UI.
-// This is a scaffold showing the control flow and key logic (expense follow-up timeout,
-// capture-to-intent pipeline, digest). Wire up to your actual DOM/UI framework of choice.
+// Control flow and key logic: auth gate, capture pipeline, folders, viewers, Money, Vault.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
@@ -30,7 +29,6 @@ import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiom
 import { setPrivacyScreen } from './privacy-screen.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
-const EXPENSE_FOLLOWUP_TIMEOUT_MS = 15000; // "what did you spend for?" — auto-save uncategorized if unanswered
 
 const CATEGORY_LABELS = {
   notes: 'Notes', private_vault: 'Private Vault', voice: 'Voice', images: 'Images', pdfs: 'PDFs',
@@ -620,18 +618,6 @@ async function captureText(rawText, sourceType = 'note', extra = {}) {
     return partial;
   }
 
-  if (intent && intent.handler === 'expense') {
-    const id = crypto.randomUUID();
-    const partial = { id, ...buildFromHandler('expense', intent.data) };
-    await insertEntry(db, partial);
-
-    if (!intent.data.category) {
-      // Ask "what did you spend for?" — if no reply within timeout, it's already saved as uncategorized.
-      promptExpenseFollowup(id);
-    }
-    return partial;
-  }
-
   // Plain note (or private note) fallback
   return saveNote(rawText, extra);
 }
@@ -640,31 +626,6 @@ function buildFromHandler(name, data) {
   // pulls the buildEntry() output from the matching handler — kept simple here since
   // intents.js's registerIntentHandler already stores handlers internally.
   if (name === 'reminder') return { type: 'reminder', label: data.label, fire_at: data.fire_at, repeat_rule: null };
-  if (name === 'expense') return {
-    type: 'expense',
-    label: data.category ? `Expense: ${data.category}` : 'Expense: uncategorized',
-    amount: data.amount,
-    expense_category: data.category || 'uncategorized',
-    replied: data.replied ? 1 : 0
-  };
-}
-
-function promptExpenseFollowup(entryId) {
-  // UI shows a small inline prompt: "What did you spend this on?"
-  // Wire this to your actual UI; below is the timeout-driven fallback contract.
-  const timer = setTimeout(async () => {
-    // No reply in time — entry already saved as 'uncategorized', nothing further to do.
-    // (Left here as an explicit hook in case you want to log a "missed-followup" flag.)
-  }, EXPENSE_FOLLOWUP_TIMEOUT_MS);
-
-  window.onExpenseFollowupReply = async (category) => {
-    clearTimeout(timer);
-    await db.run(
-      `UPDATE entries SET expense_category=?, label=?, replied=1, updated_at=? WHERE id=?`,
-      [category, `Expense: ${category}`, Date.now(), entryId]
-    );
-    await db.run(`UPDATE entries_fts SET label=? WHERE id=?`, [`Expense: ${category}`, entryId]);
-  };
 }
 
 // ---- Notes (including private notes) ----
