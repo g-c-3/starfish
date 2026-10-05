@@ -3263,7 +3263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pill = st === 'partly returned' ? 'partly' : st;
         const full = (ms) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
         const line = (k, v) => (v ? `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>` : '');
-        const reps = (d.repayments || []).map((r) => `<div><dt>${escapeHtml(formatEntryDate(r.at))}${r.note ? ` · ${escapeHtml(r.note)}` : ''}</dt><dd>${escapeHtml(fmt(r.amount))}</dd></div>`).join('');
+        const reps = (d.repayments || []).map((r) => `<div><dt>${escapeHtml(formatEntryDate(r.at))}${r.method ? ` · ${escapeHtml(r.method)}` : ''}${r.note ? ` · ${escapeHtml(r.note)}` : ''}</dt><dd>${escapeHtml(fmt(r.amount))}</dd></div>`).join('');
         body.innerHTML = `
           <div class="detail-hero${st === 'settled' ? ' inactive' : ''}" data-type="money">
             <span class="row-icon">${iconSvg('money')}</span>
@@ -3291,7 +3291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (add) add.onclick = async () => {
           const cur = Money.fromRow(await fresh());
           if (!cur) return;
-          const next = await openRepayDialog({ details: cur, symbol: currencySymbol, hooks: moneyHooks });
+          const next = await openRepayDialog({ details: cur, items: await moneyItems(), symbol: currencySymbol, hooks: moneyHooks });
           if (!next) return;
           try {
             await window.Dumpzone.editEntry(row.id, { money_json: Money.toJson(next) }, {});

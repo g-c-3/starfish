@@ -91,7 +91,7 @@ export const STATUS_LABELS = { open: 'Open', 'partly returned': 'Partly returned
 
 function cleanRepayment(r) {
   if (!r || !Number.isInteger(r.amount) || r.amount <= 0 || !isTime(r.at)) return null;
-  return { amount: r.amount, at: r.at, note: str(r.note) };
+  return { amount: r.amount, at: r.at, method: str(r.method), note: str(r.note) };
 }
 
 // Checks and trims a details object. Loan-only fields are dropped for other kinds.
@@ -133,7 +133,7 @@ export function addRepayment(d, rep, now = Date.now()) {
   const a = typeof rep?.amount === 'number' && Number.isInteger(rep.amount) ? { ok: rep.amount > 0, minor: rep.amount } : parseAmount(rep?.amount);
   if (!a.ok) return { ok: false, error: a.error || 'Amount must be above zero.' };
   if (a.minor > rem) return { ok: false, error: 'Repayment cannot exceed the remaining amount.' };
-  const entry = { amount: a.minor, at: isTime(rep.at) ? rep.at : now, note: str(rep.note) };
+  const entry = { amount: a.minor, at: isTime(rep.at) ? rep.at : now, method: str(rep.method), note: str(rep.note) };
   return { ok: true, value: { ...d, repayments: [...(d.repayments || []), entry] } };
 }
 
