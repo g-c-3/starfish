@@ -8,6 +8,7 @@ import {
   ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES
 } from './backup.js';
 import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
+import * as Money from './money.js';
 
 async function getEntryCategory(db, entryId) {
   const row = (await db.query(`SELECT * FROM entries WHERE id=?`, [entryId])).values[0];
@@ -34,6 +35,9 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
     const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
     if (row.type === 'note') {
       await Share.share({ text: content.text, title: row.label });
+    } else if (row.type === 'money') {
+      if (!content.money) throw new Error('This entry has no readable amount.');
+      await Share.share({ text: moneyPlainText(content.money), title: row.label });
     } else {
       const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeFor(row));
       try { await Share.share({ url: blobUrl, title: row.label }); }
@@ -52,6 +56,19 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
   } else {
     await Share.share({ text: row.body_text || row.label, title: row.label });
   }
+}
+
+// Readable text for a Vault Money entry (Share and Download). The plaintext label is generic, so the details come from the decrypted content.
+function moneyPlainText(d) {
+  const when = (ms) => new Date(ms).toLocaleString();
+  const lines = [Money.summary(d), `Date: ${when(d.at)}`];
+  if (d.method) lines.push(`Payment method: ${d.method}`);
+  if (Money.isLoan(d)) {
+    if (d.due) lines.push(`Due: ${new Date(d.due).toLocaleDateString()}`);
+    lines.push(`Returned: ${Money.formatPlain(Money.repaid(d))}`, `Remaining: ${Money.formatPlain(Money.remaining(d))}`);
+    for (const r of d.repayments || []) lines.push(`Repayment ${Money.formatPlain(r.amount)} on ${when(r.at)}${r.method ? ` (${r.method})` : ''}${r.note ? ` — ${r.note}` : ''}`);
+  }
+  return lines.join('\n');
 }
 
 function mapLinkFor(lat, lng) {
@@ -84,7 +101,7 @@ async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
 // ---------------------------------------------------------------------------
 async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  const ext = row.extension ? `.${row.extension}` : (row.type === 'note' ? '.txt' : '');
+  const ext = row.extension ? `.${row.extension}` : (row.type === 'note' || (row.type === 'money' && row.is_private) ? '.txt' : '');
 
   if (row.is_private) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before downloading');
@@ -92,6 +109,9 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
     const fileName = `${sanitizeFilename(row.label)}${ext}`;
     if (row.type === 'note') {
       await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.text, encoding: 'utf8', recursive: true });
+    } else if (row.type === 'money') {
+      if (!content.money) throw new Error('This entry has no readable amount.');
+      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: moneyPlainText(content.money), encoding: 'utf8', recursive: true });
     } else {
       await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.fileData, recursive: true });
     }
@@ -117,7 +137,7 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
 // ---------------------------------------------------------------------------
 async function editEntry(db, entryId, fields, { privateSessionKey = null, rescheduleReminder = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  const contentFieldsChanged = fields.text !== undefined || fields.fileData !== undefined || fields.ocrText !== undefined;
+  const contentFieldsChanged = fields.text !== undefined || fields.fileData !== undefined || fields.ocrText !== undefined || fields.money !== undefined;
 
   if (row.is_private && contentFieldsChanged) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');

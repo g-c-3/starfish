@@ -10,6 +10,7 @@
 
 import { insertEntry } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
+import * as Money from './money.js';
 
 const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // Text/Voice/Image/PDF/Reminder/Location/Money/Files — mirrors
 // the home screen's capture types minus expense/reminder, which stay out of vault scope (per spec).
@@ -17,18 +18,23 @@ const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'm
 // ---------------------------------------------------------------------------
 // Content bundling — what actually goes inside encrypted_body, by type.
 // ---------------------------------------------------------------------------
-function buildVaultPlaintext(type, { text, fileData, ocrText } = {}) {
-  // 'money'/'reminder'/'location' have no defined content shape yet — placeholder text-only, same
-  // as 'note', until each one's actual capture flow is specified. Trivial to change later since
-  // nothing has been captured under any of these three types yet.
-  if (type === 'note' || type === 'money' || type === 'reminder' || type === 'location') return text || '';
+function buildVaultPlaintext(type, { text, fileData, ocrText, money } = {}) {
+  // 'reminder'/'location' have no defined content shape yet: placeholder text, same as 'note'.
+  // 'money' is the Money details JSON (money.js toJson), checked here so a bad object never gets encrypted.
+  if (type === 'money') {
+    const r = Money.normalize(money);
+    if (!r.ok) throw new Error(r.error);
+    return Money.toJson(r.value);
+  }
+  if (type === 'note' || type === 'reminder' || type === 'location') return text || '';
   if (type === 'voice' || type === 'file') return JSON.stringify({ fileData });
   if (type === 'image' || type === 'pdf') return JSON.stringify({ fileData, ocrText: ocrText || '' });
   throw new Error(`Type not supported in Private Vault: ${type}`);
 }
 
 function parseVaultPlaintext(type, plaintext) {
-  if (type === 'note' || type === 'money' || type === 'reminder' || type === 'location') return { text: plaintext };
+  if (type === 'money') return { money: Money.fromJson(plaintext) }; // null when unreadable
+  if (type === 'note' || type === 'reminder' || type === 'location') return { text: plaintext };
   return JSON.parse(plaintext); // {fileData} or {fileData, ocrText}
 }
 
@@ -77,6 +83,12 @@ function base64ToBlobUrl(base64, mimeType) {
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
 
+// Search text for a Money entry. Memory only, like the rest of the index: the plaintext label is generic.
+function moneySearchText(d) {
+  return [Money.summary(d), d.person, d.category, d.method, ...(d.repayments || []).flatMap((r) => [r.method, r.note])]
+    .filter(Boolean).join(' ');
+}
+
 // ---------------------------------------------------------------------------
 // In-memory search index — built fresh on vault unlock, discarded on vault lock. Never persisted,
 // never written to disk even encrypted (Decision: simplicity + zero index-drift risk beats the
@@ -95,7 +107,7 @@ async function buildVaultIndex(db, privateSessionKey) {
       `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
     )).values || [];
     const tags = tagRows.map((t) => t.name);
-    let searchableText = '', sizeBytes = 0, description = '';
+    let searchableText = '', sizeBytes = 0, description = '', money = null;
     try {
       if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
     } catch { description = ''; }
@@ -103,6 +115,10 @@ async function buildVaultIndex(db, privateSessionKey) {
       const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
       if (row.type === 'note') {
         searchableText = plaintext;
+        sizeBytes = new Blob([plaintext]).size;
+      } else if (row.type === 'money') {
+        money = parseVaultPlaintext('money', plaintext).money;
+        searchableText = money ? moneySearchText(money) : '';
         sizeBytes = new Blob([plaintext]).size;
       } else {
         const content = parseVaultPlaintext(row.type, plaintext);
@@ -112,7 +128,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, createdAt: row.created_at });
+    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, createdAt: row.created_at });
   }
   vaultIndexCache = index;
   return index;

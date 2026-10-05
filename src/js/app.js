@@ -147,6 +147,7 @@ function switchMainTab(tab) {
 }
 
 let moneyMonth = null; // { y, m } month shown in the Money folder header; null means the current month
+let vaultMoneyMonth = null; // same for the Vault Money folder (Decision 135)
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
@@ -160,6 +161,9 @@ let openVaultFolderType = null; // which Vault folder (card type) is open, or nu
 function closeVaultFolder() {
   exitSelection();
   openVaultFolderType = null;
+  vaultMoneyMonth = null;
+  const vms = document.getElementById('vault-money-summary'); // amounts must not stay in the page once the folder closes or the Vault locks
+  if (vms) { vms.classList.add('hidden'); vms.innerHTML = ''; }
   document.getElementById('vault-folder-view')?.classList.add('hidden');
   document.getElementById('vault-main')?.classList.remove('hidden');
   updateBackButtonState();
@@ -745,6 +749,7 @@ async function unlockVault(pin) {
   const { key } = await deriveAesKey(pin, private_pin_salt);
   privateSessionKey = key;
   await buildVaultIndex(db, privateSessionKey); // in-memory only — see vault.js
+  await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
   return { success: true };
 }
@@ -847,10 +852,10 @@ async function showMainTimeline(types = null) {
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
 // since spec asks for the vault to be "an exact replica of the home screen function" apart from what
 // stays private-at-rest and the Share/Download restriction being lifted (both, same as non-vault). ----
-async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory }) {
+async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money }) {
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
-  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory });
+  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money });
   await buildVaultIndex(db, privateSessionKey); // rebuild so the new item is immediately searchable/listed
   return id;
 }
@@ -1085,14 +1090,16 @@ async function loadCurrencySymbol() {
   currencySymbol = Money.cleanSymbol(await metaGet('currency_symbol', Money.DEFAULT_SYMBOL));
   return currencySymbol;
 }
+// Row line for a Money details object (Home and Vault share it).
+function moneyRowMeta(d) {
+  const st = Money.status(d);
+  const state = st === 'partly returned' ? `${Money.STATUS_LABELS[st]}, ${Money.formatAmount(Money.remaining(d), currencySymbol)} left` : (st ? Money.STATUS_LABELS[st] : '');
+  return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
+}
 function rowMeta(row) {
   if (row.type === 'money' || row.type === 'expense') {
     const d = Money.fromRow(row);
-    if (d) {
-      const st = Money.status(d);
-      const state = st === 'partly returned' ? `${Money.STATUS_LABELS[st]}, ${Money.formatAmount(Money.remaining(d), currencySymbol)} left` : (st ? Money.STATUS_LABELS[st] : '');
-      return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
-    }
+    if (d) return moneyRowMeta(d);
   }
   if (row.type !== 'reminder') return { meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · '), done: false };
   const st = reminderStatus(row);
@@ -1155,7 +1162,7 @@ let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
 let activeLocSource = null;  // { finish } — New location: current fix or coordinates
 let activeCoords = null;     // { finish } — paste coordinates / map link dialog
-let activeMoney = null;      // { finish } — Money form or repayment dialog
+let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
   return askYesNo({ title: 'Discard changes?', text: 'Your changes have not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
@@ -1169,16 +1176,18 @@ function formState(el) {
 }
 // Both hooks refresh the Back button, which would otherwise stay dimmed or lit from before the dialog (Decision 132).
 // leave() is Back and Cancel: closes at once when nothing changed, else asks Discard.
-const moneyHooks = {
+const moneyHooksFor = (isVault) => ({
   open: (finish) => {
     const dlg = ['money-dialog', 'repay-dialog'].map((id) => document.getElementById(id)).find((d) => d && !d.classList.contains('hidden'));
     const snap = formState(dlg);
-    activeMoney = { finish, leave: async () => { if (formState(dlg) === snap || await askDiscard()) finish(null); } };
+    activeMoney = { finish, isVault, leave: async () => { if (formState(dlg) === snap || await askDiscard()) finish(null); } };
     updateBackButtonState();
   },
   close: () => { activeMoney = null; updateBackButtonState(); },
   leave: () => (activeMoney ? activeMoney.leave() : undefined)
-};
+});
+const moneyHooks = moneyHooksFor(false);
+const vaultMoneyHooks = moneyHooksFor(true); // a Vault lock closes this one; an app lock closes both
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
@@ -1210,7 +1219,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeYesNo) activeYesNo.finish(false);
   if (activeCoords) activeCoords.finish(null);      // clears the pasted text too
   if (activeLocSource) activeLocSource.finish(null);
-  if (activeMoney) activeMoney.finish(null);
+  if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
@@ -2245,11 +2254,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Vault mirrors Home (Decision 85): cards are folders with count badges, each folder has a New
   // button, a universal New asks for a type, and the list under the search box is search results only.
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
+  // Vault Money rows show kind, amount, status and date from the unlocked index; the plaintext label stays generic (Decision 135).
+  function vaultRowProps(e) {
+    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : { meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`, done: false };
+    return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
+  }
   function vaultRowsHtml(items) {
-    return items.map((e) => entryRowHtml({
-      id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension,
-      meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`
-    }, 'vault')).join('') || emptyStateHtml('folder');
+    return items.map((e) => entryRowHtml(vaultRowProps(e), 'vault')).join('') || emptyStateHtml('folder');
   }
 
   function renderVaultCounts() {
@@ -2298,7 +2309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const list = document.getElementById('vault-list');
     if (!term) { list.innerHTML = ''; return; }
     const items = searchVault(term);
-    list.innerHTML = items.map((e2) => entryRowHtml({ id: e2.id, type: e2.type, label: e2.label, tags: e2.tags, ext: e2.extension, meta: `${typeLabelFor(e2.type)} · ${formatBytes(e2.sizeBytes)}` })).join('') || emptyStateHtml('search');
+    list.innerHTML = items.map((e2) => entryRowHtml(vaultRowProps(e2))).join('') || emptyStateHtml('search');
     list.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
       await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
       renderVault();
@@ -2311,6 +2322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderVaultCounts();
     if (openVaultFolderType) renderVaultFolderList();
     renderVaultSearch();
+    renderVaultMoneySummary();
   }
 
   document.getElementById('vault-search-input').addEventListener('input', renderVaultSearch);
@@ -2340,7 +2352,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             toast('Saved to the Vault');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
         }, { isVault: true });
-      } else if (type === 'reminder' || type === 'location' || type === 'money') {
+      } else if (type === 'money') {
+        // Form, then the Save dialog. The name defaults to a generic one: the label is the only plaintext a Vault row carries (Decision 135).
+        await loadCurrencySymbol();
+        const items = vaultMoneyItems();
+        let details = null, d = null;
+        const mark = overlayAbortCount;
+        while (!d) {
+          details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks });
+          if (!details) return;
+          d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: `Money ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Back to amount' });
+          if (!d && overlayAbortCount !== mark) return; // locked meanwhile
+        }
+        await captureToVault({ type: 'money', label: d.name, tags: d.tags, description: d.description, money: details });
+        renderVault();
+        toast('Saved to the Vault');
+      } else if (type === 'reminder' || type === 'location') {
         toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
       } else {
         const input = document.createElement('input');
@@ -2376,6 +2403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function openVaultFolder(type, btn) {
     openVaultFolderType = type;
+    if (type === 'money') { vaultMoneyMonth = null; await loadCurrencySymbol(); } // header starts on the current month
     updateBackButtonState();
     const vTitle = document.getElementById('vault-folder-title');
     vTitle.dataset.vaultType = type;
@@ -3114,7 +3142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Edit button: details dialog (name, tags, description) for every type; text notes go through the editor.
   async function editEntryUI(item, isVault) {
     if (item.type === 'note') return openNote(item, isVault);
-    if (item.type === 'money' && !isVault) return editMoney(item);
+    if (item.type === 'money') return editMoney(item, isVault);
     const tags = item.tags || await getEntryTags(item.id);
     const isReminder = item.type === 'reminder' && !isVault;
     const d = await openSaveDialog({
@@ -3203,26 +3231,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     return rows.map((r) => Money.fromRow(r)).filter(Boolean);
   }
 
-  async function renderMoneySummary() {
-    const box = document.getElementById('money-summary');
-    if (openFolderType !== 'money') { box.classList.add('hidden'); box.innerHTML = ''; return; }
-    if (!moneyMonth) { const n = new Date(); moneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
-    const items = await moneyItems();
-    const t = Money.monthTotals(items, moneyMonth.y, moneyMonth.m);
+  // Month header and loan totals (Decision 129). Home reads the database; the Vault reads only its unlocked in-memory
+  // index and is never mixed with Home (Decision 135). Element ids carry a prefix so the two never collide.
+  function paintMoneySummary({ box, items, month, setMonth, rerender, idp }) {
+    const t = Money.monthTotals(items, month.y, month.m);
     const l = Money.loanTotals(items);
     const fmt = (n) => Money.formatAmount(n, currencySymbol);
     // Month and year pick separately. The year list is the shown year plus two either side, oldest first; any other year is typed.
-    const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i}"${i === moneyMonth.m ? ' selected' : ''}>${escapeHtml(new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }))}</option>`).join('');
+    const monthOpts = Array.from({ length: 12 }, (_, i) => `<option value="${i}"${i === month.m ? ' selected' : ''}>${escapeHtml(new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' }))}</option>`).join('');
     let yearOpts = '';
-    for (let y = moneyMonth.y - 2; y <= moneyMonth.y + 2; y++) yearOpts += `<option value="${y}"${y === moneyMonth.y ? ' selected' : ''}>${y}</option>`;
+    for (let y = month.y - 2; y <= month.y + 2; y++) yearOpts += `<option value="${y}"${y === month.y ? ' selected' : ''}>${y}</option>`;
     box.innerHTML = `
       <div class="ms-head">
-        <button type="button" id="ms-prev" class="ms-step" aria-label="Previous month">‹</button>
-        <select id="ms-month" aria-label="Month">${monthOpts}</select>
-        <select id="ms-year" aria-label="Year">${yearOpts}</select>
-        <button type="button" id="ms-next" class="ms-step" aria-label="Next month">›</button>
+        <button type="button" id="${idp}-prev" class="ms-step" aria-label="Previous month">‹</button>
+        <select id="${idp}-month" aria-label="Month">${monthOpts}</select>
+        <select id="${idp}-year" aria-label="Year">${yearOpts}</select>
+        <button type="button" id="${idp}-next" class="ms-step" aria-label="Next month">›</button>
       </div>
-      <input id="ms-year-input" class="ms-year-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Type a year, e.g. 2031" aria-label="Type a year" />
+      <input id="${idp}-year-input" class="ms-year-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Type a year, e.g. 2031" aria-label="Type a year" />
       <div class="ms-grid">
         <div><span>Spent</span><b>${escapeHtml(fmt(t.spent))}</b></div>
         <div><span>Received</span><b>${escapeHtml(fmt(t.received))}</b></div>
@@ -3233,26 +3259,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div><span>You owe</span><b>${escapeHtml(fmt(l.youOwe))}</b></div>
       </div>`;
     box.classList.remove('hidden');
+    const el = (n) => document.getElementById(`${idp}-${n}`);
     const pick = async () => {
-      moneyMonth = { y: Number(document.getElementById('ms-year').value), m: Number(document.getElementById('ms-month').value) };
-      await renderMoneySummary();
+      setMonth({ y: Number(el('year').value), m: Number(el('month').value) });
+      await rerender();
     };
-    document.getElementById('ms-month').onchange = pick;
-    const yearInput = document.getElementById('ms-year-input');
+    el('month').onchange = pick;
+    const yearInput = el('year-input');
     yearInput.onchange = async () => {
       const v = yearInput.value.trim();
-      if (/^\d{4}$/.test(v) && Number(v) >= 1900) moneyMonth = { y: Number(v), m: moneyMonth.m };
-      await renderMoneySummary(); // an invalid entry is dropped and the shown year stays
+      if (/^\d{4}$/.test(v) && Number(v) >= 1900) setMonth({ y: Number(v), m: month.m });
+      await rerender(); // an invalid entry is dropped and the shown year stays
     };
     yearInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); yearInput.blur(); } };
-    document.getElementById('ms-year').onchange = pick;
+    el('year').onchange = pick;
     const step = (delta) => async () => {
-      const d = new Date(moneyMonth.y, moneyMonth.m + delta, 1);
-      moneyMonth = { y: d.getFullYear(), m: d.getMonth() };
-      await renderMoneySummary();
+      const d = new Date(month.y, month.m + delta, 1);
+      setMonth({ y: d.getFullYear(), m: d.getMonth() });
+      await rerender();
     };
-    document.getElementById('ms-prev').onclick = step(-1);
-    document.getElementById('ms-next').onclick = step(1);
+    el('prev').onclick = step(-1);
+    el('next').onclick = step(1);
+  }
+
+  async function renderMoneySummary() {
+    const box = document.getElementById('money-summary');
+    if (openFolderType !== 'money') { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    if (!moneyMonth) { const n = new Date(); moneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
+    paintMoneySummary({ box, items: await moneyItems(), month: moneyMonth, setMonth: (v) => { moneyMonth = v; }, rerender: renderMoneySummary, idp: 'ms' });
+  }
+
+  // Vault Money: details come from the unlocked index only (Decision 135).
+  function vaultMoneyItems() {
+    return (getVaultIndex() || []).filter((e) => e.type === 'money' && e.money).map((e) => e.money);
+  }
+  function renderVaultMoneySummary() {
+    const box = document.getElementById('vault-money-summary');
+    if (!box) return;
+    if (openVaultFolderType !== 'money' || !privateSessionKey) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    if (!vaultMoneyMonth) { const n = new Date(); vaultMoneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
+    paintMoneySummary({ box, items: vaultMoneyItems(), month: vaultMoneyMonth, setMonth: (v) => { vaultMoneyMonth = v; }, rerender: renderVaultMoneySummary, idp: 'vms' });
   }
 
   async function saveMoneyEntry(details, d) {
@@ -3264,41 +3310,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Edit: form, then the Save dialog. A name still equal to the old summary follows the new details; a typed name is kept.
-  async function editMoney(item) {
-    const old = Money.fromRow(item);
+  // Vault: details come from the index, the name is never derived from them (the label is plaintext), and the
+  // details are written into the encrypted body, not money_json (Decision 135).
+  async function editMoney(item, isVault = false) {
+    const old = isVault ? item.money : Money.fromRow(item);
     if (!old) { toast('This entry has no readable amount.'); return; }
     await loadCurrencySymbol();
-    const items = await moneyItems();
+    const items = isVault ? vaultMoneyItems() : await moneyItems();
     const tags = item.tags || await getEntryTags(item.id);
-    const autoName = item.label === Money.summary(old);
+    const autoName = !isVault && item.label === Money.summary(old);
     let details = old, d = null;
     const mark = overlayAbortCount;
     while (!d) {
-      details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: moneyHooks });
+      details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks });
       if (!details) return;
-      const next = Money.summary(details);
-      d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', discardLabel: 'Back to amount' });
+      const next = isVault ? item.label : Money.summary(details);
+      d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', isVault, discardLabel: 'Back to amount' });
       if (!d && overlayAbortCount !== mark) return; // locked meanwhile
     }
     try {
-      await window.Dumpzone.editEntry(item.id, { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
+      await window.Dumpzone.editEntry(item.id, isVault
+        ? { label: d.name, description: d.description, money: details }
+        : { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
       await setEntryTags(item.id, d.tags);
+      if (isVault) await buildVaultIndex(db, privateSessionKey); // lists, totals and search read this index
       toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
-  async function openMoney(item) {
-    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+  async function openMoney(item, isVault = false) {
+    const fresh = async () => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    const detailsOf = (row) => (isVault ? row.money : Money.fromRow(row)); // Vault: from the unlocked index (Decision 135)
     await openViewer({
-      title: 'Money',
-      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      title: 'Money', isVault,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       render: async (body, { refresh }) => {
         const row = await fresh();
-        const d = Money.fromRow(row);
+        const d = detailsOf(row);
         if (!d) { body.innerHTML = '<p class="screen-sub">This entry has no readable amount.</p>'; return; }
         await loadCurrencySymbol();
         const fmt = (n) => Money.formatAmount(n, currencySymbol);
-        const tags = await getEntryTags(row.id);
+        const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
         const loan = Money.isLoan(d);
         const st = Money.status(d);
         const pill = st === 'partly returned' ? 'partly' : st;
@@ -3330,17 +3384,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>`;
         const add = document.getElementById('mv-repay-btn');
         if (add) add.onclick = async () => {
-          const cur = Money.fromRow(await fresh());
+          const cur = detailsOf(await fresh());
           if (!cur) return;
-          const next = await openRepayDialog({ details: cur, items: await moneyItems(), symbol: currencySymbol, hooks: moneyHooks });
+          const next = await openRepayDialog({ details: cur, items: isVault ? vaultMoneyItems() : await moneyItems(), symbol: currencySymbol, hooks: isVault ? vaultMoneyHooks : moneyHooks });
           if (!next) return;
           try {
-            await window.Dumpzone.editEntry(row.id, { money_json: Money.toJson(next) }, {});
+            await window.Dumpzone.editEntry(row.id, isVault ? { money: next } : { money_json: Money.toJson(next) }, {});
+            if (isVault) await buildVaultIndex(db, privateSessionKey);
             toast('Repayment added');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
           await refresh();
         };
-        document.getElementById('mv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
+        document.getElementById('mv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), isVault); await refresh(); };
       }
     });
   }
@@ -3669,7 +3724,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
-    else if ((item.type === 'money' || item.type === 'expense') && !isVault) await openMoney(item);
+    else if (item.type === 'money' || (item.type === 'expense' && !isVault)) await openMoney(item, isVault);
     else if (item.type === 'reminder' && !isVault) await openReminder(item);
     else if (item.type === 'location' && !isVault) await openLocation(item);
     else if (item.type === 'voice') await openVoice(item, isVault);
