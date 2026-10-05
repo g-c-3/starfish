@@ -1820,3 +1820,21 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Kept: reminder text detection (Decision 124), label suggestion, and every read path for existing expense rows (list, totals as Spent, viewer, search, backup). The `amount`, `expense_category` and `replied` columns stay.
 - Cause for keeping the columns: old rows and old backups still carry them.
 
+**132. Back closes the Money dialogs.** Refines Decision 126 (Back did not close them).
+- Rule: while the Money form or the repayment dialog is open, Back acts as Cancel. It sits just under the Yes/No sheet and above selection, the Save dialog and the viewers in the order Back checks.
+- No confirmation: Cancel on these dialogs has none either.
+- Cause of the dead Back: `backAction()` did not know the dialogs, so it found nothing to dismiss, or dismissed what sat behind them. The dialogs' open and close hooks now also refresh the Back button state.
+
+**133. Back is never dead; unsaved work asks Discard.** Applies to Home and Vault alike.
+- Rule: Back and every Cancel on a screen holding input ask "Discard changes?" (Yes, discard / No, keep editing) when something changed since opening. With no change they close at once, no question.
+- Edit (Save) dialog: compared with its values at open; was closing silently. Outside tap follows the same rule.
+- Money form and repayment dialog: same comparison, including repayments added to a loan. Cancel and Back share one path.
+- Coordinates paste, auto-backup passkey, Settings fields (passkey, hint, restore file, currency symbol, confirm password) and the Vault Settings confirm PIN: ask before leaving. A backup or restore that succeeds clears its passkey fields first.
+- Unchanged: the text editor guard, capture dialogs that always ask Discard, the recording Discard.
+- Not covered: first-run and lock screens, which have no screen to go back to; native prompt() and confirm() sheets, which Android closes itself.
+
+**134. Per-entry action order and Delete icon.** Fixed order everywhere: Edit, Share, Download, Delete. Delete is a red bin icon.
+- Changed: row buttons (Home and Vault) were Share, Download, Edit, Delete. The image viewer Delete was not red. The Select files Delete is now a red bin with its label.
+- Bulk bars have no Edit; their order is Share, Download, Delete.
+- Viewers other than image show only Edit in the header; adding Share, Download and Delete to them is open.
+

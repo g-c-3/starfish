@@ -12,14 +12,17 @@ Phase 4 Money capture, steps 4 and 5 of Decision 124's build order (Settings cur
 - `backup.js`: `currency_symbol` added to `APP_SETTINGS_KEYS` (export and restore both read that list).
 
 - Step 5 (Decision 131): `intents.js` expense handler removed; `captureText` expense branch, `buildFromHandler` expense case, `promptExpenseFollowup` and its timeout constant removed from `app.js`; stale scaffold header comment replaced.
+- Device feedback: steps 4 and 5 worked; Back did nothing on the Money form. `app.js`: `backAction()` closes the Money dialogs as Cancel, and the Money hooks refresh the Back button state (Decision 132).
+- Decision 133: `askDiscard`, `formState` and a shared leave path; edit dialog, Money dialogs, coordinates paste, auto-backup banner, Settings and Vault Settings fields ask Discard when changed; passkey fields cleared after success. `moneyui.js` Cancel buttons use the shared path.
+- Decision 134: row actions reordered to Edit, Share, Download, Delete; image viewer Delete red; Select files Delete a red bin; `fileactions.js` comment order.
 
-Decisions made: 130, 131.
+Decisions made: 130, 131, 132, 133, 134.
 
 Verified in the authoring environment: syntax checks, `vite build`, the validation rule run in Node against valid and invalid symbols (₹, Rs, CHF, kr accepted; empty, blank, six characters and a control character refused); `detectIntent` in Node: "spent 500 on groceries" and "I spent ₹1200 today" give none, the reminder phrase still gives reminder, label suggestion unchanged. Not run: CI, a device, the tile layout on a small screen, backup and restore with the new key.
 
-Open: Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP18, DP19 and DP20 pending on a device.
+Open: Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP18 to DP22 pending on a device. Other viewers show only Edit in the header (Decision 134 open point).
 
-Next session start point: commit `index.html`, `app.js`, `backup.js`, `intents.js` and the docs in one commit (Decision 127), install the newest build, run DP18 to DP20. Then step 6, Vault Money.
+Next session start point: commit `index.html`, `app.js`, `backup.js`, `intents.js`, `moneyui.js`, `fileactions.js` and the docs in one commit (Decision 127), install the newest build, run DP18 to DP22. Then step 6, Vault Money.
 
 ---
 

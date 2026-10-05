@@ -366,25 +366,27 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
+Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit.
+
 Download for append, its per-entry encrypted zip and the "Append files from download" import screen were
 removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
 (§4), including Private Vault content.
 
-1. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Works identically
-   for Vault entries** (Decision 41, pivot — was Copy-only before): content is decrypted into memory first,
-   never written to disk unencrypted, but otherwise no restriction. A one-time notice on first vault
-   Share/Download: content leaves the vault's encryption boundary as plaintext from that point on. `copyPrivateNote()`
-   still exists as an extra convenience for vault text specifically, not a replacement for Share/Download anymore.
-2. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
-   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). **Works for
-   Vault entries too** (Decision 41, pivot) — decrypted into memory first, written out plain only at the moment
-   this is explicitly invoked. Built (`downloadPlain()`).
-3. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
+1. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
    correcting misreads that hurt search; expense amount/category editable; reminder time/repeat editable and
    must reschedule its notification, not just silently update the DB row. **Vault entries of any type**
    (not just text) require the vault PIN already unlocked for that session to edit content — label/tags-only
    edits don't, since those were never encrypted. Built (`editEntry()`), takes a caller-supplied reschedule
    callback for reminders rather than importing `notifications.js` directly, to avoid a circular import with `app.js`.
+2. **Share** — native share sheet, raw file for voice/image/pdf/file, plain text for notes. **Works identically
+   for Vault entries** (Decision 41, pivot — was Copy-only before): content is decrypted into memory first,
+   never written to disk unencrypted, but otherwise no restriction. A one-time notice on first vault
+   Share/Download: content leaves the vault's encryption boundary as plaintext from that point on. `copyPrivateNote()`
+   still exists as an extra convenience for vault text specifically, not a replacement for Share/Download anymore.
+3. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
+   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). **Works for
+   Vault entries too** (Decision 41, pivot) — decrypted into memory first, written out plain only at the moment
+   this is explicitly invoked. Built (`downloadPlain()`).
 4. **Delete** — soft-delete into the 30-day trash bin (main or Vault's own — §3b); consistent with
    the append-mode philosophy of never silently destroying data. Already existed as `db.js`'s `softDelete()`;
    `fileactions.js` re-exports it so every per-file action is reachable from one module.
@@ -584,8 +586,10 @@ an in-memory blob URL for the life of the viewer and revoked on close or lock. P
 
 ### Back button everywhere (Decision 104)
 The nav's Back stays visible on every screen: alone on the lock, first-run and ad-gate screens, and alone above any open
-overlay (`body.overlay-open`). It dismisses the top-most layer: Save dialog, static modal, editor, viewer (through its
+overlay (`body.overlay-open`). It dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
+
+**Unsaved work (Decision 133).** Back and every Cancel ask "Discard changes?" before dropping typed or chosen input; with nothing changed they close at once. Covered: Save/edit dialog (compared with its values at open), text editor, Money form and repayment dialog, coordinates paste, auto-backup passkey, Settings and Vault Settings fields (passkeys, hint, currency symbol, confirm password or PIN). Capture dialogs (new recording, reminder, location, files) always ask. Passkey fields are cleared after a backup or restore succeeds, so a finished action is not unsaved.
 
 ### Repeating reminders (Decisions 107, 108)
 A repeating reminder is its next occurrences (daily 30, weekly 26, monthly 12), each an exact wake-from-idle one-off, ids
