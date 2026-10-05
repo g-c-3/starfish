@@ -18,11 +18,11 @@ Phase 4 Money capture, steps 4 and 5 of Decision 124's build order (Settings cur
 
 Decisions made: 130, 131, 132, 133, 134.
 
-Verified in the authoring environment: syntax checks, `vite build`, the validation rule run in Node against valid and invalid symbols (₹, Rs, CHF, kr accepted; empty, blank, six characters and a control character refused); `detectIntent` in Node: "spent 500 on groceries" and "I spent ₹1200 today" give none, the reminder phrase still gives reminder, label suggestion unchanged. Not run: CI, a device, the tile layout on a small screen, backup and restore with the new key.
+Verified in the authoring environment: syntax checks, `vite build`, the validation rule run in Node against valid and invalid symbols (₹, Rs, CHF, kr accepted; empty, blank, six characters and a control character refused); `detectIntent` in Node: "spent 500 on groceries" and "I spent ₹1200 today" give none, the reminder phrase still gives reminder, label suggestion unchanged. Device checks later passed (see the next paragraph).
 
-Open: Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP18 to DP22 pending on a device. Other viewers show only Edit in the header (Decision 134 open point).
+Open: Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP14, DP15 and DP18 to DP22 confirmed on a device at the end of the session. Open: other viewers show only Edit in the header (Decision 134 open point).
 
-Next session start point: commit `index.html`, `app.js`, `backup.js`, `intents.js`, `moneyui.js`, `fileactions.js` and the docs in one commit (Decision 127), install the newest build, run DP18 to DP22. Then step 6, Vault Money.
+Next session start point: Money step 6, Vault Money (Decision 124: JSON in `encrypted_body`, an unlocked-only index for totals). Decide first whether the other viewers get Edit, Share, Download and Delete in the header.
 
 ---
 
