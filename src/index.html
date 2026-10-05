@@ -204,6 +204,15 @@
         <label class="switch-row"><input type="checkbox" id="dark-mode-toggle" /> Dark mode</label>
       </details>
 
+      <details id="currency-settings" data-tone="violet">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-money"/></svg></span><span class="tile-label">Currency</span></summary>
+        <p class="mode-description">One symbol for every Money entry. Changing it only relabels; amounts are never converted.</p>
+        <div id="currency-chips" class="tag-chips"></div>
+        <input id="currency-custom" type="text" maxlength="5" placeholder="Other symbol (up to 5 characters)" />
+        <button id="currency-apply-btn" class="secondary-btn">Use this symbol</button>
+        <p id="currency-status" class="mode-description"></p>
+      </details>
+
       <details id="update-check-settings" data-tone="violet">
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></span><span class="tile-label">Updates</span></summary>
         <p class="mode-description">Checks this project's public GitHub Releases page — only when
