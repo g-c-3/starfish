@@ -102,3 +102,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-04 | Session 87 (addendum, 2) | Decision 125 | In-app PDF password confirmed on device in Home and Vault; lock-with-prompt, Back during the prompt and reopen unchecked |
 | 2026-10-05 | Session 88 | none | Money steps 1 and 2: money.js model with Node tests, money_json column, restore carries it; patch-mainactivity.js deleted; UI (step 3) next |
 | 2026-10-05 | Session 89 | Decision 126 | Money step 3: Home form, list rows, month header, repayment dialog, edit, viewer; dialogs tested in a simulated page; not compiled in CI or device-tested |
+| 2026-10-05 | Session 90 | Decisions 127, 128 | Money follow-up: repayments section in the form, IMPS RTGS NEFT, month and year dropdowns, one-commit rule; not compiled in CI or device-tested |

@@ -625,12 +625,13 @@ launch, on resume and before each open, never on close or lock (the other app ma
 Vault's encryption, as with Share and Download. Opening another app locks as a normal background event (Decision 93).
 No network, no new permission.
 
-### Money on Home (Decisions 124, 126)
+### Money on Home (Decisions 124, 126, 128)
 - Form and repayment dialogs: `moneyui.js`. Maths, totals and JSON: `money.js`. Saving, rows and the viewer: `app.js`.
 - Capture and edit: form, then the Save dialog. Label defaults to the summary, description is the note.
-- Month header and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
+- Month header (previous, Month and Year dropdowns, next) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
+- A repayment holds amount, date, method and note. The form edits the list of repayments; the detail view adds one at a time (Decision 128).
 - Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted.
-- Not built: Settings symbol control, expense detection removal, Vault Money, repayment edit or delete.
+- Not built: Settings symbol control, expense detection removal, Vault Money, editing a single repayment in place.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

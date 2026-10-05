@@ -1787,3 +1787,18 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Logic lives in `moneyui.js`; `app.js` only wires it. `editEntry` writes `money_json`.
 - No network call and no new permission.
 
+**127. One commit per change set.**
+- Cause: every commit to `main` starts its own build. Run numbers follow the order builds start, not the order of commits, so the highest release number can hold older source. A release holding only the docs commit, and one holding only the stylesheet commit, were both installed as the newest build.
+- Rule: upload all files of a change set in one commit. If several commits landed, run Build Android APK on `main` once they finish and install that run.
+- The in-app update check compares release numbers only. "Up to date" does not prove the newest source is installed.
+
+**128. Money repayments in the form; payment methods; month header controls.** Refines Decision 126.
+- Payment method defaults: Cash, UPI, Card, IMPS, RTGS, NEFT. Recent values come first, up to 10 chips.
+- A repayment now stores `method` beside amount, date and note. A repayment stored without one reads as empty.
+- Lent and Borrowed show a Repayments section last in the form: repaid amount, date, repaid by, note, and + Add repayment. A partial repayment can be followed by more. The list can remove a repayment; changes are kept only when the entry is saved.
+- The kind is fixed while any repayment is listed. A repayment typed but not added blocks Continue. An amount above what is left, or an amount below what is already repaid, is refused.
+- Add repayment on the detail view also asks Repaid by.
+- Month header: a small previous button, Month and Year dropdowns, and a small next button in one row. Cause of the earlier layout: `icon-btn` has no base style, so the arrows took the global full-width button rule.
+- The Money form and repayment dialogs scroll when taller than the screen.
+- A single repayment still cannot be edited in place; remove it and add it again.
+

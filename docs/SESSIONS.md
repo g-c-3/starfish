@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 90**
+
+Follow-up to Money step 3 after device checks.
+- Cause found for "coming soon" on Home: the installed build held older source (Decision 127). Fixed by process, not code.
+- Month header: Month and Year dropdowns with small previous and next buttons in one row (`app.js`, `style.css`).
+- Payment methods: IMPS, RTGS, NEFT added (`moneyui.js`).
+- Repayments section at the end of the form for Lent and Borrowed, with date, repaid by and note, + Add repayment, and remove (`moneyui.js`, `index.html`, `style.css`). `money.js` stores `method` on a repayment. The viewer line and Add repayment dialog show and ask the method (`app.js`).
+- Money dialogs scroll when tall.
+
+Decisions made: 127, 128.
+
+Verified in the authoring environment: syntax checks, `vite build`, 32 new and 28 earlier checks on both dialogs in a simulated page. Not run: CI, a device, real SQLite, the header and form layout on a small screen.
+
+Open: Settings symbol control (step 4). Expense detection still in `captureText` (step 5). Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. DP18 still pending on a device, now including the repayments section and the new methods.
+
+Next session start point: commit the changed files in one commit, install the newest build, run DP18. Then step 4, 5, 6.
+
+---
+
 **Session 89**
 
 Phase 4 Money capture, step 3 of Decision 124's build order (Home UI). Fresh session; Tier 1 and the Money parts of the Tier 2 docs read.
