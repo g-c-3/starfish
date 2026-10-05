@@ -241,7 +241,7 @@ written with them anymore.
     needed, since a tag is either already present or newly created, with nothing to attribute or collide on.
     Useful for bringing back a personal tagging taxonomy on a fresh install even before any entries are restored.
   - **App Settings:** restores non-sensitive local preferences (auto-lock timeout, notification tone choice,
-    digest visibility, etc.) as a straightforward overwrite — no merge semantics needed, just replace the local
+    digest visibility, currency symbol, etc.) as a straightforward overwrite — no merge semantics needed, just replace the local
     value. Explicitly **excludes** password/PIN hashes, salts, and hints — those remain governed only by the
     credential rules already established (a normal restore never touches them; only the dedicated
     forgot-app-password recovery flow does), so a Settings restore can never become a backdoor around that.
@@ -630,8 +630,8 @@ No network, no new permission.
 - Capture and edit: form, then the Save dialog. Label defaults to the summary, description is the note.
 - Month header (previous, Month and Year dropdowns, next; typed year field under it, Decision 129) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
 - A repayment holds amount, date, method and note. The form edits the list of repayments; the detail view adds one at a time (Decision 128).
-- Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted.
-- Not built: Settings symbol control, expense detection removal, Vault Money, editing a single repayment in place.
+- Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted. Set in Settings > Preferences > Currency: chips from `Money.CURRENCIES`, or a typed symbol of 1 to 5 visible characters (Decision 130). Part of the App Settings backup category.
+- Not built: expense detection removal, Vault Money, editing a single repayment in place.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

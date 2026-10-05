@@ -1807,3 +1807,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A text field under the row takes any four-digit year from 1900. Applies on Enter or when the field loses focus. An invalid entry is dropped and the shown year stays.
 - Cause: the list was bounded by the oldest entry and next year, newest first, so other years were unreachable.
 
+**130. Currency symbol control in Settings.** Builds Decision 124 step 4.
+- Location: Settings > Preferences > Currency. Chips for the symbols in `Money.CURRENCIES`, the current one selected; a text field takes any other symbol.
+- Rule: a typed symbol is 1 to 5 characters, trimmed, no control characters. Anything else is refused with a message and the stored symbol is unchanged. Cause: `cleanSymbol` silently falls back to the default, which would hide a bad entry.
+- Applies at once: stored in `meta.currency_symbol`, Home redraws. Amounts are never converted; the tile says so.
+- Backup: `currency_symbol` added to `APP_SETTINGS_KEYS`, so it travels with the App Settings category. The control repaints after a restore.
+- No network call and no new permission.
