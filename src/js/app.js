@@ -1890,6 +1890,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     darkToggle.addEventListener('change', (e) => setDarkMode(e.target.checked));
   }
 
+  // Currency symbol (Decision 130): chips for common symbols, free text for any other. Relabels only.
+  (function wireCurrencySettings() {
+    const chipsEl = document.getElementById('currency-chips');
+    const custom = document.getElementById('currency-custom');
+    const status = document.getElementById('currency-status');
+    if (!chipsEl || !custom) return;
+    const paint = async () => {
+      const cur = await loadCurrencySymbol();
+      chipsEl.innerHTML = Money.CURRENCIES.map((c) =>
+        `<button type="button" data-sym="${c.symbol}" title="${c.name}" class="${c.symbol === cur ? 'selected' : ''}">${c.symbol}</button>`).join('');
+      status.textContent = `Current: ${cur}`;
+    };
+    const apply = async (text) => {
+      const sym = String(text ?? '').trim();
+      if (!sym || Money.cleanSymbol(sym) !== sym) { status.textContent = 'Use 1 to 5 visible characters.'; return; }
+      await metaSet('currency_symbol', sym);
+      custom.value = '';
+      await paint();
+      renderMainTimeline().catch(() => {});
+    };
+    chipsEl.addEventListener('click', (e) => { const b = e.target.closest('button[data-sym]'); if (b) apply(b.dataset.sym); });
+    document.getElementById('currency-apply-btn').addEventListener('click', () => apply(custom.value));
+    custom.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(custom.value); });
+    window.addEventListener('dumpzone-data-restored', () => paint().catch(() => {}));
+    paint().catch(() => {});
+  })();
+
   // Privacy Screen settings UI wiring (Decision 64) — same populate-then-wire shape as dark mode
   // above. bootstrap() already applied whatever was stored before the lock screen even rendered;
   // this only needs to reflect that in the switch and react to future changes.
