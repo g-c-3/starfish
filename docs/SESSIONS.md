@@ -6,18 +6,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 **Session 91**
 
-Phase 4 Money capture, step 4 of Decision 124's build order (Settings currency symbol). Fresh session; Tier 1 and the Money parts of the Tier 2 docs read.
+Phase 4 Money capture, steps 4 and 5 of Decision 124's build order (Settings currency symbol, expense detection removal). Fresh session; Tier 1 and the Money parts of the Tier 2 docs read.
 - `index.html`: Currency tile under Preferences (chips, text field, Use this symbol, status line).
 - `app.js`: `wireCurrencySettings` paints the chips from `Money.CURRENCIES`, validates a typed symbol, writes `currency_symbol`, redraws Home; repaints after a restore.
 - `backup.js`: `currency_symbol` added to `APP_SETTINGS_KEYS` (export and restore both read that list).
 
-Decisions made: 130.
+- Step 5 (Decision 131): `intents.js` expense handler removed; `captureText` expense branch, `buildFromHandler` expense case, `promptExpenseFollowup` and its timeout constant removed from `app.js`; stale scaffold header comment replaced.
 
-Verified in the authoring environment: syntax checks, `vite build`, the validation rule run in Node against valid and invalid symbols (₹, Rs, CHF, kr accepted; empty, blank, six characters and a control character refused). Not run: CI, a device, the tile layout on a small screen, backup and restore with the new key.
+Decisions made: 130, 131.
 
-Open: expense detection still in `captureText` (step 5). Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP18 and DP19 pending on a device.
+Verified in the authoring environment: syntax checks, `vite build`, the validation rule run in Node against valid and invalid symbols (₹, Rs, CHF, kr accepted; empty, blank, six characters and a control character refused); `detectIntent` in Node: "spent 500 on groceries" and "I spent ₹1200 today" give none, the reminder phrase still gives reminder, label suggestion unchanged. Not run: CI, a device, the tile layout on a small screen, backup and restore with the new key.
 
-Next session start point: commit `index.html`, `app.js`, `backup.js` and the docs in one commit (Decision 127), install the newest build, run DP18 and DP19. Then step 5, 6.
+Open: Vault Money still a placeholder (step 6). A single repayment cannot be edited in place. After a restore the dark-mode theme and its switch are not re-applied until relaunch (pre-existing, not changed). DP18, DP19 and DP20 pending on a device.
+
+Next session start point: commit `index.html`, `app.js`, `backup.js`, `intents.js` and the docs in one commit (Decision 127), install the newest build, run DP18 to DP20. Then step 6, Vault Money.
 
 ---
 

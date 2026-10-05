@@ -20,7 +20,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
 - Images and PDFs are OCR'd; both label and OCR text are indexed (label ranked higher).
-- Rule-based intent engine (regex/keyword) detects reminders and expenses from any text/voice-labeled/typed input — no automated inference.
+- Rule-based intent engine (regex/keyword) detects reminders from any text/voice-labeled/typed input — no automated inference. Money is never detected (Decision 131).
 - **Every entry requires a user-supplied label before save completes** (blocking, not optional) — across voice,
   image, PDF, generic file, and note types alike. Labels are what make voice notes and generic files searchable
   at all, since neither gets transcription/parsing.
@@ -42,7 +42,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
 | Money | none (details in `money_json`, Decisions 124, 126) | label (readable summary) + description (note) | Home built; Vault Money still a placeholder; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are no longer auto-detected (removal pending, step 5) |
-| Expense | amount + category | label/category | amount, category, replied (bool) — auto-detected only (`intents.js`), no manual capture card, no private variant |
+| Expense | amount + category | label/category | amount, category, replied (bool) — legacy rows only (detection removed, Decision 131); read as Spent in Money, no capture card, no private variant |
 
 `is_private` (pivot: was notes-only, now applies to Text/Voice/Image/PDF/Reminder/Location/Money/Files
 — Private Vault, §3b) turns ANY of these eight into a vault entry: AES-encrypted at rest under the
@@ -483,9 +483,8 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   **Home layout (Decision 81):** the eight cards are folders, each listing only its type (Money also lists
   expenses) with a New button inside; a universal New on Home asks which type; the mixed timeline is now
   search results only. The Vault mirrors this exactly (Decision 85).
-- **Confidence-based confirmation, not silent action** — when the intent engine detects a reminder or expense,
-  show a small inline confirmation chip (e.g. "Detected: ₹500 expense — categorize?") with an auto-dismiss into
-  the sensible default (uncategorized / as-parsed) if ignored, rather than committing silently with no visible
+- **Confidence-based confirmation, not silent action** — when the intent engine detects a reminder,
+  show a small inline confirmation chip with an auto-dismiss into the as-parsed default if ignored, rather than committing silently with no visible
   feedback. Builds trust since nothing infers silently — every action traces to a visible rule.
 - **Map view for saved locations** — entries with a lat/long get a lightweight map view (in addition to the flat
   timeline), since location was otherwise dead metadata on a card.
@@ -514,10 +513,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
     renamed later via the existing Edit action), and deletable on its own, with no lingering "batch" grouping
     in the data model.
   - **Status (Decision 84):** built on the main capture bar only (Image/PDF/Files). Chosen by a confirm dialog when more than one file is picked; individual add labels each entry by file name. `suggestLabel()` pre-fill not wired (no OCR text yet). Vault batch add not built.
-- **Expense follow-up flow** — implemented as `promptExpenseFollowup()` in `app.js`. When "spent 500" has no
-  inline category, the expense entry is saved immediately as `uncategorized`, and the UI asks "What did you
-  spend this on?" with a 15-second window (`EXPENSE_FOLLOWUP_TIMEOUT_MS`). A reply updates the category and
-  label in place; no reply within the window leaves it as `uncategorized` — nothing is ever blocked on the answer.
+- **Expense follow-up flow** — removed (Decision 131). Expenses are no longer detected from text; see Money.
 - **Reminder notifications, not alarms** — implemented via `@capacitor/local-notifications` (`notifications.js`),
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
   `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
@@ -631,7 +627,7 @@ No network, no new permission.
 - Month header (previous, Month and Year dropdowns, next; typed year field under it, Decision 129) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
 - A repayment holds amount, date, method and note. The form edits the list of repayments; the detail view adds one at a time (Decision 128).
 - Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted. Set in Settings > Preferences > Currency: chips from `Money.CURRENCIES`, or a typed symbol of 1 to 5 visible characters (Decision 130). Part of the App Settings backup category.
-- Not built: expense detection removal, Vault Money, editing a single repayment in place.
+- Not built: Vault Money, editing a single repayment in place.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 

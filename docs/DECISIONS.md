@@ -1813,3 +1813,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Applies at once: stored in `meta.currency_symbol`, Home redraws. Amounts are never converted; the tile says so.
 - Backup: `currency_symbol` added to `APP_SETTINGS_KEYS`, so it travels with the App Settings category. The control repaints after a restore.
 - No network call and no new permission.
+
+**131. Expense detection removed from capture.** Builds Decision 124 step 5.
+- Rule: typed text containing "spent" and a number is saved as a plain note. Money entries come only from the Money form.
+- Removed: the expense handler in `intents.js`, the expense branch of `captureText`, and the follow-up prompt with its 15-second timer in `app.js`.
+- Kept: reminder text detection (Decision 124), label suggestion, and every read path for existing expense rows (list, totals as Spent, viewer, search, backup). The `amount`, `expense_category` and `replied` columns stay.
+- Cause for keeping the columns: old rows and old backups still carry them.
+

@@ -105,3 +105,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-05 | Session 90 | Decisions 127, 128 | Money follow-up: repayments section in the form, IMPS RTGS NEFT, month and year dropdowns, one-commit rule; not compiled in CI or device-tested |
 | 2026-10-05 | Session 90 | Decision 129 | Month header year control: five-year dropdown window, typed year from 1900; not compiled in CI or device-tested |
 | 2026-10-05 | Session 91 | Decision 130 | Money step 4: Currency tile in Settings, symbol carried by the App Settings backup category; DP19 added; not compiled in CI or device-tested |
+| 2026-10-05 | Session 91 (continued) | Decision 131 | Money step 5: expense detection removed from capture, reminder detection kept; DP20 added; not compiled in CI or device-tested |
