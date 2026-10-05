@@ -723,9 +723,8 @@ body.selecting .is-selected::after { content: "\2713"; background: var(--brand);
 
 /* Money: month header in the Money folder, loan status pills (Decision 126). */
 .money-summary { margin: 0 0 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
-.money-summary .ms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.money-summary .ms-title { font-weight: 700; font-size: 15px; }
-.money-summary .ms-head .icon-btn { font-size: 22px; line-height: 1; }
+.money-summary .ms-head { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-bottom: 8px; }
+.money-summary .ms-head select { margin: 0; padding-top: 10px; padding-bottom: 10px; font-weight: 650; }
 .money-summary .ms-grid, .money-summary .ms-loans { display: grid; gap: 8px; }
 .money-summary .ms-grid { grid-template-columns: repeat(3, 1fr); }
 .money-summary .ms-loans { grid-template-columns: repeat(2, 1fr); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
