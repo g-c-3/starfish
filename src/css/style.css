@@ -744,3 +744,4 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .rep-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .rep-item span { min-width: 0; overflow-wrap: anywhere; }
 .rep-item .rep-del { width: 32px; height: 32px; flex: none; margin: 0; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; background: var(--surface-2); color: var(--danger); }
+.money-summary .ms-year-input { margin: 0 0 8px; padding: 10px 12px; font-size: 15px; }
