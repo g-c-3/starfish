@@ -628,7 +628,7 @@ No network, no new permission.
 ### Money on Home (Decisions 124, 126, 128)
 - Form and repayment dialogs: `moneyui.js`. Maths, totals and JSON: `money.js`. Saving, rows and the viewer: `app.js`.
 - Capture and edit: form, then the Save dialog. Label defaults to the summary, description is the note.
-- Month header (previous, Month and Year dropdowns, next) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
+- Month header (previous, Month and Year dropdowns, next; typed year field under it, Decision 129) and loan totals sit above the Money folder list; totals query all Home rows of type money and expense.
 - A repayment holds amount, date, method and note. The form edits the list of repayments; the detail view adds one at a time (Decision 128).
 - Symbol: meta key `currency_symbol`, default ₹. Amounts are never converted.
 - Not built: Settings symbol control, expense detection removal, Vault Money, editing a single repayment in place.

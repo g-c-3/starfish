@@ -1802,3 +1802,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The Money form and repayment dialogs scroll when taller than the screen.
 - A single repayment still cannot be edited in place; remove it and add it again.
 
+**129. Month header year control.** Replaces the year list in Decision 128.
+- The Year dropdown lists the shown year and two either side, oldest first. Picking one moves the window.
+- A text field under the row takes any four-digit year from 1900. Applies on Enter or when the field loses focus. An invalid entry is dropped and the shown year stays.
+- Cause: the list was bounded by the oldest entry and next year, newest first, so other years were unreachable.
+

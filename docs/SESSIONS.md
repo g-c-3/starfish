@@ -12,8 +12,9 @@ Follow-up to Money step 3 after device checks.
 - Payment methods: IMPS, RTGS, NEFT added (`moneyui.js`).
 - Repayments section at the end of the form for Lent and Borrowed, with date, repaid by and note, + Add repayment, and remove (`moneyui.js`, `index.html`, `style.css`). `money.js` stores `method` on a repayment. The viewer line and Add repayment dialog show and ask the method (`app.js`).
 - Money dialogs scroll when tall.
+- Year control: five-year window around the shown year, oldest first, plus a typed year field (`app.js`, `style.css`).
 
-Decisions made: 127, 128.
+Decisions made: 127, 128, 129.
 
 Verified in the authoring environment: syntax checks, `vite build`, 32 new and 28 earlier checks on both dialogs in a simulated page. Not run: CI, a device, real SQLite, the header and form layout on a small screen.
 
