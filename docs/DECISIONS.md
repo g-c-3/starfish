@@ -1853,3 +1853,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Every Download writes to `Documents/Dumpzone`. A name already there gets ` (2)`, ` (3)` and so on; an earlier copy is never overwritten. Backup files and Extract to device storage keep their own paths: restore reads backups from the Documents root.
 - Location, Reminder and Money (and legacy Expense rows) download as a readable `.txt`. Location: name, coordinates, map link, saved time, note. Reminder: name, time, repeat, status, note. Money: summary, date, method, due, returned, remaining, repayments, note.
 - Download shows `Downloaded to Documents/Dumpzone/<name>`; a failure shows `Could not download: <reason>`. The message comes from one wrapper, so every Download entry point shows it.
+
+**137. Undo after delete.** Every Delete (row button, image viewer, Select files, multi-select, Clear items older than 30 days) shows `Moved to trash` or `N moved to trash` with an Undo button for 6 seconds.
+- Undo is a restore from the 30-day trash (`restoreFromTrash`), so a deleted reminder goes back on the schedule. The Vault index is rebuilt once per batch.
+- Not offered for Delete permanently, which keeps its confirmation.
+- One toast at a time: a newer toast replaces an Undo still showing.
+- An app lock or a Vault lock hides an Undo that belongs to what locked (the Vault lock only for Vault deletes), so no Undo button sits on the lock screen.
+- Clear items older than 30 days now reports through this toast instead of a blocking alert; with nothing to clear it says so.
+
+**138. Android Back button and back gesture.** Both run the on-screen Back button's action (`backAction()`, Decisions 82, 104, 132, 133), with the same glow. Where that button is dimmed (a section's landing page, the lock gate) the app goes to the background, which locks it (Decision 45); it does not close. Cause: no listener was registered, so Android used its default and left the app from any depth.

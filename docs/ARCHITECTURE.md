@@ -409,6 +409,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   many-to-many table.
 - **Quick-repeat patterns** — a "repeat monthly/weekly" toggle at creation time for recurring reminders (rent,
   bills) and recurring expenses, using the existing `repeat_rule` field already on the `entries` schema.
+- **Undo (Decision 137).** Every Delete shows a 6-second toast with Undo, which restores from trash. Delete permanently has none.
 - **Trash / soft-delete (30-day auto-purge)** — every Delete is a soft-delete (`deleted_at` timestamp set, row
   hidden from all normal queries and from FTS results) with a dedicated "Trash" screen to restore or delete
   permanently early. **Two independent bins** (main + Vault — §3b), same rule, distinguished by `is_private`
@@ -587,6 +588,8 @@ lock discards it. Saved voice opens in a viewer with the player (play/pause, scr
 an in-memory blob URL for the life of the viewer and revoked on close or lock. Playback re-arms the matching idle lock.
 
 ### Back button everywhere (Decision 104)
+The Android Back button and back gesture run this same action with the same glow; on a landing page or the lock gate they send the app to the background (Decision 138).
+
 The nav's Back stays visible on every screen: alone on the lock, first-run and ad-gate screens, and alone above any open
 overlay (`body.overlay-open`). It dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.

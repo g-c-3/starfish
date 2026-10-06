@@ -111,3 +111,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-05 | Session 91 (closed) | none | DP14, DP15, DP18 to DP22 confirmed on device; next: Money step 6, Vault Money |
 | 2026-10-06 | Session 92 | Decision 135 | Money step 6: Vault Money built (form, rows, month header, viewer, repayments, edit, search, Share, Download); DP23 added; not compiled in CI or device-tested |
 | 2026-10-06 | Session 92 (continued) | Decision 136 | Row buttons glow individually; downloads go to Documents/Dumpzone as readable text for Location, Reminder, Money; Download toast; DP24 added; not device-tested |
+| 2026-10-06 | Session 92 (continued, 2) | Decisions 137, 138 | DP23, DP24 confirmed; Undo toast after every delete; Android Back and back gesture follow the on-screen Back; DP25 added; not device-tested |
