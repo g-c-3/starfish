@@ -184,6 +184,8 @@ deliberate differences, all safety-necessary rather than arbitrary:
    discoverable via ordinary, no-PIN search, and its label could surface as an autocomplete suggestion in the
    normal capture bar. Fixed in `insertEntry()` (db.js) and `restoreBackup()` (backup.js).
 
+**A Vault lock always shows the gate (Decision 139).** Every lock path (button, idle, background, screen off) ends in `lockVault()`, which clears the key, lists, counts and search text, closes Vault dialogs and viewers, closes a Select files screen listing Vault items, and redraws the locked gate when the Vault is on view (no biometric prompt then; it is offered on return to the app). An app lock closes the static overlays above the lock screen.
+
 **Its own trash, its own auto-lock.** The Vault has a second 30-day trash bin, independent of the main app's —
 same restore/permanent-delete, same 30-day rule, distinguished from the main bin by `is_private` rather than a
 second table (`listTrash()`/`restoreFromTrash()`/`permanentlyDeleteEntry()` in db.js are shared, generic

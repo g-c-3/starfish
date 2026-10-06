@@ -1862,3 +1862,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Clear items older than 30 days now reports through this toast instead of a blocking alert; with nothing to clear it says so.
 
 **138. Android Back button and back gesture.** Both run the on-screen Back button's action (`backAction()`, Decisions 82, 104, 132, 133), with the same glow. Where that button is dimmed (a section's landing page, the lock gate) the app goes to the background, which locks it (Decision 45); it does not close. Cause: no listener was registered, so Android used its default and left the app from any depth.
+
+**139. A Vault lock always shows the gate.** Found in the DP17 lock check: with the Vault on view, the idle timer, app-to-background and screen-off locks cleared the key and the lists but left the content showing, with the unlocked icon, the folder counts and no PIN prompt.
+- Cause: only the lock button redrew the Vault gate. The other three paths called `lockVault()` alone.
+- Fix: `lockVault()` itself redraws the gate when the Vault screen is on view, without a biometric prompt (the app may be in the background). It also empties the folder counts and the Vault search text.
+- Returning to the app on a locked Vault screen shows the gate and offers biometric, as the Vault tab does. The app lock screen hides the Vault screen, so this never races it (Decision 59).
+- A Vault lock closes the Select files screen when it lists Vault items.
+- An app lock now also closes the static overlays that sat above the lock screen (Select files, New chooser, overwrite confirmation, due-backup prompt), each through its own Cancel or Skip, and empties the Select files list. Cause: they sit above the lock screen and nothing closed them.
