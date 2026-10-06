@@ -1883,7 +1883,12 @@ window.Dumpzone = {
   // Per-file actions — identical set for vault and non-vault (pivot); caller passes privateSessionKey
   // only when acting on a vault item, these functions no-op that param otherwise.
   shareEntry: (id) => shareEntry(db, id, { privateSessionKey }),
-  downloadPlain: (id) => downloadPlain(db, id, { privateSessionKey }),
+  downloadPlain: async (id) => {
+    try {
+      const path = await downloadPlain(db, id, { privateSessionKey });
+      toast(`Downloaded to Documents/${path}`);
+    } catch (err) { toast(`Could not download: ${err.message || err}`); }
+  },
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
   getSelectableGroups, runBulkFileAction,
   onThisDay, storageBreakdown, clearOldInCategory, yourDataSummary,
@@ -2196,6 +2201,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     goBack();
   });
   navBackBtn.addEventListener('animationend', () => navBackBtn.classList.remove('glow'));
+
+  // Same glow on the row action buttons (Edit, Share, Download, Delete): one delegated listener covers every list,
+  // including rows drawn later. Only the tapped button glows; the row itself stays still (see style.css).
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.row-actions .icon-btn');
+    if (!b) return;
+    b.classList.remove('glow');
+    void b.offsetWidth; // restarts the animation on back-to-back taps
+    b.classList.add('glow');
+  });
+  document.addEventListener('animationend', (e) => { if (e.target.classList?.contains('icon-btn')) e.target.classList.remove('glow'); });
 
   // Overlays (editor, viewer, Save dialog, modals) cover the page, so while one is open the nav shrinks to just Back
   // above it (CSS: body.overlay-open) and Back dismisses it (Decision 104). Class changes cover every open/close path,

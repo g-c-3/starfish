@@ -9,6 +9,7 @@ import {
 } from './backup.js';
 import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
 import * as Money from './money.js';
+import { repeatLabel } from './reminders.js';
 
 async function getEntryCategory(db, entryId) {
   const row = (await db.query(`SELECT * FROM entries WHERE id=?`, [entryId])).values[0];
@@ -20,6 +21,41 @@ async function getEntryCategory(db, entryId) {
 function sanitizeFilename(label) {
   return (label || 'untitled').replace(/[^a-z0-9\-_ ]/gi, '_').slice(0, 80);
 }
+
+// Every download lands in Documents/Dumpzone. An existing name gets " (2)", " (3)" … so an earlier copy is never overwritten.
+const DOWNLOAD_DIR = 'Dumpzone';
+async function freeDownloadPath(fileName) {
+  const dot = fileName.lastIndexOf('.');
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const ext = dot > 0 ? fileName.slice(dot) : '';
+  for (let n = 1; n < 100; n++) {
+    const path = `${DOWNLOAD_DIR}/${n === 1 ? stem : `${stem} (${n})`}${ext}`;
+    try { await Filesystem.stat({ path, directory: Directory.Documents }); } // throws when the file does not exist
+    catch { return path; }
+  }
+  return `${DOWNLOAD_DIR}/${stem} (${Date.now()})${ext}`;
+}
+
+// Plain-text bodies for entries whose content is not text in the row (Location, Reminder, Money).
+const stamp = (ms) => new Date(ms).toLocaleString();
+function locationPlainText(row) {
+  const lines = [row.label];
+  if (row.latitude != null && row.longitude != null) lines.push(`Coordinates: ${row.latitude}, ${row.longitude}`, `Map: ${mapLinkFor(row.latitude, row.longitude)}`);
+  lines.push(`Saved: ${stamp(row.created_at)}`);
+  if (row.description) lines.push(`Note: ${row.description}`);
+  return lines.join('\n');
+}
+function reminderPlainText(row) {
+  const lines = [row.label, `Remind at: ${stamp(row.fire_at)}`, `Repeat: ${repeatLabel(row.repeat_rule)}`];
+  lines.push(row.completed_at ? `Done: ${stamp(row.completed_at)}` : 'Status: not done');
+  if (row.description) lines.push(`Note: ${row.description}`);
+  return lines.join('\n');
+}
+function moneyRowPlainText(row) {
+  const d = Money.fromRow(row);
+  return d ? `${moneyPlainText(d)}${row.description ? `\nNote: ${row.description}` : ''}` : row.label;
+}
+const TEXT_EXPORT_TYPES = new Set(['note', 'location', 'reminder', 'money', 'expense']); // 'expense': legacy rows from before Decision 131
 
 // ---------------------------------------------------------------------------
 // Action 1 — Share. Works identically for vault and non-vault entries (pivot: user convenience over
@@ -101,33 +137,39 @@ async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
 // ---------------------------------------------------------------------------
 async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
-  const ext = row.extension ? `.${row.extension}` : (row.type === 'note' || (row.type === 'money' && row.is_private) ? '.txt' : '');
+  const ext = row.extension ? `.${row.extension}` : (TEXT_EXPORT_TYPES.has(row.type) ? '.txt' : '');
+  const base = `${sanitizeFilename(row.label)}${ext}`;
+  const text = (path, data) => Filesystem.writeFile({ path, directory: Directory.Documents, data, encoding: 'utf8', recursive: true });
 
   if (row.is_private) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before downloading');
     const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
-    const fileName = `${sanitizeFilename(row.label)}${ext}`;
+    const path = await freeDownloadPath(base);
     if (row.type === 'note') {
-      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.text, encoding: 'utf8', recursive: true });
+      await text(path, content.text);
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
-      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: moneyPlainText(content.money), encoding: 'utf8', recursive: true });
+      await text(path, moneyPlainText(content.money));
     } else {
-      await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: content.fileData, recursive: true });
+      await Filesystem.writeFile({ path, directory: Directory.Documents, data: content.fileData, recursive: true });
     }
-    return fileName;
+    return path;
   }
 
-  const fileName = `${sanitizeFilename(row.label)}${ext}`;
+  const path = await freeDownloadPath(base);
   if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
-    await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data, recursive: true });
+    await Filesystem.writeFile({ path, directory: Directory.Documents, data, recursive: true });
+  } else if (row.type === 'location') {
+    await text(path, locationPlainText(row));
+  } else if (row.type === 'reminder') {
+    await text(path, reminderPlainText(row));
+  } else if (row.type === 'money' || row.type === 'expense') {
+    await text(path, moneyRowPlainText(row));
   } else {
-    await Filesystem.writeFile({
-      path: fileName, directory: Directory.Documents, data: row.body_text || '', encoding: 'utf8', recursive: true
-    });
+    await text(path, row.body_text || '');
   }
-  return fileName;
+  return path;
 }
 
 // ---------------------------------------------------------------------------
