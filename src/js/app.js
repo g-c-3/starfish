@@ -879,10 +879,10 @@ async function showMainTimeline(types = null) {
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
 // since spec asks for the vault to be "an exact replica of the home screen function" apart from what
 // stays private-at-rest and the Share/Download restriction being lifted (both, same as non-vault). ----
-async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money }) {
+async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money, fireAt = null, repeatRule = null }) {
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
-  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money });
+  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money, fireAt, repeatRule });
   await buildVaultIndex(db, privateSessionKey); // rebuild so the new item is immediately searchable/listed
   return id;
 }
@@ -2356,7 +2356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
   // Vault Money rows show kind, amount, status and date from the unlocked index; the plaintext label stays generic (Decision 135).
   function vaultRowProps(e) {
-    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : { meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`, done: false };
+    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e) : { meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`, done: false };
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items) {
@@ -2468,7 +2468,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         await captureToVault({ type: 'money', label: d.name, tags: d.tags, description: d.description, money: details });
         renderVault();
         toast('Saved to the Vault');
-      } else if (type === 'reminder' || type === 'location') {
+      } else if (type === 'reminder') {
+        // Name, note, when and repeat in one Save dialog, as for Home. The notification says only "Vault Reminder" (Decision 140).
+        const d = await openSaveDialog({ heading: 'New vault reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard', reminder: {} });
+        if (!d) return;
+        const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
+        renderVault();
+        try {
+          await scheduleReminder({ id, label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule, is_private: 1 });
+          toast(d.repeat_rule ? 'Vault reminder saved' : reminderSetText(d.fire_at));
+        } catch (err) {
+          toast(`Vault reminder saved, but its notification could not be scheduled: ${err.message || err}`);
+        }
+      } else if (type === 'location') {
         toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
       } else {
         const input = document.createElement('input');
@@ -3045,7 +3057,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderMainTimeline().catch(() => {});
     if (privateSessionKey) renderVault();
   });
-    window.addEventListener('dumpzone-reminders-changed', () => { renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {}); });
+    window.addEventListener('dumpzone-reminders-changed', () => {
+      renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {});
+      if (privateSessionKey) buildVaultIndex(db, privateSessionKey).then(() => renderVault()).catch(() => {}); // Vault rows show the status
+    });
   document.getElementById('folder-new-btn').addEventListener('click', () => startCapture(openFolderType));
 
   // ---- Long-press multi-select (Decision 122): Home folders, Vault folders and both search lists. ----
@@ -3249,8 +3264,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function editEntryUI(item, isVault) {
     if (item.type === 'note') return openNote(item, isVault);
     if (item.type === 'money') return editMoney(item, isVault);
+    if (item.type === 'reminder') { // schedule columns may have changed since the row was drawn (Snooze, Done)
+      const r = ((await db.query(`SELECT fire_at, repeat_rule, completed_at, snoozed_until FROM entries WHERE id = ?`, [item.id])).values || [])[0];
+      if (r) item = { ...item, ...r };
+    }
     const tags = item.tags || await getEntryTags(item.id);
-    const isReminder = item.type === 'reminder' && !isVault;
+    const isReminder = item.type === 'reminder'; // Home and Vault
     const d = await openSaveDialog({
       heading: isReminder ? 'Edit reminder' : 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault,
       reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule } : null
@@ -3305,13 +3324,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Entry viewer shell (Decision 92). render(bodyEl, helpers) fills the body; call helpers.refresh() after a change.
   // onClose runs on every close, including a lock's forced close. guard() (optional) is asked on Back only and may refuse.
-  function openViewer({ title, isVault = false, render, onEdit, onClose = null, guard = null }) {
+  function openViewer({ title, isVault = false, render, onEdit, onClose = null, guard = null, entry = null }) {
     return new Promise((resolve) => {
       const $ = (id) => document.getElementById(id);
       const screen = $('viewer-screen'), body = $('viewer-body');
       $('viewer-title').textContent = title;
       const finish = () => {
         if (onClose) { try { onClose(); } catch { /* closing anyway */ } }
+        screen.querySelectorAll('.vwr-act').forEach((n) => n.remove());
         screen.classList.add('hidden');
         body.innerHTML = '';
         activeViewer = null;
@@ -3323,6 +3343,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       $('viewer-back-btn').onclick = back;
       $('viewer-edit-btn').classList.toggle('hidden', !onEdit);
       $('viewer-edit-btn').onclick = async () => { if (onEdit) { await onEdit(); await refresh(); } };
+      // Share, Download and Delete after Edit, the same order as the rows and the image viewer (Decisions 134, 141).
+      screen.querySelectorAll('.vwr-act').forEach((n) => n.remove());
+      if (entry) {
+        const add = (label, icon, extra, run) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = `vwr-act icon-btn${extra}`; b.title = label; b.setAttribute('aria-label', label);
+          b.innerHTML = iconSvg(icon); b.onclick = run;
+          $('viewer-edit-btn').parentNode.append(b);
+        };
+        add('Share', 'share', '', () => window.Dumpzone.shareEntry(entry.id));
+        add('Download', 'download', '', () => window.Dumpzone.downloadPlain(entry.id));
+        add('Delete', 'trash', ' warning-text', async () => {
+          try { if (isVault) await deleteVaultEntry(entry.id); else await softDelete(db, entry.id); }
+          catch (err) { toast(`Could not delete: ${err.message || err}`); return; }
+          finish();
+          if (refreshAfterUndo) await refreshAfterUndo();
+          offerUndo([entry.id], { isVault });
+        });
+      }
       activeViewer = { finish, back, isVault };
       screen.classList.remove('hidden');
       updateBackButtonState();
@@ -3450,7 +3489,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
     const detailsOf = (row) => (isVault ? row.money : Money.fromRow(row)); // Vault: from the unlocked index (Decision 135)
     await openViewer({
-      title: 'Money', isVault,
+      title: 'Money', isVault, entry: item,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       render: async (body, { refresh }) => {
         const row = await fresh();
@@ -3506,11 +3545,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function openReminder(item) {
-    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+  async function openReminder(item, isVault = false) {
+    // Vault: the schedule is read from the row (Snooze and Done change it while locked); the note comes from the unlocked index.
+    const fresh = async () => {
+      const dbRow = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+      if (!dbRow) return item;
+      if (!isVault) return dbRow;
+      const ix = (getVaultIndex() || []).find((e) => e.id === item.id);
+      return { ...dbRow, description: ix ? ix.description : '', tags: ix ? ix.tags : [] };
+    };
     await openViewer({
-      title: 'Reminder',
-      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      title: 'Reminder', isVault, entry: item,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       render: async (body, { refresh }) => {
         const row = await fresh();
         const tags = await getEntryTags(row.id);
@@ -3540,8 +3586,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
           </div>`;
         const t = document.getElementById('rv-toggle-btn');
-        if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); await refresh(); };
-        document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), false); await refresh(); };
+        if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); window.dispatchEvent(new Event('dumpzone-reminders-changed')); await refresh(); };
+        document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), isVault); await refresh(); };
       }
     });
   }
@@ -3563,7 +3609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openLocation(item) {
     const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
     await openViewer({
-      title: 'Location',
+      title: 'Location', entry: item,
       onEdit: async () => { await editEntryUI(await fresh(), false); },
       render: async (body) => {
         const row = await fresh();
@@ -3617,7 +3663,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return url;
     };
     await openViewer({
-      title: 'Voice', isVault,
+      title: 'Voice', isVault, entry: item,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       onClose: () => { if (player) { player.destroy(); player = null; } if (url) { URL.revokeObjectURL(url); url = null; } },
       render: async (body) => {
@@ -3832,7 +3878,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
     else if (item.type === 'money' || (item.type === 'expense' && !isVault)) await openMoney(item, isVault);
-    else if (item.type === 'reminder' && !isVault) await openReminder(item);
+    else if (item.type === 'reminder') await openReminder(item, isVault);
     else if (item.type === 'location' && !isVault) await openLocation(item);
     else if (item.type === 'voice') await openVoice(item, isVault);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);

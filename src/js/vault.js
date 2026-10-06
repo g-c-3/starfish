@@ -41,7 +41,7 @@ function parseVaultPlaintext(type, plaintext) {
 // ---------------------------------------------------------------------------
 // Save — file_path always NULL for vault entries; bytes live only inside encrypted_body.
 // ---------------------------------------------------------------------------
-async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], description = '', extension = null, autoCategory = null, ...content }) {
+async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], description = '', extension = null, autoCategory = null, fireAt = null, repeatRule = null, ...content }) {
   if (!VAULT_TYPES.includes(type)) throw new Error(`Type not supported in Private Vault: ${type}`);
   const plaintext = buildVaultPlaintext(type, content);
   const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
@@ -53,6 +53,7 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
   await insertEntry(db, {
     id, type, label, body_text: null, is_private: 1, encrypted_body: encryptedBody,
     file_path: null, extension, auto_category: autoCategory,
+    fire_at: fireAt, repeat_rule: repeatRule, // reminders: schedule columns are plaintext, the notification needs them while locked (Decision 140)
     // Description is encrypted like the body: label is the only plaintext a Vault row carries.
     encrypted_description: description ? await encryptPrivateNote(privateSessionKey, description) : null
   });
@@ -128,7 +129,8 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, createdAt: row.created_at });
+    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, createdAt: row.created_at,
+      fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until });
   }
   vaultIndexCache = index;
   return index;

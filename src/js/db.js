@@ -261,7 +261,7 @@ async function restoreFromTrash(db, id) {
   await db.run(`UPDATE entries SET deleted_at = NULL WHERE id = ?`, [id]);
   // Put a still-pending reminder back on the schedule.
   const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
-  if (row && row.type === 'reminder' && !row.is_private) {
+  if (row && row.type === 'reminder') { // Vault reminders too: the notification text is generic (Decision 140)
     const { reminderStatus } = await import('./reminders.js');
     if (reminderStatus(row) === 'upcoming') {
       try { await (await import('./notifications.js')).scheduleReminder(row); } catch { /* scheduling failed — entry is restored regardless */ }

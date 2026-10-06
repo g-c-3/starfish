@@ -74,6 +74,8 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
       await Share.share({ text: moneyPlainText(content.money), title: row.label });
+    } else if (row.type === 'reminder') {
+      await Share.share({ text: reminderPlainText(row), title: row.label });
     } else {
       const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeFor(row));
       try { await Share.share({ url: blobUrl, title: row.label }); }
@@ -150,6 +152,8 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
       await text(path, moneyPlainText(content.money));
+    } else if (row.type === 'reminder') {
+      await text(path, reminderPlainText(row));
     } else {
       await Filesystem.writeFile({ path, directory: Directory.Documents, data: content.fileData, recursive: true });
     }
@@ -226,7 +230,7 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
     const desc = updates.description !== undefined ? updates.description : row.description;
     await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [[body, desc].filter(Boolean).join(' '), entryId]);
   }
-  if (cat === 'reminders' && (fields.fire_at !== undefined || fields.repeat_rule !== undefined) && rescheduleReminder) {
+  if (row.type === 'reminder' && (fields.fire_at !== undefined || fields.repeat_rule !== undefined) && rescheduleReminder) { // Vault reminders too
     await rescheduleReminder({ ...row, ...updates, id: entryId }); // caller supplies notifications.js's scheduleReminder
   }
 }

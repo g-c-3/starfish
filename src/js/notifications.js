@@ -8,6 +8,10 @@ import { nextOccurrences } from './reminders.js';
 const CHANNEL_ID = 'dumpzone_reminders_v2';
 const OLD_CHANNEL_ID = 'dumpzone_reminders';
 
+// A Vault reminder shows only this text, on the shade and on the lock screen: what it is about is read inside the Vault (Decision 140).
+const VAULT_REMINDER_TEXT = 'Vault Reminder';
+const notificationBody = (entry) => (entry.is_private ? VAULT_REMINDER_TEXT : entry.label);
+
 async function ensureChannel() {
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
@@ -38,9 +42,9 @@ const ALARM_BUDGET = 400; // Android allows 500 alarms per app; stay clear of it
 const occurrenceId = (entryId, k) => hashIdToInt(k === 0 ? entryId : `${entryId}:r${k}`);
 
 async function scheduleReminder(entry, { windowSize = null } = {}) {
-  // entry: { id, label, fire_at, repeat_rule }
+  // entry: { id, label, fire_at, repeat_rule, is_private } — callers pass the database row, so is_private is never lost
   await ensureChannel();
-  const base = { title: 'Dumpzone Reminder', body: entry.label, channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
+  const base = { title: 'Dumpzone Reminder', body: notificationBody(entry), channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
   // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
   const times = REPEAT_WINDOW[entry.repeat_rule]
     ? nextOccurrences(entry.fire_at, entry.repeat_rule, Date.now() + 1000, Math.min(windowSize || REPEAT_WINDOW[entry.repeat_rule], MAX_OCCURRENCES))
@@ -83,7 +87,7 @@ async function snoozeReminder(entry, minutes = 10) {
     notifications: [{
       id: hashIdToInt(`${entry.id}:snooze`),
       title: 'Dumpzone Reminder',
-      body: entry.label,
+      body: notificationBody(entry),
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + minutes * 60 * 1000), allowWhileIdle: true },
       actionTypeId: 'REMINDER_ACTIONS',
