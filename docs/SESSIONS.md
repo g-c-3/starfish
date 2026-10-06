@@ -24,7 +24,7 @@ Verified in the authoring environment: syntax checks, `vite build`, 27 Node chec
 
 Open: Home Money Share sends the summary only (the Download empty-file gap is closed by Decision 136). A Vault Money Download and Share omit the note, which is not part of the decrypted content. Backups still save to the Documents root, outside `Dumpzone`. Other viewers still show only Edit in the header (Decision 134 open point), Money included. A single repayment cannot be edited in place. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing). DP13 next-day fire and DP17 and DP26 confirmed on device. The device backlog is clear. DP13 confirmed on device; the rest of DP17 still pending. The Undo window is 6 seconds (`UNDO_MS`); left as is. The glow, `:has` rule, Download names, toast and `.txt` bodies are not run on a device; the naming and text bodies were checked in Node, `vite build` passes.
 
-Next session start point: run DP27, then Vault Location, or Phase 16 remaining items.
+Next session start point: Vault Location, or Phase 16 remaining items. DP27 confirmed on device; the device backlog is clear.
 
 ---
 
