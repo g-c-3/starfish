@@ -2354,9 +2354,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Vault mirrors Home (Decision 85): cards are folders with count badges, each folder has a New
   // button, a universal New asks for a type, and the list under the search box is search results only.
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
-  // Vault Money rows show kind, amount, status and date from the unlocked index; the plaintext label stays generic (Decision 135).
+  // Vault Money rows show kind, amount, status and date from the unlocked index; the label is the readable summary, as on Home (Decision 143).
   function vaultRowProps(e) {
-    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e) : { meta: `${typeLabelFor(e.type)} · ${formatBytes(e.sizeBytes)}`, done: false };
+    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e) : rowMeta({ type: e.type, created_at: e.createdAt });
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items) {
@@ -2462,7 +2462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         while (!d) {
           details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks });
           if (!details) return;
-          d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: `Money ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Back to amount' });
+          d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: Money.summary(details), isVault: true, discardLabel: 'Back to amount' });
           if (!d && overlayAbortCount !== mark) return; // locked meanwhile
         }
         await captureToVault({ type: 'money', label: d.name, tags: d.tags, description: d.description, money: details });
@@ -2804,7 +2804,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Paste dialog. Parsing is offline and live. A short link needs the person's tap on Verify link, the one network step.
   // Resolves { lat, lng, name, text } on Continue, null on Cancel or lock.
-  // isVault: no Verify link, so the Vault makes no network request (Decision 142).
   function openCoordsDialog(text = '', isVault = false) {
     const $ = (id) => document.getElementById(id);
     return new Promise((resolve) => {
@@ -2821,7 +2820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       const render = (r, note = '') => {
         parsed = r && r.ok ? r : null;
-        verify.classList.toggle('hidden', isVault || !(r && r.short));
+        verify.classList.toggle('hidden', !(r && r.short));
         preview.classList.toggle('hidden', !parsed);
         cont.disabled = !parsed;
         if (parsed) {
@@ -2829,7 +2828,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           status.textContent = note || 'Coordinates found.';
         } else {
           preview.innerHTML = '';
-          status.textContent = note || (!r || r.empty ? '' : r.short ? `Short link: no coordinates inside.${isVault ? ' Open it in Maps and paste the full link or the coordinates.' : ''}` : r.error);
+          status.textContent = note || (!r || r.empty ? '' : r.short ? 'Short link: no coordinates inside.' : r.error);
         }
       };
       input.oninput = () => render(parseCoordinates(input.value));
@@ -2866,8 +2865,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Source chooser, then a GPS fix or pasted coordinates, then the Save dialog. Home and Vault share it (Decision 142).
-  // Resolves { d, lat, lng } or null. Vault: generic default name (a pasted place name would be plaintext), no Verify link,
-  // and nothing is kept if the Vault locks meanwhile.
+  // Resolves { d, lat, lng } or null. Nothing is kept if the Vault locks meanwhile.
   async function pickLocation(isVault) {
     const source = await askLocationSource(isVault);
     if (!source) return null;
@@ -2902,7 +2900,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       pick = await openCoordsDialog(text, isVault);
       if (!pick) return null;
       text = pick.text;
-      d = await openSaveDialog({ heading, defaultName: isVault ? fallbackName : (pick.name || fallbackName), isVault, discardLabel: 'Back to coordinates' });
+      d = await openSaveDialog({ heading, defaultName: pick.name || fallbackName, isVault, discardLabel: 'Back to coordinates' });
       if (!d && overlayAbortCount !== mark) return null; // locked meanwhile
     }
     return { d, lat: pick.lat, lng: pick.lng };
@@ -3477,13 +3475,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadCurrencySymbol();
     const items = isVault ? vaultMoneyItems() : await moneyItems();
     const tags = item.tags || await getEntryTags(item.id);
-    const autoName = !isVault && item.label === Money.summary(old);
+    const autoName = item.label === Money.summary(old);
     let details = old, d = null;
     const mark = overlayAbortCount;
     while (!d) {
       details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks });
       if (!details) return;
-      const next = isVault ? item.label : Money.summary(details);
+      const next = Money.summary(details);
       d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', isVault, discardLabel: 'Back to amount' });
       if (!d && overlayAbortCount !== mark) return; // locked meanwhile
     }

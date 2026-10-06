@@ -55,6 +55,13 @@ function moneyRowPlainText(row) {
   const d = Money.fromRow(row);
   return d ? `${moneyPlainText(d)}${row.description ? `\nNote: ${row.description}` : ''}` : row.label;
 }
+// A Vault entry's note is encrypted in its own column; decrypted here for Share and Download so they match Home (Decision 143).
+async function vaultNote(row, key) {
+  if (!row.encrypted_description) return '';
+  const { decryptPrivateNote } = await import('./crypto.js');
+  try { return await decryptPrivateNote(key, row.encrypted_description); } catch { return ''; }
+}
+const withNote = (text, note) => (note ? `${text}\nNote: ${note}` : text);
 const TEXT_EXPORT_TYPES = new Set(['note', 'location', 'reminder', 'money', 'expense']); // 'expense': legacy rows from before Decision 131
 
 // ---------------------------------------------------------------------------
@@ -73,12 +80,12 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
       await Share.share({ text: content.text, title: row.label });
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
-      await Share.share({ text: moneyPlainText(content.money), title: row.label });
+      await Share.share({ text: withNote(moneyPlainText(content.money), await vaultNote(row, privateSessionKey)), title: row.label });
     } else if (row.type === 'reminder') {
-      await Share.share({ text: reminderPlainText(row), title: row.label });
+      await Share.share({ text: reminderPlainText({ ...row, description: await vaultNote(row, privateSessionKey) }), title: row.label });
     } else if (row.type === 'location') { // same text as Home: name and map link, built from the decrypted coordinates (Decision 142)
       if (!content.location) throw new Error('This entry has no readable coordinates.');
-      await Share.share({ text: `${row.label}\n${mapLinkFor(content.location.latitude, content.location.longitude)}`, title: row.label });
+      await Share.share({ text: withNote(`${row.label}\n${mapLinkFor(content.location.latitude, content.location.longitude)}`, await vaultNote(row, privateSessionKey)), title: row.label });
     } else {
       const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeFor(row));
       try { await Share.share({ url: blobUrl, title: row.label }); }
@@ -90,7 +97,11 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
   if (row.type === 'location' && row.latitude != null && row.longitude != null) {
     // Plain text with a map link built from the stored coordinates — no network call; the
     // recipient's device resolves the link. Shared only when this action is invoked.
-    await Share.share({ text: `${row.label}\n${mapLinkFor(row.latitude, row.longitude)}`, title: row.label });
+    await Share.share({ text: withNote(`${row.label}\n${mapLinkFor(row.latitude, row.longitude)}`, row.description), title: row.label });
+  } else if (row.type === 'reminder') { // name, time, repeat, status and note, as in the Vault (Decision 143)
+    await Share.share({ text: reminderPlainText(row), title: row.label });
+  } else if (row.type === 'money' || row.type === 'expense') { // full details and the note, as in the Vault (Decision 143)
+    await Share.share({ text: moneyRowPlainText(row), title: row.label });
   } else if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
     await Share.share({ url: uri, title: row.label });
@@ -154,15 +165,12 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
       await text(path, content.text);
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
-      await text(path, moneyPlainText(content.money));
+      await text(path, withNote(moneyPlainText(content.money), await vaultNote(row, privateSessionKey)));
     } else if (row.type === 'reminder') {
-      await text(path, reminderPlainText(row));
-    } else if (row.type === 'location') { // the note is encrypted in its own column, so it is decrypted here for the copy (Decision 142)
+      await text(path, reminderPlainText({ ...row, description: await vaultNote(row, privateSessionKey) }));
+    } else if (row.type === 'location') {
       if (!content.location) throw new Error('This entry has no readable coordinates.');
-      const { decryptPrivateNote } = await import('./crypto.js');
-      let note = '';
-      try { if (row.encrypted_description) note = await decryptPrivateNote(privateSessionKey, row.encrypted_description); } catch { note = ''; }
-      await text(path, locationPlainText({ ...row, ...content.location, description: note }));
+      await text(path, locationPlainText({ ...row, ...content.location, description: await vaultNote(row, privateSessionKey) }));
     } else {
       await Filesystem.writeFile({ path, directory: Directory.Documents, data: content.fileData, recursive: true });
     }
