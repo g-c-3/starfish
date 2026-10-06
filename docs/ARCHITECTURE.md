@@ -39,7 +39,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Image | OCR'd | label + OCR text | ocr_text |
 | PDF | OCR'd | label + OCR text | ocr_text |
 | Generic file | none | label only | extension, auto_category |
-| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78 (main only; Vault variant not built), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
+| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78; Vault variant built Decision 140 (schedule columns plaintext, name plaintext label, note in `encrypted_description`, notification text `Vault Reminder`), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
 | Money | none (Home: details in `money_json`, Decisions 124, 126; Vault: details JSON in `encrypted_body`, Decision 135) | Home: label (readable summary) + description (note); Vault: in-memory index only | Home and Vault built; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are not auto-detected (Decision 131) |
 | Expense | amount + category | label/category | amount, category, replied (bool) — legacy rows only (detection removed, Decision 131); read as Spent in Money, no capture card, no private variant |
@@ -368,7 +368,7 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
-Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136).
+Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
 
 Downloads: `Documents/Dumpzone/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 

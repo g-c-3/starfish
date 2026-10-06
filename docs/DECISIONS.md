@@ -1869,3 +1869,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Returning to the app on a locked Vault screen shows the gate and offers biometric, as the Vault tab does. The app lock screen hides the Vault screen, so this never races it (Decision 59).
 - A Vault lock closes the Select files screen when it lists Vault items.
 - An app lock now also closes the static overlays that sat above the lock screen (Select files, New chooser, overwrite confirmation, due-backup prompt), each through its own Cancel or Skip, and empties the Select files list. Cause: they sit above the lock screen and nothing closed them.
+
+**140. Vault Reminder.**
+- Capture: Vault, Reminder, New opens one Save dialog (name, note, when, repeat, tags), as Home does. The name defaults to `Reminder <time>`.
+- Notification and lock screen: title `Dumpzone Reminder`, text `Vault Reminder`. The name and note are read only inside the Vault. The same text is used for a snooze and for every occurrence of a repeating reminder. Nothing else from the Vault appears in a notification.
+- Snooze and Done stay on the notification: they show nothing and need no PIN. A tap on the notification still opens nothing (Decision 92).
+- Storage: type `reminder`, `is_private` 1. `fire_at`, `repeat_rule`, `completed_at` and `snoozed_until` are plaintext columns, because the notification needs them while the app and the Vault are locked. The name is the plaintext label, as for every Vault row; the note is in `encrypted_description`; the body is empty.
+- Rows, viewer, Done, Reopen, Reschedule, Edit, Share, Download, Delete with Undo and restore from trash work as on Home. Share and Download give text (name, time, repeat, status).
+- Vault reminders never appear in Home folders, counts, search or the digest (the `is_private` scope is unchanged).
+- Cause fixed on the way: `editEntry` and restore from trash rescheduled a reminder only when it was not private.
+
+**141. Viewer header actions.** Closes the open point of Decision 134. The Money, Reminder, Location and Voice viewers show Share, Download and Delete after Edit, in the order of Decision 134, in Home and the Vault. The image and PDF viewers already had them. Delete moves the entry to trash, closes the viewer and shows Undo (Decision 137); there is no confirmation, since the trash and Undo cover a mistake. Share and Download from a Vault viewer follow Decision 41.

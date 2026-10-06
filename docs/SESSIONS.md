@@ -12,17 +12,19 @@ Phase 4 Money capture, step 6 of Decision 124's build order: Vault Money. Fresh 
 - `app.js`: Vault New in the Money folder (form, then the Save dialog, default name `Money <time>`); rows show kind, amount, status and date; month header and loan totals from the unlocked index; viewer, Add repayment and Edit work for Vault entries. `renderMoneySummary` split into `paintMoneySummary` (ids prefixed `ms` for Home, `vms` for the Vault). `moneyHooksFor(isVault)`: a Vault lock closes only Vault Money dialogs. The Vault header is emptied when the folder closes or the Vault locks. The symbol is loaded on unlock.
 - `index.html`: `#vault-money-summary` in the Vault folder view.
 - DP23, DP24 and DP25 confirmed on device.
+- Vault Reminder (Decision 140): the Vault capture card, rows, viewer, edit, restore and reschedule for Vault reminders; the notification, its snooze and every repeat occurrence read `Vault Reminder` (`notifications.js`, `vault.js`, `fileactions.js`, `db.js`, `app.js`). Checked in Node: 13 checks on the notification payloads (no name anywhere, actions kept, repeats, snooze, Home unchanged) and on storage and the index.
+- Viewer header actions (Decision 141): Share, Download and Delete in the Money, Reminder, Location and Voice viewers (`app.js`).
 - Bug found in the DP17 lock check (Decision 139): idle, background and screen-off Vault locks left the Vault content showing, with counts and no PIN prompt. `lockVault()` now redraws the gate, empties counts and search, closes a Select files screen with Vault items; the app lock closes the static overlays above the lock screen (`app.js`).
 - Undo (Decision 137): toast with an Undo button after every delete, 6 seconds, restores from trash (`app.js`, `style.css`). Android Back and back gesture run the on-screen Back action (Decision 138, `app.js`).
 - Follow-up (Decision 136): row action buttons glow individually, the row no longer reacts to them (`style.css`, `app.js`); every Download goes to `Documents/Dumpzone` with a ` (n)` suffix on a name clash; Location, Reminder and Money (and legacy Expense) download as readable `.txt`; a Download toast, or a failure toast, from one wrapper (`fileactions.js`, `app.js`).
 
-Decisions made: 135, 136, 137, 138, 139.
+Decisions made: 135, 136, 137, 138, 139, 140, 141.
 
 Verified in the authoring environment: syntax checks, `vite build`, 27 Node checks on `vault.js` (details round trip, unreadable text gives null, invalid and overrunning details refused, ciphertext holds no amount or person, `money_json` NULL, label generic, description encrypted, index details and search by person, category, summary, repayment note and description, corrupt entry still listed, index cleared) and on the Share and Download text. Not run: the Vault UI on a device, real SQLite, backup and restore of a Vault Money entry, CI.
 
 Open: Home Money Share sends the summary only (the Download empty-file gap is closed by Decision 136). A Vault Money Download and Share omit the note, which is not part of the decrypted content. Backups still save to the Documents root, outside `Dumpzone`. Other viewers still show only Edit in the header (Decision 134 open point), Money included. A single repayment cannot be edited in place. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing). DP13 next-day fire and DP17 and DP26 confirmed on device. The device backlog is clear. DP13 confirmed on device; the rest of DP17 still pending. The Undo window is 6 seconds (`UNDO_MS`); left as is. The glow, `:has` rule, Download names, toast and `.txt` bodies are not run on a device; the naming and text bodies were checked in Node, `vite build` passes.
 
-Next session start point: run DP26 (it includes the rest of DP17), then decide the viewer header actions (Edit, Share, Download, Delete) for the other viewers, then Vault Reminder and Vault Location, or Phase 16 remaining items.
+Next session start point: run DP27, then Vault Location, or Phase 16 remaining items.
 
 ---
 

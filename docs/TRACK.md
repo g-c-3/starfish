@@ -116,3 +116,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-06 | Session 92 (closed, 2) | none | DP13 confirmed on device; only DP17's Back, Vault-lock and reopen checks remain |
 | 2026-10-06 | Session 92 (reopened) | Decision 139 | Vault lock by idle, background or screen off now shows the PIN gate; app lock closes overlays above the lock screen; DP26 added; not device-tested |
 | 2026-10-06 | Session 92 (closed, 3) | none | DP17 and DP26 confirmed on device; device backlog clear; next: viewer header actions decision, Vault Reminder and Location |
+| 2026-10-06 | Session 92 (reopened, 2) | Decisions 140, 141 | Vault Reminder built (notification text `Vault Reminder`); Share, Download, Delete in the Money, Reminder, Location and Voice viewers; DP27 added; not device-tested |
