@@ -1,4 +1,4 @@
-// vault.js — Private Vault: Text/Voice/Image/PDF/Files, all under is_private=1, all under the
+// vault.js — Private Vault: Text/Voice/Image/PDF/Reminder/Location/Money/Files, all under is_private=1, all under the
 // vault's own PIN (independent of the app-open password and the backup passkey — three credentials,
 // still independent, per ARCHITECTURE.md §3). Nothing here ever writes decrypted bytes back to disk;
 // file content only ever exists in memory (a Blob URL, revoked when the caller is done with it).
@@ -12,21 +12,31 @@ import { insertEntry } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import * as Money from './money.js';
 
-const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // Text/Voice/Image/PDF/Reminder/Location/Money/Files — mirrors
-// the home screen's capture types minus expense/reminder, which stay out of vault scope (per spec).
+const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // mirrors the Home capture cards, in card order
 
 // ---------------------------------------------------------------------------
 // Content bundling — what actually goes inside encrypted_body, by type.
 // ---------------------------------------------------------------------------
-function buildVaultPlaintext(type, { text, fileData, ocrText, money } = {}) {
-  // 'reminder'/'location' have no defined content shape yet: placeholder text, same as 'note'.
+// Location content: { latitude, longitude } as JSON (Decision 142). null when missing or out of range.
+function validLocation(loc) {
+  const ok = (v, max) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max;
+  return loc && ok(loc.latitude, 90) && ok(loc.longitude, 180) ? { latitude: loc.latitude, longitude: loc.longitude } : null;
+}
+
+function buildVaultPlaintext(type, { text, fileData, ocrText, money, location } = {}) {
   // 'money' is the Money details JSON (money.js toJson), checked here so a bad object never gets encrypted.
+  // 'reminder' keeps its note in encrypted_description; its body is empty (Decision 140).
   if (type === 'money') {
     const r = Money.normalize(money);
     if (!r.ok) throw new Error(r.error);
     return Money.toJson(r.value);
   }
-  if (type === 'note' || type === 'reminder' || type === 'location') return text || '';
+  if (type === 'location') {
+    const v = validLocation(location);
+    if (!v) throw new Error('Location needs a latitude within ±90 and a longitude within ±180.');
+    return JSON.stringify(v);
+  }
+  if (type === 'note' || type === 'reminder') return text || '';
   if (type === 'voice' || type === 'file') return JSON.stringify({ fileData });
   if (type === 'image' || type === 'pdf') return JSON.stringify({ fileData, ocrText: ocrText || '' });
   throw new Error(`Type not supported in Private Vault: ${type}`);
@@ -34,7 +44,10 @@ function buildVaultPlaintext(type, { text, fileData, ocrText, money } = {}) {
 
 function parseVaultPlaintext(type, plaintext) {
   if (type === 'money') return { money: Money.fromJson(plaintext) }; // null when unreadable
-  if (type === 'note' || type === 'reminder' || type === 'location') return { text: plaintext };
+  if (type === 'location') { // null when unreadable
+    try { return { location: validLocation(JSON.parse(plaintext)) }; } catch { return { location: null }; }
+  }
+  if (type === 'note' || type === 'reminder') return { text: plaintext };
   return JSON.parse(plaintext); // {fileData} or {fileData, ocrText}
 }
 
@@ -108,7 +121,7 @@ async function buildVaultIndex(db, privateSessionKey) {
       `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
     )).values || [];
     const tags = tagRows.map((t) => t.name);
-    let searchableText = '', sizeBytes = 0, description = '', money = null;
+    let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
     try {
       if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
     } catch { description = ''; }
@@ -121,6 +134,10 @@ async function buildVaultIndex(db, privateSessionKey) {
         money = parseVaultPlaintext('money', plaintext).money;
         searchableText = money ? moneySearchText(money) : '';
         sizeBytes = new Blob([plaintext]).size;
+      } else if (row.type === 'location') {
+        location = parseVaultPlaintext('location', plaintext).location;
+        searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
+        sizeBytes = new Blob([plaintext]).size;
       } else {
         const content = parseVaultPlaintext(row.type, plaintext);
         searchableText = content.ocrText || '';
@@ -129,7 +146,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, createdAt: row.created_at,
+    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
       fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until });
   }
   vaultIndexCache = index;

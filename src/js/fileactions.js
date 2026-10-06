@@ -76,6 +76,9 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
       await Share.share({ text: moneyPlainText(content.money), title: row.label });
     } else if (row.type === 'reminder') {
       await Share.share({ text: reminderPlainText(row), title: row.label });
+    } else if (row.type === 'location') { // same text as Home: name and map link, built from the decrypted coordinates (Decision 142)
+      if (!content.location) throw new Error('This entry has no readable coordinates.');
+      await Share.share({ text: `${row.label}\n${mapLinkFor(content.location.latitude, content.location.longitude)}`, title: row.label });
     } else {
       const blobUrl = base64ToBlobUrl(content.fileData, mimeTypeFor(row));
       try { await Share.share({ url: blobUrl, title: row.label }); }
@@ -154,6 +157,12 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
       await text(path, moneyPlainText(content.money));
     } else if (row.type === 'reminder') {
       await text(path, reminderPlainText(row));
+    } else if (row.type === 'location') { // the note is encrypted in its own column, so it is decrypted here for the copy (Decision 142)
+      if (!content.location) throw new Error('This entry has no readable coordinates.');
+      const { decryptPrivateNote } = await import('./crypto.js');
+      let note = '';
+      try { if (row.encrypted_description) note = await decryptPrivateNote(privateSessionKey, row.encrypted_description); } catch { note = ''; }
+      await text(path, locationPlainText({ ...row, ...content.location, description: note }));
     } else {
       await Filesystem.writeFile({ path, directory: Directory.Documents, data: content.fileData, recursive: true });
     }

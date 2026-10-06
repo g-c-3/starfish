@@ -879,10 +879,10 @@ async function showMainTimeline(types = null) {
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
 // since spec asks for the vault to be "an exact replica of the home screen function" apart from what
 // stays private-at-rest and the Share/Download restriction being lifted (both, same as non-vault). ----
-async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money, fireAt = null, repeatRule = null }) {
+async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money, location, fireAt = null, repeatRule = null }) {
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
-  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money, fireAt, repeatRule });
+  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money, location, fireAt, repeatRule });
   await buildVaultIndex(db, privateSessionKey); // rebuild so the new item is immediately searchable/listed
   return id;
 }
@@ -1220,8 +1220,8 @@ function offerUndo(ids, { isVault = false, message = null, after = null } = {}) 
 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
-let activeLocSource = null;  // { finish } — New location: current fix or coordinates
-let activeCoords = null;     // { finish } — paste coordinates / map link dialog
+let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
+let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
@@ -1278,8 +1278,8 @@ let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so cap
 function dismissOverlays(vaultOnly = false) {
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
-  if (activeCoords) activeCoords.finish(null);      // clears the pasted text too
-  if (activeLocSource) activeLocSource.finish(null);
+  if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
+  if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
@@ -2481,7 +2481,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           toast(`Vault reminder saved, but its notification could not be scheduled: ${err.message || err}`);
         }
       } else if (type === 'location') {
-        toast(`${VAULT_TYPE_LABELS[type]} capture — coming soon.`); // same placeholder as the main capture bar
+        // Same chooser, paste dialog and Save dialog as Home. The coordinates go inside the encrypted body (Decision 142).
+        const picked = await pickLocation(true);
+        if (!picked) return;
+        await captureToVault({ type: 'location', label: picked.d.name, tags: picked.d.tags, description: picked.d.description, location: { latitude: picked.lat, longitude: picked.lng } });
+        renderVault();
+        toast('Saved to the Vault');
       } else {
         const input = document.createElement('input');
         input.type = 'file';
@@ -2779,7 +2784,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let locationFetching = false; // true while a GPS fix is pending; blocks a second Location capture
 
   // New location (Decisions 116, 117): choose current fix or pasted coordinates.
-  function askLocationSource() {
+  function askLocationSource(isVault = false) {
     const $ = (id) => document.getElementById(id);
     return new Promise((resolve) => {
       const dlg = $('loc-source-dialog');
@@ -2792,14 +2797,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       $('loc-source-current-btn').onclick = () => finish('current');
       $('loc-source-coords-btn').onclick = () => finish('coords');
       $('loc-source-cancel-btn').onclick = () => finish(null);
-      activeLocSource = { finish };
+      activeLocSource = { finish, isVault };
       dlg.classList.remove('hidden');
     });
   }
 
   // Paste dialog. Parsing is offline and live. A short link needs the person's tap on Verify link, the one network step.
   // Resolves { lat, lng, name, text } on Continue, null on Cancel or lock.
-  function openCoordsDialog(text = '') {
+  // isVault: no Verify link, so the Vault makes no network request (Decision 142).
+  function openCoordsDialog(text = '', isVault = false) {
     const $ = (id) => document.getElementById(id);
     return new Promise((resolve) => {
       const dlg = $('coords-dialog'), input = $('coords-input'), status = $('coords-status');
@@ -2815,7 +2821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       const render = (r, note = '') => {
         parsed = r && r.ok ? r : null;
-        verify.classList.toggle('hidden', !(r && r.short));
+        verify.classList.toggle('hidden', isVault || !(r && r.short));
         preview.classList.toggle('hidden', !parsed);
         cont.disabled = !parsed;
         if (parsed) {
@@ -2823,7 +2829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           status.textContent = note || 'Coordinates found.';
         } else {
           preview.innerHTML = '';
-          status.textContent = note || (!r || r.empty ? '' : r.short ? 'Short link: no coordinates inside.' : r.error);
+          status.textContent = note || (!r || r.empty ? '' : r.short ? `Short link: no coordinates inside.${isVault ? ' Open it in Maps and paste the full link or the coordinates.' : ''}` : r.error);
         }
       };
       input.oninput = () => render(parseCoordinates(input.value));
@@ -2844,7 +2850,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const leave = async () => { if (!input.value.trim() || await askDiscard()) finish(null); }; // pasted text counts as unsaved (Decision 133)
       $('coords-cancel-btn').onclick = leave;
       input.value = text;
-      activeCoords = { finish };
+      activeCoords = { finish, isVault };
       dlg.classList.remove('hidden');
       render(parseCoordinates(text));
       input.focus();
@@ -2857,6 +2863,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     await applyTags(id, d.tags);
     await renderMainTimeline();
     toast('Location saved');
+  }
+
+  // Source chooser, then a GPS fix or pasted coordinates, then the Save dialog. Home and Vault share it (Decision 142).
+  // Resolves { d, lat, lng } or null. Vault: generic default name (a pasted place name would be plaintext), no Verify link,
+  // and nothing is kept if the Vault locks meanwhile.
+  async function pickLocation(isVault) {
+    const source = await askLocationSource(isVault);
+    if (!source) return null;
+    const heading = isVault ? 'Save vault location' : 'Save location';
+    const fallbackName = `Location ${new Date().toLocaleTimeString()}`;
+    if (source === 'current') {
+      if (locationFetching) return null; // a fix is already in progress
+      locationFetching = true;
+      const newBtns = (isVault ? ['vault-folder-new-btn', 'vault-universal-new-btn'] : ['folder-new-btn', 'universal-new-btn']).map((id) => document.getElementById(id)).filter(Boolean);
+      newBtns.forEach((b) => { b.disabled = true; });
+      toast('Fetching location…', true);
+      let coords;
+      try {
+        await Geolocation.requestPermissions();
+        coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
+        hideToast();
+      } catch (err) {
+        toast(`Could not get your location: ${err.message || err}`);
+        return null;
+      } finally {
+        locationFetching = false;
+        newBtns.forEach((b) => { b.disabled = false; });
+      }
+      if (isVault && !privateSessionKey) return null; // the Vault locked during the fix
+      const d = await openSaveDialog({ heading, defaultName: fallbackName, isVault, discardLabel: 'Discard' });
+      return d ? { d, lat: coords.latitude, lng: coords.longitude } : null;
+    }
+    // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
+    let text = '', d = null, pick = null;
+    const mark = overlayAbortCount;
+    while (!d) {
+      pick = await openCoordsDialog(text, isVault);
+      if (!pick) return null;
+      text = pick.text;
+      d = await openSaveDialog({ heading, defaultName: isVault ? fallbackName : (pick.name || fallbackName), isVault, discardLabel: 'Back to coordinates' });
+      if (!d && overlayAbortCount !== mark) return null; // locked meanwhile
+    }
+    return { d, lat: pick.lat, lng: pick.lng };
   }
 
   async function startCapture(type) {
@@ -2899,43 +2948,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (type === 'location') {
       // Current GPS fix (Decision 79) or pasted coordinates / map link (Decisions 116, 117). The saved entry stays
       // on-device; Share (row action) is the only step that sends anything out.
-      const source = await askLocationSource();
-      if (!source) return;
-      let coords, suggested = '';
-      if (source === 'current') {
-        if (locationFetching) return; // a fix is already in progress
-        locationFetching = true;
-        const newBtns = ['folder-new-btn', 'universal-new-btn'].map((id) => document.getElementById(id)).filter(Boolean);
-        newBtns.forEach((b) => { b.disabled = true; });
-        toast('Fetching location…', true);
-        try {
-          await Geolocation.requestPermissions();
-          coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
-          hideToast();
-        } catch (err) {
-          toast(`Could not get your location: ${err.message || err}`);
-          return;
-        } finally {
-          locationFetching = false;
-          newBtns.forEach((b) => { b.disabled = false; });
-        }
-        const d = await openSaveDialog({ heading: 'Save location', defaultName: `Location ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
-        if (!d) return;
-        await saveLocation(d, coords.latitude, coords.longitude);
-      } else {
-        // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
-        let text = '', d = null, pick = null;
-        const mark = overlayAbortCount;
-        while (!d) {
-          pick = await openCoordsDialog(text);
-          if (!pick) return;
-          text = pick.text;
-          suggested = pick.name || `Location ${new Date().toLocaleTimeString()}`;
-          d = await openSaveDialog({ heading: 'Save location', defaultName: suggested, discardLabel: 'Back to coordinates' });
-          if (!d && overlayAbortCount !== mark) return; // locked meanwhile
-        }
-        await saveLocation(d, pick.lat, pick.lng);
-      }
+      const picked = await pickLocation(false);
+      if (picked) await saveLocation(picked.d, picked.lat, picked.lng);
     } else if (type === 'money') {
       // Form, then the Save dialog (name defaults to the readable summary; tags; the description is the note).
       await loadCurrencySymbol();
@@ -3606,14 +3620,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       <circle class="ring" cx="${x}" cy="${y}" r="9"/><circle class="pin" cx="${x}" cy="${y}" r="3.5"/></svg>`;
   }
 
-  async function openLocation(item) {
-    const fresh = async () => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+  // Vault: the coordinates come from the unlocked index (Decision 142); the view is otherwise Home's.
+  async function openLocation(item, isVault = false) {
+    const fresh = async () => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
     await openViewer({
-      title: 'Location', entry: item,
-      onEdit: async () => { await editEntryUI(await fresh(), false); },
+      title: 'Location', isVault, entry: item,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       render: async (body) => {
-        const row = await fresh();
-        const tags = await getEntryTags(row.id);
+        const found = await fresh();
+        const row = isVault // one shape for both: latitude, longitude, created_at
+          ? { ...found, latitude: found.location ? found.location.latitude : null, longitude: found.location ? found.location.longitude : null, created_at: found.createdAt }
+          : found;
+        const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
         const has = row.latitude != null && row.longitude != null;
         const coords = has ? formatCoords(row.latitude, row.longitude) : '';
         body.innerHTML = `
@@ -3879,7 +3899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (item.type === 'note') await openNote(item, isVault);
     else if (item.type === 'money' || (item.type === 'expense' && !isVault)) await openMoney(item, isVault);
     else if (item.type === 'reminder') await openReminder(item, isVault);
-    else if (item.type === 'location' && !isVault) await openLocation(item);
+    else if (item.type === 'location') await openLocation(item, isVault);
     else if (item.type === 'voice') await openVoice(item, isVault);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') await openFile(item, isVault);
