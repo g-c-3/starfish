@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); 8 capture cards, 1 still placeholder: Vault Location; Reminder Session 56 and Location Session 57 built, main only)
+- [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); Vault Location — Session 93 (Decision 142), not device-tested; all 8 Vault capture cards now built; Reminder Session 56 and Location Session 57 built on Home)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
@@ -372,8 +372,8 @@ individual items) can be picked up in any order once prerequisites are met.
     Save dialog (old reminder pop-up removed). Notification Done/Snooze buttons now work; delete cancels the
     notification, restore reschedules.
   - [x] F — Location (Session 71): detail view with coordinates (N/S, E/W and decimal), a grid plot drawn from them
-    (30° lines, no map data), Copy, and Open in Maps via a `geo:` hand-off. Main entries only; Vault Location
-    still has no capture.
+    (30° lines, no map data), Copy, and Open in Maps via a `geo:` hand-off. Vault Location viewer
+    added in Session 93 (Decision 142).
     - Session 86: New offers current location or pasted coordinates / map link; optional Verify link for short links
       (Decisions 116, 117). Confirmed on device — Session 86.
   - [~] G — Files: open with the phone's matching app (Session 87, Decisions 118 and 120; built, `vite build` passed, not run through CI,
@@ -437,6 +437,7 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP19 — confirmed on device in Session 91. Original check: Currency symbol (Session 91, Decision 130): Settings > Preferences > Currency shows the current symbol selected; tapping a chip changes it and Money rows and the month header redraw with it; a typed symbol of 1 to 5 characters applies on Enter or the button; an empty or longer entry shows a message and changes nothing; backup with App Settings, change the symbol, restore, and the symbol and chip selection return.
   - [x] DP20 — confirmed on device in Session 91. Original check: Detection removal (Session 91, Decision 131): type "spent 500 on food" in Home text capture and it saves as a plain note, not a Money entry; "remind me tomorrow at 9am to call mom" still makes a reminder; an old expense row still lists in Money and counts as Spent.
   - [x] DP21 — confirmed on device in Session 91. Original check: Discard (Session 91, Decision 133): in an edit dialog change the name, Back asks Discard, No keeps it, Yes closes; no change, Back closes with no question; same on the Money form and repayment dialog (Cancel too), the coordinates paste, and the Vault; Settings: type a backup passkey, Back asks; after a successful backup Back asks nothing.
+  - [ ] DP28 — Vault Location (Session 93, Decision 142), not device-tested. Check: Vault, Location, New offers current location or coordinates; both reach the Save dialog with the default name `Location <time>` (a pasted place name is not used); the paste dialog shows no Verify link in the Vault and a short link says to open it in Maps; the saved row opens a viewer with degrees, decimal, grid plot, Copy, Open in Maps; Share and Download give the name and map link (Download also the note); Edit changes name, tags and description only; search finds the decimal coordinates, tags and description; delete, Undo and restore from trash work; a Vault lock during the GPS fix or in either dialog saves nothing; the coordinates paste dialog on Home stays open when only the Vault locks; backup then append-restore with another PIN keeps the entry readable; Home Location unchanged (capture, viewer, Verify link).
   - [x] DP27 — Vault Reminder and viewer actions (Session 92, Decisions 140, 141) — confirmed on device in Session 92.
   - [x] DP26 — Locks always show the gate (Session 92, Decision 139) — confirmed on device in Session 92.
   - [x] DP25 — Undo and native Back (Session 92, Decisions 137, 138) — confirmed on device in Session 92.

@@ -1880,3 +1880,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause fixed on the way: `editEntry` and restore from trash rescheduled a reminder only when it was not private.
 
 **141. Viewer header actions.** Closes the open point of Decision 134. The Money, Reminder, Location and Voice viewers show Share, Download and Delete after Edit, in the order of Decision 134, in Home and the Vault. The image and PDF viewers already had them. Delete moves the entry to trash, closes the viewer and shows Undo (Decision 137); there is no confirmation, since the trash and Undo cover a mistake. Share and Download from a Vault viewer follow Decision 41.
+
+**142. Vault Location.** Last Vault capture card; closes the placeholder left by Decisions 79 and 116.
+- Capture: Vault, Location, New runs the Home flow (`pickLocation`, shared): chooser (current location or coordinates), GPS fix or paste dialog, then the Save dialog. Decisions 79, 113, 116 apply unchanged.
+- Storage: type `location`, `is_private` 1. `{ latitude, longitude }` as JSON in `encrypted_body`; note in `encrypted_description`. The `latitude` and `longitude` columns, `file_path`, `body_text` and `money_json` stay NULL. Cause: those two columns are plaintext, which is right for Home and wrong for the Vault. Coordinates outside ±90 or ±180, or not numbers, are refused before encrypting.
+- Name: the Save dialog defaults to `Location <time>`, never to a pasted place name, which would be the plaintext label. Edit changes name, tags and description only, as on Home.
+- No network from the Vault: the paste dialog hides Verify link, and a short link tells the person to open it in Maps and paste the full link or the coordinates. Decision 117 is unchanged on Home.
+- Index: built on unlock with the coordinates, a search text (decimal latitude and longitude to six places) and a size; discarded on lock. A corrupt entry is still listed, with no coordinates.
+- Viewer: the Home viewer (Decision 93) with the coordinates read from the index; the header actions follow Decision 141. Open in Maps hands a `geo:` URI to the phone, which is the same plaintext exit as Share (Decision 41); leaving the app triggers the background lock.
+- Share and Download: the name and map link, as on Home; Download is a `.txt` that also carries the note, decrypted for that copy. Plaintext from that point on (Decision 41).
+- Locks: the chooser and paste dialog carry `isVault`; a Vault lock closes only the Vault ones, an app lock closes both. A Vault lock during the GPS fix saves nothing.
+- Backup: unchanged. The entry travels in `private_vault`; cross-PIN append re-keys `encrypted_body` as for every Vault type.
+- Vault location rows never appear in Home folders, counts, search or the digest (the `is_private` scope is unchanged).

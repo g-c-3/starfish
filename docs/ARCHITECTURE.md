@@ -647,6 +647,12 @@ No network, no new permission.
 - Share and Download: readable text from the decrypted details; Download is a `.txt`.
 - Backup: no change, the entry travels in the `private_vault` category.
 
+### Location in the Vault (Decision 142)
+- `{ latitude, longitude }` JSON in `encrypted_body`; note in `encrypted_description`; `latitude`, `longitude`, `file_path`, `body_text` and `money_json` NULL. The plaintext label is generic (`Location <time>`), never a pasted place name.
+- Capture shares `pickLocation` with Home. In the Vault the paste dialog has no Verify link, so the Vault makes no network request. A Vault lock closes only the Vault's chooser and paste dialog and saves nothing from a pending GPS fix.
+- The unlocked index holds the coordinates and a decimal search text. The viewer is Home's (Decision 93) reading the index. Open in Maps, Share and Download are plaintext exits (Decision 41); Open in Maps triggers the background lock.
+- Backup: no change, the entry travels in the `private_vault` category.
+
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
 - **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially
