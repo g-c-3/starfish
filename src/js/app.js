@@ -615,16 +615,16 @@ async function yourDataSummary() {
 async function clearOldInCategory(category, olderThanDays) {
   const groups = await getSelectableGroups();
   const items = groups[category] || [];
-  if (items.length === 0) return { cleared: 0 };
+  if (items.length === 0) return { cleared: 0, ids: [] };
   const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
   const rows = await db.query(
     `SELECT id FROM entries WHERE id IN (${items.map(() => '?').join(',')}) AND created_at < ?`,
     [...items.map((it) => it.id), cutoff]
   );
   const ids = (rows.values || []).map((r) => r.id);
-  if (ids.length === 0) return { cleared: 0 };
+  if (ids.length === 0) return { cleared: 0, ids: [] };
   await runBulkFileAction('delete', ids);
-  return { cleared: ids.length };
+  return { cleared: ids.length, ids };
 }
 
 // ---- Capture pipeline: any text-producing input (typed, OCR, voice label) flows through here ----
@@ -1145,17 +1145,50 @@ function reminderSetText(ms) {
 }
 
 // sticky: stays until hideToast() or the next toast (used while a slow step runs, e.g. a GPS fix).
-function toast(message, sticky = false) {
+// action: { label, run, isVault } adds a button to the toast and keeps it up longer. Only one toast shows at a time, so a
+// newer toast drops an Undo that is still showing.
+let undoState = null; // { isVault } while a toast with an action is showing
+const UNDO_MS = 6000;
+function toast(message, sticky = false, action = null) {
   const el = document.getElementById('toast');
   if (!el) return;
   el.textContent = message;
+  el.classList.toggle('with-action', !!action);
+  undoState = action ? { isVault: !!action.isVault } : null;
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast-action';
+    b.textContent = action.label;
+    b.onclick = async () => { hideToast(); await action.run(); };
+    el.appendChild(b);
+  }
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  if (!sticky) toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  if (!sticky) toastTimer = setTimeout(hideToast, action ? UNDO_MS : 3200);
 }
 function hideToast() {
   clearTimeout(toastTimer);
+  undoState = null;
   document.getElementById('toast')?.classList.add('hidden');
+}
+
+// Deleting only moves entries to the 30-day trash, so Undo is a restore. Shown after every delete except "Delete permanently".
+let refreshAfterUndo = null; // set once the screens exist: redraws Home, search and the Vault
+function offerUndo(ids, { isVault = false, message = null, after = null } = {}) {
+  if (!ids.length) return;
+  toast(message || (ids.length === 1 ? 'Moved to trash' : `${ids.length} moved to trash`), false, {
+    label: 'Undo', isVault,
+    run: async () => {
+      try {
+        for (const id of ids) await restoreFromTrash(db, id); // also puts a pending reminder back on the schedule
+        if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+        if (refreshAfterUndo) await refreshAfterUndo();
+        if (after) await after();
+        toast(ids.length === 1 ? 'Restored' : `${ids.length} restored`);
+      } catch (err) { toast(`Could not undo: ${err.message || err}`); }
+    }
+  });
 }
 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
@@ -1216,6 +1249,7 @@ let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so cap
 
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
 function dismissOverlays(vaultOnly = false) {
+  if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
   if (activeCoords) activeCoords.finish(null);      // clears the pasted text too
   if (activeLocSource) activeLocSource.finish(null);
@@ -2202,6 +2236,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   navBackBtn.addEventListener('animationend', () => navBackBtn.classList.remove('glow'));
 
+  // Redraw after an Undo: Home (folder list, counts, totals), Home search and, when unlocked, the Vault.
+  refreshAfterUndo = async () => {
+    await renderMainTimeline();
+    document.getElementById('search-input')?.dispatchEvent(new Event('input'));
+    if (privateSessionKey) renderVault();
+  };
+
+  // Android Back button and back gesture: the same action as the on-screen Back button, with the same glow. Where that
+  // button is disabled (a section's landing page, the lock gate) the app goes to the background, which locks it (Decision 45).
+  App.addListener('backButton', () => {
+    if (!backAction()) { App.minimizeApp(); return; }
+    navBackBtn.classList.remove('glow');
+    void navBackBtn.offsetWidth;
+    navBackBtn.classList.add('glow');
+    goBack();
+  });
+
   // Same glow on the row action buttons (Edit, Share, Download, Delete): one delegated listener covers every list,
   // including rows drawn later. Only the tapped button glows; the row itself stays still (see style.css).
   document.addEventListener('click', (e) => {
@@ -2316,6 +2367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     container.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await deleteVaultEntry(b.dataset.id);
       renderVault();
+      offerUndo([b.dataset.id], { isVault: true });
     }));
     paintSelection();
   }
@@ -2518,6 +2570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusEl.textContent = 'Working…';
     const results = await runBulkFileAction(action, [...selectedIds]);
     const failed = results.filter((r) => !r.ok);
+    if (action === 'delete' && results.length > failed.length) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault: !!privateSessionKey, after: openSelectFiles });
     statusEl.textContent = `Done — ${results.length - failed.length} succeeded, ${failed.length} failed.` +
       (failed.length ? ` (${failed.map((f) => f.error).join('; ')})` : '');
   }
@@ -2938,6 +2991,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }));
     document.querySelectorAll('.main-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await softDelete(db, b.dataset.id); await renderMainTimeline();
+      offerUndo([b.dataset.id]);
     }));
     paintSelection();
   }
@@ -3042,7 +3096,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
       const done = results.length - failed.length;
       const verb = action === 'delete' ? 'moved to trash' : action === 'share' ? 'shared' : 'downloaded';
-      toast(failed.length ? `${done} ${verb}, ${failed.length} failed: ${failed[0].error}` : `${done} ${verb}`);
+      const msg = failed.length ? `${done} ${verb}, ${failed.length} failed: ${failed[0].error}` : `${done} ${verb}`;
+      if (action === 'delete' && done) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault, message: msg });
+      else toast(msg);
     }
     document.getElementById('sel-share').addEventListener('click', () => runSelection('share'));
     document.getElementById('sel-download').addEventListener('click', () => runSelection('download'));
@@ -3126,8 +3182,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.clear-old-btn').forEach((b) => b.addEventListener('click', async () => {
       if (!confirm('Move matching items to trash? They stay recoverable for 30 days.')) return;
       const result = await clearOldInCategory(b.dataset.cat, 30);
-      alert(`${result.cleared} item(s) moved to trash.`);
       await renderStorageBreakdown(); await renderMainTimeline();
+      if (result.cleared) offerUndo(result.ids, { isVault: !!privateSessionKey, message: `${result.cleared} item${result.cleared > 1 ? 's' : ''} moved to trash`, after: renderStorageBreakdown });
+      else toast('Nothing older than 30 days.');
     }));
   }
   document.getElementById('storage-breakdown-settings').addEventListener('toggle', (e) => { if (e.target.open) renderStorageBreakdown(); });
@@ -3608,6 +3665,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         downloadBtn.onclick = () => window.Dumpzone.downloadPlain(item.id);
         deleteBtn.onclick = async () => {
           if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
+          offerUndo([item.id], { isVault });
           items.splice(index, 1);
           if (!items.length) { close(); return; }
           index = Math.min(index, items.length - 1);
