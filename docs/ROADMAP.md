@@ -6,7 +6,7 @@
 - [ ] 1 — Infra & secrets
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
-- [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); Vault Location — Session 93 (Decision 142), not device-tested; all 8 Vault capture cards now built; Reminder Session 56 and Location Session 57 built on Home)
+- [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); Vault Location — Session 93 (Decision 142), Vault made to match Home (Decision 143), not device-tested; all 8 Vault capture cards now built; Reminder Session 56 and Location Session 57 built on Home)
 - [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
 - [~] 6 — Backup & restore engine (core logic done, UI wired, not device-tested)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
@@ -20,6 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
+- [ ] 17 — Encryption at rest (planned, Decision 144; A Vault labels, B Vault index per entry, C whole-database, D per-file, E backup, F migration; nothing started)
 - [x] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 confirmed — Session 92; DP14, DP15 and DP18 to DP22 confirmed — Session 91; DP16 confirmed — Session 87; DP17 confirmed — Session 92; DP23, DP24 and DP25 confirmed — Session 92; DP26 and DP27 confirmed — Session 92)
 
 ## Detailed
@@ -394,6 +395,14 @@ individual items) can be picked up in any order once prerequisites are met.
     visible. Built by CI and confirmed on a device: reminder fires, Snooze and Done
     act with no app launch. Shade tap with the app open confirmed Session 85. Row state lags the tap until the
     queue is drained.
+- [ ] **17 — Encryption at rest (Decision 144).** Planned, nothing built. Each item needs approval before it starts, and is measured on a real phone.
+  - [ ] A — Vault labels encrypted (`encrypted_label`, placeholder in `label`).
+  - [ ] B — Vault index updated per entry on add, edit and delete.
+  - [ ] C — Whole-database encryption. First check plugin support and the speed cost.
+  - [ ] D — Per-file encryption: random name, no extension, per-file key wrapped under the master key.
+  - [ ] E — Backup and restore adapted at each stage (rules in ARCHITECTURE.md §3c).
+  - [ ] F — One-time migration of existing data.
+  - Open: database key source, PBKDF2 iteration count, minimum passcode length or warning.
 - [~] **DP — Device pass backlog (Sessions 55 to 74).** Built and reasoned from code, never confirmed on a device. Run
   one by one, newest risk first; mark each with the session that confirms it.
   - [x] DP1 — Backup and restore (Session 69, Decision 91): install over an older build, existing entries survive the
@@ -437,7 +446,8 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP19 — confirmed on device in Session 91. Original check: Currency symbol (Session 91, Decision 130): Settings > Preferences > Currency shows the current symbol selected; tapping a chip changes it and Money rows and the month header redraw with it; a typed symbol of 1 to 5 characters applies on Enter or the button; an empty or longer entry shows a message and changes nothing; backup with App Settings, change the symbol, restore, and the symbol and chip selection return.
   - [x] DP20 — confirmed on device in Session 91. Original check: Detection removal (Session 91, Decision 131): type "spent 500 on food" in Home text capture and it saves as a plain note, not a Money entry; "remind me tomorrow at 9am to call mom" still makes a reminder; an old expense row still lists in Money and counts as Spent.
   - [x] DP21 — confirmed on device in Session 91. Original check: Discard (Session 91, Decision 133): in an edit dialog change the name, Back asks Discard, No keeps it, Yes closes; no change, Back closes with no question; same on the Money form and repayment dialog (Cancel too), the coordinates paste, and the Vault; Settings: type a backup passkey, Back asks; after a successful backup Back asks nothing.
-  - [ ] DP28 — Vault Location (Session 93, Decision 142), not device-tested. Check: Vault, Location, New offers current location or coordinates; both reach the Save dialog with the default name `Location <time>` (a pasted place name is not used); the paste dialog shows no Verify link in the Vault and a short link says to open it in Maps; the saved row opens a viewer with degrees, decimal, grid plot, Copy, Open in Maps; Share and Download give the name and map link (Download also the note); Edit changes name, tags and description only; search finds the decimal coordinates, tags and description; delete, Undo and restore from trash work; a Vault lock during the GPS fix or in either dialog saves nothing; the coordinates paste dialog on Home stays open when only the Vault locks; backup then append-restore with another PIN keeps the entry readable; Home Location unchanged (capture, viewer, Verify link).
+  - [ ] DP28 — Vault Location (Session 93, Decision 142), not device-tested. Check: Vault, Location, New offers current location or coordinates; both reach the Save dialog with the pasted place name or `Location <time>` as the default name; the paste dialog shows Verify link for a short link, as on Home; the saved row opens a viewer with degrees, decimal, grid plot, Copy, Open in Maps; Share and Download give the name and map link (Download also the note); Edit changes name, tags and description only; search finds the decimal coordinates, tags and description; delete, Undo and restore from trash work; a Vault lock during the GPS fix or in either dialog saves nothing; the coordinates paste dialog on Home stays open when only the Vault locks; backup then append-restore with another PIN keeps the entry readable; Home Location unchanged (capture, viewer, Verify link).
+  - [ ] DP29 — Vault matches Home (Session 93, Decision 143), not device-tested. Check: new Vault Money entry defaults to the readable summary and Edit rewrites an unchanged summary name; Vault rows show type and date (no size); Select files still shows sizes; Share and Download of a Vault Money, Reminder and Location entry include the note; Home Share of Money, Reminder and Location sends the same text as Download; Vault Verify link resolves a short map link.
   - [x] DP27 — Vault Reminder and viewer actions (Session 92, Decisions 140, 141) — confirmed on device in Session 92.
   - [x] DP26 — Locks always show the gate (Session 92, Decision 139) — confirmed on device in Session 92.
   - [x] DP25 — Undo and native Back (Session 92, Decisions 137, 138) — confirmed on device in Session 92.

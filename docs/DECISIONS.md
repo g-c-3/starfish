@@ -1892,3 +1892,32 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Locks: the chooser and paste dialog carry `isVault`; a Vault lock closes only the Vault ones, an app lock closes both. A Vault lock during the GPS fix saves nothing.
 - Backup: unchanged. The entry travels in `private_vault`; cross-PIN append re-keys `encrypted_body` as for every Vault type.
 - Vault location rows never appear in Home folders, counts, search or the digest (the `is_private` scope is unchanged).
+
+**143. Vault matches Home.** Owner direction: the Vault works as Home does, with three differences only: its own PIN, the notification text `Vault Reminder` (Decision 140), and trash, Select and search kept separate from Home. Supersedes the parts of Decisions 135 and 142 that differed.
+- Names: Vault Money defaults to the readable summary and Vault Location to the pasted place name, as on Home. Edit rewrites an unchanged summary name from the new details in both. Consequence: the label is the one plaintext field of a Vault row, so an amount, person or place name typed or pasted into it is stored unencrypted. Rename the entry to keep it out.
+- Verify link: available in the Vault paste dialog, one request to Google on tap, as on Home (Decision 117). No Vault data is sent; only the short link the person pasted.
+- Rows: Vault rows show type and date as Home rows do, not the size. The size stays in Select files.
+- Share and Download: Vault Money, Reminder and Location include the note, decrypted for that copy. Plaintext from that point on (Decision 41).
+- Home Share now sends the same text as Download for Money (summary, date, method, loan figures, repayments, note), Reminder (name, time, repeat, status, note) and Location (name, map link, note). Before, Home Money Share sent the summary only and Home Reminder Share the name only.
+
+**144. Encryption at rest: plan, staged, nothing built.** Owner goal: nothing readable by reading the database file or the files on disk, and still fast. Plan only; each stage below is a separate roadmap item (Phase 17) and needs approval before it starts.
+- Key derivation: stays PBKDF2 with AES-GCM on Web Crypto. No Argon2id and no other external crypto library. Raising the PBKDF2 iteration count is allowed inside this rule and is open.
+- Layers, in build order:
+  - A. Vault labels encrypted (`encrypted_label`, a generic placeholder in `label`), decrypted into the in-memory index on unlock, never in `entries_fts` or `label_history`. Ends the plaintext-label consequence recorded in Decision 143.
+  - B. Vault index updated per entry on add, edit and delete, instead of a full rebuild after every change.
+  - C. Whole-database encryption, so labels, sizes and the search index are unreadable without the key. Home search keeps FTS5. Whether `@capacitor-community/sqlite` supports this, and the cost in speed, are not yet checked.
+  - D. Per-file encryption on disk: a random name with no extension, a random key per file wrapped under the master key. The type no longer shows in the file name. A file is decrypted into memory to open it. Vault files stop being base64 inside the database only if this stage chooses so.
+  - E. Backup and restore adapted at every stage, under the rules below.
+  - F. One-time migration of existing data, on a successful unlock.
+- Vault entries stay encrypted under the Vault PIN on top of any database layer. Opening the database does not open the Vault.
+- Search: encrypting each field separately would force an in-memory index and slow search; whole-database encryption does not. The plan therefore avoids per-field encryption for Home.
+- Database key: open. Options are a random key held in the Android keystore (works with no app password, does not move between phones) or a key from the app password (does not exist while the password is optional). Not decided.
+- Credentials stay independent: app-open password, Vault PIN and backup passkey. No layer lets one recover another.
+- Backup rules, binding on every stage:
+  - A backup is encrypted only under the backup passkey. It never contains a device key or anything derived from one.
+  - A backup restores on a different device with the passkey; Vault entries also need the old Vault PIN, as now (append re-keys them).
+  - Restore re-encrypts everything for the current device.
+  - Backups made before this plan (plaintext labels, unencrypted files) are accepted for good, and encrypted on the way in.
+  - Append stays the default restore; the safety-backup rule is unchanged; a restore that fails partway must not leave a mix of old and new encryption.
+- Speed: each stage is measured on a real phone, including backup and restore of a large library, before it is called done.
+- Passcode strength: no length or character rule exists today. A minimum length or a warning for short passcodes is open and undecided; a short numeric PIN is the weakest point whatever the cipher.

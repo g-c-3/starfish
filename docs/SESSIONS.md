@@ -12,13 +12,17 @@ Phase 4, Vault Location (Decision 142). Fresh session; Tier 1 docs read, Tier 2 
 - `app.js`: `pickLocation(isVault)` shared by Home and Vault capture; chooser and paste dialog carry `isVault` (a Vault lock closes only Vault ones); no Verify link in the Vault; generic default name; `openLocation(item, isVault)` reads the index; `captureToVault` takes `location`; row dispatch opens Vault Location.
 - Home Location behaviour is unchanged; its branch now calls `pickLocation(false)`.
 
-Decisions made: 142.
+- Vault made to match Home (Decision 143): Vault Money and Location default names as on Home; Verify link in the Vault; Vault rows show type and date; Vault Money, Reminder and Location Share and Download include the note; Home Share of Money, Reminder and Location sends the Download text (`fileactions.js`, `app.js`).
+
+- Decision 144 recorded: staged plan for encryption at rest (Phase 17), with the backup rules. Plan only, no code.
+
+Decisions made: 142, 143, 144.
 
 Verified in the authoring environment: syntax checks, `vite build`, 34 Node checks on `vault.js` (build refuses 8 invalid inputs, accepts boundary values, parse round trip, unreadable and out-of-range text give null, stored row has NULL coordinate columns and no coordinate or note text, load decrypts, index and search by latitude, longitude, description and tag, wrong key still lists the entry, nothing inserted on refusal, note and reminder unchanged). Not run: the Vault UI on a device, real SQLite, GPS in the Vault, backup and restore of a Vault Location, `fileactions.js` Share and Download (syntax only), CI.
 
-Open: Vault Money and Vault Reminder Share and Download still omit the note (Location includes it). Open in Maps from the Vault locks the Vault on return. DP28 pending. Backups still save to the Documents root. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing).
+Open: a Vault label is plaintext, so a summary or place name used as the default name is stored unencrypted (Decision 143). Open in Maps from the Vault locks the Vault on return. DP28 pending. Backups still save to the Documents root. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing).
 
-Next session start point: device-test DP28, then Phase 16 remaining items.
+Next session start point: device-test DP28 and DP29, then Phase 17 item A (Vault labels) if approved, or Phase 16 remaining items.
 
 ---
 

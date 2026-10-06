@@ -119,3 +119,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-06 | Session 92 (reopened, 2) | Decisions 140, 141 | Vault Reminder built (notification text `Vault Reminder`); Share, Download, Delete in the Money, Reminder, Location and Voice viewers; DP27 added; not device-tested |
 | 2026-10-06 | Session 92 (closed, 4) | none | DP27 confirmed on device (Vault Reminder, viewer header actions); device backlog clear; next: Vault Location, Phase 16 |
 | 2026-10-07 | Session 93 | Decision 142 | Vault Location built (capture, viewer, Share, Download, index search); all 8 Vault capture cards now built; DP28 added; not device-tested; next: DP28, Phase 16 |
+| 2026-10-07 | Session 93 (reopened) | Decision 143 | Vault matches Home: default names, Verify link, row text, notes in Share and Download, Home Share text; DP29 added; not device-tested |
+| 2026-10-07 | Session 93 (reopened, 2) | Decision 144 | Phase 17 added: encryption at rest, plan and backup rules only; nothing built |
