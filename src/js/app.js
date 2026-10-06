@@ -79,7 +79,7 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 
 function showScreen(id, { tab } = {}) {
   exitSelection();
-  if (id === 'lock-screen') { dismissOverlays(false); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
+  if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
@@ -192,6 +192,16 @@ function openModalDismiss() {
     };
   }
   return null;
+}
+// App lock: every static overlay (z-index above the lock screen) is dismissed with its own Cancel/Skip, and the Select files
+// list, which can hold Vault item names, is emptied. Without this they stayed on top of the lock screen.
+function closeStaticModals() {
+  for (const [id, btn] of BACK_MODALS) {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden')) document.getElementById(btn)?.click();
+  }
+  const groups = document.getElementById('select-files-groups');
+  if (groups) groups.innerHTML = '';
 }
 // Fields that hold typed-but-unused input (Decision 133). A modal's field guards that modal; Settings fields guard leaving Settings.
 const MODAL_PENDING = { 'auto-backup-due-banner': 'auto-backup-passphrase-input' };
@@ -343,7 +353,13 @@ async function bootstrap() {
 async function registerBackgroundLock() {
   const { App } = await import('@capacitor/app');
   App.addListener('appStateChange', async ({ isActive }) => {
-    if (isActive) { lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); purgeOpenCopies(); return; } // only act on going TO background, not returning from it
+    if (isActive) {
+      lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); purgeOpenCopies();
+      // Back in front on the Vault screen while it is locked: show the gate and offer biometric, as the Vault tab does.
+      // The app lock screen hides the Vault screen, so this never races it (Decision 59).
+      if (!privateSessionKey && !document.getElementById('vault-screen')?.classList.contains('hidden')) window.refreshVaultGateView?.();
+      return;
+    } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });
@@ -774,8 +790,19 @@ function lockVault() {
   if (list) list.innerHTML = '';
   if (folderList) folderList.innerHTML = '';
   if (trash) trash.innerHTML = '';
+  document.querySelectorAll('#vault-capture-bar .card-count').forEach((c) => { c.textContent = ''; }); // counts must not outlive the key
+  const vs = document.getElementById('vault-search-input');
+  if (vs) vs.value = '';
+  // The Select files screen is an overlay of its own; with Vault items listed it must not outlive the key.
+  const sf = document.getElementById('select-files-screen');
+  if (sf && !sf.classList.contains('hidden') && sf.querySelector('[data-cat="private_vault"]')) {
+    sf.classList.add('hidden');
+    document.getElementById('select-files-groups').innerHTML = '';
+  }
   closeVaultFolder(); // next unlock lands on the card grid, not a previously open folder
+  if (onVaultLocked) onVaultLocked(); // idle, background and screen-off locks all end here: the gate must show, not the emptied content
 }
+let onVaultLocked = null; // set once the Vault screen exists: shows the locked gate when the Vault is on view
 
 // Called on unlock and on any vault activity (app.js's vault UI handlers should call this on
 // capture/search/browse) — a separate timer from whatever the app-level lock uses, per-spec
@@ -2122,7 +2149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderTrash(); });
 
   // ---- Private Vault ----
-  async function refreshVaultGateView() {
+  async function refreshVaultGateView({ prompt = true } = {}) {
     const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
     const needsSetup = !cred.values[0]?.private_pin_hash;
     const unlocked = !needsSetup && !!privateSessionKey;
@@ -2160,7 +2187,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Default to biometric when it's enabled — same as the app-open lock screen. Guarded so it
     // only fires once per fresh "locked" state, not on every re-render while still locked (e.g.
     // re-visiting the Vault tab after cancelling once shouldn't re-prompt every single time).
-    if (locked && settings.vaultEnabled && settings.available && !vaultBioAutoPrompted) {
+    if (prompt && locked && settings.vaultEnabled && settings.available && !vaultBioAutoPrompted) {
       vaultBioAutoPrompted = true;
       const result = await window.tryBiometricUnlockVault();
       if (result.success) await refreshVaultGateView();
@@ -2169,6 +2196,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Exposed the same way window.attemptUnlock/tryBiometricUnlockVault already are — goBack()
   // (top-level, outside this DOMContentLoaded closure) needs to call this when returning to Vault.
   window.refreshVaultGateView = refreshVaultGateView;
+  // A lock that fires while the Vault is on view (idle timer, app to background, screen off) used to clear the key and the
+  // lists but leave the content showing, with the unlocked icon and no PIN prompt. No biometric prompt here: the app may be
+  // in the background; the prompt comes when the app is back in front (appStateChange).
+  onVaultLocked = () => {
+    if (!document.getElementById('vault-screen')?.classList.contains('hidden')) refreshVaultGateView({ prompt: false });
+  };
 
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
     await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
