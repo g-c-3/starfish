@@ -1847,3 +1847,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Share and Download: readable text built from the decrypted details (summary, date, method, due, returned, remaining, repayments); Download is a `.txt`. Same rule as Decision 41: the copy is plaintext once it leaves the Vault.
 - Backup: unchanged. `private_vault` carries `encrypted_body`; cross-PIN append re-keys it as for every other Vault type.
 - The Vault symbol is the app symbol (Decision 130), loaded on unlock.
+
+**136. Row-button feedback and the download folder.**
+- Each row action button (Edit, Share, Download, Delete) glows on its own, with the Back button's animation; Delete glows in the danger colour. Cause of the old behaviour: `:active` also matches every ancestor, so pressing a button lit the whole row. The row now reacts only to a press outside `.row-actions`.
+- Every Download writes to `Documents/Dumpzone`. A name already there gets ` (2)`, ` (3)` and so on; an earlier copy is never overwritten. Backup files and Extract to device storage keep their own paths: restore reads backups from the Documents root.
+- Location, Reminder and Money (and legacy Expense rows) download as a readable `.txt`. Location: name, coordinates, map link, saved time, note. Reminder: name, time, repeat, status, note. Money: summary, date, method, due, returned, remaining, repayments, note.
+- Download shows `Downloaded to Documents/Dumpzone/<name>`; a failure shows `Could not download: <reason>`. The message comes from one wrapper, so every Download entry point shows it.

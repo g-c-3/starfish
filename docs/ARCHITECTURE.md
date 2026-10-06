@@ -366,7 +366,9 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
-Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit.
+Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136).
+
+Downloads: `Documents/Dumpzone/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 
 Download for append, its per-entry encrypted zip and the "Append files from download" import screen were
 removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
