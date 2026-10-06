@@ -20,7 +20,7 @@
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish not started)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
 - [~] 16 — Open & edit (A unified Save dialog and B text editor done — Session 69; E reminder detail done — Session 70, F location detail done — Session 71 (add by coordinates — Session 86), C voice recorder + player done — Sessions 82–83, D image grid + viewer done — Sessions 84–85, G open Files with phone app done on device — Session 87, H PDF viewer built — Session 87, not device-tested)
-- [~] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 confirmed — Session 92; DP14, DP15 and DP18 to DP22 confirmed — Session 91; DP16 confirmed — Session 87; DP17 confirmed except lock-with-prompt (found Decision 139, recheck in DP26); DP23, DP24 and DP25 confirmed — Session 92; DP26 Vault lock pending)
+- [x] DP — Device pass backlog (DP1 to DP12 confirmed Session 86; DP13 confirmed — Session 92; DP14, DP15 and DP18 to DP22 confirmed — Session 91; DP16 confirmed — Session 87; DP17 confirmed — Session 92; DP23, DP24 and DP25 confirmed — Session 92; DP26 confirmed — Session 92)
 
 ## Detailed
 
@@ -437,18 +437,14 @@ individual items) can be picked up in any order once prerequisites are met.
   - [x] DP19 — confirmed on device in Session 91. Original check: Currency symbol (Session 91, Decision 130): Settings > Preferences > Currency shows the current symbol selected; tapping a chip changes it and Money rows and the month header redraw with it; a typed symbol of 1 to 5 characters applies on Enter or the button; an empty or longer entry shows a message and changes nothing; backup with App Settings, change the symbol, restore, and the symbol and chip selection return.
   - [x] DP20 — confirmed on device in Session 91. Original check: Detection removal (Session 91, Decision 131): type "spent 500 on food" in Home text capture and it saves as a plain note, not a Money entry; "remind me tomorrow at 9am to call mom" still makes a reminder; an old expense row still lists in Money and counts as Spent.
   - [x] DP21 — confirmed on device in Session 91. Original check: Discard (Session 91, Decision 133): in an edit dialog change the name, Back asks Discard, No keeps it, Yes closes; no change, Back closes with no question; same on the Money form and repayment dialog (Cancel too), the coordinates paste, and the Vault; Settings: type a backup passkey, Back asks; after a successful backup Back asks nothing.
-  - [ ] DP26 — Locks always show the gate (Session 92, Decision 139): with the Vault open, wait for the idle auto-lock: the PIN gate shows, no folder content, no counts, no unlocked icon; with the Vault open, go Home on the phone and come back: the gate shows and biometric is offered; the same with screen off; inside a Vault folder, then lock by idle or background: the gate shows, and after unlock the card grid shows; a protected PDF with the password prompt open, then lock the Vault (button, idle and background): the viewer closes and the gate shows; reopen asks again (rest of DP17); type in the Vault search, lock, unlock: the search box is empty; Select files with Vault items listed, then a Vault lock: the screen closes; with an app password set, open Select files, the New chooser or the overwrite confirmation, then background the app: the lock screen shows with nothing above it, and after unlock none of them reappears; Home entries are not reachable over the lock screen.
+  - [x] DP26 — Locks always show the gate (Session 92, Decision 139) — confirmed on device in Session 92.
   - [x] DP25 — Undo and native Back (Session 92, Decisions 137, 138) — confirmed on device in Session 92.
   - [x] DP24 — Row buttons and downloads (Session 92, Decision 136) — confirmed on device in Session 92.
   - [x] DP23 — Vault Money (Session 92, Decision 135) — confirmed on device in Session 92.
   - [x] DP22 — confirmed on device in Session 91. Original check: Action order (Session 91, Decision 134): every row shows Edit, Share, Download, Delete in that order, Delete a red bin, in Home and the Vault; image viewer header and Select files Delete match.
   - Session 87: DP15 confirmed for a Home PDF (draws, zoom, sideways scroll, page count), rename keeps the page, and the protected-PDF
     message and Open with app fallback (Home and Vault). A Vault PDF that opens normally and locking with it open are still unchecked.
-  - [~] DP17 — In-app PDF password (Session 87, Decision 125). Confirmed on device in Home and the Vault: right password opens, wrong
-    password says so and asks again, Cancel shows the message with Open with app. Unchecked: Back during the prompt, locking the Vault
-    with the prompt open, and reopening asking again. Original check: a protected PDF in Home shows a password field; a wrong password says so
-    and asks again; the right one opens it; Cancel shows the message with Open with app; same in the Vault; Back during the prompt closes
-    the viewer; locking the Vault with the prompt open closes it; reopening asks again (nothing remembered).
+  - [x] DP17 — In-app PDF password (Session 87, Decision 125) — confirmed on device in Session 92: right password opens, wrong one asks again, Cancel offers Open with app, Back and a Vault lock close the prompt, reopening asks again.
   - Session 87: DP14 partly confirmed: a Home file opens in the phone's app with no detail step and the row icon shows the extension.
     Still unchecked: a Vault file, a type with no app, and the empty `cache/open/` after returning.
   - Session 86: DP1 to DP12 confirmed on device. DP4 no-fix notice confirmed (Location services off). DP13: Done for now and Repeat
