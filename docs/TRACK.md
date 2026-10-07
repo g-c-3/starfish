@@ -127,3 +127,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-07 | Session 94 (reopened, 3) | none | Device-test fixes for Phase 15 item 4b: Trash view placement, Select files Back and fixed size, wrapped type chips, Search close button; vite build passes; not device-tested |
 | 2026-10-07 | Session 94 (reopened, 4) | none | Home tool tiles made icon only; Phase 15 item 4c (Vault parity) added to the roadmap for a fresh session; not device-tested |
 | 2026-10-07 | Session 95 | Decision 147 | Phase 15 item 4c built: Vault tools row, Vault Trash folder, Vault Search layer, Vault-only Select; Home Select no longer lists Vault items; DP33 added; vite build passes; not device-tested, not run through CI |
+| 2026-10-07 | Session 96 | Decision 148 | Phase 15 item 4d built: Trash Undo (Restore and Delete permanently), PDF pinch zoom, PDF viewer on/off switch; DP34 added; vite build passes; not device-tested, not run through CI |

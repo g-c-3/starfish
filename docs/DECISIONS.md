@@ -1948,3 +1948,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Long-press selection in search results follows the layer's source.
 - Back order inside the Vault: dialogs and viewers, Search, Vault Trash, Vault Settings, a type folder.
 - No new data, no new credential, no network.
+
+**148. Trash Undo, pinch zoom, PDF viewer switch.**
+- Trash Undo (Home and Vault): Restore shows an Undo toast that puts the item back in the trash with its original deleted date. Delete permanently keeps its confirmation, then hides the row at once and runs the real delete after the Undo window; Undo cancels it. This replaces the exception in Decision 137 ("not offered for Delete permanently"). Only one delete is pending at a time: a second one, reopening a Trash view, or a Vault lock completes it immediately. If the app is closed inside the window the item stays in the trash.
+- Pinch zoom in the PDF viewer, Home and Vault: two fingers scale the pages by a transform while they move, then the pages are redrawn sharp at the new zoom on release, anchored at the pinch point. Range 1 to 4. The + and - buttons step from any zoom, including a pinched one.
+- PDF viewer switch: the top of each PDF folder (Home and Vault) carries one switch, in-app viewer on or off, default on. It is a single setting (`pdf_inapp_viewer`) shared by both, included in backups with the other non-sensitive settings. Off: every PDF open, including from search, goes to the phone's PDF app or its chooser (Decision 118 path). For Vault PDFs that means a temporary decrypted copy, as for other Vault files, removed on the next launch or resume.
+- No new data beyond one setting, no new credential, no network.

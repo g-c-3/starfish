@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 96**
+
+Phase 15 item 4d (Decision 148), requested after device use of the Vault PDF folder.
+- Trash Undo, Home and Vault: Restore and Delete permanently both show an Undo toast. Permanent delete is deferred until the Undo window ends; `pendingPurge` / `flushPurge()` in `app.js`; `lockVault()` completes a Vault one.
+- PDF viewer: pinch to zoom (`pdfviewer.js`, `pdfmath.js` `pinchZoom`, `nextZoom` steps from any value).
+- PDF folder switch (Home and Vault) for in-app viewer on or off; setting `pdf_inapp_viewer`, added to backup settings keys; `openEntry` routes PDFs by it.
+- Files: `app.js`, `index.html`, `pdfviewer.js`, `pdfmath.js`, `backup.js`.
+
+Decisions made: 148.
+
+Verified in the authoring environment: syntax checks, `vite build`, a Node check of the `nextZoom` and `pinchZoom` values. Not verified: the pinch gesture itself, the viewer's touch handling beside native scrolling, Undo timing on a device, the phone's PDF app launch for a Vault PDF, CI.
+
+Open: pinch shows a scaled, softer page until release by design. DP31 to DP34 pending.
+
+Next session start point: device-test DP31 to DP34; then Phase 17 B if approved, or Phase 15 item 3 or 4.
+
+---
+
 **Session 95**
 
 Phase 15 item 4c, Vault parity (Decision 147). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 143 to 146, the Vault, Phase 17 and Home tools sections of ARCHITECTURE. Item was marked as needing approval; started on the strength of the Session 94 start point.

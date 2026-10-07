@@ -795,3 +795,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `app.js`: top-level `vaultTrashOpen` / `closeVaultTrash()`, `vaultSettingsOpen` / `closeVaultSettings()`, and `searchMode` (`home` or `vault`) with `searchRows`, so `lockVault()`, `showScreen()` and `backAction()` reach them. `lockVault()` closes all three and a Vault-scoped Select dialog (`#select-files-screen` carries `data-scope`).
 - Vault Trash reuses `browse.js` and `showVaultTrash()`. Vault Search calls `searchVault()` on the in-memory index and draws rows with `vaultRowProps`.
 - Nothing from the Vault is stored or sent: lists are rebuilt from the index on each open and emptied on close or lock.
+
+## Trash Undo, PDF pinch zoom, PDF viewer switch (Decision 148)
+- `app.js`: module-level `pendingPurge` and `flushPurge()` hold the one delayed permanent delete; `lockVault()` flushes a Vault one. Restore Undo re-trashes with `softDelete` then writes back the original `deleted_at`.
+- `pdfmath.js`: `pinchZoom`, `ZOOM_MAX`; `nextZoom` steps from any value.
+- `pdfviewer.js`: touch handlers on the scroller (`touch-action: pan-x pan-y`); a transform during the pinch, `setZoom(next, anchor)` on release.
+- Setting `pdf_inapp_viewer` (`on` or `off`) in `meta`, listed in `APP_SETTINGS_KEYS` in `backup.js`. `openEntry` reads it for every PDF: `on` goes to `openPdf`, `off` to `openFile`.
+- `index.html`: `#pdf-inapp-wrap` and `#vault-pdf-inapp-wrap` at the top of the Home and Vault folder views, shown for the PDF folder only.
