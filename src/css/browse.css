@@ -3,18 +3,17 @@
 /* ---- Tools row: Select, Search, Trash, Settings ---- */
 #home-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 14px; }
 .tool-tile {
-  display: flex; flex-direction: column; align-items: center; gap: 8px; width: auto; min-width: 0; margin: 0;
-  padding: 14px 4px 11px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center; width: auto; min-width: 0; margin: 0;
+  padding: 14px 4px; border-radius: 18px;
   background: var(--surface); color: var(--fg); border: 1px solid var(--border); box-shadow: var(--shadow);
   transition: transform 0.14s ease, border-color 0.14s ease;
 }
 .tool-tile:active { transform: scale(0.96); border-color: rgba(var(--tc-rgb, 139, 124, 246), 0.55); }
 .tool-ico {
-  width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center;
+  width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center;
   background: rgba(var(--tc-rgb, 139, 124, 246), 0.16); color: var(--tc-ink, var(--brand-ink));
 }
-.tool-ico .ic { width: 22px; height: 22px; }
-.tool-label { font-size: 12.5px; font-weight: 650; letter-spacing: 0.01em; }
+.tool-ico .ic { width: 23px; height: 23px; }
 
 /* ---- Shared toolbar: type chips, then sort and period ---- */
 .bt-toolbar:empty { display: none; }
