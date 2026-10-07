@@ -18,6 +18,7 @@ Phase 17 A, Vault labels encrypted (Decision 145). Approved as the first item in
 - DP28, DP29 and DP30 confirmed on device.
 - Home tools row, Trash folder, Search layer, shared sort and filter (Decision 146, Phase 15 item 4b). NEW `src/js/browse.js` (filter, period, sort, toolbar) and `src/css/browse.css`. `index.html`: tools row replaces the Settings tile, search box and Select files button; `#trash-view`; `#search-screen`; Trash removed from Settings; `i-restore` icon. `app.js`: overlay state and open/close functions, `showScreen` and `backAction` hooks, Trash, Search and Select files redrawn with the toolbar; Select files names are now escaped.
 - Bugs fixed after the first device look at the tools row: (1) Trash showed nothing. Cause: `#trash-view` had been inserted inside the hidden `#folder-view`. Fix: moved it to be a child of `#home-tab`, confirmed by parsing the markup. Correct because `home-main` and `trash-view` are now siblings that `openTrash` and `closeTrash` toggle. (2) Select files had no usable Back. Cause: the dialog sits above the nav and the Back button's lit state was not refreshed. Fix: nav raised above the dialog while it is open, and Back state refreshed on open and close. (3) The Select dialog resized per type. Fix: fixed height, only the list scrolls, actions in one row. (4) Types needed sideways scrolling. Fix: chips wrap (all three toolbars). (5) The Search close button was a stray gradient square. Fix: a plain round button; the Search backdrop is now opaque.
+- Tool tile labels removed on request (icon only; `aria-label` and `title` kept).
 - Verified: `vite build` passes with the new files; 17 Node checks on `browse.js` (every sort, type and period filter, numeric names, counts, input not changed, toolbar markup). Not verified: how it looks or moves (no browser here), keyboard raise on Android, Back order on a device, CI.
 
 Decisions made: 145, 146.
@@ -27,7 +28,7 @@ Not verified: `vite build`, CI, the `app.js` trash change, the `backup.js` resto
 
 Open: freed pages and journal files may keep an old plaintext label until Phase 17 C. DP31 pending. Backups still save to the Documents root.
 
-Next session start point: device-test DP31 and DP32, then match the Vault (search, trash, Select files) to Home, or Phase 17 B, if approved.
+Next session start point: device-test DP31 and DP32, then Vault parity (Phase 15 item 4c), planned for a fresh session: a Vault tools row (Select, Search, Trash, Settings), Vault Trash as a folder view with decrypted labels (`vaultRowLabel`), Vault Search as the same grow-out layer reading the in-memory index and closing on Vault lock, Vault Select files with the shared toolbar. Reuse `browse.js` and `browse.css`; the Vault gate and lock paths (`lockVault`, `refreshVaultGateView`) must close every new layer. Phase 17 B follows if approved.
 
 ---
 

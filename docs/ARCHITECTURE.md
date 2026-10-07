@@ -784,7 +784,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 `npx cap add android`, which should be run once and committed.
 
 ## Home tools, Trash and Search (Decision 146)
-- `index.html`: `#home-tools` (four `.tool-tile` buttons: `#select-files-btn`, `#open-search-btn`, `#open-trash-btn`, `#open-settings-tile`), `#trash-view` inside `#home-tab`, `#search-screen` as a fixed layer, `#select-files-toolbar` in the Select files dialog. Styles in `css/browse.css`.
+- `index.html`: `#home-tools` (four icon-only `.tool-tile` buttons, named by `aria-label`: `#select-files-btn`, `#open-search-btn`, `#open-trash-btn`, `#open-settings-tile`), `#trash-view` inside `#home-tab`, `#search-screen` as a fixed layer, `#select-files-toolbar` in the Select files dialog. Styles in `css/browse.css`.
 - `browse.js`: `browse()` (type, period, sort) and `typeCounts()` are pure; `toolbarHtml()` and `bindToolbar()` draw and wire the toolbar for Trash, Search and Select files.
 - `app.js`: `trashOpen` / `closeTrash()` and `searchOpen` / `openSearchScreen()` / `closeSearchScreen()` are top-level so `showScreen()` and `backAction()` can reach them. Back order: dialogs and viewers, then Search, then Trash, then a type folder.
 - The Search layer keeps the ids `#search-input` and `#timeline`, so the redraw after Undo still reaches it.
