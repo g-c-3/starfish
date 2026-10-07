@@ -1,0 +1,83 @@
+/* Home tools, Trash folder, Search overlay and the shared sort/filter toolbar (Decision 146). Loads after style.css; uses its tokens. */
+
+/* ---- Tools row: Select, Search, Trash, Settings ---- */
+#home-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 14px; }
+.tool-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: auto; min-width: 0; margin: 0;
+  padding: 14px 4px 11px; border-radius: 18px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--border); box-shadow: var(--shadow);
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+.tool-tile:active { transform: scale(0.96); border-color: rgba(var(--tc-rgb, 139, 124, 246), 0.55); }
+.tool-ico {
+  width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center;
+  background: rgba(var(--tc-rgb, 139, 124, 246), 0.16); color: var(--tc-ink, var(--brand-ink));
+}
+.tool-ico .ic { width: 22px; height: 22px; }
+.tool-label { font-size: 12.5px; font-weight: 650; letter-spacing: 0.01em; }
+
+/* ---- Shared toolbar: type chips, then sort and period ---- */
+.bt-toolbar:empty { display: none; }
+.bt-toolbar { margin: 4px 0 14px; }
+.bt-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 1px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.bt-chips::-webkit-scrollbar { display: none; }
+.bt-chip {
+  flex: none; width: auto; margin: 0; display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; min-height: 0;
+  background: var(--surface); color: var(--muted); border: 1px solid var(--border); box-shadow: none;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.bt-chip[aria-pressed="true"] { background: var(--brand-tint); color: var(--brand-ink); border-color: var(--brand); }
+.bt-count { font-size: 11.5px; font-weight: 700; opacity: 0.75; }
+.bt-selects { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; }
+.bt-field { display: flex; flex-direction: column; gap: 4px; margin: 0; min-width: 0; }
+.bt-field > span { font-size: 12px; font-weight: 600; color: var(--muted); padding-left: 4px; }
+.bt-select { margin: 0; width: 100%; padding-top: 9px; padding-bottom: 9px; font-size: 14px; }
+
+/* ---- Trash folder ---- */
+#trash-title { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+#trash-note { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.trash-row .row-meta { white-space: normal; }
+.trash-row.expiring .row-meta .left { color: #f87171; }
+
+/* ---- Search overlay: the bar grows out of the Search tile ---- */
+body.overlay-open #lock-toggle-btn, body.overlay-open #power-close-btn { display: none; }
+body.overlay-open #bottom-nav { z-index: 9; } /* Back stays reachable */
+#search-screen { position: fixed; inset: 0; z-index: 8; }
+#search-screen.hidden { display: none !important; }
+#search-backdrop {
+  position: absolute; inset: 0; background: var(--bg); opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#search-screen.open #search-backdrop { opacity: 0.97; }
+#search-bar {
+  position: absolute; left: 14px; right: 14px; top: calc(12px + env(safe-area-inset-top, 0px)); height: 54px;
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; box-sizing: border-box;
+  border-radius: 27px; background: var(--surface-2); border: 1px solid var(--brand);
+  box-shadow: 0 0 0 4px var(--brand-tint), 0 12px 30px rgba(0, 0, 0, 0.35);
+  transform-origin: top left; will-change: transform;
+}
+#search-bar > * { opacity: 0; transition: opacity 0.18s ease; }
+#search-screen.open #search-bar > * { opacity: 1; transition-delay: 0.16s; }
+#search-bar > .ic { width: 20px; height: 20px; flex: none; color: var(--brand-ink); }
+#search-bar #search-input,
+#search-bar #search-input:focus-visible {
+  flex: 1; min-width: 0; margin: 0; padding: 0; height: 100%; border: none; border-radius: 0; box-shadow: none;
+  background: transparent; background-image: none; font-size: 17px; color: var(--fg);
+}
+#search-bar #search-input::-webkit-search-cancel-button { display: none; }
+#search-close-btn { flex: none; width: 38px; height: 38px; margin: 0; color: var(--muted); }
+#search-panel {
+  position: absolute; left: 0; right: 0; bottom: 0; top: calc(78px + env(safe-area-inset-top, 0px));
+  overflow-y: auto; padding: 6px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  opacity: 0; transform: translateY(10px); transition: opacity 0.26s ease 0.12s, transform 0.26s ease 0.12s;
+}
+#search-screen.open #search-panel { opacity: 1; transform: none; }
+#search-panel #timeline { margin-top: 4px; }
+
+/* ---- Select files: toolbar sits under the title ---- */
+#select-files-toolbar .bt-chips { padding-bottom: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-tile, .bt-chip, #search-backdrop, #search-bar > *, #search-panel { transition: none !important; }
+}
