@@ -2719,12 +2719,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     Object.assign(selectState, { type: 'all', sort: 'default' });
     drawSelectFiles();
     document.getElementById('select-files-screen').classList.remove('hidden');
+    updateBackButtonState(); // Back is lit while the dialog is open
   }
   function toggleId(id, on) { if (on) selectedIds.add(id); else selectedIds.delete(id); }
 
   document.getElementById('select-files-btn').addEventListener('click', openSelectFiles);
   document.getElementById('vault-select-files-btn').addEventListener('click', openSelectFiles);
-  document.getElementById('select-files-close-btn').addEventListener('click', () => document.getElementById('select-files-screen').classList.add('hidden'));
+  document.getElementById('select-files-close-btn').addEventListener('click', () => { document.getElementById('select-files-screen').classList.add('hidden'); updateBackButtonState(); });
 
   async function runSelectedBulk(action) {
     const statusEl = document.getElementById('select-files-status');
