@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS entries (
   longitude REAL,
   description TEXT,                  -- optional free text (Decision 91). NULL for Vault entries — see encrypted_description
   encrypted_description BLOB,        -- Private Vault only: description encrypted under the Vault key
+  encrypted_label BLOB,              -- Private Vault only (Decision 145): the label under the Vault key; label then holds VAULT_PLACEHOLDER_LABEL
 
   -- expense-specific
   amount REAL,
@@ -136,6 +137,7 @@ async function initDb(sqlite) {
   await ensureColumn(db, 'entries', 'completed_at', 'INTEGER');
   await ensureColumn(db, 'entries', 'description', 'TEXT');
   await ensureColumn(db, 'entries', 'encrypted_description', 'BLOB');
+  await ensureColumn(db, 'entries', 'encrypted_label', 'BLOB');
   // Money details as JSON text (Decision 124). Home only; Vault Money keeps the same JSON inside encrypted_body.
   await ensureColumn(db, 'entries', 'money_json', 'TEXT');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
@@ -165,6 +167,9 @@ async function ensureColumn(db, table, column, columnDefSql) {
   if (!exists) await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${columnDefSql}`);
 }
 
+// What `label` holds for a Vault row; the real label is in encrypted_label (Decision 145).
+const VAULT_PLACEHOLDER_LABEL = 'Vault item';
+
 // Insert an entry and keep the FTS index in sync.
 // Private note bodies must NOT be passed as body_text — pass encryptedBody instead and leave body_text null.
 async function insertEntry(db, entry) {
@@ -172,18 +177,18 @@ async function insertEntry(db, entry) {
     id, type, label, body_text = null, is_private = 0, encrypted_body = null,
     file_path = null, extension = null, auto_category = null, noise_reduction = null,
     latitude = null, longitude = null, amount = null, expense_category = null,
-    replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null, money_json = null
+    replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null, encrypted_label = null, money_json = null
   } = entry;
   const now = Date.now();
 
   await db.run(
     `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path,
       extension, auto_category, noise_reduction, latitude, longitude, amount, expense_category,
-      replied, fire_at, repeat_rule, description, encrypted_description, money_json, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      replied, fire_at, repeat_rule, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, type, label, body_text, is_private, encrypted_body, file_path, extension, auto_category,
      noise_reduction, latitude, longitude, amount, expense_category, replied, fire_at, repeat_rule,
-     description, encrypted_description, money_json, now, now]
+     description, encrypted_description, encrypted_label, money_json, now, now]
   );
 
   // Private Vault entries are excluded from BOTH the searchable index and label autocomplete —
@@ -332,7 +337,7 @@ const MAX_TAGS = 2; // Decision 90 — an entry holds at most two tags
 
 export {
   MAX_TAGS, listTagsForScope,
-  initDb, insertEntry, searchEntries, softDelete,
+  initDb, insertEntry, searchEntries, softDelete, VAULT_PLACEHOLDER_LABEL,
   listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
   listAllTags, listLabelHistory, SCHEMA_SQL
 };

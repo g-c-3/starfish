@@ -8,6 +8,7 @@
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { encryptBackup, decryptBackup } from './crypto.js';
+import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
 const SCHEMA_VERSION = 1;
 const FILES_DIR = 'files'; // Directory.Data/files/<uuid>.<ext> — where captured file bytes live on-device
@@ -259,7 +260,8 @@ async function restoreBackup(db, opts) {
       // restored copy takes a fresh id; the trashed one stays in Trash untouched.
       const trashedSameId = (await db.query(`SELECT id FROM entries WHERE id=?`, [entry.id])).values || [];
       if (trashedSameId.length > 0) targetId = crypto.randomUUID();
-      const labelMatch = (await db.query(
+      // Vault labels are placeholders or ciphertext, so a label match means nothing there (Decision 145).
+      const labelMatch = entry.is_private ? [] : (await db.query(
         `SELECT id FROM entries WHERE label=? AND id != ? AND deleted_at IS NULL`, [entry.label, entry.id]
       )).values || [];
       if (labelMatch.length > 0) {
@@ -272,6 +274,7 @@ async function restoreBackup(db, opts) {
     let bodyText = entry.body_text;
     let encryptedBody = entry.encrypted_body;
     let encryptedDescription = entry.encrypted_description || null;
+    let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
     if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
       // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
       // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
@@ -285,6 +288,13 @@ async function restoreBackup(db, opts) {
       if (entry.encrypted_description) {
         encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
       }
+      if (entry.encrypted_label) {
+        encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_label));
+        label = VAULT_PLACEHOLDER_LABEL;
+      } else {
+        encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, entry.label); // pre-change backup: encrypt on the way in
+        label = VAULT_PLACEHOLDER_LABEL;
+      }
     }
 
     if (entry.fileData) {
@@ -297,12 +307,12 @@ async function restoreBackup(db, opts) {
     await db.run(
       `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
         auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
-        fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, money_json, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
        entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
        entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
-       entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, entry.money_json || null,
+       entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null,
        entry.created_at || Date.now(), Date.now()]
     );
     // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts

@@ -8,7 +8,7 @@
 // entry's plaintext is a small JSON envelope instead. Same key, same AES-GCM call, same everything —
 // only what gets encrypted differs by type.
 
-import { insertEntry } from './db.js';
+import { insertEntry, VAULT_PLACEHOLDER_LABEL } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import * as Money from './money.js';
 
@@ -64,7 +64,8 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
   // point: a vault item's existence/label must never surface in ordinary, no-PIN search or
   // autocomplete. Vault's own search/autocomplete comes from the in-memory index below instead.
   await insertEntry(db, {
-    id, type, label, body_text: null, is_private: 1, encrypted_body: encryptedBody,
+    id, type, label: VAULT_PLACEHOLDER_LABEL, body_text: null, is_private: 1, encrypted_body: encryptedBody,
+    encrypted_label: await encryptPrivateNote(privateSessionKey, label), // Decision 145: the label is encrypted like the body
     file_path: null, extension, auto_category: autoCategory,
     fire_at: fireAt, repeat_rule: repeatRule, // reminders: schedule columns are plaintext, the notification needs them while locked (Decision 140)
     // Description is encrypted like the body: label is the only plaintext a Vault row carries.
@@ -80,13 +81,34 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
 }
 
 // ---------------------------------------------------------------------------
+// Labels (Decision 145). A Vault row stores a placeholder in `label` and the real label in `encrypted_label`.
+// Rows from before this change carry a plaintext label until the next unlock rewrites them.
+// ---------------------------------------------------------------------------
+const UNREADABLE_LABEL = 'Unreadable item';
+
+async function vaultRowLabel(privateSessionKey, row) {
+  if (!row.encrypted_label) return row.label; // not migrated yet
+  try { return await decryptPrivateNote(privateSessionKey, row.encrypted_label); } catch { return UNREADABLE_LABEL; }
+}
+
+// Encrypts every Vault label still in plaintext, trashed rows included. Safe to repeat or to be cut short.
+async function migrateVaultLabels(db, privateSessionKey) {
+  const rows = (await db.query(`SELECT id, label FROM entries WHERE is_private=1 AND encrypted_label IS NULL`)).values || [];
+  for (const row of rows) {
+    const enc = await encryptPrivateNote(privateSessionKey, row.label);
+    await db.run(`UPDATE entries SET encrypted_label=?, label=? WHERE id=? AND encrypted_label IS NULL`, [enc, VAULT_PLACEHOLDER_LABEL, row.id]);
+  }
+  return rows.length;
+}
+
+// ---------------------------------------------------------------------------
 // Load — decrypt on demand, never cache decrypted content beyond the in-memory index below.
 // ---------------------------------------------------------------------------
 async function loadVaultEntryContent(db, privateSessionKey, entryId) {
   const row = (await db.query(`SELECT * FROM entries WHERE id=? AND is_private=1`, [entryId])).values[0];
   if (!row) throw new Error('Vault entry not found');
   const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
-  return { row, content: parseVaultPlaintext(row.type, plaintext) };
+  return { row: { ...row, label: await vaultRowLabel(privateSessionKey, row) }, content: parseVaultPlaintext(row.type, plaintext) };
 }
 
 // Caller must URL.revokeObjectURL() the result when done — this Blob only ever exists in memory.
@@ -114,6 +136,7 @@ function moneySearchText(d) {
 let vaultIndexCache = null;
 
 async function buildVaultIndex(db, privateSessionKey) {
+  await migrateVaultLabels(db, privateSessionKey);
   const rows = (await db.query(`SELECT * FROM entries WHERE is_private=1 AND deleted_at IS NULL`)).values || [];
   const index = [];
   for (const row of rows) {
@@ -122,6 +145,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     )).values || [];
     const tags = tagRows.map((t) => t.name);
     let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
+    const label = await vaultRowLabel(privateSessionKey, row);
     try {
       if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
     } catch { description = ''; }
@@ -146,7 +170,7 @@ async function buildVaultIndex(db, privateSessionKey) {
     } catch {
       searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
     }
-    index.push({ id: row.id, type: row.type, label: row.label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
+    index.push({ id: row.id, type: row.type, label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
       fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until });
   }
   vaultIndexCache = index;
@@ -184,7 +208,7 @@ function vaultLabelSuggestions(type, partial) {
 }
 
 export {
-  VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext,
+  VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
   saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl,
   buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions
 };

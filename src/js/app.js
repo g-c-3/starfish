@@ -27,7 +27,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
-import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
+import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 
 const CATEGORY_LABELS = {
@@ -927,7 +927,8 @@ function mimeTypeForVaultRow(row) {
 async function showTrash() { return listTrash(db, { isPrivate: false }); }
 async function showVaultTrash() {
   if (!privateSessionKey) throw new Error('Vault locked');
-  return listTrash(db, { isPrivate: true });
+  const rows = await listTrash(db, { isPrivate: true });
+  return Promise.all(rows.map(async (r) => ({ ...r, label: await vaultRowLabel(privateSessionKey, r) }))); // stored label is a placeholder (Decision 145)
 }
 async function restoreEntry(id) {
   await restoreFromTrash(db, id);

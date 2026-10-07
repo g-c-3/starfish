@@ -8,6 +8,7 @@ import {
   ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES
 } from './backup.js';
 import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
+import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 import * as Money from './money.js';
 import { repeatLabel } from './reminders.js';
 
@@ -75,7 +76,9 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
 
   if (row.is_private) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before sharing');
-    const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const loaded = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const content = loaded.content;
+    row.label = loaded.row.label; // the stored label is a placeholder (Decision 145)
     if (row.type === 'note') {
       await Share.share({ text: content.text, title: row.label });
     } else if (row.type === 'money') {
@@ -154,12 +157,15 @@ async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
 async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
   const ext = row.extension ? `.${row.extension}` : (TEXT_EXPORT_TYPES.has(row.type) ? '.txt' : '');
-  const base = `${sanitizeFilename(row.label)}${ext}`;
+  let base = `${sanitizeFilename(row.label)}${ext}`;
   const text = (path, data) => Filesystem.writeFile({ path, directory: Directory.Documents, data, encoding: 'utf8', recursive: true });
 
   if (row.is_private) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before downloading');
-    const { content } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const loaded = await loadVaultEntryContent(db, privateSessionKey, entryId);
+    const content = loaded.content;
+    row.label = loaded.row.label; // the stored label is a placeholder (Decision 145)
+    base = `${sanitizeFilename(row.label)}${ext}`;
     const path = await freeDownloadPath(base);
     if (row.type === 'note') {
       await text(path, content.text);
@@ -213,7 +219,16 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   }
 
   const updates = { updated_at: Date.now() };
-  if (fields.label !== undefined) updates.label = fields.label;
+  if (fields.label !== undefined) {
+    if (row.is_private) { // the label is encrypted in the Vault; `label` keeps the placeholder (Decision 145)
+      if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
+      const { encryptPrivateNote } = await import('./crypto.js');
+      updates.encrypted_label = await encryptPrivateNote(privateSessionKey, fields.label);
+      updates.label = VAULT_PLACEHOLDER_LABEL;
+    } else {
+      updates.label = fields.label;
+    }
+  }
   if (fields.description !== undefined) {
     if (row.is_private) {
       if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
