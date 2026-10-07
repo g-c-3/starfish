@@ -131,6 +131,10 @@
 
       <div id="folder-view" class="hidden">
         <h2 id="folder-title"></h2>
+        <div id="pdf-inapp-wrap" class="hidden">
+          <label class="switch-row"><input type="checkbox" id="pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
+          <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick).</p>
+        </div>
         <button id="folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
         <div id="money-summary" class="money-summary hidden"></div>
         <div id="folder-list"></div>
@@ -365,6 +369,10 @@
 
       <div id="vault-folder-view" class="hidden">
         <h2 id="vault-folder-title"></h2>
+        <div id="vault-pdf-inapp-wrap" class="hidden">
+          <label class="switch-row"><input type="checkbox" id="vault-pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
+          <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick). The Vault then writes a temporary readable copy for that app, removed on the next launch or resume.</p>
+        </div>
         <button id="vault-folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
         <div id="vault-money-summary" class="money-summary hidden"></div>
         <div id="vault-folder-list"></div>
