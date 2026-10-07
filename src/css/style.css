@@ -545,6 +545,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 #coords-preview { margin: 0 0 12px; text-align: center; }
 #coords-preview .hero-note { margin-top: 6px; }
 #coords-verify { margin-bottom: 12px; }
+#text-dialog { z-index: 12; }
 #yesno-dialog { z-index: 12; } /* above the Save dialog (11), which it confirms over */
 #save-dialog .modal-box {
   max-width: 560px; max-height: 92vh; overflow-y: auto; border-radius: 28px 28px 0 0;
