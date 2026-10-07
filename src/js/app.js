@@ -27,6 +27,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
+import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 
@@ -80,6 +81,8 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 function showScreen(id, { tab } = {}) {
   exitSelection();
   if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
+  if (id !== 'main-screen') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
+  if (id === 'lock-screen') closeTrash();
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
   if (target) target.classList.remove('hidden');
@@ -155,6 +158,63 @@ function closeFolder() {
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
   updateBackButtonState();
+}
+
+// ---- Home overlays (Decision 146): Trash is a folder-like view; Search is a full-screen layer that grows out of its tile. ----
+let trashOpen = false;
+function closeTrash() {
+  if (!trashOpen) return;
+  trashOpen = false;
+  document.getElementById('trash-view')?.classList.add('hidden');
+  document.getElementById('home-main')?.classList.remove('hidden');
+  updateBackButtonState();
+}
+let searchOpen = false;
+let searchCloseTimer = null;
+const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+function morphTo(bar, rect) { // the bar's own box, squeezed over `rect`; its content is hidden while it travels
+  const to = bar.getBoundingClientRect();
+  bar.style.transform = `translate(${rect.left - to.left}px, ${rect.top - to.top}px) scale(${rect.width / to.width}, ${rect.height / to.height})`;
+}
+function openSearchScreen(fromEl) {
+  const scr = document.getElementById('search-screen'), bar = document.getElementById('search-bar'), input = document.getElementById('search-input');
+  if (!scr || !bar || !input || searchOpen) return;
+  searchOpen = true;
+  clearTimeout(searchCloseTimer);
+  document.body.classList.add('overlay-open');
+  bar.style.transition = 'none';
+  bar.style.transform = 'none';
+  scr.classList.remove('hidden');
+  input.focus({ preventScroll: true }); // inside the tap, so the keyboard rises with the bar
+  updateBackButtonState();
+  if (!fromEl || reducedMotion()) { scr.classList.add('open'); return; }
+  morphTo(bar, fromEl.getBoundingClientRect());
+  void bar.offsetWidth; // commits the start frame before the transition is set
+  bar.style.transition = 'transform 0.42s cubic-bezier(0.2, 0.85, 0.25, 1)';
+  bar.style.transform = 'none';
+  scr.classList.add('open');
+}
+function closeSearchScreen({ instant = false } = {}) {
+  if (!searchOpen) return;
+  searchOpen = false;
+  document.body.classList.remove('overlay-open');
+  const scr = document.getElementById('search-screen'), bar = document.getElementById('search-bar'), input = document.getElementById('search-input');
+  input?.blur();
+  updateBackButtonState();
+  const finish = () => {
+    scr.classList.add('hidden'); scr.classList.remove('open');
+    input.value = '';
+    document.getElementById('timeline').innerHTML = '';
+    document.getElementById('search-toolbar').innerHTML = '';
+    bar.style.transition = ''; bar.style.transform = '';
+  };
+  const tile = document.getElementById('open-search-btn');
+  if (instant || reducedMotion() || !tile || !tile.offsetParent) { finish(); return; }
+  bar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.6, 1)';
+  morphTo(bar, tile.getBoundingClientRect());
+  scr.classList.remove('open');
+  clearTimeout(searchCloseTimer);
+  searchCloseTimer = setTimeout(finish, 320);
 }
 
 let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
@@ -245,12 +305,14 @@ function backAction() {
   if (modal) return modal;
   if (activeEditor) return () => activeEditor.requestBack();
   if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
+  if (searchOpen) return () => closeSearchScreen();
   if (currentLocation === 'vault') {
     if (openVaultFolderType) return closeVaultFolder;
     const card = document.getElementById('vault-settings-card');
     return card && card.open ? async () => { if (await leaveIfClean(VAULT_SETTINGS_PENDING)) card.open = false; } : null;
   }
   if (currentLocation === 'settings') return async () => { if (await leaveIfClean(SETTINGS_PENDING)) showScreen('main-screen', { tab: 'home' }); };
+  if (trashOpen) return closeTrash;
   if (openFolderType) return closeFolder;
   return null;
 }
@@ -2128,26 +2190,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // ---- Trash (main) ----
-  async function renderTrash() {
-    const items = await showTrash();
-    document.getElementById('trash-list').innerHTML = items.map((row) => `
-      <div class="drive-backup-row" data-type="${row.type}">
-        <span>${row.label} (${row.type})</span>
-        <span>
-          <button class="restore-btn" data-id="${row.id}">Restore</button>
-          <button class="perm-delete-btn warning-text" data-id="${row.id}">Delete permanently</button>
+  // ---- Trash (main): a folder with type filter, period and sort (Decision 146) ----
+  const trashState = { type: 'all', sort: 'new', period: 'any' };
+  const TRASH_SORTS = [['new', 'Recently deleted'], ['old', 'Deleting soonest'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['type', 'Type']];
+  const browseType = (r) => (r.type === 'expense' ? 'money' : r.type); // legacy expense rows read as Money
+  const TRASH_KEEP_MS = 30 * 86400000; // same 30-day rule as db.js purgeOldTrash
+  let trashRows = [];
+  function drawTrash() {
+    const types = typeCounts(trashRows, browseType, VAULT_TYPES);
+    if (trashState.type !== 'all' && !types.some((t) => t.type === trashState.type)) trashState.type = 'all';
+    const rows = browse(trashRows, { ...trashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    document.getElementById('trash-toolbar').innerHTML = trashRows.length
+      ? toolbarHtml({ types, total: trashRows.length, type: trashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: trashState.sort, periods: PERIODS, period: trashState.period }) : '';
+    document.getElementById('trash-list').innerHTML = rows.map((row) => {
+      const left = Math.max(0, Math.ceil((row.deleted_at + TRASH_KEEP_MS - Date.now()) / 86400000));
+      const when = new Date(row.deleted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      return `
+      <div class="entry-row trash-row${left <= 3 ? ' expiring' : ''}" data-type="${escapeHtml(row.type)}" data-id="${escapeHtml(row.id)}">
+        ${rowIconHtml(row.type, row.extension || '')}
+        <span class="row-main">
+          <span class="row-title">${escapeHtml(row.label)}</span>
+          <span class="row-meta">${escapeHtml(typeLabelFor(browseType(row)))} · deleted ${escapeHtml(when)} · <span class="left">${left} ${left === 1 ? 'day' : 'days'} left</span></span>
         </span>
-      </div>
-    `).join('') || 'Trash is empty.';
-    document.querySelectorAll('#trash-list .restore-btn').forEach((b) => b.addEventListener('click', async () => {
-      await window.Dumpzone.restoreEntry(b.dataset.id); await renderTrash();
-    }));
-    document.querySelectorAll('#trash-list .perm-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-      if (confirm('Delete permanently? This cannot be undone.')) { await window.Dumpzone.permanentlyDelete(b.dataset.id); await renderTrash(); }
-    }));
+        <span class="row-actions">
+          <button class="icon-btn trash-restore-btn" data-id="${escapeHtml(row.id)}" aria-label="Restore" title="Restore">${iconSvg('restore')}</button>
+          <button class="icon-btn trash-purge-btn warning-text" data-id="${escapeHtml(row.id)}" aria-label="Delete permanently" title="Delete permanently">${iconSvg('trash')}</button>
+        </span>
+      </div>`;
+    }).join('') || (trashRows.length
+      ? emptyStateHtml('search')
+      : `<div class="empty-state">${iconSvg('trash')}<strong>Trash is empty</strong><span>Deleted items wait here for 30 days.</span></div>`);
   }
-  document.getElementById('trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderTrash(); });
+  async function loadTrash() { trashRows = await showTrash(); drawTrash(); }
+  async function openTrash() {
+    trashOpen = true;
+    Object.assign(trashState, { type: 'all', sort: 'new', period: 'any' });
+    document.getElementById('home-main').classList.add('hidden');
+    document.getElementById('trash-view').classList.remove('hidden');
+    updateBackButtonState();
+    await loadTrash();
+  }
+  bindToolbar(document.getElementById('trash-toolbar'), trashState, drawTrash);
+  document.getElementById('open-trash-btn').addEventListener('click', openTrash);
+  document.getElementById('trash-list').addEventListener('click', async (e) => {
+    const restore = e.target.closest('.trash-restore-btn'), purge = e.target.closest('.trash-purge-btn');
+    if (restore) {
+      await window.Dumpzone.restoreEntry(restore.dataset.id);
+      await loadTrash();
+      renderMainTimeline().catch(() => {});
+      toast('Restored');
+    } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
+      await window.Dumpzone.permanentlyDelete(purge.dataset.id);
+      await loadTrash();
+    }
+  });
 
   // ---- Private Vault ----
   async function refreshVaultGateView({ prompt = true } = {}) {
@@ -2584,19 +2680,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Select files (multi-select, shared by main + vault) ----
   let selectedIds = new Set();
-  async function openSelectFiles() {
-    selectedIds = new Set();
-    const groups = await getSelectableGroups();
+  let selectGroups = {};
+  const selectState = { type: 'all', sort: 'default' };
+  const SELECT_SORTS = [['default', 'Default'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['big', 'Largest first'], ['small', 'Smallest first']];
+  function drawSelectFiles() {
     const container = document.getElementById('select-files-groups');
-    container.innerHTML = Object.entries(groups).map(([cat, items]) => `
+    const total = Object.values(selectGroups).reduce((n, items) => n + items.length, 0);
+    if (selectState.type !== 'all' && !selectGroups[selectState.type]) selectState.type = 'all';
+    document.getElementById('select-files-toolbar').innerHTML = total
+      ? toolbarHtml({ types: Object.entries(selectGroups).map(([cat, items]) => ({ type: cat, count: items.length })), total, type: selectState.type, labelOf: (c) => CATEGORY_LABELS[c] || c, sorts: SELECT_SORTS, sort: selectState.sort }) : '';
+    const shown = Object.entries(selectGroups).filter(([cat]) => selectState.type === 'all' || cat === selectState.type)
+      .map(([cat, items]) => [cat, browse(items, { sort: selectState.sort, nameOf: (i) => i.label, typeOf: () => cat, sizeOf: (i) => i.sizeBytes || 0 })]);
+    container.innerHTML = shown.map(([cat, items]) => `
       <div class="select-files-category" data-cat="${cat}">
         <div class="select-files-category-header">
-          <input type="checkbox" class="cat-select-all" data-cat="${cat}" />
+          <input type="checkbox" class="cat-select-all" data-cat="${cat}"${items.length && items.every((it) => selectedIds.has(it.id)) ? ' checked' : ''} />
           <span>${CATEGORY_LABELS[cat] || cat} (${items.length})</span>
         </div>
         ${items.map((it) => `
           <div class="select-files-item">
-            <label><input type="checkbox" class="item-select" data-id="${it.id}" /> ${it.label}</label>
+            <label><input type="checkbox" class="item-select" data-id="${escapeHtml(it.id)}"${selectedIds.has(it.id) ? ' checked' : ''} /> ${escapeHtml(it.label)}</label>
             <span class="file-size">${formatBytes(it.sizeBytes)}</span>
           </div>
         `).join('')}
@@ -2608,7 +2711,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       group.querySelectorAll('.item-select').forEach((cb) => { cb.checked = catBox.checked; toggleId(cb.dataset.id, catBox.checked); });
     }));
     container.querySelectorAll('.item-select').forEach((cb) => cb.addEventListener('change', () => toggleId(cb.dataset.id, cb.checked)));
-
+  }
+  bindToolbar(document.getElementById('select-files-toolbar'), selectState, drawSelectFiles);
+  async function openSelectFiles() {
+    selectedIds = new Set();
+    selectGroups = await getSelectableGroups();
+    Object.assign(selectState, { type: 'all', sort: 'default' });
+    drawSelectFiles();
     document.getElementById('select-files-screen').classList.remove('hidden');
   }
   function toggleId(id, on) { if (on) selectedIds.add(id); else selectedIds.delete(id); }
@@ -3909,18 +4018,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 
-  document.getElementById('search-input').addEventListener('input', async (e) => {
-    const term = e.target.value;
-    if (!term) { document.getElementById('timeline').innerHTML = ''; return; } // entries live in their folders; this list is search results only (Decision 81)
-    let rows = [];
-    try { rows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }
-    await loadCurrencySymbol();
-    document.getElementById('timeline').innerHTML = rows.map((row) => entryRowHtml({
+  // ---- Search (Decision 146): a full-screen layer that grows out of its tile, with type filter, period and sort ----
+  const searchState = { type: 'all', sort: 'default', period: 'any' };
+  const SEARCH_SORTS = [['default', 'Best match'], ['new', 'Newest'], ['old', 'Oldest'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['type', 'Type']];
+  let searchRows = [];
+  function drawSearch() {
+    const term = document.getElementById('search-input').value;
+    const toolbar = document.getElementById('search-toolbar'), timeline = document.getElementById('timeline');
+    if (!term) { // entries live in their folders; this list is search results only (Decision 81)
+      toolbar.innerHTML = '';
+      timeline.innerHTML = `<div class="empty-state">${iconSvg('search')}<strong>Search everything</strong><span>Names, text, tags and notes.</span></div>`;
+      return;
+    }
+    const types = typeCounts(searchRows, browseType, VAULT_TYPES);
+    if (searchState.type !== 'all' && !types.some((t) => t.type === searchState.type)) searchState.type = 'all';
+    toolbar.innerHTML = searchRows.length
+      ? toolbarHtml({ types, total: searchRows.length, type: searchState.type, labelOf: typeLabelFor, sorts: SEARCH_SORTS, sort: searchState.sort, periods: PERIODS, period: searchState.period }) : '';
+    const rows = browse(searchRows, { ...searchState, dateOf: (r) => r.created_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    timeline.innerHTML = rows.map((row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
-    document.querySelectorAll('#timeline .entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
+    timeline.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
     paintSelection();
+  }
+  bindToolbar(document.getElementById('search-toolbar'), searchState, drawSearch);
+  document.getElementById('search-input').addEventListener('input', async (e) => {
+    const term = e.target.value;
+    searchRows = [];
+    if (term) {
+      try { searchRows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }
+      await loadCurrencySymbol();
+    }
+    drawSearch();
   });
+  document.getElementById('search-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); }); // Enter lowers the keyboard so the results are all in view
+  document.getElementById('open-search-btn').addEventListener('click', (e) => {
+    searchRows = [];
+    Object.assign(searchState, { type: 'all', sort: 'default', period: 'any' });
+    document.getElementById('search-input').value = '';
+    drawSearch();
+    openSearchScreen(e.currentTarget);
+  });
+  document.getElementById('search-close-btn').addEventListener('click', () => closeSearchScreen());
 
   // Auto-biometric on the app-open lock screen (Decision 56/58) — deliberately the very last
   // thing in this handler. Everything above (settings population, all button/tab wiring) is fully
