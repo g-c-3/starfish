@@ -802,3 +802,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `pdfviewer.js`: touch handlers on the scroller (`touch-action: pan-x pan-y`); a transform during the pinch, `setZoom(next, anchor)` on release.
 - Setting `pdf_inapp_viewer` (`on` or `off`) in `meta`, listed in `APP_SETTINGS_KEYS` in `backup.js`. `openEntry` reads it for every PDF: `on` goes to `openPdf`, `off` to `openFile`.
 - `index.html`: `#pdf-inapp-wrap` and `#vault-pdf-inapp-wrap` at the top of the Home and Vault folder views, shown for the PDF folder only.
+
+## In-app text and choice sheets (Decision 149)
+- `app.js`: `askText({ title, text, initial, password, decimal, ok, cancel, isVault })` and `askYesNo({ ..., explicitNo })`, both module-level with `activeText` / `activeYesNo`. `backAction()` checks them first; `dismissOverlays()` closes them on a lock (`askText` honours `isVault`).
+- `index.html`: `#text-dialog` (`#text-title`, `#text-text`, `#text-input`, `#text-ok-btn`, `#text-cancel-btn`), `#yesno-dialog`; both `modal-overlay`, z-index 12.
+- Callers: Drive passkey (text), legacy expense edit (text), Drive restore mode (`explicitNo`), Delete permanently, Select delete, Clear older than 30 days (Yes/No). Credential failures use `toast()`.

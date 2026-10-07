@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 97**
+
+Phase 15 item 3 (Decision 149). Fresh session; Tier 1 and the Tier 2 docs read (Decisions 144 to 148, Credentials section of ARCHITECTURE). Phase 17 B was not started: it needs approval.
+- `app.js`: `askText` single-field sheet (Cancel, Back and every lock close it; the field is emptied on close); `askYesNo` takes `explicitNo`; all 16 native `prompt()`/`confirm()`/`alert()` calls replaced; dead `promptForTags` and `promptForLabel` removed (nothing called them); stale comments removed.
+- `index.html`: `#text-dialog`. `style.css`: `#text-dialog` stacks above the Save dialog.
+- Replaced: wrong password, wrong PIN, failed Vault biometric, Drive connect error and the preview-only power message now toast; Delete permanently (Home and Vault Trash), Select delete and Clear older than 30 days ask through the Yes/No sheet; Drive passkey prompts and legacy expense edit use the text sheet; Drive restore mode asks Append or Overwrite through the Yes/No sheet.
+- Behaviour fix: the old Drive restore mode `confirm()` read Cancel as Overwrite. Now only the Overwrite button selects it; Back or a lock cancels the restore.
+
+Decisions made: 149.
+
+Verified in the authoring environment: syntax check, `vite build`, 10 Node checks on `askYesNo` and `askText` (explicit No, dismissal, Yes, plain No, value returned, field emptied, Back, second call refused), a scan showing no native dialog call left in `app.js`, new element ids present once. Not verified: how the sheets look or stack on a device, keyboard raise, Back order, CI. The Drive and legacy expense paths cannot be reached on a device.
+
+Open: DP31 to DP35 pending. Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
+
+Next session start point: device-test DP31 to DP35; then Phase 17 B if approved, or Phase 15 item 4 polish.
+
+---
+
 **Session 96**
 
 Phase 15 item 4d (Decision 148), requested after device use of the Vault PDF folder.

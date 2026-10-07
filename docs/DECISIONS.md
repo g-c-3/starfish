@@ -1954,3 +1954,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Pinch zoom in the PDF viewer, Home and Vault: two fingers scale the pages by a transform while they move, then the pages are redrawn sharp at the new zoom on release, anchored at the pinch point. Range 1 to 4. The + and - buttons step from any zoom, including a pinched one.
 - PDF viewer switch: the top of each PDF folder (Home and Vault) carries one switch, in-app viewer on or off, default on. It is a single setting (`pdf_inapp_viewer`) shared by both, included in backups with the other non-sensitive settings. Off: every PDF open, including from search, goes to the phone's PDF app or its chooser (Decision 118 path). For Vault PDFs that means a temporary decrypted copy, as for other Vault files, removed on the next launch or resume.
 - No new data beyond one setting, no new credential, no network.
+
+**149. In-app sheets replace native dialogs.** No `prompt()`, `confirm()` or `alert()` remains in `app.js`.
+- Text sheet (`askText`): one field, OK and Cancel, optional password mask and decimal keypad. Resolves the typed text, or `null` on Cancel, Back or a lock. The field is emptied on every close, so a typed passkey never outlives the sheet (Decision 94 rule). A Vault-flagged sheet closes on a Vault lock; others close on an app lock.
+- Yes/No sheet: `askYesNo` gains `explicitNo`. The No button then resolves `'no'`; Back or a lock still resolves `false`, so a dismissal is never read as a choice.
+- Drive restore mode: Append (safe) or Overwrite. Only the Overwrite button selects Overwrite, and the existing consequence dialog still follows. The native `confirm()` it replaces read Cancel as Overwrite.
+- Wrong password, wrong PIN, failed Vault biometric and similar notices are toasts.
+- Delete permanently, Select delete and Clear older than 30 days ask through the Yes/No sheet. Rules unchanged: 30-day trash, Undo window, Append default.
+- Removed unused `promptForTags` and `promptForLabel`; tags and names come from the Save dialog (Decision 91).
+- No new data, no new credential, no network.
