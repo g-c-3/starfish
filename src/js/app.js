@@ -2168,9 +2168,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // exclusions the universal button needs — the first (the app-open lock screen) is handled once
     // in showScreen(), but vault-screen doesn't change screen id when its internal gate/content
     // substate toggles, so that exclusion has to live here instead.
-    document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', !unlocked);
+    // Only while the Vault is on view: this runs after an await, so a lock from the Vault button has already moved to Home by now,
+    // and hiding the shared button there removed Home's lock button (Session 94).
+    const vaultOnView = !document.getElementById('vault-screen')?.classList.contains('hidden');
+    if (vaultOnView) document.getElementById('lock-toggle-btn')?.classList.toggle('hidden', !unlocked);
     if (unlocked) renderVault(); // counts and any open folder (biometric unlock reaches here too)
-    updateLockButtonDisabledState(true); // vault context never shows "disabled" — always has a PIN by the time it's shown
+    if (vaultOnView) updateLockButtonDisabledState(true); // vault context never shows "disabled" — always has a PIN by the time it's shown
 
     const settings = await getBiometricSettings();
     // The unlock button belongs on the locked gate (it's how you get in); the enable/disable
