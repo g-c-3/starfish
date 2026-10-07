@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 95**
+
+Phase 15 item 4c, Vault parity (Decision 147). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 143 to 146, the Vault, Phase 17 and Home tools sections of ARCHITECTURE. Item was marked as needing approval; started on the strength of the Session 94 start point.
+- `index.html`: `#vault-tools` row replaces the Vault search box, Select files button and inline results list; new `#vault-trash-view` and `#vault-settings-view` (the settings card moved into it, Vault Trash section removed from it).
+- `css/browse.css`: Vault tools row and view titles share Home's rules; settings card summary hidden in its view.
+- `fileactions.js`: `getSelectableEntries` takes `scope` (`home` or `vault`).
+- `app.js`: module-level `searchMode`, `searchRows`, `vaultTrashOpen`, `vaultSettingsOpen` and their close functions; `lockVault()`, `showScreen()` and `backAction()` close them; Vault Trash view built on `browse.js`; the search layer takes a source and reads the in-memory index in Vault mode; Select files scoped, Vault scope grouped by type; long-press selection in search follows the layer's source; old Vault search and Vault Trash code removed.
+- Behaviour change: Home Select and the Home storage breakdown no longer list Vault items while the Vault is unlocked.
+
+Decisions made: 147.
+
+Verified in the authoring environment: syntax checks, `vite build` against the full repo, element ids cross-checked against `index.html` (only the known dynamically created ids differ), HTML nesting parsed with no errors, no stale references to removed ids in `app.js` or the markup. Not verified: how it looks or moves, Back order and keyboard on a device, Vault lock closing each new layer on a device, real SQLite restore and purge from Vault Trash, CI.
+
+Open: `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list` (harmless). DP31 and DP32 still pending. Backups still save to the Documents root.
+
+Next session start point: device-test DP31, DP32 and DP33. Then Phase 17 B (Vault index updated per entry) if approved, or Phase 15 item 3 (capture flows in sheets) or item 4 polish.
+
+---
+
 **Session 94**
 
 Phase 17 A, Vault labels encrypted (Decision 145). Approved as the first item in order. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 142 to 144 and the Vault, Credentials and Backup sections of ARCHITECTURE.

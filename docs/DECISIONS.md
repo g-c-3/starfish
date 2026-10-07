@@ -1937,5 +1937,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Sorts: Trash: Recently deleted, Deleting soonest, Name, Type. Search: Best match, Newest, Oldest, Name, Type. Names sort numerically (item 2 before item 10).
 - Type chips wrap onto several rows so every type is visible without sideways scrolling.
 - Select files is a fixed-size dialog (the list scrolls inside it, Share, Download and Delete sit in one row, Close below) so it does not resize per type, and the Back button is raised above it while it is open.
-- Not changed: the Vault's own search, Vault Trash and Vault Select files keep their current form. Matching them is a separate item.
+- Not changed: the Vault's own search, Vault Trash and Vault Select files keep their current form. Matching them is a separate item (done, Decision 147).
+- No new data, no new credential, no network.
+
+**147. Vault tools row, Vault Trash folder, Vault Search layer, Vault-only Select.** Finishes the item left open in Decision 146. The Vault landing page shows the same four icon-only tiles as Home: Select, Search, Trash, Vault Settings. The Vault search box, the Select files button, the inline results list and the Trash section inside Vault Settings are removed.
+- Trash: a folder-like view inside the Vault (Back returns). Same toolbar, sorts and 30-day rule as Home. Labels are decrypted for display (`vaultRowLabel`) and held only while the view is open; closing it or locking the Vault empties them.
+- Search: the one search layer of Decision 146 with a source flag. Opened from the Vault tile it reads the in-memory index (Decision 39), shows Vault rows, and nothing from Home. A Vault lock, or switching to Home, closes it at once and clears the text, results and rows. The lock and power buttons stay hidden while it is open, as on Home.
+- Settings: the tile opens the existing settings card as its own view (card always open, summary hidden). Back asks Discard if a field holds typed input (Decision 133).
+- Select: Home Select lists Home entries only; Vault Select lists Vault entries only, one chip per Vault type. Before, Home Select and the Home storage breakdown also listed Vault items while the Vault was unlocked; that mixing is removed. A Vault lock closes a Vault Select dialog.
+- Long-press selection in search results follows the layer's source.
+- Back order inside the Vault: dialogs and viewers, Search, Vault Trash, Vault Settings, a type folder.
 - No new data, no new credential, no network.

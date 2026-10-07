@@ -788,4 +788,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `browse.js`: `browse()` (type, period, sort) and `typeCounts()` are pure; `toolbarHtml()` and `bindToolbar()` draw and wire the toolbar for Trash, Search and Select files.
 - `app.js`: `trashOpen` / `closeTrash()` and `searchOpen` / `openSearchScreen()` / `closeSearchScreen()` are top-level so `showScreen()` and `backAction()` can reach them. Back order: dialogs and viewers, then Search, then Trash, then a type folder.
 - The Search layer keeps the ids `#search-input` and `#timeline`, so the redraw after Undo still reaches it.
+- Select files takes a scope (`getSelectableGroups(scope)`, `getSelectableEntries(db, { scope })`): `home` or `vault`, never mixed (Decision 147).
 
+## Vault tools, Trash, Search and Select (Decision 147)
+- `index.html`: `#vault-tools` (`#vault-select-files-btn`, `#vault-open-search-btn`, `#vault-open-trash-btn`, `#vault-open-settings-tile`), `#vault-trash-view`, `#vault-settings-view` holding `#vault-settings-card` (always open, summary hidden by `browse.css`). Siblings inside `#vault-content`: `vault-main`, `vault-folder-view`, `vault-trash-view`, `vault-settings-view`.
+- `app.js`: top-level `vaultTrashOpen` / `closeVaultTrash()`, `vaultSettingsOpen` / `closeVaultSettings()`, and `searchMode` (`home` or `vault`) with `searchRows`, so `lockVault()`, `showScreen()` and `backAction()` reach them. `lockVault()` closes all three and a Vault-scoped Select dialog (`#select-files-screen` carries `data-scope`).
+- Vault Trash reuses `browse.js` and `showVaultTrash()`. Vault Search calls `searchVault()` on the in-memory index and draws rows with `vaultRowProps`.
+- Nothing from the Vault is stored or sent: lists are rebuilt from the index on each open and emptied on close or lock.
