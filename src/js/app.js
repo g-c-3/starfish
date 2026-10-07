@@ -81,7 +81,7 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 function showScreen(id, { tab } = {}) {
   exitSelection();
   if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
-  if (id !== 'main-screen') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
+  if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
   if (id === 'lock-screen') closeTrash();
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
   const target = document.getElementById(id);
@@ -170,16 +170,22 @@ function closeTrash() {
   updateBackButtonState();
 }
 let searchOpen = false;
+let searchMode = 'home'; // 'home' or 'vault': one layer, two sources (Decision 147)
+let searchRows = []; // module-level so a close or a Vault lock empties it
+let searchOriginId = 'open-search-btn';
 let searchCloseTimer = null;
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 function morphTo(bar, rect) { // the bar's own box, squeezed over `rect`; its content is hidden while it travels
   const to = bar.getBoundingClientRect();
   bar.style.transform = `translate(${rect.left - to.left}px, ${rect.top - to.top}px) scale(${rect.width / to.width}, ${rect.height / to.height})`;
 }
-function openSearchScreen(fromEl) {
+function openSearchScreen(fromEl, mode = 'home') {
   const scr = document.getElementById('search-screen'), bar = document.getElementById('search-bar'), input = document.getElementById('search-input');
   if (!scr || !bar || !input || searchOpen) return;
   searchOpen = true;
+  searchMode = mode;
+  searchOriginId = mode === 'vault' ? 'vault-open-search-btn' : 'open-search-btn';
+  input.placeholder = mode === 'vault' ? 'Search the Vault…' : 'Search everything…';
   clearTimeout(searchCloseTimer);
   document.body.classList.add('overlay-open');
   bar.style.transition = 'none';
@@ -204,11 +210,13 @@ function closeSearchScreen({ instant = false } = {}) {
   const finish = () => {
     scr.classList.add('hidden'); scr.classList.remove('open');
     input.value = '';
+    searchRows = [];
+    searchMode = 'home';
     document.getElementById('timeline').innerHTML = '';
     document.getElementById('search-toolbar').innerHTML = '';
     bar.style.transition = ''; bar.style.transform = '';
   };
-  const tile = document.getElementById('open-search-btn');
+  const tile = document.getElementById(searchOriginId);
   if (instant || reducedMotion() || !tile || !tile.offsetParent) { finish(); return; }
   bar.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.6, 1)';
   morphTo(bar, tile.getBoundingClientRect());
@@ -217,6 +225,27 @@ function closeSearchScreen({ instant = false } = {}) {
   searchCloseTimer = setTimeout(finish, 320);
 }
 
+let vaultTrashOpen = false;
+let vaultTrashRows = []; // decrypted labels live here only while the Vault Trash is open
+function closeVaultTrash() {
+  vaultTrashRows = [];
+  const list = document.getElementById('vault-trash-list'), bar = document.getElementById('vault-trash-toolbar');
+  if (list) list.innerHTML = '';
+  if (bar) bar.innerHTML = '';
+  if (!vaultTrashOpen) return;
+  vaultTrashOpen = false;
+  document.getElementById('vault-trash-view')?.classList.add('hidden');
+  document.getElementById('vault-main')?.classList.remove('hidden');
+  updateBackButtonState();
+}
+let vaultSettingsOpen = false;
+function closeVaultSettings() {
+  if (!vaultSettingsOpen) return;
+  vaultSettingsOpen = false;
+  document.getElementById('vault-settings-view')?.classList.add('hidden');
+  document.getElementById('vault-main')?.classList.remove('hidden');
+  updateBackButtonState();
+}
 let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
 function closeVaultFolder() {
   exitSelection();
@@ -276,7 +305,7 @@ async function leaveIfClean(ids) {
 
 // ---- Multi-select inside a folder or a search list: long press a row to start (Decision 122). ----
 let selection = null; // { isVault, ids: Set } while selecting, else null
-const SELECTABLE_ROOTS = ['folder-list', 'timeline', 'vault-folder-list', 'vault-list'];
+const SELECTABLE_ROOTS = ['folder-list', 'timeline', 'vault-folder-list'];
 function paintSelection() {
   const ids = selection ? selection.ids : null;
   for (const rootId of SELECTABLE_ROOTS) {
@@ -307,9 +336,10 @@ function backAction() {
   if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
   if (searchOpen) return () => closeSearchScreen();
   if (currentLocation === 'vault') {
+    if (vaultTrashOpen) return closeVaultTrash;
+    if (vaultSettingsOpen) return async () => { if (await leaveIfClean(VAULT_SETTINGS_PENDING)) closeVaultSettings(); };
     if (openVaultFolderType) return closeVaultFolder;
-    const card = document.getElementById('vault-settings-card');
-    return card && card.open ? async () => { if (await leaveIfClean(VAULT_SETTINGS_PENDING)) card.open = false; } : null;
+    return null;
   }
   if (currentLocation === 'settings') return async () => { if (await leaveIfClean(SETTINGS_PENDING)) showScreen('main-screen', { tab: 'home' }); };
   if (trashOpen) return closeTrash;
@@ -846,21 +876,20 @@ function lockVault() {
   // whatever was last rendered into them, fully visible, since nothing hid or cleared that DOM
   // content on lock. Combined with vault-screen having no gate of its own (see Decision 54),
   // this was the actual bug: the vault could appear "already unlocked" indefinitely.
-  const list = document.getElementById('vault-list');
   const trash = document.getElementById('vault-trash-list');
   const folderList = document.getElementById('vault-folder-list');
-  if (list) list.innerHTML = '';
   if (folderList) folderList.innerHTML = '';
   if (trash) trash.innerHTML = '';
   document.querySelectorAll('#vault-capture-bar .card-count').forEach((c) => { c.textContent = ''; }); // counts must not outlive the key
-  const vs = document.getElementById('vault-search-input');
-  if (vs) vs.value = '';
+  if (searchOpen && searchMode === 'vault') closeSearchScreen({ instant: true }); // text, results and rows go with the key
   // The Select files screen is an overlay of its own; with Vault items listed it must not outlive the key.
   const sf = document.getElementById('select-files-screen');
-  if (sf && !sf.classList.contains('hidden') && sf.querySelector('[data-cat="private_vault"]')) {
+  if (sf && sf.dataset.scope === 'vault') {
     sf.classList.add('hidden');
     document.getElementById('select-files-groups').innerHTML = '';
   }
+  closeVaultTrash();
+  closeVaultSettings();
   closeVaultFolder(); // next unlock lands on the card grid, not a previously open folder
   if (onVaultLocked) onVaultLocked(); // idle, background and screen-off locks all end here: the gate must show, not the emptied content
 }
@@ -1010,8 +1039,8 @@ async function deleteVaultEntry(id) {
 
 // ---- "Select files" multi-select screen — one shared implementation for both main and vault
 // (spec: "every single thing in non private will be exactly replicated in private vault") ----
-async function getSelectableGroups() {
-  return getSelectableEntries(db, { vaultIndex: privateSessionKey ? getVaultIndex() : null });
+async function getSelectableGroups(scope = 'home') {
+  return getSelectableEntries(db, { scope, vaultIndex: scope === 'vault' && privateSessionKey ? getVaultIndex() : null });
 }
 async function runBulkFileAction(action, entryIds, extraOpts = {}) {
   if (vaultAutoLockTimer) armVaultAutoLock(); // bulk-acting on vault items counts as activity too
@@ -2505,28 +2534,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintSelection();
   }
 
-  function renderVaultSearch() {
-    const term = document.getElementById('vault-search-input').value;
-    const list = document.getElementById('vault-list');
-    if (!term) { list.innerHTML = ''; return; }
-    const items = searchVault(term);
-    list.innerHTML = items.map((e2) => entryRowHtml(vaultRowProps(e2))).join('') || emptyStateHtml('search');
-    list.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
-      await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
-      renderVault();
-    }));
-    paintSelection();
-  }
-
   // Call only while unlocked (browseVault/searchVault throw otherwise).
   function renderVault() {
     renderVaultCounts();
     if (openVaultFolderType) renderVaultFolderList();
-    renderVaultSearch();
+    if (searchOpen && searchMode === 'vault') runVaultSearch();
     renderVaultMoneySummary();
   }
-
-  document.getElementById('vault-search-input').addEventListener('input', renderVaultSearch);
 
   async function startVaultCapture(type) {
     try {
@@ -2633,23 +2647,84 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
   document.getElementById('vault-folder-new-btn').addEventListener('click', () => startVaultCapture(openVaultFolderType));
 
-  async function renderVaultTrash() {
-    const items = await showVaultTrash();
-    document.getElementById('vault-trash-list').innerHTML = items.map((row) => `
-      <div class="drive-backup-row" data-type="${row.type}">
-        <span>${row.label} (${VAULT_TYPE_LABELS[row.type]})</span>
-        <span>
-          <button class="vault-restore-btn" data-id="${row.id}">Restore</button>
-          <button class="vault-perm-delete-btn warning-text" data-id="${row.id}">Delete permanently</button>
+  // ---- Vault Trash: a folder with the same toolbar as Home's (Decision 147). Labels are decrypted for display only. ----
+  const vaultTrashState = { type: 'all', sort: 'new', period: 'any' };
+  function drawVaultTrash() {
+    const types = typeCounts(vaultTrashRows, browseType, VAULT_TYPES);
+    if (vaultTrashState.type !== 'all' && !types.some((t) => t.type === vaultTrashState.type)) vaultTrashState.type = 'all';
+    const rows = browse(vaultTrashRows, { ...vaultTrashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    document.getElementById('vault-trash-toolbar').innerHTML = vaultTrashRows.length
+      ? toolbarHtml({ types, total: vaultTrashRows.length, type: vaultTrashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: vaultTrashState.sort, periods: PERIODS, period: vaultTrashState.period }) : '';
+    document.getElementById('vault-trash-list').innerHTML = rows.map((row) => {
+      const left = Math.max(0, Math.ceil((row.deleted_at + TRASH_KEEP_MS - Date.now()) / 86400000));
+      const when = new Date(row.deleted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      return `
+      <div class="entry-row trash-row${left <= 3 ? ' expiring' : ''}" data-type="${escapeHtml(row.type)}" data-id="${escapeHtml(row.id)}">
+        ${rowIconHtml(row.type, row.extension || '')}
+        <span class="row-main">
+          <span class="row-title">${escapeHtml(row.label)}</span>
+          <span class="row-meta">${escapeHtml(typeLabelFor(browseType(row)))} · deleted ${escapeHtml(when)} · <span class="left">${left} ${left === 1 ? 'day' : 'days'} left</span></span>
         </span>
-      </div>
-    `).join('') || 'Vault trash is empty.';
-    document.querySelectorAll('.vault-restore-btn').forEach((b) => b.addEventListener('click', async () => { await restoreEntry(b.dataset.id); await renderVaultTrash(); renderVault(); }));
-    document.querySelectorAll('.vault-perm-delete-btn').forEach((b) => b.addEventListener('click', async () => {
-      if (confirm('Delete permanently? This cannot be undone.')) { await permanentlyDelete(b.dataset.id); await renderVaultTrash(); renderVault(); }
-    }));
+        <span class="row-actions">
+          <button class="icon-btn vtrash-restore-btn" data-id="${escapeHtml(row.id)}" aria-label="Restore" title="Restore">${iconSvg('restore')}</button>
+          <button class="icon-btn vtrash-purge-btn warning-text" data-id="${escapeHtml(row.id)}" aria-label="Delete permanently" title="Delete permanently">${iconSvg('trash')}</button>
+        </span>
+      </div>`;
+    }).join('') || (vaultTrashRows.length
+      ? emptyStateHtml('search')
+      : `<div class="empty-state">${iconSvg('trash')}<strong>Vault Trash is empty</strong><span>Deleted Vault items wait here for 30 days.</span></div>`);
   }
-  document.getElementById('vault-trash-settings').addEventListener('toggle', (e) => { if (e.target.open) renderVaultTrash(); });
+  async function loadVaultTrash() {
+    if (!privateSessionKey) return;
+    vaultTrashRows = await showVaultTrash();
+    drawVaultTrash();
+  }
+  async function openVaultTrash() {
+    vaultTrashOpen = true;
+    Object.assign(vaultTrashState, { type: 'all', sort: 'new', period: 'any' });
+    document.getElementById('vault-main').classList.add('hidden');
+    document.getElementById('vault-trash-view').classList.remove('hidden');
+    updateBackButtonState();
+    await loadVaultTrash();
+  }
+  bindToolbar(document.getElementById('vault-trash-toolbar'), vaultTrashState, drawVaultTrash);
+  document.getElementById('vault-open-trash-btn').addEventListener('click', openVaultTrash);
+  document.getElementById('vault-trash-list').addEventListener('click', async (e) => {
+    const restore = e.target.closest('.vtrash-restore-btn'), purge = e.target.closest('.vtrash-purge-btn');
+    if (restore) {
+      await restoreEntry(restore.dataset.id);
+      await loadVaultTrash();
+      renderVault();
+      toast('Restored');
+    } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
+      await permanentlyDelete(purge.dataset.id);
+      await loadVaultTrash();
+      renderVault();
+    }
+  });
+
+  // ---- Vault Settings tile: opens the settings card as its own view; Back returns to the landing page ----
+  document.getElementById('vault-open-settings-tile').addEventListener('click', () => {
+    vaultSettingsOpen = true;
+    document.getElementById('vault-main').classList.add('hidden');
+    document.getElementById('vault-settings-view').classList.remove('hidden');
+    updateBackButtonState();
+  });
+
+  // ---- Vault Search: the shared search layer reading the in-memory index (Decision 147) ----
+  function runVaultSearch() {
+    const term = document.getElementById('search-input').value;
+    searchRows = term && privateSessionKey ? searchVault(term) : [];
+    drawSearch();
+  }
+  document.getElementById('vault-open-search-btn').addEventListener('click', (e) => {
+    if (!privateSessionKey) return;
+    searchRows = [];
+    Object.assign(searchState, { type: 'all', sort: 'default', period: 'any' });
+    document.getElementById('search-input').value = '';
+    openSearchScreen(e.currentTarget, 'vault');
+    drawSearch();
+  });
 
   document.getElementById('vault-auto-lock-select').addEventListener('change', (e) => setVaultAutoLockMinutes(Number(e.target.value)));
   document.getElementById('app-auto-lock-select').addEventListener('change', (e) => setAutoLockMinutes(Number(e.target.value)));
@@ -2683,19 +2758,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   let selectGroups = {};
   const selectState = { type: 'all', sort: 'default' };
   const SELECT_SORTS = [['default', 'Default'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['big', 'Largest first'], ['small', 'Smallest first']];
+  const selectScope = () => document.getElementById('select-files-screen').dataset.scope || 'home';
+  const selectLabel = (c) => (selectScope() === 'vault' ? typeLabelFor(c) : (CATEGORY_LABELS[c] || c));
   function drawSelectFiles() {
     const container = document.getElementById('select-files-groups');
     const total = Object.values(selectGroups).reduce((n, items) => n + items.length, 0);
     if (selectState.type !== 'all' && !selectGroups[selectState.type]) selectState.type = 'all';
     document.getElementById('select-files-toolbar').innerHTML = total
-      ? toolbarHtml({ types: Object.entries(selectGroups).map(([cat, items]) => ({ type: cat, count: items.length })), total, type: selectState.type, labelOf: (c) => CATEGORY_LABELS[c] || c, sorts: SELECT_SORTS, sort: selectState.sort }) : '';
+      ? toolbarHtml({ types: Object.entries(selectGroups).map(([cat, items]) => ({ type: cat, count: items.length })), total, type: selectState.type, labelOf: selectLabel, sorts: SELECT_SORTS, sort: selectState.sort }) : '';
     const shown = Object.entries(selectGroups).filter(([cat]) => selectState.type === 'all' || cat === selectState.type)
       .map(([cat, items]) => [cat, browse(items, { sort: selectState.sort, nameOf: (i) => i.label, typeOf: () => cat, sizeOf: (i) => i.sizeBytes || 0 })]);
     container.innerHTML = shown.map(([cat, items]) => `
       <div class="select-files-category" data-cat="${cat}">
         <div class="select-files-category-header">
           <input type="checkbox" class="cat-select-all" data-cat="${cat}"${items.length && items.every((it) => selectedIds.has(it.id)) ? ' checked' : ''} />
-          <span>${CATEGORY_LABELS[cat] || cat} (${items.length})</span>
+          <span>${escapeHtml(selectLabel(cat))} (${items.length})</span>
         </div>
         ${items.map((it) => `
           <div class="select-files-item">
@@ -2713,9 +2790,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     container.querySelectorAll('.item-select').forEach((cb) => cb.addEventListener('change', () => toggleId(cb.dataset.id, cb.checked)));
   }
   bindToolbar(document.getElementById('select-files-toolbar'), selectState, drawSelectFiles);
-  async function openSelectFiles() {
+  async function openSelectFiles(scope = 'home') {
+    if (scope === 'vault' && !privateSessionKey) return;
     selectedIds = new Set();
-    selectGroups = await getSelectableGroups();
+    document.getElementById('select-files-screen').dataset.scope = scope;
+    const groups = await getSelectableGroups(scope);
+    selectGroups = groups;
+    if (scope === 'vault') { // one chip per Vault type, in the usual order
+      selectGroups = {};
+      const all = groups.private_vault || [];
+      for (const t of VAULT_TYPES) { const items = all.filter((i) => i.type === t); if (items.length) selectGroups[t] = items; }
+    }
     Object.assign(selectState, { type: 'all', sort: 'default' });
     drawSelectFiles();
     document.getElementById('select-files-screen').classList.remove('hidden');
@@ -2723,8 +2808,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   function toggleId(id, on) { if (on) selectedIds.add(id); else selectedIds.delete(id); }
 
-  document.getElementById('select-files-btn').addEventListener('click', openSelectFiles);
-  document.getElementById('vault-select-files-btn').addEventListener('click', openSelectFiles);
+  document.getElementById('select-files-btn').addEventListener('click', () => openSelectFiles('home'));
+  document.getElementById('vault-select-files-btn').addEventListener('click', () => openSelectFiles('vault'));
   document.getElementById('select-files-close-btn').addEventListener('click', () => { document.getElementById('select-files-screen').classList.add('hidden'); updateBackButtonState(); });
 
   async function runSelectedBulk(action) {
@@ -2734,7 +2819,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusEl.textContent = 'Working…';
     const results = await runBulkFileAction(action, [...selectedIds]);
     const failed = results.filter((r) => !r.ok);
-    if (action === 'delete' && results.length > failed.length) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault: !!privateSessionKey, after: openSelectFiles });
+    if (action === 'delete' && results.length > failed.length) { const scope = selectScope(); offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault: scope === 'vault', after: () => openSelectFiles(scope) }); }
     statusEl.textContent = `Done — ${results.length - failed.length} succeeded, ${failed.length} failed.` +
       (failed.length ? ` (${failed.map((f) => f.error).join('; ')})` : '');
   }
@@ -3200,7 +3285,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (selection.ids.size === 0) { exitSelection(); return; } // deselecting the last item leaves selection mode
       paintSelection();
     }
-    for (const [rootId, isVault] of [['folder-list', false], ['timeline', false], ['vault-folder-list', true], ['vault-list', true]]) {
+    for (const [rootId, staticVault] of [['folder-list', false], ['timeline', false], ['vault-folder-list', true]]) {
+      const vaultNow = () => (rootId === 'timeline' ? searchMode === 'vault' : staticVault); // the search list serves Home or the Vault
       const root = document.getElementById(rootId);
       if (!root) continue;
       let timer = null, startX = 0, startY = 0, swallow = false;
@@ -3215,10 +3301,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const id = row.dataset.id;
         timer = setTimeout(() => {
           timer = null;
-          if (selection && selection.isVault !== isVault) return;
+          if (selection && selection.isVault !== vaultNow()) return;
           swallow = true; // the click that follows this press must not open the entry
           if (!selection) {
-            selection = { isVault, ids: new Set() };
+            selection = { isVault: vaultNow(), ids: new Set() };
             document.body.classList.add('selecting');
             document.getElementById('select-bar')?.classList.remove('hidden');
             updateBackButtonState();
@@ -3247,7 +3333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!selection) return;
       for (const rootId of SELECTABLE_ROOTS) {
         const root = document.getElementById(rootId);
-        if (!root || root.closest('.hidden') || (rootId.startsWith('vault') !== selection.isVault)) continue; // skip lists on hidden screens
+        if (!root || root.closest('.hidden') || ((rootId === 'timeline' ? searchMode === 'vault' : rootId.startsWith('vault')) !== selection.isVault)) continue; // skip lists on hidden screens
         root.querySelectorAll('.entry-row, .thumb-tile').forEach((el) => selection.ids.add(el.dataset.id));
       }
       arm();
@@ -3279,7 +3365,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sel-delete').addEventListener('click', () => runSelection('delete'));
   })();
 
-  document.getElementById('vault-settings-card').addEventListener('toggle', updateBackButtonState);
   updateBackButtonState();
 
   const newChooser = document.getElementById('new-chooser-modal');
@@ -4022,29 +4107,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Search (Decision 146): a full-screen layer that grows out of its tile, with type filter, period and sort ----
   const searchState = { type: 'all', sort: 'default', period: 'any' };
   const SEARCH_SORTS = [['default', 'Best match'], ['new', 'Newest'], ['old', 'Oldest'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['type', 'Type']];
-  let searchRows = [];
+  const sDate = (r) => (searchMode === 'vault' ? r.createdAt : r.created_at);
   function drawSearch() {
     const term = document.getElementById('search-input').value;
     const toolbar = document.getElementById('search-toolbar'), timeline = document.getElementById('timeline');
     if (!term) { // entries live in their folders; this list is search results only (Decision 81)
       toolbar.innerHTML = '';
-      timeline.innerHTML = `<div class="empty-state">${iconSvg('search')}<strong>Search everything</strong><span>Names, text, tags and notes.</span></div>`;
+      timeline.innerHTML = `<div class="empty-state">${iconSvg('search')}<strong>Search everything</strong><span>${searchMode === 'vault' ? 'Names, text, tags and notes in the Vault.' : 'Names, text, tags and notes.'}</span></div>`;
       return;
     }
     const types = typeCounts(searchRows, browseType, VAULT_TYPES);
     if (searchState.type !== 'all' && !types.some((t) => t.type === searchState.type)) searchState.type = 'all';
     toolbar.innerHTML = searchRows.length
       ? toolbarHtml({ types, total: searchRows.length, type: searchState.type, labelOf: typeLabelFor, sorts: SEARCH_SORTS, sort: searchState.sort, periods: PERIODS, period: searchState.period }) : '';
-    const rows = browse(searchRows, { ...searchState, dateOf: (r) => r.created_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
-    timeline.innerHTML = rows.map((row) => entryRowHtml({
+    const rows = browse(searchRows, { ...searchState, dateOf: sDate, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    const inVault = searchMode === 'vault';
+    timeline.innerHTML = rows.map((row) => entryRowHtml(inVault ? vaultRowProps(row) : {
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
     })).join('') || emptyStateHtml('search');
-    timeline.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', () => openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id))));
+    timeline.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
+      await openEntry(r.dataset.id, inVault, rows.find((x) => x.id === r.dataset.id));
+      if (inVault && privateSessionKey) renderVault();
+    }));
     paintSelection();
   }
   bindToolbar(document.getElementById('search-toolbar'), searchState, drawSearch);
   document.getElementById('search-input').addEventListener('input', async (e) => {
     const term = e.target.value;
+    if (searchMode === 'vault') { runVaultSearch(); return; }
     searchRows = [];
     if (term) {
       try { searchRows = await searchEntries(db, term); } catch { /* an unreadable query shows no results */ }

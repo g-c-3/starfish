@@ -281,8 +281,9 @@ export { softDelete as deleteEntry } from './db.js';
 // Delete — Edit stays per-item only, bulk-editing doesn't make sense) just
 // loop the same four functions above; nothing new to keep in sync with them.
 // ---------------------------------------------------------------------------
-async function getSelectableEntries(db, { vaultIndex = null } = {}) {
-  const rows = (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0`)).values || [];
+// scope 'home' lists Home entries only; 'vault' lists the unlocked Vault index only (Decision 147). The two are never mixed.
+async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = {}) {
+  const rows = scope === 'vault' ? [] : (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0`)).values || [];
   const groups = {};
   for (const row of rows) {
     const cat = Object.keys(ENTRY_CATEGORIES).find((c) => c !== 'private_vault' && ENTRY_CATEGORIES[c](row));
@@ -298,7 +299,7 @@ async function getSelectableEntries(db, { vaultIndex = null } = {}) {
   }
   // Vault items come from the already-decrypted in-memory index (vault.js) — never re-decrypt here
   // just to compute a size that index already has.
-  if (vaultIndex) {
+  if (scope === 'vault' && vaultIndex) {
     groups.private_vault = vaultIndex.map((e) => ({ id: e.id, label: e.label, type: e.type, sizeBytes: e.sizeBytes }));
   }
   return groups;
