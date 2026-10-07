@@ -336,6 +336,7 @@ function exitSelection() {
 
 function backAction() {
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
+  if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
   if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
   if (selection) return exitSelection; // Back leaves selection mode first (Decision 122)
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
@@ -1322,6 +1323,7 @@ function offerUndo(ids, { isVault = false, message = null, after = null } = {}) 
 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
+let activeText = null;       // { finish, isVault } — the in-app single-field text sheet
 let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
@@ -1352,7 +1354,8 @@ const moneyHooks = moneyHooksFor(false);
 const vaultMoneyHooks = moneyHooksFor(true); // a Vault lock closes this one; an app lock closes both
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
-function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' } = {}) {
+// explicitNo: the No button resolves 'no'; Back or a lock still resolves false, so a dismissal is never read as a choice.
+function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false } = {}) {
   if (activeYesNo) return Promise.resolve(false);
   return new Promise((resolve) => {
     const dlg = document.getElementById('yesno-dialog');
@@ -1367,9 +1370,39 @@ function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No' }
       resolve(v);
     };
     document.getElementById('yesno-yes-btn').onclick = () => finish(true);
-    document.getElementById('yesno-no-btn').onclick = () => finish(false);
+    document.getElementById('yesno-no-btn').onclick = () => finish(explicitNo ? 'no' : false);
     activeYesNo = { finish };
     dlg.classList.remove('hidden');
+  });
+}
+// Single-field text sheet. Resolves the typed string, or null on Cancel, Back or a lock. The field is emptied on close.
+function askText({ title = '', text = '', placeholder = '', initial = '', password = false, decimal = false, ok = 'OK', cancel = 'Cancel', isVault = false } = {}) {
+  if (activeText) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const dlg = document.getElementById('text-dialog'), input = document.getElementById('text-input');
+    document.getElementById('text-title').textContent = title;
+    document.getElementById('text-text').textContent = text;
+    document.getElementById('text-ok-btn').textContent = ok;
+    document.getElementById('text-cancel-btn').textContent = cancel;
+    input.type = password ? 'password' : 'text';
+    input.inputMode = decimal ? 'decimal' : 'text';
+    input.placeholder = placeholder;
+    input.value = initial;
+    const finish = (v) => {
+      if (!activeText) return;
+      activeText = null;
+      input.value = '';
+      dlg.classList.add('hidden');
+      updateBackButtonState();
+      resolve(v);
+    };
+    document.getElementById('text-ok-btn').onclick = () => finish(input.value);
+    document.getElementById('text-cancel-btn').onclick = () => finish(null);
+    input.onkeydown = (e) => { if (e.key === 'Enter') finish(input.value); };
+    activeText = { finish, isVault };
+    dlg.classList.remove('hidden');
+    updateBackButtonState();
+    setTimeout(() => input.focus(), 50);
   });
 }
 let activeEditor = null;     // { finish, requestBack, isVault }
@@ -1380,6 +1413,7 @@ let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so cap
 function dismissOverlays(vaultOnly = false) {
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
+  if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
   if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
@@ -1914,7 +1948,7 @@ async function renderDriveBackupList(accessToken) {
 
 async function handleDriveRestore(fileId, accessToken) {
   const statusEl = document.getElementById('drive-backup-status');
-  const passphrase = prompt('Backup passkey for this Drive backup:'); // one-off, not stored anywhere
+  const passphrase = await askText({ title: 'Backup passkey', text: 'For this Drive backup. Not stored.', password: true, ok: 'Continue' }); // one-off, not stored anywhere
   if (!passphrase) return;
 
   let preview;
@@ -1922,10 +1956,13 @@ async function handleDriveRestore(fileId, accessToken) {
   catch { statusEl.textContent = 'Wrong passkey or corrupted backup.'; return; }
 
   const categories = preview.categories; // restore everything the backup contains, same as opening a local file with all boxes checked
-  const mode = confirm(
-    `This backup has: ${categories.map((c) => CATEGORY_LABELS[c] || c).join(', ')}. ` +
-    `Click OK to Append (safe, adds to existing data), Cancel to choose Overwrite instead.`
-  ) ? 'append' : 'overwrite';
+  const choice = await askYesNo({
+    title: 'Restore mode',
+    text: `This backup has: ${categories.map((c) => CATEGORY_LABELS[c] || c).join(', ')}. Append adds to existing data (safe). Overwrite replaces the selected categories.`,
+    yes: 'Append (safe)', no: 'Overwrite…', explicitNo: true
+  });
+  if (!choice) { statusEl.textContent = 'Restore cancelled.'; return; } // Back or a lock never selects Overwrite
+  const mode = choice === true ? 'append' : 'overwrite';
 
   const { proceed, takeSafetyBackup } = await confirmOverwriteIfNeeded(mode);
   if (!proceed) { statusEl.textContent = 'Restore cancelled.'; return; }
@@ -1941,7 +1978,7 @@ async function handleDriveRestore(fileId, accessToken) {
 
 async function handleDriveBackupNow() {
   const statusEl = document.getElementById('drive-backup-status');
-  const passphrase = prompt('Backup passkey (never stored — needed for this upload only):');
+  const passphrase = await askText({ title: 'Backup passkey', text: 'Never stored. Needed for this upload only.', password: true, ok: 'Back up' });
   if (!passphrase) return;
   statusEl.textContent = 'Checking Drive storage…';
   try {
@@ -2143,7 +2180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await ensureSignedIn({ silent: false }); // shows Google's own sign-in UI on first connect
       await refreshDriveConnectionView();
     } catch (err) {
-      alert(err.message); // e.g. "Google Drive isn't set up yet..." — the guard in gdrive.js throws
+      toast(err.message); // e.g. "Google Drive isn't set up yet..." — the guard in gdrive.js throws
       // a clean JS error now instead of ever reaching the native call that used to crash the app.
     }
   });
@@ -2205,7 +2242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await window.enableAppBiometric(pwInput.value);
       pwInput.value = '';
       if (result.success) { appBioToggle.checked = true; appBioConfirm.classList.add('hidden'); }
-      else alert('Wrong password.');
+      else toast('Wrong password.');
     });
   }
   const vaultBioConfirm = document.getElementById('vault-biometric-confirm');
@@ -2225,7 +2262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await window.enableVaultBiometric(pinInput.value);
       pinInput.value = '';
       if (result.success) { vaultBioConfirm.classList.add('hidden'); await refreshVaultGateView(); }
-      else alert('Wrong PIN.');
+      else toast('Wrong PIN.');
     });
   }
 
@@ -2283,7 +2320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { await softDelete(db, id); await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [was, id]); await loadTrash(); await renderMainTimeline(); toast('Moved back to trash'); }
         catch (err) { toast(`Could not undo: ${err.message || err}`); }
       } });
-    } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
+    } else if (purge && await askYesNo({ title: 'Delete permanently?', text: 'This cannot be undone.', yes: 'Delete', no: 'Keep' })) {
       await flushPurge();
       const id = purge.dataset.id, row = trashRows.find((r) => r.id === id);
       trashRows = trashRows.filter((r) => r.id !== id);
@@ -2365,12 +2402,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const result = await unlockVault(document.getElementById('vault-pin-input').value);
     if (result.success) { clearSecretInputs(VAULT_SECRET_INPUT_IDS); await refreshVaultGateView(); renderVault(); }
     else if (result.setupNeeded) await refreshVaultGateView();
-    else alert('Wrong PIN.');
+    else toast('Wrong PIN.');
   });
   document.getElementById('vault-biometric-unlock-btn')?.addEventListener('click', async () => {
     const result = await window.tryBiometricUnlockVault();
     if (result.success) { await refreshVaultGateView(); renderVault(); }
-    else alert('Biometric unlock failed — enter your Vault PIN.');
+    else toast('Biometric unlock failed — enter your Vault PIN.');
   });
   // vault-lock-btn removed (Decision 65) — replaced by the universal #lock-toggle-btn, wired
   // further down near the power button, which does exactly what this used to: lockVault() then
@@ -2472,7 +2509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // re-opens the app same as a mistaken tap of the OS back button would.
   document.getElementById('power-close-btn').addEventListener('click', async () => {
     const { Capacitor } = await import('@capacitor/core');
-    if (!Capacitor.isNativePlatform()) { alert('Closing only works in the installed app, not this preview.'); return; }
+    if (!Capacitor.isNativePlatform()) { toast('Closing only works in the installed app, not this preview.'); return; }
     const { App } = await import('@capacitor/app');
     App.exitApp();
   });
@@ -2730,7 +2767,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await buildVaultIndex(db, privateSessionKey); await loadVaultTrash(); renderVault(); toast('Moved back to trash');
         } catch (err) { toast(`Could not undo: ${err.message || err}`); }
       } });
-    } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
+    } else if (purge && await askYesNo({ title: 'Delete permanently?', text: 'This cannot be undone.', yes: 'Delete', no: 'Keep' })) {
       await flushPurge();
       const id = purge.dataset.id, row = vaultTrashRows.find((r) => r.id === id);
       vaultTrashRows = vaultTrashRows.filter((r) => r.id !== id);
@@ -2858,7 +2895,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function runSelectedBulk(action) {
     const statusEl = document.getElementById('select-files-status');
     if (selectedIds.size === 0) { statusEl.textContent = 'Nothing selected.'; return; }
-    if (action === 'delete' && !confirm(`Delete ${selectedIds.size} item(s)? They go to trash, not permanent.`)) return;
+    if (action === 'delete' && !(await askYesNo({ title: `Delete ${selectedIds.size} item(s)?`, text: 'They go to trash, not permanent.', yes: 'Delete', no: 'Cancel' }))) return;
     statusEl.textContent = 'Working…';
     const results = await runBulkFileAction(action, [...selectedIds]);
     const failed = results.filter((r) => !r.ok);
@@ -2870,33 +2907,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('select-files-download-btn').addEventListener('click', () => runSelectedBulk('download'));
   document.getElementById('select-files-delete-btn').addEventListener('click', () => runSelectedBulk('delete'));
 
-  // ---- Shared tag picker (Phase 8) — same prompt()-based rough edge already flagged for Drive/
-  // vault one-offs (ROADMAP), not a new pattern. Shows existing tags as a pickable hint since a
-  // plain prompt() can't render real chips; typing a name not in that list creates it (existing
-  // applyTags()/entry_tags behavior — INSERT OR IGNORE already handles "new tag" for free). ----
-  // ---- Reminder capture (Phase 4). Modal, not prompt(): a date/time needs a real picker, and
-  // free-typed text would need the same parsing Edit's prompt() already gets wrong on locale.
+  // ---- Reminder capture (Phase 4). Modal: a date/time needs a real picker, not typed text.
   // Resolves { label, fire_at, repeat_rule } or null on cancel. One-time reminders must be future. ----
-  async function promptForTags() {
-    const existing = await listAllTags(db);
-    const hint = existing.length ? ` Existing: ${existing.map((t) => t.name).join(', ')}.` : '';
-    const input = prompt(`Tags, comma-separated (optional).${hint}`);
-    if (!input) return [];
-    return input.split(',').map((t) => t.trim()).filter(Boolean);
-  }
-
-  // ---- Label autocomplete (Phase 8, ARCHITECTURE §7) — same prompt()-based rough edge as
-  // promptForTags() above: label_history's previously used labels for this type are shown as a
-  // hint since a plain prompt() can't render real tap-to-select chips (still Phase 4's job).
-  // Typing anything else still works — history is a memory aid, not a closed list. Only wired to
-  // voice capture's label prompt, the one place today where a label is actually typed by hand;
-  // note/file/image/pdf/generic-file labels are auto-derived (text excerpt or filename) and have
-  // no free-text prompt to attach a hint to.
-  async function promptForLabel(type, defaultLabel, noun = 'recording') {
-    const history = await listLabelHistory(db, type);
-    const hint = history.length ? ` Previously used: ${history.map((h) => h.label).join(', ')}.` : '';
-    return prompt(`Label for this ${noun}:${hint}`, defaultLabel) || defaultLabel;
-  }
 
   // ---- Voice recording (cap-voice-rec) — was previously just a generic file picker for ALL
   // non-text types including voice, meaning "record a voice memo" actually asked you to upload an
@@ -3494,7 +3506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `).join('') || 'Nothing captured yet.';
     document.querySelectorAll('.clear-old-btn').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm('Move matching items to trash? They stay recoverable for 30 days.')) return;
+      if (!(await askYesNo({ title: 'Move matching items to trash?', text: 'They stay recoverable for 30 days.', yes: 'Move', no: 'Cancel' }))) return;
       const result = await clearOldInCategory(b.dataset.cat, 30);
       await renderStorageBreakdown(); await renderMainTimeline();
       if (result.cleared) offerUndo(result.ids, { isVault: !!privateSessionKey, message: `${result.cleared} item${result.cleared > 1 ? 's' : ''} moved to trash`, after: renderStorageBreakdown });
@@ -3544,9 +3556,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fields = { label: d.name, description: d.description };
 
     if (item.type === 'expense' && !isVault) {
-      const newAmount = prompt('New amount:', item.amount);
-      if (newAmount !== null && newAmount !== '') fields.amount = parseFloat(newAmount);
-      const newCategory = prompt('New category:', item.expense_category || '');
+      const newAmount = await askText({ title: 'New amount', initial: String(item.amount ?? ''), decimal: true });
+      if (newAmount !== null && newAmount.trim() !== '' && Number.isFinite(parseFloat(newAmount))) fields.amount = parseFloat(newAmount);
+      const newCategory = await askText({ title: 'New category', initial: item.expense_category || '' });
       if (newCategory !== null) fields.expense_category = newCategory;
     } else if (isReminder) {
       const timeChanged = d.fire_at !== item.fire_at || (d.repeat_rule || null) !== (item.repeat_rule || null);
