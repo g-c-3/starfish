@@ -312,7 +312,24 @@
         <button data-vault-type="file"><span class="card-icon"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span><span class="card-label">Files</span><span class="card-count"></span></button>
         </div>
 
-        <details id="vault-settings-card">
+        <div id="vault-tools" role="group" aria-label="Vault tools">
+          <button id="vault-select-files-btn" class="tool-tile" aria-label="Select" title="Select" data-tone="green"><span class="tool-ico"><svg class="ic" aria-hidden="true"><use href="#i-select"/></svg></span></button>
+          <button id="vault-open-search-btn" class="tool-tile" aria-label="Search" title="Search" data-tone="violet"><span class="tool-ico"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></span></button>
+          <button id="vault-open-trash-btn" class="tool-tile" aria-label="Trash" title="Trash" data-tone="blue"><span class="tool-ico"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span></button>
+          <button id="vault-open-settings-tile" class="tool-tile" aria-label="Vault Settings" title="Vault Settings" data-tone="amber"><span class="tool-ico"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></span></button>
+        </div>
+      </div>
+
+      <div id="vault-trash-view" class="hidden">
+        <h2 id="vault-trash-title"><span class="title-ico" data-tone="blue"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span>Vault Trash</span></h2>
+        <p id="vault-trash-note" class="mode-description">Deleted Vault items stay here 30 days, then are removed. Only visible while the Vault is unlocked.</p>
+        <div id="vault-trash-toolbar" class="bt-toolbar"></div>
+        <div id="vault-trash-list"></div>
+      </div>
+
+      <div id="vault-settings-view" class="hidden">
+        <h2 id="vault-settings-title"><span class="title-ico" data-tone="amber"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></span><span>Vault Settings</span></h2>
+        <details id="vault-settings-card" open>
           <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></span><span class="tile-label">Vault Settings</span></summary>
 
           <div id="vault-biometric-row" class="hidden">
@@ -342,16 +359,8 @@
           <p class="mode-description">Same native listener as the app-lock version (Decision 74) — not yet confirmed on device.
             Same relationship to "Lock when backgrounded" as the app-lock switches above.</p>
 
-          <details id="vault-trash-settings">
-            <summary>Vault Trash</summary>
-            <p class="mode-description">Separate from the main Trash — same 30-day rule, only visible while the Vault is unlocked.</p>
-            <div id="vault-trash-list"></div>
-          </details>
         </details>
 
-        <input id="vault-search-input" placeholder="Search the vault..." />
-        <button id="vault-select-files-btn" class="secondary-btn"><svg class="ic" aria-hidden="true"><use href="#i-select"/></svg><span>Select files</span></button>
-        <div id="vault-list"></div>
       </div>
 
       <div id="vault-folder-view" class="hidden">
