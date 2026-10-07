@@ -14,14 +14,17 @@ Phase 17 A, Vault labels encrypted (Decision 145). Approved as the first item in
 - `backup.js`: restore writes `encrypted_label`, re-keys it on a different-PIN append, skips the `(Restored)` label match for Vault entries, encrypts a pre-change label on the way in.
 - ARCHITECTURE.md: label line, Reminder row, Phase 17 table updated.
 
+- Bug fixed after device test: after the Vault lock button, Home showed no lock button. Cause: `refreshVaultGateView` ran its button toggle after an await, once the screen had already moved to Home, and hid the shared lock button there. Fix: it toggles the button and its disabled state only while the Vault is on view. Correct because the Vault's own gate states are the only ones that rule exists for; `showScreen` already sets the button for every other screen. Not yet run through CI.
+- DP28, DP29 and DP30 confirmed on device.
+
 Decisions made: 145.
 
 Verified in the authoring environment: syntax checks on all changed files; 4 Node checks against real SQLite (`node:sqlite`) and real Web Crypto: stored row has the placeholder and no plaintext label, `entries_fts` and `label_history` stay empty for Vault rows, decrypt round trip, wrong key gives `Unreadable item`, index search finds the label, plaintext rows (trashed too) migrate once, Home rows untouched.
 Not verified: `vite build`, CI, the `app.js` trash change, the `backup.js` restore path (needs the Capacitor plugins), any device behaviour.
 
-Open: freed pages and journal files may keep an old plaintext label until Phase 17 C. DP28, DP29 and DP30 pending. Backups still save to the Documents root.
+Open: freed pages and journal files may keep an old plaintext label until Phase 17 C. DP31 pending. Backups still save to the Documents root.
 
-Next session start point: device-test DP28, DP29, DP30, then Phase 17 B if approved.
+Next session start point: device-test DP31, then Phase 17 B if approved.
 
 ---
 
