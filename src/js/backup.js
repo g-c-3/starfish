@@ -40,7 +40,7 @@ const ENTRY_CATEGORIES = {
 const FILE_BEARING_CATEGORIES = new Set(['voice', 'images', 'pdfs', 'files']);
 const ALL_CATEGORIES = [...Object.keys(ENTRY_CATEGORIES), 'tags', 'app_settings'];
 
-const APP_SETTINGS_KEYS = ['dark_mode', 'currency_symbol']; // non-sensitive only — never credential hashes/salts/hints (Decision 8).
+const APP_SETTINGS_KEYS = ['dark_mode', 'currency_symbol', 'pdf_inapp_viewer']; // non-sensitive only — never credential hashes/salts/hints (Decision 8).
 // gradient_mode/gradient_color_1/gradient_color_2 removed here (Decision 53 removed the feature
 // itself; this list just hadn't been updated to match until now) — any old backup still carrying
 // those keys restores them as harmless, unread meta rows, same as explained in app.js.

@@ -1,6 +1,7 @@
 // pdfmath.js — pure helpers for the PDF viewer (Decision 121). No DOM, no pdf.js: testable in Node.
 
 const ZOOM_STEPS = [1, 1.5, 2, 3];
+const ZOOM_MAX = 4; // pinch may go past the last button step
 const MAX_CANVAS_PIXELS = 16e6; // backing-store cap per page; above this the pixel ratio is lowered
 
 // CSS scale that fits a page of width pageW into the container, times the zoom step.
@@ -28,10 +29,17 @@ function pageAt(tops, heights, y) {
   return hit;
 }
 
+// Button step from any zoom, including a pinched one: next step above or below, clamped to the list.
 function nextZoom(current, dir) {
-  const i = ZOOM_STEPS.indexOf(current);
-  const at = i === -1 ? 0 : i;
-  return ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, at + dir))];
+  const eps = 0.01;
+  if (dir > 0) return ZOOM_STEPS.find((z) => z > current + eps) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+  const lower = ZOOM_STEPS.filter((z) => z < current - eps);
+  return lower.length ? lower[lower.length - 1] : ZOOM_STEPS[0];
+}
+
+// Zoom after a pinch of `ratio`, kept between 1 and ZOOM_MAX.
+function pinchZoom(current, ratio) {
+  return Math.min(ZOOM_MAX, Math.max(1, current * ratio));
 }
 
 function base64ToBytes(b64) {
@@ -49,4 +57,4 @@ function pdfErrorMessage(err) {
   return `Could not open this PDF: ${err?.message || err}`;
 }
 
-export { ZOOM_STEPS, fitScale, canvasRatio, pageAt, nextZoom, base64ToBytes, pdfErrorMessage };
+export { ZOOM_STEPS, ZOOM_MAX, pinchZoom, fitScale, canvasRatio, pageAt, nextZoom, base64ToBytes, pdfErrorMessage };

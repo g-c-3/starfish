@@ -225,6 +225,15 @@ function closeSearchScreen({ instant = false } = {}) {
   searchCloseTimer = setTimeout(finish, 320);
 }
 
+// Delete permanently with Undo: the row leaves the list at once, the real delete waits for the Undo window (Decision 148).
+let pendingPurge = null; // { id, timer }
+async function flushPurge() {
+  if (!pendingPurge) return;
+  const { id, timer } = pendingPurge;
+  pendingPurge = null;
+  clearTimeout(timer);
+  try { await permanentlyDelete(id); } catch { /* already gone */ }
+}
 let vaultTrashOpen = false;
 let vaultTrashRows = []; // decrypted labels live here only while the Vault Trash is open
 function closeVaultTrash() {
@@ -863,6 +872,7 @@ async function unlockVault(pin) {
 }
 
 function lockVault() {
+  if (pendingPurge?.isVault) flushPurge(); // the person chose to delete; the Undo toast goes with the lock
   exitSelection();
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
@@ -2252,6 +2262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   async function loadTrash() { trashRows = await showTrash(); drawTrash(); }
   async function openTrash() {
+    await flushPurge();
     trashOpen = true;
     Object.assign(trashState, { type: 'all', sort: 'new', period: 'any' });
     document.getElementById('home-main').classList.add('hidden');
@@ -2264,13 +2275,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('trash-list').addEventListener('click', async (e) => {
     const restore = e.target.closest('.trash-restore-btn'), purge = e.target.closest('.trash-purge-btn');
     if (restore) {
-      await window.Dumpzone.restoreEntry(restore.dataset.id);
+      const id = restore.dataset.id, was = trashRows.find((r) => r.id === id)?.deleted_at ?? Date.now();
+      await window.Dumpzone.restoreEntry(id);
       await loadTrash();
       renderMainTimeline().catch(() => {});
-      toast('Restored');
+      toast('Restored', false, { label: 'Undo', isVault: false, run: async () => { // back into the trash with its original deleted date
+        try { await softDelete(db, id); await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [was, id]); await loadTrash(); await renderMainTimeline(); toast('Moved back to trash'); }
+        catch (err) { toast(`Could not undo: ${err.message || err}`); }
+      } });
     } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
-      await window.Dumpzone.permanentlyDelete(purge.dataset.id);
-      await loadTrash();
+      await flushPurge();
+      const id = purge.dataset.id, row = trashRows.find((r) => r.id === id);
+      trashRows = trashRows.filter((r) => r.id !== id);
+      drawTrash();
+      pendingPurge = { id, isVault: false, timer: setTimeout(flushPurge, UNDO_MS + 300) };
+      toast('Deleted permanently', false, { label: 'Undo', isVault: false, run: () => {
+        if (pendingPurge?.id !== id) return;
+        clearTimeout(pendingPurge.timer); pendingPurge = null;
+        if (row) trashRows.push(row);
+        drawTrash();
+        toast('Kept in trash');
+      } });
     }
   });
 
@@ -2642,6 +2667,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
+    await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -2680,6 +2706,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     drawVaultTrash();
   }
   async function openVaultTrash() {
+    await flushPurge();
     vaultTrashOpen = true;
     Object.assign(vaultTrashState, { type: 'all', sort: 'new', period: 'any' });
     document.getElementById('vault-main').classList.add('hidden');
@@ -2692,14 +2719,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-trash-list').addEventListener('click', async (e) => {
     const restore = e.target.closest('.vtrash-restore-btn'), purge = e.target.closest('.vtrash-purge-btn');
     if (restore) {
-      await restoreEntry(restore.dataset.id);
+      const id = restore.dataset.id, was = vaultTrashRows.find((r) => r.id === id)?.deleted_at ?? Date.now();
+      await restoreEntry(id);
       await loadVaultTrash();
       renderVault();
-      toast('Restored');
+      toast('Restored', false, { label: 'Undo', isVault: true, run: async () => {
+        try {
+          if (!privateSessionKey) return;
+          await softDelete(db, id); await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [was, id]);
+          await buildVaultIndex(db, privateSessionKey); await loadVaultTrash(); renderVault(); toast('Moved back to trash');
+        } catch (err) { toast(`Could not undo: ${err.message || err}`); }
+      } });
     } else if (purge && confirm('Delete permanently? This cannot be undone.')) {
-      await permanentlyDelete(purge.dataset.id);
-      await loadVaultTrash();
-      renderVault();
+      await flushPurge();
+      const id = purge.dataset.id, row = vaultTrashRows.find((r) => r.id === id);
+      vaultTrashRows = vaultTrashRows.filter((r) => r.id !== id);
+      drawVaultTrash();
+      pendingPurge = { id, isVault: true, timer: setTimeout(async () => { await flushPurge(); if (privateSessionKey) renderVault(); }, UNDO_MS + 300) };
+      toast('Deleted permanently', false, { label: 'Undo', isVault: true, run: () => {
+        if (pendingPurge?.id !== id) return;
+        clearTimeout(pendingPurge.timer); pendingPurge = null;
+        if (row) vaultTrashRows.push(row);
+        drawVaultTrash();
+        toast('Kept in trash');
+      } });
     }
   });
 
@@ -3251,6 +3294,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }));
     paintSelection();
   }
+  // PDF folders carry one switch (shared by Home and the Vault): in-app viewer or the phone's PDF app (Decision 148).
+  async function showPdfSwitch(wrapId, toggleId, type) {
+    document.getElementById(wrapId).classList.toggle('hidden', type !== 'pdf');
+    if (type === 'pdf') document.getElementById(toggleId).checked = (await metaGet('pdf_inapp_viewer', 'on')) === 'on';
+  }
+  for (const id of ['pdf-inapp-toggle', 'vault-pdf-inapp-toggle']) {
+    document.getElementById(id).addEventListener('change', async (e) => {
+      await metaSet('pdf_inapp_viewer', e.target.checked ? 'on' : 'off');
+      if (id === 'vault-pdf-inapp-toggle') armVaultAutoLock();
+    });
+  }
   async function openFolder(type, btn) {
     openFolderType = type;
     if (type === 'money') moneyMonth = null; // the month header starts on the current month
@@ -3260,6 +3314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
+    await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
@@ -4100,7 +4155,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'voice') await openVoice(item, isVault);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') await openFile(item, isVault);
-    else if (item.type === 'pdf') await openPdf(item, isVault);
+    else if (item.type === 'pdf') {
+      if ((await metaGet('pdf_inapp_viewer', 'on')) === 'on') await openPdf(item, isVault); // off: the phone's own PDF app (Decision 148)
+      else await openFile(item, isVault);
+    }
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
 

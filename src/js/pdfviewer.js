@@ -4,7 +4,7 @@
 
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import PdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker';
-import { fitScale, canvasRatio, pageAt, nextZoom } from './pdfmath.js';
+import { fitScale, canvasRatio, pageAt, nextZoom, pinchZoom } from './pdfmath.js';
 import { openPdfDocument } from './pdfopen.js';
 
 let workerReady = false;
@@ -107,19 +107,53 @@ async function createPdfView(container, bytes, { onPage = () => {}, onActivity =
   container.addEventListener('scroll', onScroll, { passive: true });
   onPage(1);
 
-  function setZoom(next) {
+  // anchor: { vx, vy } is a point inside the container (pixels) that stays under the same spot of the page; default is the centre.
+  function setZoom(next, anchor = null) {
     if (next === zoom || destroyed) return;
+    const vx = anchor ? anchor.vx : container.clientWidth / 2, vy = anchor ? anchor.vy : container.clientHeight / 2;
     const h = container.scrollHeight || 1, w = container.scrollWidth || 1;
-    const cy = (container.scrollTop + container.clientHeight / 2) / h;
-    const cx = (container.scrollLeft + container.clientWidth / 2) / w;
+    const cy = (container.scrollTop + vy) / h;
+    const cx = (container.scrollLeft + vx) / w;
     zoom = next;
     slots.forEach(release);
     sizeSlots();
-    container.scrollTop = cy * container.scrollHeight - container.clientHeight / 2;
-    container.scrollLeft = cx * container.scrollWidth - container.clientWidth / 2;
+    container.scrollTop = cy * container.scrollHeight - vy;
+    container.scrollLeft = cx * container.scrollWidth - vx;
     slots.forEach((s) => { if (s.visible) draw(s); });
     onPage(currentPage());
   }
+
+  // Pinch to zoom (two fingers). The pages are scaled by a transform while the fingers move, then redrawn sharp at the new zoom on release.
+  container.style.touchAction = 'pan-x pan-y'; // the page itself must not pinch-zoom; this handler does
+  let pinch = null; // { d0, ratio, vx, vy }
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const stage = () => container.querySelector('.pdf-pages');
+  function onTouchStart(e) {
+    if (e.touches.length !== 2) return;
+    const r = container.getBoundingClientRect();
+    pinch = { d0: dist(e.touches) || 1, ratio: 1, vx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, vy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top };
+    const el = stage();
+    if (el) el.style.transformOrigin = `${container.scrollLeft + pinch.vx}px ${container.scrollTop + pinch.vy}px`;
+  }
+  function onTouchMove(e) {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    onActivity();
+    pinch.ratio = pinchZoom(zoom, dist(e.touches) / pinch.d0) / zoom; // shown scale never passes the limits
+    const el = stage();
+    if (el) el.style.transform = `scale(${pinch.ratio})`;
+  }
+  function onTouchEnd(e) {
+    if (!pinch || e.touches.length >= 2) return;
+    const p = pinch; pinch = null;
+    const el = stage();
+    if (el) { el.style.transform = ''; el.style.transformOrigin = ''; }
+    if (Math.abs(p.ratio - 1) > 0.03) setZoom(pinchZoom(zoom, p.ratio), { vx: p.vx, vy: p.vy });
+  }
+  container.addEventListener('touchstart', onTouchStart, { passive: true });
+  container.addEventListener('touchmove', onTouchMove, { passive: false });
+  container.addEventListener('touchend', onTouchEnd, { passive: true });
+  container.addEventListener('touchcancel', onTouchEnd, { passive: true });
 
   return {
     pageCount: doc.numPages,
@@ -129,6 +163,10 @@ async function createPdfView(container, bytes, { onPage = () => {}, onActivity =
       destroyed = true;
       observer.disconnect();
       container.removeEventListener('scroll', onScroll);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('touchcancel', onTouchEnd);
       if (raf) cancelAnimationFrame(raf);
       slots.forEach(release);
       container.innerHTML = '';
