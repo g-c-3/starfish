@@ -343,7 +343,7 @@ queue. See `android-notes/native-setup.md` §11 for the exact console steps.
 
 **Storage check before every upload, same pattern as local (Decision 8).** Drive's `about.get` API
 returns quota (`storageQuota.limit`/`usageInDrive`); the same "required vs. available, block if it
-won't fit" check `backup.js` already does against `navigator.storage.estimate()` applies here against
+won't fit" check `backup.js` already does against the phone's real free space (Decision 150) applies here against
 that response instead. Shown before the upload starts, not discovered mid-transfer.
 
 **No refresh-token store of our own.** `gdrive.js` never requests `grantOfflineAccess`/a serverAuthCode
@@ -373,7 +373,7 @@ rather than interrupting whatever the person opened the app to do.
 
 **Storage check before every upload, same pattern as local (Decision 8).** Drive's `about.get` API
 returns quota (`storageQuota.limit`/`usage`); the same "required vs. available, block if it won't
-fit" check `backup.js` already does against `navigator.storage.estimate()` applies here against that
+fit" check `backup.js` already does against the phone's real free space (Decision 150) applies here against that
 response instead — `limit` absent means an unlimited-storage account, treated as no cap. Shown before
 the upload starts, not discovered mid-transfer.
 
@@ -769,7 +769,7 @@ the Private Vault (`vault.js` + its `app.js`/`index.html` wiring — capture/bro
 its own trash bin, its own auto-lock). Screen show/hide wiring (`showScreen()`) was itself missing until the
 Vault pivot surfaced it — every UI section built in every prior session was technically unreachable before that.
 Also implemented: the digest/on-this-day/storage-breakdown screens (§6), and now the "Your Data" transparency
-screen (§7, Session 35) — total entry count plus an on-device storage estimate, with an Export Now button that opens
+screen (§7, Session 35) — total entry count plus the size of the data held, with an Export Now button that opens
 the existing Backup & Restore section rather than a second export path. Entry count excludes Vault entries,
 same reasoning as the digest/on-this-day fix (Decision 40) — this screen sits behind the app-open password,
 not the Vault PIN. Also implemented: the recurring backup-reminder banner (Session 40), a soft
@@ -807,3 +807,9 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `app.js`: `askText({ title, text, initial, password, decimal, ok, cancel, isVault })` and `askYesNo({ ..., explicitNo })`, both module-level with `activeText` / `activeYesNo`. `backAction()` checks them first; `dismissOverlays()` closes them on a lock (`askText` honours `isVault`).
 - `index.html`: `#text-dialog` (`#text-title`, `#text-text`, `#text-input`, `#text-ok-btn`, `#text-cancel-btn`), `#yesno-dialog`; both `modal-overlay`, z-index 12.
 - Callers: Drive passkey (text), legacy expense edit (text), Drive restore mode (`explicitNo`), Delete permanently, Select delete, Clear older than 30 days (Yes/No). Credential failures use `toast()`.
+
+## Storage checks and sizes (Decision 150)
+- `backup.js` `getStorageEstimate()`: `Device.getInfo().realDiskFree` (bytes free on the data partition); `null` when unavailable, and callers do not block on `null`.
+- Backup: `estimateBackupSize` before building, then the encrypted archive's real size before `Filesystem.writeFile`. Restore: `estimateRestoreSize` = file bytes + each database row's JSON size.
+- `fileactions.js` `rowExtraBytes(row)`: description, `money_json`, `expense_category`, coordinates (16 B), `amount` (8 B). Added to every entry size in `getSelectableEntries`, so Storage breakdown, Select files and Your Data agree.
+- Your Data (`yourDataSummary`): count of Home entries and the sum of their sizes. No WebView storage API is read.

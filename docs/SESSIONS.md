@@ -11,14 +11,16 @@ Phase 15 item 3 (Decision 149). Fresh session; Tier 1 and the Tier 2 docs read (
 - `index.html`: `#text-dialog`. `style.css`: `#text-dialog` stacks above the Save dialog.
 - Replaced: wrong password, wrong PIN, failed Vault biometric, Drive connect error and the preview-only power message now toast; Delete permanently (Home and Vault Trash), Select delete and Clear older than 30 days ask through the Yes/No sheet; Drive passkey prompts and legacy expense edit use the text sheet; Drive restore mode asks Append or Overwrite through the Yes/No sheet.
 - Behaviour fix: the old Drive restore mode `confirm()` read Cancel as Overwrite. Now only the Overwrite button selects it; Back or a lock cancels the restore.
+- Device report: Money and Location read 0 B in the Storage breakdown and Your Data read ~0 B. Cause: sizes counted only file bytes or note text, and Your Data read the WebView's own storage estimate, which excludes files and the database. Fix: `fileactions.js` `rowExtraBytes` adds description, Money details, coordinates (16 B) and legacy expense fields; Your Data sums the Home entry sizes. Correct because it counts what the entry stores, from the same function the breakdown and Select files use.
+- Restore check (Decision 150): `backup.js` `getStorageEstimate` now reads real free space with `@capacitor/device` (`realDiskFree`); unknown gives no block. `createBackup` also checks the encrypted file's real size before writing. `estimateRestoreSize` counts database rows, not only file bytes. `package.json`: `@capacitor/device` `^6.0.3`.
 
-Decisions made: 149.
+Decisions made: 149, 150.
 
-Verified in the authoring environment: syntax check, `vite build`, 10 Node checks on `askYesNo` and `askText` (explicit No, dismissal, Yes, plain No, value returned, field emptied, Back, second call refused), a scan showing no native dialog call left in `app.js`, new element ids present once. Not verified: how the sheets look or stack on a device, keyboard raise, Back order, CI. The Drive and legacy expense paths cannot be reached on a device.
+Verified in the authoring environment: syntax check, `vite build`, 10 Node checks on `askYesNo` and `askText` (explicit No, dismissal, Yes, plain No, value returned, field emptied, Back, second call refused), a scan showing no native dialog call left in `app.js`, new element ids present once. Also: 12 Node checks on `rowExtraBytes`, `estimateRestoreSize` and `getStorageEstimate` with a mocked plugin (value, zero, missing, throws); `vite build` with the new plugin (the bundle contains `realDiskFree`); the plugin's published Android source read (StatFs on the data directory). Not verified: the real free-space figure on a device, CI with the new dependency, how the sheets look or stack on a device, keyboard raise, Back order, CI. The Drive and legacy expense paths cannot be reached on a device.
 
-Open: DP31 to DP35 pending. Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
+Open: DP31 to DP36 pending. The free-space reading is the data partition; a backup in Documents is assumed to share it (true on current phones). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
 
-Next session start point: device-test DP31 to DP35; then Phase 17 B if approved, or Phase 15 item 4 polish.
+Next session start point: device-test DP31 to DP36; then Phase 17 B if approved, or Phase 15 item 4 polish.
 
 ---
 

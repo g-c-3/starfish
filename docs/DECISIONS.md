@@ -1963,3 +1963,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Delete permanently, Select delete and Clear older than 30 days ask through the Yes/No sheet. Rules unchanged: 30-day trash, Undo window, Append default.
 - Removed unused `promptForTags` and `promptForLabel`; tags and names come from the Save dialog (Decision 91).
 - No new data, no new credential, no network.
+
+**150. Real free space for backup and restore checks; sizes count what an entry stores.**
+- Free space comes from `@capacitor/device` (`realDiskFree`, Android StatFs of the data directory), replacing `navigator.storage.estimate()`, which reports the WebView's own quota. A missing or failed reading is unknown and never blocks (as before).
+- Backup: the existing check against the payload size stays; a second check uses the encrypted file's real size just before it is written. Restore: the required size is the file bytes plus the database rows.
+- Sizes: an entry's size is its file or note text plus description, Money details, coordinates (16 B) and legacy expense fields. Your Data shows the sum of the Home entry sizes (Vault excluded, Decision 40), labelled as data held, not as an estimate of device usage.
+- Drive's check against Drive's own quota is unchanged.
+- One new official plugin, no permission, no network. Nothing leaves the device.
