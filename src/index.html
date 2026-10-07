@@ -135,12 +135,13 @@
         <div id="money-summary" class="money-summary hidden"></div>
         <div id="folder-list"></div>
 
+      </div>
+
       <div id="trash-view" class="hidden">
         <h2 id="trash-title"><span class="title-ico" data-tone="blue"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span>Trash</span></h2>
         <p id="trash-note" class="mode-description">Deleted items stay here 30 days, then are removed.</p>
         <div id="trash-toolbar" class="bt-toolbar"></div>
         <div id="trash-list"></div>
-      </div>
       </div>
     </div>
 
@@ -395,14 +396,16 @@
   </div>
 
   <div id="select-files-screen" class="modal-overlay hidden">
-    <div class="modal-box" style="max-width:520px; max-height:80vh; overflow-y:auto;">
+    <div class="modal-box select-box">
       <h3>Select files</h3>
       <div id="select-files-toolbar" class="bt-toolbar"></div>
       <div id="select-files-groups"></div>
       <div class="status-line" id="select-files-status"></div>
-      <button id="select-files-share-btn" class="secondary-btn">Share selected</button>
-      <button id="select-files-download-btn" class="secondary-btn">Download selected</button>
-      <button id="select-files-delete-btn" class="secondary-btn warning-text"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg> Delete selected</button>
+      <div class="select-actions">
+        <button id="select-files-share-btn" class="secondary-btn">Share</button>
+        <button id="select-files-download-btn" class="secondary-btn">Download</button>
+        <button id="select-files-delete-btn" class="secondary-btn warning-text"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg> Delete</button>
+      </div>
       <button id="select-files-close-btn" class="secondary-btn">Close</button>
     </div>
   </div>
