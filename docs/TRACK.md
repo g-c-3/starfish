@@ -123,3 +123,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-07 | Session 93 (reopened, 2) | Decision 144 | Phase 17 added: encryption at rest, plan and backup rules only; nothing built |
 | 2026-10-07 | Session 94 | Decision 145 | Phase 17 A built: Vault labels encrypted (`encrypted_label`), unlock-time migration, backup and restore adapted; DP30 added; not device-tested, not run through CI |
 | 2026-10-07 | Session 94 (reopened) | none | DP28, DP29, DP30 confirmed on device; Phase 17 A confirmed; Home lock button fix after a Vault lock; DP31 added; not run through CI |
+| 2026-10-07 | Session 94 (reopened, 2) | Decision 146 | Phase 15 item 4b built: Home tools row, Trash folder, Search layer, shared sort and filter; DP32 added; vite build passes; not device-tested, not run through CI |

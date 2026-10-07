@@ -16,15 +16,17 @@ Phase 17 A, Vault labels encrypted (Decision 145). Approved as the first item in
 
 - Bug fixed after device test: after the Vault lock button, Home showed no lock button. Cause: `refreshVaultGateView` ran its button toggle after an await, once the screen had already moved to Home, and hid the shared lock button there. Fix: it toggles the button and its disabled state only while the Vault is on view. Correct because the Vault's own gate states are the only ones that rule exists for; `showScreen` already sets the button for every other screen. Not yet run through CI.
 - DP28, DP29 and DP30 confirmed on device.
+- Home tools row, Trash folder, Search layer, shared sort and filter (Decision 146, Phase 15 item 4b). NEW `src/js/browse.js` (filter, period, sort, toolbar) and `src/css/browse.css`. `index.html`: tools row replaces the Settings tile, search box and Select files button; `#trash-view`; `#search-screen`; Trash removed from Settings; `i-restore` icon. `app.js`: overlay state and open/close functions, `showScreen` and `backAction` hooks, Trash, Search and Select files redrawn with the toolbar; Select files names are now escaped.
+- Verified: `vite build` passes with the new files; 17 Node checks on `browse.js` (every sort, type and period filter, numeric names, counts, input not changed, toolbar markup). Not verified: how it looks or moves (no browser here), keyboard raise on Android, Back order on a device, CI.
 
-Decisions made: 145.
+Decisions made: 145, 146.
 
 Verified in the authoring environment: syntax checks on all changed files; 4 Node checks against real SQLite (`node:sqlite`) and real Web Crypto: stored row has the placeholder and no plaintext label, `entries_fts` and `label_history` stay empty for Vault rows, decrypt round trip, wrong key gives `Unreadable item`, index search finds the label, plaintext rows (trashed too) migrate once, Home rows untouched.
 Not verified: `vite build`, CI, the `app.js` trash change, the `backup.js` restore path (needs the Capacitor plugins), any device behaviour.
 
 Open: freed pages and journal files may keep an old plaintext label until Phase 17 C. DP31 pending. Backups still save to the Documents root.
 
-Next session start point: device-test DP31, then Phase 17 B if approved.
+Next session start point: device-test DP31 and DP32, then match the Vault (search, trash, Select files) to Home, or Phase 17 B, if approved.
 
 ---
 

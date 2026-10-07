@@ -195,7 +195,7 @@ app-open password's own timeout does — locking one doesn't necessarily lock th
 **Backup category.** Every vault entry, regardless of type, falls under one unified `private_vault` backup
 category (was a notes-only `private_notes` category before this pivot) — see backup.js's `ENTRY_CATEGORIES`.
 
-**"Select files" multi-select** (Decision 44) is shared between the main app and the Vault: category-grouped,
+**"Select files" multi-select** (Decision 44; type chips and sort added to Home's, Decision 146) is shared between the main app and the Vault: category-grouped,
 per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
@@ -782,3 +782,10 @@ map view, and the confidence-confirmation chip UI. These are the next
 implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.
+
+## Home tools, Trash and Search (Decision 146)
+- `index.html`: `#home-tools` (four `.tool-tile` buttons: `#select-files-btn`, `#open-search-btn`, `#open-trash-btn`, `#open-settings-tile`), `#trash-view` inside `#home-tab`, `#search-screen` as a fixed layer, `#select-files-toolbar` in the Select files dialog. Styles in `css/browse.css`.
+- `browse.js`: `browse()` (type, period, sort) and `typeCounts()` are pure; `toolbarHtml()` and `bindToolbar()` draw and wire the toolbar for Trash, Search and Select files.
+- `app.js`: `trashOpen` / `closeTrash()` and `searchOpen` / `openSearchScreen()` / `closeSearchScreen()` are top-level so `showScreen()` and `backAction()` can reach them. Back order: dialogs and viewers, then Search, then Trash, then a type folder.
+- The Search layer keeps the ids `#search-input` and `#timeline`, so the redraw after Undo still reaches it.
+
