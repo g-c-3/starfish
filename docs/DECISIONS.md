@@ -1935,5 +1935,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Search opens a full-screen layer. The bar grows out of the Search tile (a transform from the tile's box to the bar's box; its content fades in after) and the keyboard is raised inside the tap. Back or the close button reverses it. Reduced motion skips the animation. Locking, or going to the Vault, the lock screen or Settings, closes it at once and clears the text and results.
 - One toolbar serves Trash, Search results and Select files (`browse.js`): type chips with counts, a sort list, and for Trash and Search a period list (Any time, Today, Last 7 days, Last 30 days). Period is the deleted date in Trash and the created date in Search. Select files has type chips and sort only (Default, Name, Largest, Smallest).
 - Sorts: Trash: Recently deleted, Deleting soonest, Name, Type. Search: Best match, Newest, Oldest, Name, Type. Names sort numerically (item 2 before item 10).
+- Type chips wrap onto several rows so every type is visible without sideways scrolling.
+- Select files is a fixed-size dialog (the list scrolls inside it, Share, Download and Delete sit in one row, Close below) so it does not resize per type, and the Back button is raised above it while it is open.
 - Not changed: the Vault's own search, Vault Trash and Vault Select files keep their current form. Matching them is a separate item.
 - No new data, no new credential, no network.
