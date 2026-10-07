@@ -4,6 +4,27 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 94**
+
+Phase 17 A, Vault labels encrypted (Decision 145). Approved as the first item in order. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 142 to 144 and the Vault, Credentials and Backup sections of ARCHITECTURE.
+- `db.js`: `encrypted_label` column (schema and `ensureColumn`), `insertEntry` writes it, `VAULT_PLACEHOLDER_LABEL` exported.
+- `vault.js`: `saveVaultEntry` stores the placeholder and the encrypted label; `vaultRowLabel`; `migrateVaultLabels` (run at the start of `buildVaultIndex`, trash included); `loadVaultEntryContent` returns the decrypted label; index uses it.
+- `fileactions.js`: Vault Share and Download use the decrypted label (file name too); `editEntry` writes `encrypted_label` for Vault rows.
+- `app.js`: Vault trash list decrypts labels.
+- `backup.js`: restore writes `encrypted_label`, re-keys it on a different-PIN append, skips the `(Restored)` label match for Vault entries, encrypts a pre-change label on the way in.
+- ARCHITECTURE.md: label line, Reminder row, Phase 17 table updated.
+
+Decisions made: 145.
+
+Verified in the authoring environment: syntax checks on all changed files; 4 Node checks against real SQLite (`node:sqlite`) and real Web Crypto: stored row has the placeholder and no plaintext label, `entries_fts` and `label_history` stay empty for Vault rows, decrypt round trip, wrong key gives `Unreadable item`, index search finds the label, plaintext rows (trashed too) migrate once, Home rows untouched.
+Not verified: `vite build`, CI, the `app.js` trash change, the `backup.js` restore path (needs the Capacitor plugins), any device behaviour.
+
+Open: freed pages and journal files may keep an old plaintext label until Phase 17 C. DP28, DP29 and DP30 pending. Backups still save to the Documents root.
+
+Next session start point: device-test DP28, DP29, DP30, then Phase 17 B if approved.
+
+---
+
 **Session 93**
 
 Phase 4, Vault Location (Decision 142). Fresh session; Tier 1 docs read, Tier 2 read for the Vault, Location, Money and Reminder parts. The source lives in `src/` (not `www/`).

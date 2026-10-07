@@ -39,7 +39,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 | Image | OCR'd | label + OCR text | ocr_text |
 | PDF | OCR'd | label + OCR text | ocr_text |
 | Generic file | none | label only | extension, auto_category |
-| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78; Vault variant built Decision 140 (schedule columns plaintext, name plaintext label, note in `encrypted_description`, notification text `Vault Reminder`), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
+| Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78; Vault variant built Decision 140 (schedule columns plaintext, name in `encrypted_label` (Decision 145), note in `encrypted_description`, notification text `Vault Reminder`), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
 | Money | none (Home: details in `money_json`, Decisions 124, 126; Vault: details JSON in `encrypted_body`, Decision 135) | Home: label (readable summary) + description (note); Vault: in-memory index only | Home and Vault built; kinds Spent, Lent, Received, Borrowed with repayments; separate type from Expense below; expenses are not auto-detected (Decision 131) |
 | Expense | amount + category | label/category | amount, category, replied (bool) — legacy rows only (detection removed, Decision 131); read as Spent in Money, no capture card, no private variant |
@@ -169,7 +169,7 @@ deliberate differences, all safety-necessary rather than arbitrary:
    back to disk unencrypted except at the explicit moment Download is invoked (point 3 below).
 1a. **Description is encrypted too.** A Vault entry's description lives in `encrypted_description` (same AES-GCM
    calls); `description` stays NULL. It is decrypted into the in-memory index on unlock and is searchable there.
-   The label remains the only plaintext field a Vault row carries.
+   The label is encrypted too (Decision 145): `label` holds the placeholder `Vault item`, `encrypted_label` the real one. The schedule columns of a Vault Reminder, `type` and the timestamps stay plaintext until Phase 17 C.
 2. **Search is a fresh in-memory index built on unlock, discarded on lock — nothing persisted, not even
    encrypted** (Decision 39). Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
    autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
@@ -205,7 +205,7 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 
 | Stage | What | State |
 |---|---|---|
-| A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | planned |
+| A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; not device-tested |
 | B | Vault index updated per entry, not rebuilt on every change | planned |
 | C | Whole-database encryption, FTS5 search kept | planned; plugin support not yet checked |
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | planned |

@@ -121,3 +121,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-07 | Session 93 | Decision 142 | Vault Location built (capture, viewer, Share, Download, index search); all 8 Vault capture cards now built; DP28 added; not device-tested; next: DP28, Phase 16 |
 | 2026-10-07 | Session 93 (reopened) | Decision 143 | Vault matches Home: default names, Verify link, row text, notes in Share and Download, Home Share text; DP29 added; not device-tested |
 | 2026-10-07 | Session 93 (reopened, 2) | Decision 144 | Phase 17 added: encryption at rest, plan and backup rules only; nothing built |
+| 2026-10-07 | Session 94 | Decision 145 | Phase 17 A built: Vault labels encrypted (`encrypted_label`), unlock-time migration, backup and restore adapted; DP30 added; not device-tested, not run through CI |

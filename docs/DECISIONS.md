@@ -1921,3 +1921,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
   - Append stays the default restore; the safety-backup rule is unchanged; a restore that fails partway must not leave a mix of old and new encryption.
 - Speed: each stage is measured on a real phone, including backup and restore of a large library, before it is called done.
 - Passcode strength: no length or character rule exists today. A minimum length or a warning for short passcodes is open and undecided; a short numeric PIN is the weakest point whatever the cipher.
+
+**145. Vault labels encrypted (Phase 17 A).** A Vault row stores the placeholder `Vault item` in `label` and the real label in `encrypted_label`, encrypted under the Vault key like the body and description.
+- Read: `loadVaultEntryContent` returns the row with its label decrypted; the in-memory index, the Vault trash list, Share and Download use that. An undecryptable label reads `Unreadable item`.
+- Write: capture and Edit write `encrypted_label` and keep the placeholder; Edit of a Vault label now needs the unlocked Vault, as description edits already did.
+- Migration: on unlock, every Vault row (trash included) still holding a plaintext label is encrypted and its `label` replaced by the placeholder. Repeatable, safe if cut short. This is the label part of Phase 17 F, done here so A has effect on existing data.
+- Backup: `encrypted_label` travels in the payload. Append skips the `(Restored)` label-match check for Vault entries (labels are placeholders or ciphertext); the UUID check stays. A different-PIN restore re-keys `encrypted_label` with the body and description. A backup from before this decision (plaintext label, no `encrypted_label`) is accepted: encrypted on the way in under a different-PIN restore, otherwise at the next unlock.
+- Limit: freed database pages and journal files may still hold an old plaintext label until whole-database encryption (Phase 17 C). A and the migration do not remove those.
+- Closes the plaintext-label consequence of Decision 143. Credentials unchanged: no new key, no new credential.
