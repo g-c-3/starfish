@@ -7,6 +7,7 @@
 // that category was included).
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Device } from '@capacitor/device';
 import { encryptBackup, decryptBackup } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
@@ -73,15 +74,16 @@ function backupFileName(prefix, categories) {
 }
 
 // ---------------------------------------------------------------------------
-// Storage sanity checks — navigator.storage.estimate() is the practical in-webview substitute
-// for a device free-space API; Capacitor core has no dedicated one. Treated as an estimate,
-// not an exact figure, and labeled as such wherever shown.
+// Storage sanity checks — real free space of the phone's data partition, from @capacitor/device
+// (`realDiskFree`, Android StatFs). The WebView's navigator.storage.estimate() is not used: it
+// reports the WebView's own quota, which says nothing about the phone's free space. Where the
+// reading is missing (browser preview, plugin error) the answer is null and callers do not block.
 // ---------------------------------------------------------------------------
 async function getStorageEstimate() {
-  if (navigator.storage && navigator.storage.estimate) {
-    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
-    return { availableBytes: Math.max(0, quota - usage) };
-  }
+  try {
+    const { realDiskFree } = await Device.getInfo();
+    if (Number.isFinite(realDiskFree) && realDiskFree >= 0) return { availableBytes: realDiskFree };
+  } catch { /* fall through to unknown */ }
   return { availableBytes: null }; // unknown — caller should not hard-block on null
 }
 
@@ -162,11 +164,19 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
   const payload = await buildBackupPayload(db, categories);
   const archive = await encryptBackup(passphrase, JSON.stringify(payload), hint);
   const name = fileName || backupFileName('backup', categories);
+  const archiveText = JSON.stringify(archive);
+
+  // The first check used the payload size; the file written is the encrypted archive, which is larger. Check the real size.
+  const writeBytes = new Blob([archiveText]).size;
+  const free = (await getStorageEstimate()).availableBytes;
+  if (free !== null && writeBytes > free) {
+    return { ok: false, reason: 'insufficient_storage', requiredBytes: writeBytes, availableBytes: free };
+  }
 
   await Filesystem.writeFile({
     path: name,
     directory: Directory.Documents,
-    data: JSON.stringify(archive),
+    data: archiveText,
     encoding: 'utf8'
   });
 
@@ -194,7 +204,9 @@ function estimateRestoreSize(payload, categories) {
   const wanted = payload.entries.filter((e) => categories.includes(e._category));
   let bytes = 0;
   for (const e of wanted) {
-    if (e.fileData) bytes += Math.ceil(e.fileData.length * 0.75); // base64 → raw byte estimate
+    const { fileData, ...row } = e;
+    if (fileData) bytes += Math.ceil(fileData.length * 0.75); // base64 → raw byte estimate
+    bytes += JSON.stringify(row).length; // the database row itself (Vault bytes sit inside it as encrypted text)
   }
   return bytes;
 }

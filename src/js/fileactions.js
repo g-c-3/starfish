@@ -282,6 +282,16 @@ export { softDelete as deleteEntry } from './db.js';
 // loop the same four functions above; nothing new to keep in sync with them.
 // ---------------------------------------------------------------------------
 // scope 'home' lists Home entries only; 'vault' lists the unlocked Vault index only (Decision 147). The two are never mixed.
+// Bytes an entry stores besides a file or note text: description, Money details, coordinates (two 8-byte values),
+// legacy expense fields. Without these Money and Location rows read 0 B.
+function rowExtraBytes(row) {
+  const text = (v) => (v ? new Blob([String(v)]).size : 0);
+  let n = text(row.description) + text(row.money_json) + text(row.expense_category);
+  if (Number.isFinite(row.latitude) && Number.isFinite(row.longitude)) n += 16;
+  if (Number.isFinite(row.amount)) n += 8;
+  return n;
+}
+
 async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = {}) {
   const rows = scope === 'vault' ? [] : (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0`)).values || [];
   const groups = {};
@@ -295,6 +305,7 @@ async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = 
     } else if (row.body_text) {
       sizeBytes = new Blob([row.body_text]).size;
     }
+    sizeBytes += rowExtraBytes(row);
     (groups[cat] = groups[cat] || []).push({ id: row.id, label: row.label, type: row.type, sizeBytes });
   }
   // Vault items come from the already-decrypted in-memory index (vault.js) — never re-decrypt here

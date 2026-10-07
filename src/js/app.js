@@ -714,17 +714,17 @@ async function storageBreakdown() {
 // ownership visible/concrete, not about managing space). Excludes Vault entries from the count for
 // the same reason showDigest()/onThisDay() do (Decision 40) — the app-open password gates this
 // screen, but not the Vault PIN, so a count that included vault items would leak the vault's size to
-// anyone with app access but not the PIN. Storage size has no such split available: navigator.storage.
-// estimate() reports the whole origin's usage, not per-category, so it's shown as one on-device total
-// (files + vault content + the database itself) rather than a false non-vault-only figure.
+// anyone with app access but not the PIN. The size is the sum of the same per-entry sizes the Storage
+// breakdown shows (Home entries only, same reason), not navigator.storage.estimate(): that reports
+// the WebView's own storage and misses files and the database, so it read ~0 B.
 async function yourDataSummary() {
   const rows = await db.query(`SELECT COUNT(*) as cnt FROM entries WHERE deleted_at IS NULL AND is_private=0`);
   const entryCount = (rows.values && rows.values[0] && rows.values[0].cnt) || 0;
-  let storageBytes = null; // null = unknown, e.g. no Storage API in this WebView — caller shows "unknown", not 0
-  if (navigator.storage && navigator.storage.estimate) {
-    const { usage = 0 } = await navigator.storage.estimate();
-    storageBytes = usage;
-  }
+  let storageBytes = null; // null = unknown (the lookup failed) — caller shows "unknown", not 0
+  try {
+    const groups = await getSelectableGroups('home');
+    storageBytes = Object.values(groups).reduce((sum, items) => sum + items.reduce((n, it) => n + (it.sizeBytes || 0), 0), 0);
+  } catch { /* leave unknown */ }
   return { entryCount, storageBytes };
 }
 
@@ -3521,7 +3521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { entryCount, storageBytes } = await yourDataSummary();
     document.getElementById('your-data-summary').textContent =
       `${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} · ` +
-      (storageBytes === null ? 'on-device storage: unknown' : `~${formatBytes(storageBytes)} used on this device (estimate)`);
+      (storageBytes === null ? 'on-device storage: unknown' : `~${formatBytes(storageBytes)} of data on this device`);
   }
   document.getElementById('your-data-settings').addEventListener('toggle', (e) => { if (e.target.open) renderYourData(); });
   // Export Now jumps straight into the existing Backup & Restore flow (ARCHITECTURE §7) rather than
