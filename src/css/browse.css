@@ -1,7 +1,7 @@
 /* Home tools, Trash folder, Search overlay and the shared sort/filter toolbar (Decision 146). Loads after style.css; uses its tokens. */
 
 /* ---- Tools row: Select, Search, Trash, Settings ---- */
-#home-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 14px; }
+#home-tools, #vault-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 14px; }
 .tool-tile {
   display: flex; align-items: center; justify-content: center; width: auto; min-width: 0; margin: 0;
   padding: 14px 4px; border-radius: 18px;
@@ -33,8 +33,8 @@
 .bt-select { margin: 0; width: 100%; padding-top: 9px; padding-bottom: 9px; font-size: 14px; }
 
 /* ---- Trash folder ---- */
-#trash-title { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
-#trash-note { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+#trash-title, #vault-trash-title, #vault-settings-title { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+#trash-note, #vault-trash-note { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
 .trash-row .row-meta { white-space: normal; }
 .trash-row.expiring .row-meta .left { color: #f87171; }
 
@@ -94,3 +94,6 @@ body:has(#select-files-screen:not(.hidden)) #bottom-nav { z-index: 11; }
 @media (prefers-reduced-motion: reduce) {
   .tool-tile, .bt-chip, #search-backdrop, #search-bar > *, #search-panel { transition: none !important; }
 }
+
+/* ---- Vault tools: Settings opens a view, so its card is always open and its summary hidden (Decision 147) ---- */
+#vault-settings-view > #vault-settings-card > summary { display: none; }
