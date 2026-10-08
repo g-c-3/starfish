@@ -28,7 +28,7 @@ import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
-import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
+import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
 
 const CATEGORY_LABELS = {
@@ -985,7 +985,7 @@ async function captureToVault({ type, label, tags = [], description = '', text, 
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
   const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money, location, fireAt, repeatRule });
-  await buildVaultIndex(db, privateSessionKey); // rebuild so the new item is immediately searchable/listed
+  await refreshVaultIndexEntries(db, privateSessionKey, [id]); // only the new item, so it is immediately searchable/listed
   return id;
 }
 
@@ -1034,18 +1034,18 @@ async function showVaultTrash() {
 }
 async function restoreEntry(id) {
   await restoreFromTrash(db, id);
-  if (privateSessionKey) await buildVaultIndex(db, privateSessionKey); // covers the vault-trash case; harmless no-op otherwise
+  if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [id]); // covers the vault-trash case; a Home id changes nothing
 }
 async function permanentlyDelete(id) {
   await permanentlyDeleteEntry(db, id);
-  if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+  if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
 }
 // Vault items specifically need the in-memory index rebuilt after a soft-delete too, or the item
 // keeps appearing in browseVault()/searchVault() until the next unlock rebuilds it — the index has
-// no other way to learn a row it already cached is now gone.
+// no other way to learn a row it already cached is now gone. Only that entry is re-read (Phase 17 B).
 async function deleteVaultEntry(id) {
   await softDelete(db, id);
-  if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+  if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
 }
 
 // ---- "Select files" multi-select screen — one shared implementation for both main and vault
@@ -1057,8 +1057,8 @@ async function runBulkFileAction(action, entryIds, extraOpts = {}) {
   if (vaultAutoLockTimer) armVaultAutoLock(); // bulk-acting on vault items counts as activity too
   const results = await runBulkAction(db, action, entryIds, { privateSessionKey, ...extraOpts });
   // Same reason as deleteVaultEntry() above: a bulk delete can include vault items, and the
-  // in-memory index has no way to notice a row it cached got soft-deleted except a rebuild.
-  if (action === 'delete' && privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+  // in-memory index has no way to notice a row it cached got soft-deleted; the named entries are re-read.
+  if (action === 'delete' && privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, entryIds);
   return results;
 }
 
@@ -1187,7 +1187,7 @@ async function handleLocalRestore() {
     document.getElementById('restore-passphrase').value = '';
     fileInput.value = '';
     // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
-    // Vault entries show without a relock. Locked Vault: nothing to do, unlock builds it fresh.
+    // Vault entries show without a relock (a full rebuild: many entries changed). Locked Vault: nothing to do, unlock builds it fresh.
     if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
     window.dispatchEvent(new Event('dumpzone-data-restored'));
   }
@@ -1312,7 +1312,7 @@ function offerUndo(ids, { isVault = false, message = null, after = null } = {}) 
     run: async () => {
       try {
         for (const id of ids) await restoreFromTrash(db, id); // also puts a pending reminder back on the schedule
-        if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+        if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, ids);
         if (refreshAfterUndo) await refreshAfterUndo();
         if (after) await after();
         toast(ids.length === 1 ? 'Restored' : `${ids.length} restored`);
@@ -2764,7 +2764,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           if (!privateSessionKey) return;
           await softDelete(db, id); await db.run(`UPDATE entries SET deleted_at = ? WHERE id = ?`, [was, id]);
-          await buildVaultIndex(db, privateSessionKey); await loadVaultTrash(); renderVault(); toast('Moved back to trash');
+          await refreshVaultIndexEntries(db, privateSessionKey, [id]); await loadVaultTrash(); renderVault(); toast('Moved back to trash');
         } catch (err) { toast(`Could not undo: ${err.message || err}`); }
       } });
     } else if (purge && await askYesNo({ title: 'Delete permanently?', text: 'This cannot be undone.', yes: 'Delete', no: 'Keep' })) {
@@ -3575,7 +3575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
       await window.Dumpzone.editEntry(item.id, fields, opts);
       await setEntryTags(item.id, d.tags);
-      if (isVault) await buildVaultIndex(db, privateSessionKey); // list/search read this in-memory index
+      if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // list/search read this in-memory index
       toast(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
@@ -3595,7 +3595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       await window.Dumpzone.editEntry(item.id, { label: d.name, text, description: d.description }, {});
       await setEntryTags(item.id, d.tags);
-      if (isVault) await buildVaultIndex(db, privateSessionKey);
+      if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
       toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
@@ -3756,7 +3756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ? { label: d.name, description: d.description, money: details }
         : { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
       await setEntryTags(item.id, d.tags);
-      if (isVault) await buildVaultIndex(db, privateSessionKey); // lists, totals and search read this index
+      if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // lists, totals and search read this index
       toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
@@ -3813,7 +3813,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (!next) return;
           try {
             await window.Dumpzone.editEntry(row.id, isVault ? { money: next } : { money_json: Money.toJson(next) }, {});
-            if (isVault) await buildVaultIndex(db, privateSessionKey);
+            if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [row.id]);
             toast('Repayment added');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
           await refresh();

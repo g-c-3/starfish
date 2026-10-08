@@ -126,7 +126,7 @@ function moneySearchText(d) {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory search index — built fresh on vault unlock, discarded on vault lock. Never persisted,
+// In-memory search index — built fresh on vault unlock, updated per entry afterwards, discarded on vault lock. Never persisted,
 // never written to disk even encrypted (Decision: simplicity + zero index-drift risk beats the
 // performance a persistent index would buy at this scale — see conversation/DECISIONS.md).
 // Also powers: vault-only label autocomplete (deliberately not the shared label_history table,
@@ -135,46 +135,82 @@ function moneySearchText(d) {
 // ---------------------------------------------------------------------------
 let vaultIndexCache = null;
 
+// One index entry from one database row (decrypts under the Vault key). `rid` is the row's rowid: it keeps
+// the cache in database order when one entry is added back, so a per-entry update lists like a full rebuild.
+async function indexEntryFromRow(db, privateSessionKey, row) {
+  const tagRows = (await db.query(
+    `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
+  )).values || [];
+  const tags = tagRows.map((t) => t.name);
+  let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
+  const label = await vaultRowLabel(privateSessionKey, row);
+  try {
+    if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
+  } catch { description = ''; }
+  try {
+    const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
+    if (row.type === 'note') {
+      searchableText = plaintext;
+      sizeBytes = new Blob([plaintext]).size;
+    } else if (row.type === 'money') {
+      money = parseVaultPlaintext('money', plaintext).money;
+      searchableText = money ? moneySearchText(money) : '';
+      sizeBytes = new Blob([plaintext]).size;
+    } else if (row.type === 'location') {
+      location = parseVaultPlaintext('location', plaintext).location;
+      searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
+      sizeBytes = new Blob([plaintext]).size;
+    } else {
+      const content = parseVaultPlaintext(row.type, plaintext);
+      searchableText = content.ocrText || '';
+      sizeBytes = content.fileData ? Math.ceil(content.fileData.length * 0.75) : 0; // base64 → raw byte estimate
+    }
+  } catch {
+    searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
+  }
+  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
+    fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until };
+}
+
+// Full build: on unlock (and after a restore or a reminder change that names no entry). Also runs the label migration.
 async function buildVaultIndex(db, privateSessionKey) {
   await migrateVaultLabels(db, privateSessionKey);
-  const rows = (await db.query(`SELECT * FROM entries WHERE is_private=1 AND deleted_at IS NULL`)).values || [];
+  const rows = (await db.query(`SELECT rowid AS rid, * FROM entries WHERE is_private=1 AND deleted_at IS NULL ORDER BY rowid`)).values || [];
   const index = [];
-  for (const row of rows) {
-    const tagRows = (await db.query(
-      `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
-    )).values || [];
-    const tags = tagRows.map((t) => t.name);
-    let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
-    const label = await vaultRowLabel(privateSessionKey, row);
-    try {
-      if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
-    } catch { description = ''; }
-    try {
-      const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
-      if (row.type === 'note') {
-        searchableText = plaintext;
-        sizeBytes = new Blob([plaintext]).size;
-      } else if (row.type === 'money') {
-        money = parseVaultPlaintext('money', plaintext).money;
-        searchableText = money ? moneySearchText(money) : '';
-        sizeBytes = new Blob([plaintext]).size;
-      } else if (row.type === 'location') {
-        location = parseVaultPlaintext('location', plaintext).location;
-        searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
-        sizeBytes = new Blob([plaintext]).size;
-      } else {
-        const content = parseVaultPlaintext(row.type, plaintext);
-        searchableText = content.ocrText || '';
-        sizeBytes = content.fileData ? Math.ceil(content.fileData.length * 0.75) : 0; // base64 → raw byte estimate
-      }
-    } catch {
-      searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
-    }
-    index.push({ id: row.id, type: row.type, label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
-      fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until });
-  }
+  for (const row of rows) index.push(await indexEntryFromRow(db, privateSessionKey, row));
   vaultIndexCache = index;
   return index;
+}
+
+// Pure cache edits (no database): replace the entry with the same id, or insert it at its rowid position.
+function upsertIndexEntry(index, entry) {
+  const at = index.findIndex((e) => e.id === entry.id);
+  if (at >= 0) { index[at] = entry; return index; }
+  let pos = index.length;
+  while (pos > 0 && (index[pos - 1].rid ?? 0) > (entry.rid ?? 0)) pos--;
+  index.splice(pos, 0, entry);
+  return index;
+}
+function removeIndexEntry(index, id) {
+  const at = index.findIndex((e) => e.id === id);
+  if (at >= 0) index.splice(at, 1);
+  return index;
+}
+
+// Per-entry update after add, edit, trash, restore or delete: reads only the named rows. A row that is now
+// a live Vault row is added or replaced; anything else (trashed, deleted, not a Vault row) is removed.
+// No index yet (the Vault was never built this unlock) falls back to a full build.
+async function refreshVaultIndexEntries(db, privateSessionKey, ids) {
+  if (!vaultIndexCache) return buildVaultIndex(db, privateSessionKey);
+  for (const id of ids) {
+    const row = ((await db.query(`SELECT rowid AS rid, * FROM entries WHERE id=?`, [id])).values || [])[0];
+    if (row && row.is_private === 1 && !row.deleted_at) {
+      upsertIndexEntry(vaultIndexCache, await indexEntryFromRow(db, privateSessionKey, row));
+    } else {
+      removeIndexEntry(vaultIndexCache, id);
+    }
+  }
+  return vaultIndexCache;
 }
 
 function getVaultIndex() {
@@ -210,5 +246,5 @@ function vaultLabelSuggestions(type, partial) {
 export {
   VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
   saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl,
-  buildVaultIndex, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions
+  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions
 };
