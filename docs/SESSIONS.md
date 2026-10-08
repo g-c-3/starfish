@@ -24,9 +24,9 @@ Decisions made: 155, 156, 157.
 
 Verified in the authoring environment: `vite build` passes; Node run of the new index on real crypto and SQLite with three entries (note, PDF, voice; 3 MB files): first build 831 ms and writes 2 records, second build 7 ms, sizes, OCR text and tags identical, a changed body is picked up, a wrong key lists entries unreadable without throwing. Not verified: unlock time on a device with a real Vault, CI.
 
-Open: the first unlock after the update is as slow as today's (one-time rebuild). Haptics need a new plugin and approval. Light-theme tuning needs a device. Exits do not animate (hiding is `display: none`). DP38 (rest) not yet device-tested. CI result for the build with `@capacitor/device` still not reported.
+Open: the first unlock after the update, or after a restore into the Vault, rebuilds the file records once (a notice shows progress). Haptics need a new plugin and approval. Light-theme tuning needs a device. Exits do not animate (hiding is `display: none`). DP38 (rest) not yet device-tested. CI result for the build with `@capacitor/device` still not reported.
 
-Next session start point: device-test DP41. Then Phase 18 B (needs its own go-ahead), Phase 17 C (needs approval; starts with a plugin and speed check), or haptics (needs approval).
+Next session start point: DP41 confirmed on device. Then Phase 18 B (needs its own go-ahead), Phase 17 C (needs approval; starts with a plugin and speed check), or haptics (needs approval).
 
 ---
 
