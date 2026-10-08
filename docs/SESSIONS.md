@@ -14,13 +14,15 @@ Phase 18 A, PDF reading tools (Decision 153), approved in Decision 152. Fresh se
 - `style.css`: text layer, highlight, Find bar and panel rules.
 - Password-protected PDFs keep the inline prompt from Decision 125 (device-confirmed); the field is not moved to the text sheet.
 
-Decisions made: 153.
+Decisions made: 153, 154.
+
+After delivery: DP38 on a small PDF passed (selection, Find, Pages, Outline, go to page). A 41.92 MB PDF that had never opened closed the app during loading. Decision 154 changes how Home PDFs are read (`readStoredBytes` in `app.js`); not tested on a device with that file.
 
 Verified in the authoring environment: syntax checks, `vite build`, Node checks: a generated three-page PDF read by the bundled pdf.js (matches on the right pages and items, case folded, outline entries and a named destination resolved to pages 1 and 3), phrases across items and line ends, whitespace collapse, overlapping and capped matches, wrap-around stepping, page clamping. Read from the pdf.js source: `TextLayer.textDivs` is parallel to the items that carry a string. Not verified: how any of it looks or behaves on a device (selection handles, Copy, keyboard with the Find bar, panel layout, Back order), speed on a large PDF, CI.
 
 Open: highlights cover the whole text element holding a match, not the exact characters. Copy from a Vault PDF puts text on the system clipboard (the person's own action, in line with Decision 41); it is not cleared automatically. A scanned PDF has no text to select or find (OCR excluded, Decision 152). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`. CI result for the build with `@capacitor/device` still not reported.
 
-Next session start point: device-test DP38. Then Phase 18 B (needs its own go-ahead), or Phase 17 C or Phase 15 item 4.
+Next session start point: device-test DP38 (rest) and DP39. Then Phase 18 B (needs its own go-ahead), or Phase 17 C or Phase 15 item 4.
 
 ---
 
