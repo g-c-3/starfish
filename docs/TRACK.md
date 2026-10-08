@@ -136,4 +136,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-08 | Session 98 (device pass) | none | DP37 confirmed on device: Phase 17 B (Vault index per entry) done; Phase 18 A is next |
 | 2026-10-08 | Session 99 | Decision 153 | Phase 18 A built: PDF reading tools (text layer, find, go to page, thumbnails, outline); DP38 added; vite build passes; DP38 passed on a small PDF; not run through CI |
 | 2026-10-08 | Session 99 (later) | Decision 154 | Large PDF crash fix: Home PDFs read as bytes via the file URL; DP39 added; not device-tested |
-
+| 2026-10-08 | Session 99 (end) | Decision 154 | DP39 confirmed on device: 41.92 MB PDF opens from Home; Session 99 closed |

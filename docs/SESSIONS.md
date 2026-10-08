@@ -16,7 +16,7 @@ Phase 18 A, PDF reading tools (Decision 153), approved in Decision 152. Fresh se
 
 Decisions made: 153, 154.
 
-After delivery: DP38 on a small PDF passed (selection, Find, Pages, Outline, go to page). A 41.92 MB PDF that had never opened closed the app during loading. Decision 154 changes how Home PDFs are read (`readStoredBytes` in `app.js`); not tested on a device with that file.
+After delivery: DP38 on a small PDF passed (selection, Find, Pages, Outline, go to page). A 41.92 MB PDF that had never opened closed the app during loading. Decision 154 changes how Home PDFs are read (`readStoredBytes` in `app.js`); confirmed on device: the file opens (DP39).
 
 Verified in the authoring environment: syntax checks, `vite build`, Node checks: a generated three-page PDF read by the bundled pdf.js (matches on the right pages and items, case folded, outline entries and a named destination resolved to pages 1 and 3), phrases across items and line ends, whitespace collapse, overlapping and capped matches, wrap-around stepping, page clamping. Read from the pdf.js source: `TextLayer.textDivs` is parallel to the items that carry a string. Not verified: how any of it looks or behaves on a device (selection handles, Copy, keyboard with the Find bar, panel layout, Back order), speed on a large PDF, CI.
 
