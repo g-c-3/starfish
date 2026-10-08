@@ -858,6 +858,16 @@ async function setupVaultPin(pin, hint = '') {
   await disableVaultBiometric(); // stored secret (if any) was the old PIN — stale now, must re-enable explicitly
 }
 
+// Full Vault index build with a sticky notice while file records are being built (first unlock after the update, or after a restore).
+async function buildVaultIndexWithNotice() {
+  let shown = false;
+  try {
+    return await buildVaultIndex(db, privateSessionKey, ({ done, total }) => { shown = true; toast(`Preparing Vault: ${done} of ${total}`, true); });
+  } finally {
+    if (shown) hideToast();
+  }
+}
+
 async function unlockVault(pin) {
   const row = await db.query(`SELECT private_pin_hash, private_pin_salt FROM credentials WHERE id=1`);
   if (!row.values[0] || !row.values[0].private_pin_hash) return { setupNeeded: true };
@@ -866,7 +876,7 @@ async function unlockVault(pin) {
   if (!ok) return { success: false };
   const { key } = await deriveAesKey(pin, private_pin_salt);
   privateSessionKey = key;
-  await buildVaultIndex(db, privateSessionKey); // in-memory only — see vault.js
+  await buildVaultIndexWithNotice(); // in-memory only — see vault.js
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
   return { success: true };
@@ -1188,7 +1198,7 @@ async function handleLocalRestore() {
     fileInput.value = '';
     // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
     // Vault entries show without a relock (a full rebuild: many entries changed). Locked Vault: nothing to do, unlock builds it fresh.
-    if (privateSessionKey) await buildVaultIndex(db, privateSessionKey);
+    if (privateSessionKey) await buildVaultIndexWithNotice();
     window.dispatchEvent(new Event('dumpzone-data-restored'));
   }
 }

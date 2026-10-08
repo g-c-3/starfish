@@ -205,7 +205,8 @@ async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null)
 
 // Full build: on unlock (and after a restore or a reminder change that names no entry). Also runs the label migration.
 // Tags for every Vault row come from one query, not one per entry.
-async function buildVaultIndex(db, privateSessionKey) {
+// onProgress({ done, total }) is called only while records are being built (entries with none yet), so the caller can say so.
+async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
   await migrateVaultLabels(db, privateSessionKey);
   const rows = (await db.query(`${VAULT_INDEX_SQL} WHERE is_private=1 AND deleted_at IS NULL ORDER BY rowid`)).values || [];
   const tagsByEntry = new Map();
@@ -217,8 +218,15 @@ async function buildVaultIndex(db, privateSessionKey) {
     if (!tagsByEntry.has(t.entry_id)) tagsByEntry.set(t.entry_id, []);
     tagsByEntry.get(t.entry_id).push(t.name);
   }
+  const total = onProgress ? rows.filter((r) => VAULT_FILE_TYPES.includes(r.type) && !r.encrypted_meta).length : 0;
+  let done = 0;
+  if (total) onProgress({ done, total });
   const index = [];
-  for (const row of rows) index.push(await indexEntryFromRow(db, privateSessionKey, row, tagsByEntry));
+  for (const row of rows) {
+    const building = total && VAULT_FILE_TYPES.includes(row.type) && !row.encrypted_meta;
+    index.push(await indexEntryFromRow(db, privateSessionKey, row, tagsByEntry));
+    if (building) onProgress({ done: ++done, total });
+  }
   vaultIndexCache = index;
   return index;
 }
