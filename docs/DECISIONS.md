@@ -1997,3 +1997,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **154. Home PDFs are read as bytes through the app's file URL.** A 41.92 MB PDF closed the app during "Loading…" with no message (a process kill, not a script error). Cause: the base64 read held the file as a base64 string, its decoded string and the byte array at once. Confirmed on device: the 41.92 MB PDF now opens. Home PDFs now load with `fetch` on the Capacitor file URL straight into a byte array; if that read fails, the base64 read runs as before. Vault PDFs are unchanged: the stored entry is base64 inside the encrypted record, so a very large Vault PDF can still exhaust memory. No new permission, no network (the URL is the app's own local file server).
 
+**155. Entrance motion only.** Extends Decision 86; no behavior change.
+- Screens and modal backdrops fade in (0.18s); the toast slides in from above (0.2s). Sheets keep `sheet-in` (Decision 86 era), buttons keep their press scale.
+- Opacity only on screens: a transform would make a screen the containing block for fixed children while it runs.
+- Entrances only. Hiding is `display: none`, so exits do not animate; adding exits would mean delaying every hide in `app.js`.
+- Everything sits under `prefers-reduced-motion: no-preference`.
+- Haptics not added: no haptics plugin is installed, and a new plugin is a new dependency. Light-theme tuning not done blind.
+- No new dependency, no permission, no network, no stored data.
+

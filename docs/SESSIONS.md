@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 100**
+
+Phase 15 item 4, entrance motion (Decision 155). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 86 and 144 and ARCHITECTURE §3c. Credentials and backup are not touched.
+- `src/css/style.css`: one appended block. `fade-in` on `.screen` and `.modal-overlay`, `toast-in` on `.toast`; all inside `prefers-reduced-motion: no-preference`.
+- Sheets, buttons, switches and the auth screens already animated; left as they were.
+- Repo layout note: source is in `src/`; `www/` is the `vite build` output.
+
+Decisions made: 155.
+
+Verified in the authoring environment: `vite build` passes. Not verified: how it looks or feels on a device, CI.
+
+Open: haptics need a new plugin and approval. Light-theme tuning needs a device. Exits do not animate (hiding is `display: none`). DP38 (rest) not yet device-tested. CI result for the build with `@capacitor/device` still not reported.
+
+Next session start point: device-test DP38 (rest) and DP40. Then Phase 18 B (needs its own go-ahead), Phase 17 C (needs approval; starts with a plugin and speed check), or haptics (needs approval).
+
+---
+
 **Session 99**
 
 Phase 18 A, PDF reading tools (Decision 153), approved in Decision 152. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 121, 125, 144, 148, 152 and the Credentials and PDF viewer parts of ARCHITECTURE. Credentials and backup are not touched.

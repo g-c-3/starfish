@@ -137,3 +137,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-08 | Session 99 | Decision 153 | Phase 18 A built: PDF reading tools (text layer, find, go to page, thumbnails, outline); DP38 added; vite build passes; DP38 passed on a small PDF; not run through CI |
 | 2026-10-08 | Session 99 (later) | Decision 154 | Large PDF crash fix: Home PDFs read as bytes via the file URL; DP39 added; not device-tested |
 | 2026-10-08 | Session 99 (end) | Decision 154 | DP39 confirmed on device: 41.92 MB PDF opens from Home; Session 99 closed |
+| 2026-10-08 | Session 100 | Decision 155 | Phase 15 item 4 entrance motion built (screen and backdrop fade, toast slide); DP40 added; haptics and light-theme tuning remain; vite build passes; not run through CI |
