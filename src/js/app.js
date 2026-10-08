@@ -4072,7 +4072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // decrypted into memory only and dropped on close or lock. A document that cannot be read offers the phone's app.
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
-    let view = null, token = 0, pwResolve = null;
+    let view = null, tools = null, token = 0, pwResolve = null;
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
     const fresh = async () => isVault
       ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
@@ -4103,7 +4103,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openViewer({
       title: item.label || 'PDF', isVault,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (view) { view.destroy(); view = null; } },
+      guard: async () => !(tools && tools.closeTop()), // Back closes the Pages panel, then Find, before it leaves the viewer (Decision 153)
+      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } },
       render: async (body) => {
         const row = await fresh();
         document.getElementById('viewer-title').textContent = row.label || 'PDF';
@@ -4137,6 +4138,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           body.insertAdjacentHTML('beforeend', `<div class="pdf-zoom"><button type="button" class="pdf-zin" aria-label="Zoom in">+</button><button type="button" class="pdf-zout" aria-label="Zoom out">−</button></div>`);
           body.querySelector('.pdf-zin').onclick = () => { arm(); view?.zoomIn(); };
           body.querySelector('.pdf-zout').onclick = () => { arm(); view?.zoomOut(); };
+          const { mountPdfTools } = await import('./pdftools.js');
+          if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
+          tools = mountPdfTools(body, view, { onActivity: arm });
         } catch (err) {
           if (mine !== token) return;
           scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}<button type="button" class="pdf-fallback">Open with app</button></div>`;
