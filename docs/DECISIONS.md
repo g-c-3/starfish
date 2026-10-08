@@ -2014,3 +2014,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - First unlock after the update rebuilds the records once, at today's speed.
 - No new dependency, no permission, no network. Whole-database and per-file encryption (C, D) remain open; D would replace this record with its own.
 
+**157. Preparing Vault notice.** Extends Decision 156; no behavior change to data.
+- While the full index build creates file records, a sticky toast reads "Preparing Vault: N of M" (M = file entries without a record) and is hidden when the build ends. Nothing shows when no records are needed.
+- Shown on unlock and after a restore; not on single-entry updates. The record build itself still runs one entry at a time and can block the screen briefly on a very large file, so the count may pause.
+- No new dependency, no permission, no network, no stored data.
+

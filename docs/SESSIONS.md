@@ -18,7 +18,9 @@ Then, Vault unlock speed (Decision 156), approved by the owner after a report th
 - `backup.js`: `encrypted_meta` is dropped from the export. Backup format, restore and the three credentials are untouched; a restored row has no record and gets one at the next unlock.
 - Confirmed on device: DP38 (all items) and DP40.
 
-Decisions made: 155, 156.
+- Confirmed on device: the Vault is fast after the first unlock (DP41, first part). Then a progress notice for the one-time build (Decision 157): `buildVaultIndex` takes an optional `onProgress`, called only while records are being built; `app.js` `buildVaultIndexWithNotice` shows a sticky toast "Preparing Vault: N of M" and hides it when the build ends. Used on unlock and after a restore.
+
+Decisions made: 155, 156, 157.
 
 Verified in the authoring environment: `vite build` passes; Node run of the new index on real crypto and SQLite with three entries (note, PDF, voice; 3 MB files): first build 831 ms and writes 2 records, second build 7 ms, sizes, OCR text and tags identical, a changed body is picked up, a wrong key lists entries unreadable without throwing. Not verified: unlock time on a device with a real Vault, CI.
 
