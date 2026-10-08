@@ -18,9 +18,9 @@ Decisions made: 149, 150.
 
 Verified in the authoring environment: syntax check, `vite build`, 10 Node checks on `askYesNo` and `askText` (explicit No, dismissal, Yes, plain No, value returned, field emptied, Back, second call refused), a scan showing no native dialog call left in `app.js`, new element ids present once. Also: 12 Node checks on `rowExtraBytes`, `estimateRestoreSize` and `getStorageEstimate` with a mocked plugin (value, zero, missing, throws); `vite build` with the new plugin (the bundle contains `realDiskFree`); the plugin's published Android source read (StatFs on the data directory). Not verified: the real free-space figure on a device, CI with the new dependency, how the sheets look or stack on a device, keyboard raise, Back order, CI. The Drive and legacy expense paths cannot be reached on a device.
 
-Open: DP31 to DP36 pending. The free-space reading is the data partition; a backup in Documents is assumed to share it (true on current phones). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
+Device results: DP31 to DP36 all passed (reported by the user, no failures). The free-space reading is the data partition; a backup in Documents is assumed to share it (true on current phones). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
 
-Next session start point: device-test DP31 to DP36; then Phase 17 B if approved, or Phase 15 item 4 polish.
+Next session start point: Phase 17 B if approved, or Phase 15 item 4 polish. CI result for the build with `@capacitor/device` not yet reported.
 
 ---
 
