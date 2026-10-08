@@ -1977,3 +1977,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Full build stays for: unlock (with the label migration), a backup restore, and a reminders-changed event that names no entry. If no index exists yet, a refresh does a full build.
 - The index is still memory only, never written to disk, and cleared on lock (Decision 39). No change to backup, restore, credentials or stored data.
 - Measured on a real phone with a large Vault before it is called done (DP37).
+
+**152. PDF viewer tools (Phase 18): plan, approved, nothing built.** Three items, built in order, one per session, each with its own device pass. All offline; no account, no network, no cloud.
+- A. Reading tools, `pdfjs-dist` only: text layer, search inside the PDF, jump to page, thumbnails, outline, password-protected PDFs. The PDF password goes through the text sheet, is never stored and the field is emptied on close. Vault PDFs stay in memory only.
+- B. Mark-up and forms through the pdf.js annotation editor: highlight, note or text box, drawing, stamp, form fill. Output is a new copy by default (same folder, name with a suffix). Replacing the original is a separate explicit choice, with its consequence stated and no Undo. A Vault copy is encrypted under the Vault key like any Vault entry. Leaving with unsaved marks asks to discard.
+- C. Page tools and image to PDF with `pdf-lib`: rotate, delete, reorder, split or extract, merge, image to PDF, a signature picture placed on a page. Always a new copy. `pdf-lib` is not a crypto library, so the Decision 144 rule does not apply, but bundle size and CI are checked before use. The signature is a picture, not a digital signature.
+- With the PDF viewer switch off (Decision 148) the phone's PDF app opens the file and these tools do not exist.
+- Not doing: conversion to or from Office files (needs heavy converters or a server); summaries or questions about a document (automated inference, outside the app's premise); cloud sharing and collaboration (a backend); OCR of scanned PDFs (offline OCR data is large and the usual library fetches it over the network); cryptographic digital signatures (Web Crypto cannot produce the PDF signature format and an external crypto library is excluded by Decision 144).
+- Speed and memory: each item is measured on a real phone with a large PDF before it is called done.

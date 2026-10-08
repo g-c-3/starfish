@@ -132,3 +132,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-08 | Session 97 (continued) | Decision 150 | Real free-space reading for backup and restore checks (@capacitor/device); Money, Location and description now counted in sizes; Your Data shows the data held; DP36 added; vite build passes; not device-tested, not run through CI |
 | 2026-10-08 | Session 97 (device pass) | none | DP31 to DP36 confirmed on device: Phase 15 items 3, 4b, 4c, 4d, in-app sheets, free-space check and size fixes; Phase 15 item 4 polish and Phase 17 B remain |
 | 2026-10-08 | Session 98 | Decision 151 | Phase 17 B built: Vault index updated per entry instead of full rebuild after every change; DP37 added; vite build passes; not device-tested, not run through CI |
+| 2026-10-08 | Session 98 (plan) | Decision 152 | Phase 18 PDF viewer tools planned and approved: A reading tools, B mark-up and forms, C page tools and image to PDF; nothing built |
+| 2026-10-08 | Session 98 (device pass) | none | DP37 confirmed on device: Phase 17 B (Vault index per entry) done; Phase 18 A is next |

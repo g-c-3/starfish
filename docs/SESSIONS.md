@@ -10,14 +10,15 @@ Phase 17 B (Decision 151), approved by the owner. Fresh start from the docs; Dec
 - `vault.js`: the per-row index build is now `indexEntryFromRow`; `refreshVaultIndexEntries(db, key, ids)` re-reads only the named rows and adds, replaces or removes them in the cache (a trashed, deleted or Home row is removed or ignored); `upsertIndexEntry` keeps database order through each row's `rowid` (`rid`). `buildVaultIndex` is the full build, now ordered by `rowid`.
 - `app.js`: capture, edit (text, Money, repayment), trash, Undo, restore from Vault Trash, permanent delete and bulk delete call `refreshVaultIndexEntries` with the affected ids. Full builds remain on unlock, after a backup restore, and on the reminders-changed event (it names no entry).
 - No change to backup, restore, credentials or stored data.
+- Phase 18 planned (Decision 152): PDF viewer reading tools, mark-up and forms, page tools and image to PDF, approved by the owner, nothing built. Not started this session: context limit.
 
-Decisions made: 151.
+Decisions made: 151, 152.
 
 Verified in the authoring environment: syntax checks, `vite build`, 12 Node checks against a stub database (full build when no index exists, one decrypt per edit, order kept, trash removes, restore returns to its `rowid` position, new entry appended, Home id never added, permanent delete removes, bulk, result equals a fresh full build, two queries per refresh). Not verified: real speed on a phone with a large Vault, CI.
 
-Open: DP37 pending. Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
+Device results: DP37 passed (reported by the owner, no failures). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`.
 
-Next session start point: device-test DP37; then Phase 17 C (check `@capacitor-community/sqlite` encryption support and the speed cost first; needs approval), or Phase 15 item 4 polish.
+Next session start point: Phase 18 A (approved). Phase 17 C and Phase 15 item 4 stay open and need their own go-ahead.
 
 ---
 
