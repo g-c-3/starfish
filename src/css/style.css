@@ -707,6 +707,41 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 .pdf-zoom button { width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; font-size: 22px; line-height: 1;
   background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
 
+/* ---- PDF reading tools (Decision 153) ---- */
+.textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; -webkit-text-size-adjust: none; text-size-adjust: none; transform-origin: 0 0; -webkit-user-select: text; user-select: text; z-index: 0; }
+.textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0 0; }
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(59, 130, 246, 0.35); }
+.textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; -webkit-user-select: none; user-select: none; }
+.textLayer.selecting .endOfContent { top: 0; }
+.textLayer span.pdf-hit { background: rgba(255, 214, 0, 0.45); border-radius: 2px; }
+.textLayer span.pdf-hit.pdf-hit-cur { background: rgba(255, 120, 0, 0.6); outline: 2px solid rgba(255, 120, 0, 0.9); }
+.pdf-tools { position: absolute; left: 12px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; z-index: 3; }
+.pdf-tools button { width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
+.pdf-searchbar { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 4px; padding: 6px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.pdf-searchbar input { flex: 1; min-width: 0; width: auto; margin: 0; }
+.pdf-find-count { flex: none; max-width: 36%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.pdf-searchbar .icon-btn, .pdf-panel .icon-btn { flex: none; width: 40px; height: 40px; margin: 0; padding: 0; display: grid; place-items: center; border-radius: 12px; border: none; background: transparent; color: var(--fg); box-shadow: none; }
+.pdf-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 72%; z-index: 5; display: flex; flex-direction: column; background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35); padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+.pdf-panel-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px 14px; }
+.pdf-tabs { flex: 1; display: flex; gap: 6px; }
+.pdf-tabs button { width: auto; margin: 0; padding: 8px 14px; border-radius: 12px; font-size: 13px; background: transparent; color: var(--fg); border: 1px solid var(--border); box-shadow: none; }
+.pdf-tabs button.active { background: var(--brand-tint); border-color: var(--brand); }
+.pdf-goto { display: flex; gap: 6px; padding: 0 14px 8px; }
+.pdf-goto input { flex: 1; min-width: 0; width: auto; margin: 0; }
+.pdf-goto button { flex: none; width: auto; margin: 0; padding: 0 18px; }
+.pdf-panel-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 12px; }
+.pdf-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.pdf-thumb { position: relative; flex: none; margin: 0; padding: 0; border: 2px solid transparent; border-radius: 6px; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); overflow: hidden; }
+.pdf-thumb.current { border-color: var(--brand); }
+.pdf-thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pdf-thumb-n { position: absolute; right: 3px; bottom: 3px; z-index: 1; padding: 0 5px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; line-height: 16px; }
+.pdf-ol-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; margin: 0; padding: 10px 10px; text-align: left; background: transparent; color: var(--fg); border: none; border-bottom: 1px solid var(--border); border-radius: 0; box-shadow: none; font-size: 14px; }
+.pdf-ol-title { min-width: 0; overflow-wrap: anywhere; }
+.pdf-ol-page { flex: none; color: var(--muted); font-size: 12px; }
+.pdf-ol-msg { padding: 24px 0; text-align: center; color: var(--muted); font-size: 14px; }
+
 /* ---- Long-press multi-select (Decision 122) ---- */
 .entry-row, .thumb-tile { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .entry-row { position: relative; }
