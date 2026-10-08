@@ -1970,3 +1970,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Sizes: an entry's size is its file or note text plus description, Money details, coordinates (16 B) and legacy expense fields. Your Data shows the sum of the Home entry sizes (Vault excluded, Decision 40), labelled as data held, not as an estimate of device usage.
 - Drive's check against Drive's own quota is unchanged.
 - One new official plugin, no permission, no network. Nothing leaves the device.
+
+**151. Vault index updated per entry (Phase 17 B).** The in-memory Vault index is no longer rebuilt after every change.
+- Add, edit, trash, Undo, restore, permanent delete and bulk delete re-read only the affected rows. A row that is a live Vault row is added or replaced; any other result removes it. A Home id changes nothing.
+- Order is the database order, kept through each row's `rowid`, so a restored entry returns to its place.
+- Full build stays for: unlock (with the label migration), a backup restore, and a reminders-changed event that names no entry. If no index exists yet, a refresh does a full build.
+- The index is still memory only, never written to disk, and cleared on lock (Decision 39). No change to backup, restore, credentials or stored data.
+- Measured on a real phone with a large Vault before it is called done (DP37).

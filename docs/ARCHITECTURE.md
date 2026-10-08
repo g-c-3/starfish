@@ -206,7 +206,7 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | Stage | What | State |
 |---|---|---|
 | A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; not device-tested |
-| B | Vault index updated per entry, not rebuilt on every change | planned |
+| B | Vault index updated per entry, not rebuilt on every change | built (Session 98, Decision 151), not device-tested |
 | C | Whole-database encryption, FTS5 search kept | planned; plugin support not yet checked |
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | planned |
 | E | Backup and restore adapted at every stage | planned |
@@ -813,3 +813,9 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Backup: `estimateBackupSize` before building, then the encrypted archive's real size before `Filesystem.writeFile`. Restore: `estimateRestoreSize` = file bytes + each database row's JSON size.
 - `fileactions.js` `rowExtraBytes(row)`: description, `money_json`, `expense_category`, coordinates (16 B), `amount` (8 B). Added to every entry size in `getSelectableEntries`, so Storage breakdown, Select files and Your Data agree.
 - Your Data (`yourDataSummary`): count of Home entries and the sum of their sizes. No WebView storage API is read.
+
+## Vault index updates (Decision 151)
+- `vault.js` `refreshVaultIndexEntries(db, key, ids)`: for each id, reads the row (`rowid AS rid, *`); a live Vault row is upserted through `indexEntryFromRow`, anything else is removed from the cache. Cache order follows `rid`.
+- Callers (`app.js`): `captureToVault`, `restoreEntry`, `permanentlyDelete`, `deleteVaultEntry`, `runBulkFileAction` (delete), `offerUndo`, Vault Trash Undo, and the text, Money and repayment edit paths.
+- Full `buildVaultIndex` (with `migrateVaultLabels`): unlock, backup restore, `dumpzone-reminders-changed`.
+- The cache is memory only and cleared on lock; backup, restore and credentials are untouched.
