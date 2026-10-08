@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS entries (
   description TEXT,                  -- optional free text (Decision 91). NULL for Vault entries — see encrypted_description
   encrypted_description BLOB,        -- Private Vault only: description encrypted under the Vault key
   encrypted_label BLOB,              -- Private Vault only (Decision 145): the label under the Vault key; label then holds VAULT_PLACEHOLDER_LABEL
+  encrypted_meta BLOB,               -- Private Vault file types only (Decision 156): {size, OCR text, body length} under the Vault key; derived from encrypted_body, rebuilt when missing or stale
 
   -- expense-specific
   amount REAL,
@@ -138,6 +139,7 @@ async function initDb(sqlite) {
   await ensureColumn(db, 'entries', 'description', 'TEXT');
   await ensureColumn(db, 'entries', 'encrypted_description', 'BLOB');
   await ensureColumn(db, 'entries', 'encrypted_label', 'BLOB');
+  await ensureColumn(db, 'entries', 'encrypted_meta', 'BLOB');
   // Money details as JSON text (Decision 124). Home only; Vault Money keeps the same JSON inside encrypted_body.
   await ensureColumn(db, 'entries', 'money_json', 'TEXT');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');

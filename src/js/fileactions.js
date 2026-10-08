@@ -215,7 +215,7 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
     const plaintext = buildVaultPlaintext(row.type, merged);
     const { encryptPrivateNote } = await import('./crypto.js');
     const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
-    await db.run(`UPDATE entries SET encrypted_body=?, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]);
+    await db.run(`UPDATE entries SET encrypted_body=?, encrypted_meta=NULL, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]); // meta is derived from the body (Decision 156)
   }
 
   const updates = { updated_at: Date.now() };

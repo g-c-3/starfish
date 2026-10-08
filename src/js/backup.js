@@ -114,6 +114,7 @@ async function buildBackupPayload(db, categories) {
       const cat = entryCategoryNames.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;
       const out = { ...row, _category: cat };
+      delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
       if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
         out.fileData = await readFileBase64(row.file_path); // raw bytes travel with the entry
       }

@@ -137,47 +137,88 @@ let vaultIndexCache = null;
 
 // One index entry from one database row (decrypts under the Vault key). `rid` is the row's rowid: it keeps
 // the cache in database order when one entry is added back, so a per-entry update lists like a full rebuild.
-async function indexEntryFromRow(db, privateSessionKey, row) {
-  const tagRows = (await db.query(
+const VAULT_FILE_TYPES = ['voice', 'image', 'pdf', 'file']; // the types whose body holds file bytes (Decision 156)
+
+// Index rows leave the file bytes out: file types return NULL for encrypted_body plus its length, so the bridge never
+// carries a file just to list it. Small types (text, money, location, reminder) still return their body.
+const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, encrypted_label, encrypted_description, extension, created_at,
+  fire_at, repeat_rule, completed_at, snoozed_until, is_private, deleted_at, encrypted_meta, LENGTH(encrypted_body) AS body_len,
+  CASE WHEN type IN ('voice','image','pdf','file') THEN NULL ELSE encrypted_body END AS encrypted_body
+  FROM entries`;
+
+// Size and OCR text of a file entry without decrypting the file. Valid only while it decrypts under the current key and
+// its recorded body length still matches; otherwise it is rebuilt from the body and written back. Never throws.
+async function fileEntryMeta(db, privateSessionKey, row) {
+  if (row.encrypted_meta) {
+    try {
+      const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta));
+      if (m && m.v === 1 && m.bl === row.body_len) return m;
+    } catch { /* wrong key or damaged: rebuild below */ }
+  }
+  try {
+    const full = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [row.id])).values || [])[0];
+    const content = parseVaultPlaintext(row.type, await decryptPrivateNote(privateSessionKey, full.encrypted_body));
+    const meta = { v: 1, bl: row.body_len, o: content.ocrText || '', s: content.fileData ? Math.ceil(content.fileData.length * 0.75) : 0 }; // base64 → raw byte estimate
+    try {
+      await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(privateSessionKey, JSON.stringify(meta)), row.id]);
+    } catch { /* the index still works without the cache */ }
+    return meta;
+  } catch {
+    return null; // corrupted or undecryptable entry: still listed (so it can be deleted), just not searchable
+  }
+}
+
+async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null) {
+  const tags = tagsByEntry ? (tagsByEntry.get(row.id) || []) : ((await db.query(
     `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
-  )).values || [];
-  const tags = tagRows.map((t) => t.name);
+  )).values || []).map((t) => t.name);
   let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
   const label = await vaultRowLabel(privateSessionKey, row);
   try {
     if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
   } catch { description = ''; }
-  try {
-    const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
-    if (row.type === 'note') {
-      searchableText = plaintext;
-      sizeBytes = new Blob([plaintext]).size;
-    } else if (row.type === 'money') {
-      money = parseVaultPlaintext('money', plaintext).money;
-      searchableText = money ? moneySearchText(money) : '';
-      sizeBytes = new Blob([plaintext]).size;
-    } else if (row.type === 'location') {
-      location = parseVaultPlaintext('location', plaintext).location;
-      searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
-      sizeBytes = new Blob([plaintext]).size;
-    } else {
-      const content = parseVaultPlaintext(row.type, plaintext);
-      searchableText = content.ocrText || '';
-      sizeBytes = content.fileData ? Math.ceil(content.fileData.length * 0.75) : 0; // base64 → raw byte estimate
+  if (VAULT_FILE_TYPES.includes(row.type)) {
+    const meta = await fileEntryMeta(db, privateSessionKey, row);
+    if (meta) { searchableText = meta.o || ''; sizeBytes = meta.s || 0; }
+  } else {
+    try {
+      const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
+      if (row.type === 'note') {
+        searchableText = plaintext;
+        sizeBytes = new Blob([plaintext]).size;
+      } else if (row.type === 'money') {
+        money = parseVaultPlaintext('money', plaintext).money;
+        searchableText = money ? moneySearchText(money) : '';
+        sizeBytes = new Blob([plaintext]).size;
+      } else if (row.type === 'location') {
+        location = parseVaultPlaintext('location', plaintext).location;
+        searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
+        sizeBytes = new Blob([plaintext]).size;
+      }
+    } catch {
+      searchableText = ''; // corrupted/undecryptable entry: still listed, just not searchable
     }
-  } catch {
-    searchableText = ''; // corrupted/undecryptable entry — still listed (so it can be deleted), just not searchable
   }
   return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
     fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until };
 }
 
 // Full build: on unlock (and after a restore or a reminder change that names no entry). Also runs the label migration.
+// Tags for every Vault row come from one query, not one per entry.
 async function buildVaultIndex(db, privateSessionKey) {
   await migrateVaultLabels(db, privateSessionKey);
-  const rows = (await db.query(`SELECT rowid AS rid, * FROM entries WHERE is_private=1 AND deleted_at IS NULL ORDER BY rowid`)).values || [];
+  const rows = (await db.query(`${VAULT_INDEX_SQL} WHERE is_private=1 AND deleted_at IS NULL ORDER BY rowid`)).values || [];
+  const tagsByEntry = new Map();
+  const tagRows = (await db.query(
+    `SELECT et.entry_id AS entry_id, t.name AS name FROM entry_tags et JOIN tags t ON t.id=et.tag_id
+     WHERE et.entry_id IN (SELECT id FROM entries WHERE is_private=1 AND deleted_at IS NULL)`
+  )).values || [];
+  for (const t of tagRows) {
+    if (!tagsByEntry.has(t.entry_id)) tagsByEntry.set(t.entry_id, []);
+    tagsByEntry.get(t.entry_id).push(t.name);
+  }
   const index = [];
-  for (const row of rows) index.push(await indexEntryFromRow(db, privateSessionKey, row));
+  for (const row of rows) index.push(await indexEntryFromRow(db, privateSessionKey, row, tagsByEntry));
   vaultIndexCache = index;
   return index;
 }
@@ -203,7 +244,7 @@ function removeIndexEntry(index, id) {
 async function refreshVaultIndexEntries(db, privateSessionKey, ids) {
   if (!vaultIndexCache) return buildVaultIndex(db, privateSessionKey);
   for (const id of ids) {
-    const row = ((await db.query(`SELECT rowid AS rid, * FROM entries WHERE id=?`, [id])).values || [])[0];
+    const row = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [id])).values || [])[0];
     if (row && row.is_private === 1 && !row.deleted_at) {
       upsertIndexEntry(vaultIndexCache, await indexEntryFromRow(db, privateSessionKey, row));
     } else {
