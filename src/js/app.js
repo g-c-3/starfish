@@ -4070,6 +4070,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // PDF entry: in-app viewer on a bundled pdf.js, loaded on first open (Phase 16 H, Decision 121). Vault bytes are
   // decrypted into memory only and dropped on close or lock. A document that cannot be read offers the phone's app.
+  // Stored file as bytes, read through the app's own file URL so a large file is not also held as a base64 string and its
+  // decoded copy (Decision 154). Falls back to the base64 read if the URL read fails.
+  async function readStoredBytes(path) {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
+      const res = await fetch(Capacitor.convertFileSrc(uri));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    } catch {
+      return base64ToBytes((await Filesystem.readFile({ path, directory: Directory.Data })).data);
+    }
+  }
+
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
     let view = null, tools = null, token = 0, pwResolve = null;
@@ -4112,7 +4127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mine = ++token;
         body.innerHTML = '<div class="pdf-scroll"><div class="pdf-msg">Loading…</div></div>';
         const scroll = body.querySelector('.pdf-scroll');
-        let b64 = null, dbRow = null;
+        let b64 = null, bytes = null, dbRow = null;
         try {
           if (isVault) {
             if (!privateSessionKey) throw new Error('Vault locked');
@@ -4122,11 +4137,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           } else {
             dbRow = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
             if (!dbRow) throw new Error('PDF not found');
-            const { Filesystem, Directory } = await import('@capacitor/filesystem');
-            b64 = (await Filesystem.readFile({ path: dbRow.file_path, directory: Directory.Data })).data;
+            bytes = await readStoredBytes(dbRow.file_path);
           }
+          if (!bytes) bytes = base64ToBytes(b64); // Vault: the stored entry is base64 inside the encrypted record
           const { createPdfView } = await import('./pdfviewer.js');
-          const next = await createPdfView(scroll, base64ToBytes(b64), {
+          const next = await createPdfView(scroll, bytes, {
             onActivity: arm,
             askPassword: (wasWrong) => askPassword(wasWrong, scroll),
             onPage: (n) => { const c = viewerScreen.querySelector('.pdf-count'); if (c && view) c.textContent = `${n}/${view.pageCount}`; }
