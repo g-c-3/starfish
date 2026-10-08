@@ -138,3 +138,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-08 | Session 99 (later) | Decision 154 | Large PDF crash fix: Home PDFs read as bytes via the file URL; DP39 added; not device-tested |
 | 2026-10-08 | Session 99 (end) | Decision 154 | DP39 confirmed on device: 41.92 MB PDF opens from Home; Session 99 closed |
 | 2026-10-08 | Session 100 | Decision 155 | Phase 15 item 4 entrance motion built (screen and backdrop fade, toast slide); DP40 added; haptics and light-theme tuning remain; vite build passes; not run through CI |
+| 2026-10-09 | Session 100 (continued) | Decision 156 | DP38 and DP40 confirmed on device; Phase 17 B2 built: Vault unlock no longer decrypts file bytes (metadata cache, one tags query); DP41 added; vite build passes; Node test on real crypto and SQLite; not run through CI |

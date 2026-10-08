@@ -11,13 +11,20 @@ Phase 15 item 4, entrance motion (Decision 155). Fresh session; Tier 1 docs read
 - Sheets, buttons, switches and the auth screens already animated; left as they were.
 - Repo layout note: source is in `src/`; `www/` is the `vite build` output.
 
-Decisions made: 155.
+Then, Vault unlock speed (Decision 156), approved by the owner after a report that the Vault opens slowly. Cause: the full index build on unlock decrypted and parsed every file entry's whole body (the file as base64) only to read its size and OCR text, and fetched those bodies through the plugin bridge, plus one tags query per entry. Fix:
+- `db.js`: `encrypted_meta` column (`ensureColumn`, existing installs migrate on open).
+- `vault.js`: `fileEntryMeta` (size, OCR text, body length under the Vault key; used only if it decrypts and the length matches, else rebuilt from the body and written back); `VAULT_INDEX_SQL` returns NULL for file bodies plus their length; one tags query for the whole build.
+- `fileactions.js`: a Vault content edit clears `encrypted_meta`.
+- `backup.js`: `encrypted_meta` is dropped from the export. Backup format, restore and the three credentials are untouched; a restored row has no record and gets one at the next unlock.
+- Confirmed on device: DP38 (all items) and DP40.
 
-Verified in the authoring environment: `vite build` passes. Not verified: how it looks or feels on a device, CI.
+Decisions made: 155, 156.
 
-Open: haptics need a new plugin and approval. Light-theme tuning needs a device. Exits do not animate (hiding is `display: none`). DP38 (rest) not yet device-tested. CI result for the build with `@capacitor/device` still not reported.
+Verified in the authoring environment: `vite build` passes; Node run of the new index on real crypto and SQLite with three entries (note, PDF, voice; 3 MB files): first build 831 ms and writes 2 records, second build 7 ms, sizes, OCR text and tags identical, a changed body is picked up, a wrong key lists entries unreadable without throwing. Not verified: unlock time on a device with a real Vault, CI.
 
-Next session start point: device-test DP38 (rest) and DP40. Then Phase 18 B (needs its own go-ahead), Phase 17 C (needs approval; starts with a plugin and speed check), or haptics (needs approval).
+Open: the first unlock after the update is as slow as today's (one-time rebuild). Haptics need a new plugin and approval. Light-theme tuning needs a device. Exits do not animate (hiding is `display: none`). DP38 (rest) not yet device-tested. CI result for the build with `@capacitor/device` still not reported.
+
+Next session start point: device-test DP41. Then Phase 18 B (needs its own go-ahead), Phase 17 C (needs approval; starts with a plugin and speed check), or haptics (needs approval).
 
 ---
 

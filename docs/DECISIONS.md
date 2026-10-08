@@ -2005,3 +2005,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Haptics not added: no haptics plugin is installed, and a new plugin is a new dependency. Light-theme tuning not done blind.
 - No new dependency, no permission, no network, no stored data.
 
+**156. Vault file metadata cache.** Extends Decision 144 (B); stage C and D unchanged.
+- Cause of the slow Vault open: the full index build decrypted and parsed each file entry's whole body (file bytes as base64) to get its size and OCR text, after the plugin had returned every body; a tags query ran per entry. Encryption itself is not the cost.
+- `encrypted_meta` (new column, Vault file types only: voice, image, pdf, file): JSON `{v, bl, o, s}` (body length, OCR text, size) under the Vault key, same AES-GCM call.
+- Derived data, never authoritative. Used only if it decrypts under the current key and `bl` equals the SQL length of the stored body; otherwise rebuilt from the body and written back. This covers a PIN change, a restore, and any write path that forgets it. A Vault content edit clears it anyway.
+- The index query returns NULL instead of a file entry's body, with its length; text, money, location and reminder bodies are still read.
+- Not in backups: the export drops it, restore leaves it empty, the next unlock fills it. Backup format, safety backup, append default and the three credentials are unchanged.
+- First unlock after the update rebuilds the records once, at today's speed.
+- No new dependency, no permission, no network. Whole-database and per-file encryption (C, D) remain open; D would replace this record with its own.
+
