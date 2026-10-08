@@ -134,3 +134,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-08 | Session 98 | Decision 151 | Phase 17 B built: Vault index updated per entry instead of full rebuild after every change; DP37 added; vite build passes; not device-tested, not run through CI |
 | 2026-10-08 | Session 98 (plan) | Decision 152 | Phase 18 PDF viewer tools planned and approved: A reading tools, B mark-up and forms, C page tools and image to PDF; nothing built |
 | 2026-10-08 | Session 98 (device pass) | none | DP37 confirmed on device: Phase 17 B (Vault index per entry) done; Phase 18 A is next |
+| 2026-10-08 | Session 99 | Decision 153 | Phase 18 A built: PDF reading tools (text layer, find, go to page, thumbnails, outline); DP38 added; vite build passes; not device-tested, not run through CI |

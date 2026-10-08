@@ -1985,3 +1985,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - With the PDF viewer switch off (Decision 148) the phone's PDF app opens the file and these tools do not exist.
 - Not doing: conversion to or from Office files (needs heavy converters or a server); summaries or questions about a document (automated inference, outside the app's premise); cloud sharing and collaboration (a backend); OCR of scanned PDFs (offline OCR data is large and the usual library fetches it over the network); cryptographic digital signatures (Web Crypto cannot produce the PDF signature format and an external crypto library is excluded by Decision 144).
 - Speed and memory: each item is measured on a real phone with a large PDF before it is called done.
+
+**153. PDF reading tools (Phase 18 A).** Builds item A of Decision 152.
+- Text layer: each drawn page gets a pdf.js `TextLayer` of transparent text over the canvas, so words can be selected and copied with the system selection controls. It is released with the page and drawn again after a zoom.
+- Find: a Find bar (field, count, previous, next, close). A query needs 2 or more characters; case is ignored and whitespace collapsed; a phrase can run across text items and line ends. Search runs page by page and shows progress; it starts after a typing pause or on Enter. The first match on or after the current page is chosen; next and previous wrap. Cap 2000 matches, shown as `2000+`. Highlights cover the whole text element holding a match (yellow; the current one orange), not the exact characters.
+- Pages panel: thumbnails drawn while near the view and released beyond it, the current page marked; an Outline tab listing entries that point inside the document with their page (links to outside addresses are not followed); a go to page field clamped to 1 through the page count.
+- Back closes Pages, then Find, then the viewer.
+- Privacy: the query, the results, the page text and the thumbnails live in memory only. Page text is cached only while Find is open and dropped when it closes. Closing Find, closing the viewer or a Vault lock empties the field and drops everything. Vault bytes stay in memory only. Copy from a Vault PDF reaches the system clipboard by the person's own action, as Share and Download already do (Decision 41); it is not cleared automatically.
+- Password-protected PDFs keep the inline prompt of Decision 125; it is not moved to the text sheet named in Decision 152.
+- Scanned PDFs have no text to select or find (OCR excluded, Decision 152). No new dependency, no network, no new permission, no stored data.
+

@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 99**
+
+Phase 18 A, PDF reading tools (Decision 153), approved in Decision 152. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 121, 125, 144, 148, 152 and the Credentials and PDF viewer parts of ARCHITECTURE. Credentials and backup are not touched.
+- `pdfsearch.js` (NEW): pure helpers `pageItems`, `findInItems`, `normalizeQuery`, `stepMatch`, `firstHitFrom`, `clampPage`, `flattenOutline`.
+- `pdfviewer.js`: text layer per drawn page (pdf.js `TextLayer`, released with the page); `search` (page by page, text cached only while Find is open), `stepHit`, `clearSearch`, `goToPage`, `currentPage`, `getOutline`, `attachThumbnails`.
+- `pdftools.js` (NEW): tool buttons, Find bar, Pages panel (Pages and Outline tabs, go to page).
+- `app.js`: `openPdf` mounts the tools after the document opens; `guard` makes Back close Pages, then Find, before leaving; `onClose` destroys the tools.
+- `style.css`: text layer, highlight, Find bar and panel rules.
+- Password-protected PDFs keep the inline prompt from Decision 125 (device-confirmed); the field is not moved to the text sheet.
+
+Decisions made: 153.
+
+Verified in the authoring environment: syntax checks, `vite build`, Node checks: a generated three-page PDF read by the bundled pdf.js (matches on the right pages and items, case folded, outline entries and a named destination resolved to pages 1 and 3), phrases across items and line ends, whitespace collapse, overlapping and capped matches, wrap-around stepping, page clamping. Read from the pdf.js source: `TextLayer.textDivs` is parallel to the items that carry a string. Not verified: how any of it looks or behaves on a device (selection handles, Copy, keyboard with the Find bar, panel layout, Back order), speed on a large PDF, CI.
+
+Open: highlights cover the whole text element holding a match, not the exact characters. Copy from a Vault PDF puts text on the system clipboard (the person's own action, in line with Decision 41); it is not cleared automatically. A scanned PDF has no text to select or find (OCR excluded, Decision 152). Backups still save to the Documents root. `style.css` still carries rules for the removed `#vault-search-input` and `#vault-list`. CI result for the build with `@capacitor/device` still not reported.
+
+Next session start point: device-test DP38. Then Phase 18 B (needs its own go-ahead), or Phase 17 C or Phase 15 item 4.
+
+---
+
 **Session 98**
 
 Phase 17 B (Decision 151), approved by the owner. Fresh start from the docs; Decision 144 and the Phase 17 spec read; credentials and backup are not touched by this item.

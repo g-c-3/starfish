@@ -642,7 +642,7 @@ Entries of type PDF open in `pdfviewer.js`, built on a bundled pdf.js (legacy bu
 drawn lazily and released off screen; zoom is 1 to 3 times fit-to-width by buttons; the header carries rename and the page count.
 Home bytes come from the stored path; Vault bytes are decrypted in memory only and dropped on close or lock. Layout maths lives in
 `pdfmath.js` (no DOM, tested in Node). A protected PDF asks for its password in the viewer (`pdfopen.js`, Decision 125; memory only,
-never stored). No text layer or search; a damaged PDF or a cancelled prompt offers the phone's app. No network.
+never stored). Reading tools (Decision 153): text layer, find, go to page, thumbnails and outline, in `pdfsearch.js` (pure helpers), `pdfviewer.js` (document side) and `pdftools.js` (interface); memory only. A damaged PDF or a cancelled prompt offers the phone's app. No network.
 
 ### Open a file with another app (Decisions 118, 120)
 Tapping a Files row hands the file straight to the phone's matching app, with no detail step (`fileopen.js`, Decision 120);
@@ -819,3 +819,9 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Callers (`app.js`): `captureToVault`, `restoreEntry`, `permanentlyDelete`, `deleteVaultEntry`, `runBulkFileAction` (delete), `offerUndo`, Vault Trash Undo, and the text, Money and repayment edit paths.
 - Full `buildVaultIndex` (with `migrateVaultLabels`): unlock, backup restore, `dumpzone-reminders-changed`.
 - The cache is memory only and cleared on lock; backup, restore and credentials are untouched.
+
+## PDF reading tools (Decision 153)
+- `pdfsearch.js`: no DOM, no pdf.js. `pageItems` keeps the items that carry a string, in the order pdf.js's `TextLayer` lays out its elements, so an item index is an index into `textDivs`. `findInItems` joins items (a line end counts as a space, whitespace collapsed) and returns item index ranges per match.
+- `pdfviewer.js`: `drawText` adds the layer after each canvas draw; `search` fills `hits` and `hitsByPage`; `applyHits` marks spans when a layer is drawn; the page text cache is cleared by `clearSearch` and `destroy`. `getOutline` resolves named and direct destinations to page numbers. `attachThumbnails` draws and releases thumbnails with an `IntersectionObserver` rooted in the panel body.
+- `pdftools.js`: mounted by `openPdf` after the document opens; `closeTop()` backs the viewer's `guard`; `destroy()` runs from `onClose`, which also covers a Vault lock.
+
