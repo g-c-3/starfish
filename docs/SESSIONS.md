@@ -17,9 +17,13 @@ Decisions made: 160.
 
 Verified in the authoring environment: `npm install` and `vite build` pass; no `encbench` or `enc-bench` string in the build output. Not verified: CI, how Settings looks on a device.
 
-Open: DP42 check 5 (fresh install shows Database encryption On) still pending; commit this cleanup after it passes. A format 1 backup from before Session 102, if the owner has one, is worth one append restore. Phase 17 D, Phase 18 B, haptics and the light-theme pass each need approval.
+Device pass: DP42 check 5 confirmed (fresh install shows Database encryption On); DP42 closed, all checks. Cleanup cleared to commit.
 
-Next session start point: DP42 check 5. Then Phase 17 D, Phase 18 B, haptics or light-theme tuning (each needs approval).
+Device pass: an append restore of a format 1 backup (made before Session 102) succeeded; format 1 restore confirmed on device.
+
+Open: Phase 17 D, Phase 18 B, haptics and the light-theme pass each need approval.
+
+Next session start point: Phase 17 D, Phase 18 B, haptics or light-theme tuning (each needs approval).
 
 ---
 

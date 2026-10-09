@@ -199,7 +199,7 @@ category (was a notes-only `private_notes` category before this pivot) — see b
 per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
-## 3c. Encryption at rest (Decision 144; A, B, C built)
+## 3c. Encryption at rest (Decision 144; A, B, C built and confirmed)
 
 Goal: nothing readable by reading the database file or the files on disk, and still fast. Key derivation stays PBKDF2 with AES-GCM on Web Crypto; no external crypto library.
 
@@ -207,7 +207,7 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 |---|---|---|
 | A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; confirmed on device |
 | B | Vault index updated per entry, not rebuilt on every change | built (Session 98, Decision 151); confirmed on device |
-| C | Whole-database encryption, FTS5 search kept | built, Session 101, Decision 158; owner's database converted; DP42 pending |
+| C | Whole-database encryption, FTS5 search kept | built, Session 101, Decision 158; owner's database converted; DP42 confirmed on device, Session 103 |
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | planned |
 | E | Backup and restore adapted at every stage | planned |
 | F | One-time migration of existing data on a successful unlock | planned |

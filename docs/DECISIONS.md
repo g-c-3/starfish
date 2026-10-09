@@ -2052,5 +2052,5 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 **160. Encryption test removed (Phase 17 C cleanup).** Closes the last bullet of Decision 158.
 - Removed: `src/js/encbench.js`, the Settings Diagnostics group with its Encryption test row, and the script tag in `index.html`. Nothing else imported it.
 - It only ever touched scratch databases. No schema, stored data, credential, backup format or CI change.
-- Committed after DP42 check 5 (fresh install shows Database encryption On), so the test stays available if that check fails.
+- Committed after DP42 check 5 (fresh install shows Database encryption On), which passed.
 - No new dependency, no permission, no network, no account.
