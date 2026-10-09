@@ -16,6 +16,22 @@ async function wipe(name) {
   try { await CapacitorSQLite.deleteDatabase({ database: name, readonly: false }); } catch (e) { /* absent */ }
 }
 
+// deleteDatabase alone can leave an encrypted file behind; open it with the stored key and delete it.
+async function purge(name) {
+  for (const [enc, mode] of [[true, 'secret'], [false, 'no-encryption']]) {
+    try {
+      const c = await sqlite.createConnection(name, enc, mode, 1, false);
+      await c.open();
+      await c.delete();
+      try { await sqlite.closeConnection(name, false); } catch (e) { /* closed by delete */ }
+      return;
+    } catch (e) {
+      try { await sqlite.closeConnection(name, false); } catch (x) { /* not open */ }
+    }
+  }
+  await wipe(name);
+}
+
 async function drop(db, name) {
   try { await db.delete(); } catch (e) { /* closed below */ }
   try { await sqlite.closeConnection(name, false); } catch (e) { /* already closed */ }
@@ -63,10 +79,10 @@ async function runConversion(name, blobMB) {
   await plain.execute('CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(id UNINDEXED, label, body_text)');
   const set = [];
   for (let i = 1; i <= 50; i++) {
-    set.push({ statement: 'INSERT INTO entries (id, type, label, body_text) VALUES (?, ?, ?, ?)', values: [`id${i}`, 'note', `row ${i}`, `body ${i}`] });
+    set.push({ statement: 'INSERT INTO entries (id, type, label, body_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', values: [`id${i}`, 'note', `row ${i}`, `body ${i}`, Date.now(), Date.now()] });
     set.push({ statement: 'INSERT INTO entries_fts (id, label, body_text) VALUES (?, ?, ?)', values: [`id${i}`, `row ${i}`, `body ${i}`] });
   }
-  if (blobMB) set.push({ statement: 'INSERT INTO entries (id, type, label, file_path) VALUES (?, ?, ?, ?)', values: ['big', 'file', 'big', 'x'.repeat(blobMB * 1024 * 1024)] });
+  if (blobMB) set.push({ statement: 'INSERT INTO entries (id, type, label, file_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', values: ['big', 'file', 'big', 'x'.repeat(blobMB * 1024 * 1024), Date.now(), Date.now()] });
   await plain.executeSet(set, true);
   await plain.close();
   await sqlite.closeConnection(name, false);
@@ -85,7 +101,7 @@ async function runConversion(name, blobMB) {
   } catch (e) {
     r.error = e.message || String(e);
   }
-  await wipe(name);
+  await purge(name);
   return r;
 }
 
@@ -101,6 +117,7 @@ async function runBench(out) {
   let weSetSecret = false;
   try {
     for (const n of NAMES) await wipe(n);
+    for (const n of NAMES.slice(2)) await purge(n);
     if (!(await sqlite.isSecretStored()).result) {
       await sqlite.setEncryptionSecret(randomKey());
       weSetSecret = true;
@@ -125,6 +142,7 @@ async function runBench(out) {
     log(`failed — ${e.message || e}`);
   } finally {
     for (const n of NAMES) await wipe(n);
+    for (const n of NAMES.slice(2)) await purge(n);
     if (weSetSecret) { try { await CapacitorSQLite.clearEncryptionSecret(); } catch (e) { log('secret not cleared'); } }
     log('scratch databases removed');
   }
