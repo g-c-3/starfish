@@ -11,7 +11,11 @@ function toBase64(buf) {
   return btoa(binary);
 }
 function fromBase64(b64) {
-  return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+  // Plain index loop: Uint8Array.from with a callback is several times slower on a multi-MB string (backup chunks).
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
 }
 function randomBytes(len) {
   return crypto.getRandomValues(new Uint8Array(len));
@@ -73,6 +77,20 @@ async function decryptBytes(key, cipherB64, ivB64) {
   return plain; // ArrayBuffer — caller decides text vs binary
 }
 
+// ---- Chunk helpers (backup format 2, Decision 159) ----
+// One AES-GCM call per chunk. `aad` (the chunk's line number in the file) is authenticated but not stored,
+// so a reordered, dropped or swapped line fails to decrypt.
+async function encryptChunk(key, bytes, aad) {
+  const iv = randomBytes(12);
+  const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: ENC.encode(String(aad)) }, key, bytes);
+  return { iv: toBase64(iv), c: toBase64(cipher) };
+}
+async function decryptChunk(key, ivB64, cB64, aad) {
+  return crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: fromBase64(ivB64), additionalData: ENC.encode(String(aad)) }, key, fromBase64(cB64)
+  ); // ArrayBuffer; throws if the key is wrong or the line was altered or moved
+}
+
 // ---- Private note helpers ----
 async function encryptPrivateNote(pinDerivedKey, text) {
   const { cipher, iv } = await encryptBytes(pinDerivedKey, text);
@@ -110,5 +128,6 @@ export {
   hashPassword, verifyPassword, deriveAesKey,
   encryptBytes, decryptBytes,
   encryptPrivateNote, decryptPrivateNote,
-  encryptBackup, decryptBackup
+  encryptBackup, decryptBackup,
+  encryptChunk, decryptChunk, toBase64, fromBase64
 };

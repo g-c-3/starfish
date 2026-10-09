@@ -9,7 +9,7 @@ import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelRem
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
-import { ALL_CATEGORIES, createBackup, restoreBackup } from './backup.js';
+import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader } from './backup.js';
 import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
   restoreFromDrive, checkAndRunAutoBackupIfDue
@@ -1129,15 +1129,18 @@ async function handleBackupNow() {
   if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
 
   statusEl.textContent = 'Checking storage…';
-  const result = await createBackup(db, { passphrase, hint, categories });
+  const result = await createBackup(db, {
+    passphrase, hint, categories,
+    onProgress: ({ done, total }) => { statusEl.textContent = `Backing up ${done + 1} of ${total}…`; }
+  });
   if (!result.ok && result.reason === 'insufficient_storage') {
     statusEl.textContent = `Not enough space: needs ~${formatBytes(result.requiredBytes)}, ` +
       `${formatBytes(result.availableBytes)} available.`;
     return;
   }
   statusEl.textContent = result.ok
-    ? `Saved as ${result.path}.`
-    : `Backup failed: ${result.reason || 'unknown error'}.`;
+    ? `Saved as ${result.path}.${result.skippedFiles ? ` ${result.skippedFiles} missing file(s) were not included.` : ''}`
+    : `Backup failed: ${result.reason || 'unknown error'}${result.detail ? ` (${result.detail})` : ''}.`;
   if (result.ok) { document.getElementById('backup-passphrase').value = ''; document.getElementById('backup-hint').value = ''; }
 }
 
@@ -1178,26 +1181,40 @@ async function handleLocalRestore() {
   if (!proceed) { statusEl.textContent = 'Restore cancelled.'; return; }
 
   statusEl.textContent = 'Reading file…';
-  // Read via the browser File API directly rather than @capacitor/filesystem — a picked file's
-  // content:// URI isn't a plain Filesystem path, and restoreBackup() accepts a parsed archiveObj
-  // either way, so there's nothing Filesystem-specific to gain here.
-  const text = await fileInput.files[0].text();
-  let archiveObj;
-  try { archiveObj = JSON.parse(text); } catch { statusEl.textContent = 'Not a valid backup file.'; return; }
+  // Read via the browser File API directly rather than @capacitor/filesystem — a picked file's content:// URI isn't a
+  // plain Filesystem path. A format 2 file is read in slices as it is restored; only a format 1 file is read whole.
+  const file = fileInput.files[0];
+  let info;
+  try { info = await readBackupHeader(file); } catch { statusEl.textContent = 'Not a valid backup file.'; return; }
 
   statusEl.textContent = 'Restoring…';
-  const result = await restoreBackup(db, {
-    passphrase, archiveObj, mode, categories, takeSafetyBackup, confirmedDestructive: true
-  });
+  const common = { passphrase, mode, categories, takeSafetyBackup, confirmedDestructive: true };
+  let result;
+  try {
+    result = await restoreBackup(db, info.version === 2
+      ? { ...common, file, header: info.header, onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; } }
+      : { ...common, archiveObj: info.archiveObj });
+  } catch {
+    result = { ok: false, reason: 'wrong_passkey_or_damaged_file' }; // format 1: a wrong passkey throws on decrypt
+  }
+  const REASONS = {
+    wrong_passkey_or_damaged_file: 'wrong passkey, or the file is damaged',
+    backup_damaged: 'the file is damaged',
+    backup_incomplete: 'the file ends early; entries restored so far were kept',
+    insufficient_storage: 'not enough free space'
+  };
   statusEl.textContent = result.ok
     ? `Done — added ${result.summary.added}, skipped ${result.summary.skippedExactDup} exact duplicates, ` +
       `${result.summary.restoredLabeled} restored under "(Restored)".`
-    : `Restore failed: ${result.reason || 'unknown error'}.`;
+    : `Restore failed: ${REASONS[result.reason] || result.reason || 'unknown error'}.`;
   if (result.ok) {
     document.getElementById('restore-passphrase').value = '';
     fileInput.value = '';
     // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
     // Vault entries show without a relock (a full rebuild: many entries changed). Locked Vault: nothing to do, unlock builds it fresh.
+    if (privateSessionKey) await buildVaultIndexWithNotice();
+    window.dispatchEvent(new Event('dumpzone-data-restored'));
+  } else if (result.summary?.added) { // stopped part-way: what was restored is real, show it
     if (privateSessionKey) await buildVaultIndexWithNotice();
     window.dispatchEvent(new Event('dumpzone-data-restored'));
   }

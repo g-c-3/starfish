@@ -1,18 +1,33 @@
 // backup.js — full & selective backup/restore. No network calls; everything reads/writes
 // device storage via @capacitor/filesystem and encrypts via crypto.js (AES-GCM/PBKDF2).
 //
-// Archive format (single JSON file, AES-GCM encrypted as a whole by crypto.encryptBackup):
-//   { schemaVersion, createdAt, categories: [...], entries: [...], tags: [...], settings: {...} }
-// entries[].fileData is base64 file bytes for voice/image/pdf/file categories (present only when
-// that category was included).
+// Two archive formats, both one `.dz` file:
+//   Format 1 (still read; still written by the Drive path): one JSON object, AES-GCM encrypted as a whole by
+//   crypto.encryptBackup: { schemaVersion, createdAt, categories, entries, tags, settings }, with entries[].fileData
+//   as base64 file bytes. Memory grows with the total data.
+//   Format 2 (Decision 159, written by createBackup): line 1 is a plain header {version:2, salt, kdfIterations, hint};
+//   every later line is {iv, c}, one AES-GCM call whose additional data is the line number. Order: a head record
+//   (categories, tags, settings, sizes), then per entry an entry record followed by its body pieces and file chunks,
+//   then an end record with the counts. Memory grows with one chunk, not the total.
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
-import { encryptBackup, decryptBackup } from './crypto.js';
+import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, toBase64, fromBase64 } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
 const SCHEMA_VERSION = 1;
 const FILES_DIR = 'files'; // Directory.Data/files/<uuid>.<ext> — where captured file bytes live on-device
+const FORMAT2 = 2;
+const KDF_ITERATIONS = 300000;
+const FILE_CHUNK_BYTES = 3 * 1024 * 1024;  // raw file bytes per encrypted line
+const BODY_PIECE_CHARS = 2 * 1024 * 1024;  // characters of an oversized stored body per encrypted line
+const INLINE_BODY_CHARS = 1024 * 1024;     // a stored body up to this size stays inside its entry record
+const FLUSH_CHARS = 2 * 1024 * 1024;       // buffered text before one append to the backup file
+const READ_SLICE_BYTES = 2 * 1024 * 1024;  // bytes read from a backup file per slice
+const B64_FACTOR = 1.34;                   // every byte is stored as base64
+const ENC_T = new TextEncoder();
+const DEC_T = new TextDecoder();
 
 // Categories are independent selectable units. Voice/Images/PDFs/Files exclude private ones —
 // EVERY private entry, regardless of underlying type, falls under the one unified private_vault
@@ -152,38 +167,159 @@ async function estimateBackupSize(db, categories) {
   return new Blob([JSON.stringify(payload)]).size;
 }
 
+
 // ---------------------------------------------------------------------------
-// Create + write a backup file
+// Format 2 writer (Decision 159)
 // ---------------------------------------------------------------------------
-async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGORIES, fileName }) {
-  const required = await estimateBackupSize(db, categories);
+// File as a Blob through the app's own file URL (the Decision 154 route), so it is never held as a base64 string.
+// null when the file is missing.
+async function readFileBlob(filePath) {
+  try {
+    const { uri } = await Filesystem.getUri({ path: filePath, directory: Directory.Data });
+    const res = await fetch(Capacitor.convertFileSrc(uri));
+    if (res.ok) return await res.blob();
+  } catch { /* fall back below */ }
+  try {
+    const r = await Filesystem.readFile({ path: filePath, directory: Directory.Data });
+    return new Blob([fromBase64(r.data)]);
+  } catch { return null; }
+}
+
+async function statSize(filePath) {
+  try { return (await Filesystem.stat({ path: filePath, directory: Directory.Data })).size || 0; } catch { return 0; }
+}
+
+// Sizes only, no payload: one light query plus a stat per file. requiredBytes is the written file's expected size.
+async function planBackup(db, categories) {
+  const names = Object.keys(ENTRY_CATEGORIES).filter((c) => categories.includes(c));
+  const items = [];
+  const sizeByCategory = {};
+  let bytes = 0;
+  if (names.length > 0) {
+    const rows = (await db.query(
+      `SELECT id, type, is_private, file_path,
+         COALESCE(LENGTH(encrypted_body),0) + COALESCE(LENGTH(body_text),0) + COALESCE(LENGTH(description),0) +
+         COALESCE(LENGTH(encrypted_description),0) + COALESCE(LENGTH(encrypted_label),0) + COALESCE(LENGTH(money_json),0) AS rb
+       FROM entries WHERE deleted_at IS NULL`
+    )).values || [];
+    for (const row of rows) {
+      const cat = names.find((c) => ENTRY_CATEGORIES[c](row));
+      if (!cat) continue;
+      const fileSize = (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) ? await statSize(row.file_path) : 0;
+      const size = 600 + (row.rb || 0) + fileSize;
+      items.push({ id: row.id, cat });
+      sizeByCategory[cat] = (sizeByCategory[cat] || 0) + size;
+      bytes += size;
+    }
+  }
+  return { items, sizeByCategory, requiredBytes: Math.ceil(bytes * B64_FACTOR) + 64 * 1024 };
+}
+
+// Tags, settings and the Vault salt: the same three reads buildBackupPayload makes, small by nature.
+async function readBackupExtras(db, categories, hasVault) {
+  const extras = { tags: [], settings: {}, privateVaultSalt: null };
+  if (categories.includes('private_vault') && hasVault) {
+    const cred = (await db.query(`SELECT private_pin_salt FROM credentials WHERE id=1`)).values[0];
+    extras.privateVaultSalt = cred?.private_pin_salt || null;
+  }
+  if (categories.includes('tags')) extras.tags = (await db.query(`SELECT name FROM tags`)).values || [];
+  if (categories.includes('app_settings')) {
+    for (const key of APP_SETTINGS_KEYS) {
+      const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
+      if (r.values && r.values[0]) extras.settings[key] = r.values[0].value;
+    }
+  }
+  return extras;
+}
+
+// Buffers lines and appends them to one file; abort() removes a half-written file.
+function makeSink(path, directory) {
+  let parts = [];
+  let size = 0;
+  let started = false;
+  const flush = async () => {
+    if (parts.length === 0) return;
+    const data = parts.join('');
+    parts = []; size = 0;
+    if (!started) { await Filesystem.writeFile({ path, directory, data, encoding: 'utf8' }); started = true; }
+    else await Filesystem.appendFile({ path, directory, data, encoding: 'utf8' });
+  };
+  return {
+    async push(line) { parts.push(line); size += line.length; if (size >= FLUSH_CHARS) await flush(); },
+    async finish() { await flush(); },
+    async abort() { try { if (started) await Filesystem.deleteFile({ path, directory }); } catch { /* nothing to remove */ } }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Create + write a backup file (format 2)
+// ---------------------------------------------------------------------------
+// onProgress({ done, total }) after each entry. Peak memory is one entry's row plus one 3 MB chunk (and a Vault entry's
+// stored body, which is already one string in the database).
+async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGORIES, fileName, onProgress }) {
+  const plan = await planBackup(db, categories);
   const { availableBytes } = await getStorageEstimate();
-  if (availableBytes !== null && required > availableBytes) {
-    return { ok: false, reason: 'insufficient_storage', requiredBytes: required, availableBytes };
+  if (availableBytes !== null && plan.requiredBytes > availableBytes) {
+    return { ok: false, reason: 'insufficient_storage', requiredBytes: plan.requiredBytes, availableBytes };
   }
 
-  const payload = await buildBackupPayload(db, categories);
-  const archive = await encryptBackup(passphrase, JSON.stringify(payload), hint);
+  const { key, salt } = await deriveAesKey(passphrase, null, KDF_ITERATIONS);
   const name = fileName || backupFileName('backup', categories);
-  const archiveText = JSON.stringify(archive);
+  const sink = makeSink(name, Directory.Documents);
+  let n = 0, count = 0, files = 0, skippedFiles = 0;
+  const put = async (data) => { n += 1; await sink.push(JSON.stringify(await encryptChunk(key, data, n)) + '\n'); };
 
-  // The first check used the payload size; the file written is the encrypted archive, which is larger. Check the real size.
-  const writeBytes = new Blob([archiveText]).size;
-  const free = (await getStorageEstimate()).availableBytes;
-  if (free !== null && writeBytes > free) {
-    return { ok: false, reason: 'insufficient_storage', requiredBytes: writeBytes, availableBytes: free };
+  try {
+    await sink.push(JSON.stringify({ version: FORMAT2, salt, kdfIterations: KDF_ITERATIONS, hint }) + '\n');
+    const extras = await readBackupExtras(db, categories, plan.items.some((i) => i.cat === 'private_vault'));
+    await put(ENC_T.encode(JSON.stringify({
+      t: 'head', schemaVersion: SCHEMA_VERSION, createdAt: Date.now(), categories: [...categories],
+      entryCount: plan.items.length, sizeByCategory: plan.sizeByCategory, ...extras
+    })));
+
+    for (let i = 0; i < plan.items.length; i++) {
+      const it = plan.items[i];
+      onProgress?.({ done: i, total: plan.items.length });
+      const row = ((await db.query(`SELECT * FROM entries WHERE id=?`, [it.id])).values || [])[0];
+      if (!row) continue; // removed since the plan was made
+      const out = { ...row, _category: it.cat };
+      delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
+      const tagRows = (await db.query(
+        `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`, [row.id]
+      )).values || [];
+      out.tags = tagRows.map((t) => t.name); // entry_tags is a join table, not a column — carried separately
+
+      let pieces = null;
+      if (typeof out.encrypted_body === 'string' && out.encrypted_body.length > INLINE_BODY_CHARS) {
+        pieces = [];
+        for (let p = 0; p < out.encrypted_body.length; p += BODY_PIECE_CHARS) pieces.push(out.encrypted_body.slice(p, p + BODY_PIECE_CHARS));
+        out.encrypted_body = null; // travels as its own lines
+      }
+      let blob = null;
+      if (FILE_BEARING_CATEGORIES.has(it.cat) && row.file_path) {
+        blob = await readFileBlob(row.file_path);
+        if (!blob) skippedFiles += 1;
+      }
+      const nFile = blob ? Math.ceil(blob.size / FILE_CHUNK_BYTES) : 0;
+
+      await put(ENC_T.encode(JSON.stringify({ t: 'entry', entry: out, nBody: pieces ? pieces.length : 0, nFile, hasFile: !!blob })));
+      if (pieces) for (const piece of pieces) await put(ENC_T.encode(piece));
+      for (let c = 0; c < nFile; c++) {
+        await put(await blob.slice(c * FILE_CHUNK_BYTES, (c + 1) * FILE_CHUNK_BYTES).arrayBuffer());
+      }
+      count += 1;
+      if (blob) files += 1;
+    }
+
+    await put(ENC_T.encode(JSON.stringify({ t: 'end', entries: count, files, skippedFiles })));
+    await sink.finish();
+  } catch (err) {
+    await sink.abort();
+    return { ok: false, reason: 'write_failed', detail: String(err?.message || err) };
   }
-
-  await Filesystem.writeFile({
-    path: name,
-    directory: Directory.Documents,
-    data: archiveText,
-    encoding: 'utf8'
-  });
 
   await db.run(`UPDATE credentials SET last_backup_at = ? WHERE id = 1`, [Date.now()]); // single-row table, not meta
-
-  return { ok: true, path: name, requiredBytes: required };
+  return { ok: true, path: name, requiredBytes: plan.requiredBytes, entries: count, skippedFiles };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,15 +349,225 @@ function estimateRestoreSize(payload, categories) {
 }
 
 // ---------------------------------------------------------------------------
+// Reading a format 2 file: lines come from File.slice, never the whole file at once
+// ---------------------------------------------------------------------------
+function joinParts(parts) {
+  if (parts.length === 1) return parts[0];
+  const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+function lineReader(file) {
+  let pos = 0, buf = new Uint8Array(0), bi = 0;
+  return {
+    async next() { // next line without its newline, or null at the end
+      const parts = [];
+      for (;;) {
+        if (bi >= buf.length) {
+          if (pos >= file.size) return parts.length ? joinParts(parts) : null;
+          const end = Math.min(pos + READ_SLICE_BYTES, file.size);
+          buf = new Uint8Array(await file.slice(pos, end).arrayBuffer());
+          pos = end; bi = 0;
+        }
+        const nl = buf.indexOf(10, bi);
+        if (nl === -1) { parts.push(buf.subarray(bi)); bi = buf.length; continue; }
+        parts.push(buf.subarray(bi, nl));
+        bi = nl + 1;
+        return joinParts(parts);
+      }
+    }
+  };
+}
+
+// Plain header of a picked file. Format 2: { version: 2, hint, header }. Format 1: the whole archive object, as before.
+async function readBackupHeader(file) {
+  const first = await file.slice(0, 16).text();
+  if (first.startsWith('{"version":2')) {
+    const line = await lineReader(file).next();
+    const header = JSON.parse(DEC_T.decode(line));
+    return { version: 2, hint: header.hint || '', header };
+  }
+  const archiveObj = JSON.parse(await file.text());
+  return { version: archiveObj.version || 1, hint: archiveObj.hint || '', archiveObj };
+}
+
+// Cursor over the encrypted lines; numbering starts at 1 after the header, and the number is the AES-GCM additional data.
+function openV2(file, key) {
+  const reader = lineReader(file);
+  let n = 0;
+  const take = async () => {
+    const raw = await reader.next();
+    if (!raw) return null;
+    n += 1;
+    return { o: JSON.parse(DEC_T.decode(raw)), n };
+  };
+  return {
+    async skipHeader() { await reader.next(); },
+    async nextRecord() { // decrypted JSON record, or null at the end of the file
+      const line = await take();
+      if (!line) return null;
+      return JSON.parse(DEC_T.decode(await decryptChunk(key, line.o.iv, line.o.c, line.n)));
+    },
+    async nextBytes() { // decrypted bytes of a body piece or file chunk
+      const line = await take();
+      if (!line) throw new Error('backup ends early');
+      return decryptChunk(key, line.o.iv, line.o.c, line.n);
+    },
+    async skip(count) { // lines of an entry that is not restored: read past, no decryption
+      for (let i = 0; i < count; i++) if (!(await take())) throw new Error('backup ends early');
+    }
+  };
+}
+
+// Reads and decrypts every line without restoring anything. Run before an overwrite deletes data.
+async function verifyV2(file, key) {
+  const cur = openV2(file, key);
+  await cur.skipHeader();
+  const head = await cur.nextRecord();
+  if (!head || head.t !== 'head') return false;
+  let seen = 0;
+  for (;;) {
+    const rec = await cur.nextRecord();
+    if (!rec) return false; // no end record: cut short
+    if (rec.t === 'end') return rec.entries === seen;
+    if (rec.t !== 'entry') return false;
+    for (let i = 0; i < rec.nBody + rec.nFile; i++) await cur.nextBytes();
+    seen += 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Restore
 // ---------------------------------------------------------------------------
+// Shared by both formats. null = exact UUID match among live entries, skipped; else the id and label to insert under.
+async function planEntryTarget(db, entry, mode, summary) {
+  let targetId = entry.id;
+  let label = entry.label;
+  if (mode === 'append') {
+    const existing = (await db.query(`SELECT id FROM entries WHERE id=? AND deleted_at IS NULL`, [entry.id])).values || [];
+    if (existing.length > 0) {
+      summary.skippedExactDup += 1;
+      return null; // caller can offer "restore anyway" as a forced re-run with a fresh UUID
+    }
+    // Trashed rows are not duplicates (Decision 110). A trashed row still owns the primary key, so the
+    // restored copy takes a fresh id; the trashed one stays in Trash untouched.
+    const trashedSameId = (await db.query(`SELECT id FROM entries WHERE id=?`, [entry.id])).values || [];
+    if (trashedSameId.length > 0) targetId = crypto.randomUUID();
+    // Vault labels are placeholders or ciphertext, so a label match means nothing there (Decision 145).
+    const labelMatch = entry.is_private ? [] : (await db.query(
+      `SELECT id FROM entries WHERE label=? AND id != ? AND deleted_at IS NULL`, [entry.label, entry.id]
+    )).values || [];
+    if (labelMatch.length > 0) {
+      targetId = crypto.randomUUID();
+      label = `${entry.label} (Restored)`;
+      summary.restoredLabeled += 1;
+    }
+  }
+  return { targetId, label };
+}
+
+// Overwrite: remove the selected categories' live rows (their files on disk are left, as before).
+async function wipeCategories(db, categories) {
+  for (const cat of categories.filter((c) => ENTRY_CATEGORIES[c])) {
+    const predicate = ENTRY_CATEGORIES[cat];
+    const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
+    for (const row of rows) {
+      const full = (await db.query(`SELECT * FROM entries WHERE id=?`, [row.id])).values[0];
+      if (predicate(full)) {
+        await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
+        await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
+        await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
+      }
+    }
+  }
+}
+
+// Insert one entry whose file (if any) is already written and whose file_path is set.
+async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultSalt, summary) {
+  let bodyText = entry.body_text;
+  let encryptedBody = entry.encrypted_body;
+  let encryptedDescription = entry.encrypted_description || null;
+  let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
+  if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
+    // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
+    // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
+    // privateVaultSalt is the ONE salt for every Private Vault entry in the backup (a device has one PIN, one salt).
+    if (!privateVaultSalt) throw new Error('Backup has no privateVaultSalt — cannot decrypt its Private Vault entries');
+    const { decryptPrivateNote, encryptPrivateNote } = await import('./crypto.js');
+    const { key: sourceKey } = await deriveAesKey(opts.sourcePin, privateVaultSalt);
+    const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
+    encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
+    if (entry.encrypted_description) {
+      encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
+    }
+    if (entry.encrypted_label) {
+      encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_label));
+      label = VAULT_PLACEHOLDER_LABEL;
+    } else {
+      encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, entry.label); // pre-change backup: encrypt on the way in
+      label = VAULT_PLACEHOLDER_LABEL;
+    }
+  }
+
+  await db.run(
+    `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
+      auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
+      fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
+     entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
+     entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
+     entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null,
+     entry.created_at || Date.now(), Date.now()]
+  );
+  // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts
+  // and label_history entirely, not just their body — indexing even the label would leak a
+  // vault item's existence/title into ordinary, no-PIN search and autocomplete.
+  if (!entry.is_private) {
+    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, [bodyText, entry.description].filter(Boolean).join(' ')]);
+    await db.run(
+      `INSERT INTO label_history (type, label) VALUES (?,?)
+       ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
+      [entry.type, label]
+    );
+  }
+  for (const tagName of entry.tags || []) {
+    await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
+    const tagRow = (await db.query(`SELECT id FROM tags WHERE name = ?`, [tagName])).values[0];
+    await db.run(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)`, [targetId, tagRow.id]);
+  }
+  summary.added += 1;
+}
+
+async function restoreTagsAndSettings(db, src, categories, summary) {
+  if (categories.includes('tags')) {
+    for (const t of src.tags || []) {
+      await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [t.name]);
+      summary.tagsAdded += 1;
+    }
+  }
+  if (categories.includes('app_settings')) {
+    for (const [key, value] of Object.entries(src.settings || {})) {
+      await db.run(
+        `INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        [key, value]
+      );
+    }
+    summary.settingsRestored = true;
+  }
+}
+
 // opts: {
-//   passphrase, archiveObj, mode: 'append' | 'overwrite', categories,
+//   passphrase, mode: 'append' | 'overwrite', categories,
 //   takeSafetyBackup: bool, confirmedDestructive: bool (required if mode='overwrite' && !takeSafetyBackup),
 //   sourcePin: string|null (only if private_vault selected and encrypted under a different PIN),
-//   currentPrivateKey: CryptoKey|null (this device's active PIN-derived key, for re-encrypting)
+//   currentPrivateKey: CryptoKey|null (this device's active PIN-derived key, for re-encrypting),
+//   format 1: archiveObj          format 2: file (the picked File) + header (from readBackupHeader) + onProgress
 // }
 async function restoreBackup(db, opts) {
+  if (opts.file && opts.header) return restoreFormat2(db, opts);
   const { passphrase, archiveObj, mode, categories, takeSafetyBackup, confirmedDestructive } = opts;
 
   const payload = await decryptBackupPayload(passphrase, archiveObj); // proves validity before anything destructive
@@ -244,126 +590,102 @@ async function restoreBackup(db, opts) {
 
   const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false };
 
-  if (mode === 'overwrite') {
-    for (const cat of categories.filter((c) => ENTRY_CATEGORIES[c])) {
-      const predicate = ENTRY_CATEGORIES[cat];
-      const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
-      for (const row of rows) {
-        const full = (await db.query(`SELECT * FROM entries WHERE id=?`, [row.id])).values[0];
-        if (predicate(full)) {
-          await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
-          await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
-          await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
-        }
-      }
-    }
-  }
+  if (mode === 'overwrite') await wipeCategories(db, categories);
 
   for (const entry of payload.entries.filter((e) => categories.includes(e._category))) {
-    let targetId = entry.id;
-    let label = entry.label;
-
-    if (mode === 'append') {
-      const existing = (await db.query(`SELECT id FROM entries WHERE id=? AND deleted_at IS NULL`, [entry.id])).values || [];
-      if (existing.length > 0) {
-        summary.skippedExactDup += 1;
-        continue; // exact UUID match among live entries — caller can offer "restore anyway" as a forced re-run with a fresh UUID
-      }
-      // Trashed rows are not duplicates (Decision 110). A trashed row still owns the primary key, so the
-      // restored copy takes a fresh id; the trashed one stays in Trash untouched.
-      const trashedSameId = (await db.query(`SELECT id FROM entries WHERE id=?`, [entry.id])).values || [];
-      if (trashedSameId.length > 0) targetId = crypto.randomUUID();
-      // Vault labels are placeholders or ciphertext, so a label match means nothing there (Decision 145).
-      const labelMatch = entry.is_private ? [] : (await db.query(
-        `SELECT id FROM entries WHERE label=? AND id != ? AND deleted_at IS NULL`, [entry.label, entry.id]
-      )).values || [];
-      if (labelMatch.length > 0) {
-        targetId = crypto.randomUUID();
-        label = `${entry.label} (Restored)`;
-        summary.restoredLabeled += 1;
-      }
-    }
-
-    let bodyText = entry.body_text;
-    let encryptedBody = entry.encrypted_body;
-    let encryptedDescription = entry.encrypted_description || null;
-    let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
-    if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
-      // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
-      // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
-      // payload.privateVaultSalt is the ONE salt for every Private Vault entry in this payload (Decision — a
-      // device has one PIN, one salt) — not per-entry; entry._sourcePinSalt never existed as a field.
-      if (!payload.privateVaultSalt) throw new Error('Backup has no privateVaultSalt — cannot decrypt its Private Vault entries');
-      const { decryptPrivateNote, encryptPrivateNote, deriveAesKey } = await import('./crypto.js');
-      const { key: sourceKey } = await deriveAesKey(opts.sourcePin, payload.privateVaultSalt);
-      const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
-      encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
-      if (entry.encrypted_description) {
-        encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
-      }
-      if (entry.encrypted_label) {
-        encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_label));
-        label = VAULT_PLACEHOLDER_LABEL;
-      } else {
-        encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, entry.label); // pre-change backup: encrypt on the way in
-        label = VAULT_PLACEHOLDER_LABEL;
-      }
-    }
-
+    const target = await planEntryTarget(db, entry, mode, summary);
+    if (!target) continue;
     if (entry.fileData) {
       const ext = entry.extension || (entry.file_path || '').split('.').pop() || 'bin';
-      const fileName = `${FILES_DIR}/${targetId}.${ext}`;
+      const fileName = `${FILES_DIR}/${target.targetId}.${ext}`;
       await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: entry.fileData, recursive: true });
       entry.file_path = fileName;
     }
-
-    await db.run(
-      `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
-        auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
-        fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
-       entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
-       entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
-       entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null,
-       entry.created_at || Date.now(), Date.now()]
-    );
-    // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts
-    // and label_history entirely, not just their body — indexing even the label would leak a
-    // vault item's existence/title into ordinary, no-PIN search and autocomplete.
-    if (!entry.is_private) {
-      await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, [bodyText, entry.description].filter(Boolean).join(' ')]);
-      await db.run(
-        `INSERT INTO label_history (type, label) VALUES (?,?)
-         ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
-        [entry.type, label]
-      );
-    }
-    for (const tagName of entry.tags || []) {
-      await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
-      const tagRow = (await db.query(`SELECT id FROM tags WHERE name = ?`, [tagName])).values[0];
-      await db.run(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)`, [targetId, tagRow.id]);
-    }
-    summary.added += 1;
+    await insertRestoredEntry(db, entry, target.targetId, target.label, opts, payload.privateVaultSalt, summary);
   }
 
-  if (categories.includes('tags')) {
-    for (const t of payload.tags) {
-      await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [t.name]);
-      summary.tagsAdded += 1;
+  await restoreTagsAndSettings(db, payload, categories, summary);
+  return { ok: true, summary };
+}
+
+// Format 2: one pass, one entry at a time. Overwrite reads the whole file once first, so a damaged file is found
+// before anything is deleted.
+async function restoreFormat2(db, opts) {
+  const { file, header, passphrase, mode, categories, takeSafetyBackup, confirmedDestructive, onProgress } = opts;
+
+  let key, head, cur;
+  try {
+    ({ key } = await deriveAesKey(passphrase, header.salt, header.kdfIterations));
+    cur = openV2(file, key);
+    await cur.skipHeader();
+    head = await cur.nextRecord(); // fails to decrypt on a wrong passkey: nothing is touched
+    if (!head || head.t !== 'head') throw new Error('no head record');
+  } catch {
+    return { ok: false, reason: 'wrong_passkey_or_damaged_file' };
+  }
+
+  if (mode === 'overwrite') {
+    if (!takeSafetyBackup && !confirmedDestructive) return { ok: false, reason: 'destructive_confirmation_required' };
+    let intact = false;
+    try { intact = await verifyV2(file, key); } catch { intact = false; }
+    if (!intact) return { ok: false, reason: 'backup_damaged' };
+    if (takeSafetyBackup) {
+      const safety = await createBackup(db, { passphrase, categories: ALL_CATEGORIES, hint: 'safety-backup' });
+      if (!safety.ok) return { ok: false, reason: 'safety_backup_failed', detail: safety };
     }
   }
 
-  if (categories.includes('app_settings')) {
-    for (const [key, value] of Object.entries(payload.settings)) {
-      await db.run(
-        `INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-        [key, value]
-      );
-    }
-    summary.settingsRestored = true;
+  const required = categories.filter((c) => ENTRY_CATEGORIES[c]).reduce((a, c) => a + (head.sizeByCategory?.[c] || 0), 0);
+  const { availableBytes } = await getStorageEstimate();
+  if (availableBytes !== null && required > availableBytes) {
+    return { ok: false, reason: 'insufficient_storage', requiredBytes: required, availableBytes };
   }
 
+  const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false };
+  if (mode === 'overwrite') await wipeCategories(db, categories);
+
+  let seen = 0;
+  let end = null;
+  try {
+    for (;;) {
+      const rec = await cur.nextRecord();
+      if (!rec) break;
+      if (rec.t === 'end') { end = rec; break; }
+      if (rec.t !== 'entry') throw new Error('unexpected record');
+      const entry = rec.entry;
+      const lines = rec.nBody + rec.nFile;
+      seen += 1;
+      onProgress?.({ done: seen, total: head.entryCount || seen });
+      if (!categories.includes(entry._category)) { await cur.skip(lines); continue; }
+      const target = await planEntryTarget(db, entry, mode, summary);
+      if (!target) { await cur.skip(lines); continue; }
+
+      if (rec.nBody > 0) {
+        let body = '';
+        for (let i = 0; i < rec.nBody; i++) body += DEC_T.decode(await cur.nextBytes());
+        entry.encrypted_body = body;
+      }
+      if (rec.hasFile) {
+        const ext = entry.extension || (entry.file_path || '').split('.').pop() || 'bin';
+        const fileName = `${FILES_DIR}/${target.targetId}.${ext}`;
+        if (rec.nFile === 0) {
+          await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: '', encoding: 'utf8', recursive: true });
+        }
+        for (let c = 0; c < rec.nFile; c++) {
+          const b64 = toBase64(await cur.nextBytes());
+          if (c === 0) await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: b64, recursive: true });
+          else await Filesystem.appendFile({ path: fileName, directory: Directory.Data, data: b64 });
+        }
+        entry.file_path = fileName;
+      }
+      await insertRestoredEntry(db, entry, target.targetId, target.label, opts, head.privateVaultSalt, summary);
+    }
+  } catch (err) {
+    return { ok: false, reason: 'backup_damaged', detail: String(err?.message || err), summary };
+  }
+  if (!end || end.entries !== seen) return { ok: false, reason: 'backup_incomplete', summary };
+
+  await restoreTagsAndSettings(db, head, categories, summary);
   return { ok: true, summary };
 }
 
@@ -390,6 +712,6 @@ async function extractCategoryToStorage(payload, category, destDir = 'Dumpzone-R
 export {
   ALL_CATEGORIES, ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
   buildBackupPayload, estimateBackupSize, createBackup,
-  openBackupFile, decryptBackupPayload, estimateRestoreSize, restoreBackup,
+  openBackupFile, readBackupHeader, decryptBackupPayload, estimateRestoreSize, restoreBackup,
   extractCategoryToStorage, getStorageEstimate, backupFileName
 };
