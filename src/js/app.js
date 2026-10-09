@@ -919,7 +919,23 @@ let onVaultLocked = null; // set once the Vault screen exists: shows the locked 
 // Called on unlock and on any vault activity (app.js's vault UI handlers should call this on
 // capture/search/browse) — a separate timer from whatever the app-level lock uses, per-spec
 // ("separate auto lock after certain time"), read from its own column, not auto_lock_minutes.
+// A long backup or restore takes no taps, so the idle timers would fire in the middle of it. Held for the duration.
+let idleLockHeld = false;
+async function withoutIdleLock(task) {
+  const vaultWasArmed = !!vaultAutoLockTimer;
+  idleLockHeld = true;
+  disarmAppAutoLock();
+  if (vaultAutoLockTimer) { clearTimeout(vaultAutoLockTimer); vaultAutoLockTimer = null; }
+  try { return await task(); }
+  finally {
+    idleLockHeld = false;
+    await armAppAutoLock();
+    if (vaultWasArmed && privateSessionKey) await armVaultAutoLock();
+  }
+}
+
 async function armVaultAutoLock() {
+  if (idleLockHeld) return;
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
   const row = await db.query(`SELECT vault_auto_lock_minutes, vault_lock_idle_enabled FROM credentials WHERE id=1`);
   if (!(row.values[0]?.vault_lock_idle_enabled ?? 1)) return; // idle trigger switched off (Decision 74)
@@ -951,6 +967,7 @@ async function setLockTriggerEnabled(lock, trigger, enabled) {
 // from every capture/search/browse function — the vault's equivalent needed several follow-up
 // patches for exactly that reason; a delegated listener can't be missed the same way. ----
 async function armAppAutoLock() {
+  if (idleLockHeld) return;
   if (appAutoLockTimer) clearTimeout(appAutoLockTimer);
   const cred = (await db.query(`SELECT app_password_hash, auto_lock_minutes, app_lock_idle_enabled FROM credentials WHERE id=1`)).values[0];
   if (!cred?.app_password_hash) return; // quick access — nothing to arm
@@ -1129,10 +1146,10 @@ async function handleBackupNow() {
   if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
 
   statusEl.textContent = 'Checking storage…';
-  const result = await createBackup(db, {
+  const result = await withoutIdleLock(() => createBackup(db, {
     passphrase, hint, categories,
     onProgress: ({ done, total }) => { statusEl.textContent = `Backing up ${done + 1} of ${total}…`; }
-  });
+  }));
   if (!result.ok && result.reason === 'insufficient_storage') {
     statusEl.textContent = `Not enough space: needs ~${formatBytes(result.requiredBytes)}, ` +
       `${formatBytes(result.availableBytes)} available.`;
@@ -1191,9 +1208,13 @@ async function handleLocalRestore() {
   const common = { passphrase, mode, categories, takeSafetyBackup, confirmedDestructive: true };
   let result;
   try {
-    result = await restoreBackup(db, info.version === 2
-      ? { ...common, file, header: info.header, onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; } }
-      : { ...common, archiveObj: info.archiveObj });
+    result = await withoutIdleLock(() => restoreBackup(db, info.version === 2
+      ? {
+        ...common, file, header: info.header,
+        onPhase: (text) => { statusEl.textContent = text; },
+        onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; }
+      }
+      : { ...common, archiveObj: info.archiveObj }));
   } catch {
     result = { ok: false, reason: 'wrong_passkey_or_damaged_file' }; // format 1: a wrong passkey throws on decrypt
   }

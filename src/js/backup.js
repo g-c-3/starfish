@@ -564,7 +564,7 @@ async function restoreTagsAndSettings(db, src, categories, summary) {
 //   takeSafetyBackup: bool, confirmedDestructive: bool (required if mode='overwrite' && !takeSafetyBackup),
 //   sourcePin: string|null (only if private_vault selected and encrypted under a different PIN),
 //   currentPrivateKey: CryptoKey|null (this device's active PIN-derived key, for re-encrypting),
-//   format 1: archiveObj          format 2: file (the picked File) + header (from readBackupHeader) + onProgress
+//   format 1: archiveObj          format 2: file (the picked File) + header (from readBackupHeader) + onProgress({done,total}) + onPhase(text)
 // }
 async function restoreBackup(db, opts) {
   if (opts.file && opts.header) return restoreFormat2(db, opts);
@@ -611,7 +611,7 @@ async function restoreBackup(db, opts) {
 // Format 2: one pass, one entry at a time. Overwrite reads the whole file once first, so a damaged file is found
 // before anything is deleted.
 async function restoreFormat2(db, opts) {
-  const { file, header, passphrase, mode, categories, takeSafetyBackup, confirmedDestructive, onProgress } = opts;
+  const { file, header, passphrase, mode, categories, takeSafetyBackup, confirmedDestructive, onProgress, onPhase } = opts;
 
   let key, head, cur;
   try {
@@ -626,11 +626,15 @@ async function restoreFormat2(db, opts) {
 
   if (mode === 'overwrite') {
     if (!takeSafetyBackup && !confirmedDestructive) return { ok: false, reason: 'destructive_confirmation_required' };
+    onPhase?.('Checking the backup file…');
     let intact = false;
     try { intact = await verifyV2(file, key); } catch { intact = false; }
     if (!intact) return { ok: false, reason: 'backup_damaged' };
     if (takeSafetyBackup) {
-      const safety = await createBackup(db, { passphrase, categories: ALL_CATEGORIES, hint: 'safety-backup' });
+      const safety = await createBackup(db, {
+        passphrase, categories: ALL_CATEGORIES, hint: 'safety-backup',
+        onProgress: ({ done, total }) => onPhase?.(`Saving a safety backup, ${done + 1} of ${total}…`)
+      });
       if (!safety.ok) return { ok: false, reason: 'safety_backup_failed', detail: safety };
     }
   }
@@ -642,7 +646,7 @@ async function restoreFormat2(db, opts) {
   }
 
   const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false };
-  if (mode === 'overwrite') await wipeCategories(db, categories);
+  if (mode === 'overwrite') { onPhase?.('Replacing current data…'); await wipeCategories(db, categories); }
 
   let seen = 0;
   let end = null;
