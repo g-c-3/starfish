@@ -2032,3 +2032,18 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The plaintext schedule columns and timestamps of Vault reminders now sit inside the encrypted file. Vault entries stay under the Vault PIN on top.
 - `encbench.js` and its Settings row (Diagnostics) remain until cleanup.
 - No new dependency, no permission, no network, no account.
+
+**159. Backup format 2: chunked, encrypted per line (Phase 6, found on DP42).**
+- Cause: Export Now froze, then the app closed, on 109 MB of Home data plus the Vault. Format 1 held the whole archive as one string and copied it many times (base64, stringify, encrypt, stringify again, size check; the payload was also built twice, once only to measure it). Restore had the same shape: whole file read, whole JSON parsed.
+- Format 2 (written by `createBackup`): same `.dz` file name. Line 1 is a plain header `{version:2, salt, kdfIterations, hint}`. Every later line is `{iv, c}`: one AES-GCM call with the line number as additional data, so a dropped, moved or swapped line fails to decrypt. Order: head record (categories, tags, settings, Vault salt, size per category), then per entry an entry record followed by its stored-body pieces and file chunks (3 MB of file bytes per line; a stored body over 1 MB, such as a Vault file, is split into 2 MB pieces), then an end record with the counts.
+- One passkey derivation per backup (300000 PBKDF2 iterations, as before). Header fields are the only plain data: salt, iterations, hint.
+- Format 1 files restore unchanged. The Drive path still writes and reads format 1 (`buildBackupPayload`, `encryptBackup`, `decryptBackupPayload` are kept as they were).
+- Size check without a payload: one query of column lengths plus a file size per file. Expected size is 1.34 times the data plus a small margin.
+- Restore reads the picked file with `File.slice`, 2 MB at a time, one entry at a time. File chunks are appended to `files/<id>.<ext>`. Entries in unselected categories and exact duplicates are read past without decrypting.
+- Overwrite: the passkey is proven by the head record, then the whole file is read and decrypted once and its end record checked, before the safety backup and before anything is deleted. A damaged or cut-short file stops there with nothing changed. Append has no first pass; a file that ends early reports "ends early" and keeps what was restored.
+- A file missing from storage at backup time is left out and reported as a count; format 1 failed the whole backup on it.
+- A wrong passkey on a format 1 file now shows a message instead of an unhandled error.
+- Unchanged: append default, overwrite warning and safety-backup rules, cross-PIN Vault re-key, selective categories, file name pattern, the three independent credentials.
+- Measured in Node on 150 MB of files: peak extra memory about 990 MB (format 1) against 68 MB (format 2) with disk-backed storage; tests cover round trip, byte-identical files at chunk boundaries, empty and missing files, an oversized Vault body, truncation, reordered lines, wrong passkey, overwrite refusal, and format 1 restore. Not yet run on a device.
+- `crypto.js`: `encryptChunk`, `decryptChunk` added and `toBase64`, `fromBase64` exported; `fromBase64` rewritten as a plain loop (same output, much faster on multi-MB strings).
+

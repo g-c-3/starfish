@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 102**
+
+DP42 device pass on the encrypted database, then the backup crash it exposed (Decision 159), approved by the owner with the approach left to the assistant. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 152, 158 and ARCHITECTURE §3, §3c and §4.
+- DP42 checks 1 to 3 confirmed on device: Vault entries, images, PDFs and files open on the encrypted file; a reminder fires with Snooze and Done and repeats; nothing lost after lock and unlock. First Vault unlock after the install looked frozen until the biometric prompt was tapped; later unlocks about half a second. Logged as an observation, cause not identified.
+- DP42 check 4 failed: Export Now froze, then "Dumpzone keeps stopping". Settings showed 19 entries and about 109 MB (Vault not counted).
+- `src/js/backup.js`: format 2 writer and reader; restore split into shared helpers (`planEntryTarget`, `wipeCategories`, `insertRestoredEntry`, `restoreTagsAndSettings`); `readBackupHeader` added; format 1 reading and the Drive path untouched.
+- `src/js/crypto.js`: chunk helpers, exports, faster `fromBase64`.
+- `src/js/app.js`: Export Now shows "Backing up N of M"; restore reads the header first, passes the picked file for format 2, shows plain reasons for failures, and refreshes the lists when a restore stops part-way.
+- Tested in Node (real crypto, real SQLite, in-memory and disk-backed file stubs): 37 checks pass; `vite build` passes; not run through CI.
+
+Bugs fixed:
+- Export Now crashed on large data. Cause: the whole archive lived in memory as several copies of one string, and the payload was built twice. Fix: format 2 writes one encrypted chunk per line and sizes the backup without building it. Correct because memory now follows one chunk (68 MB against about 990 MB on 150 MB of data in the same test).
+- Restore of a large file would have failed the same way (whole file read and parsed). Fix: sliced reading, one entry at a time.
+- A wrong passkey on a format 1 file raised an unhandled error. Fix: caught and reported.
+
+Decisions: 159.
+
+Next: owner device pass on the new build: Export Now with everything ticked, then Restore (append) of that file, then Restore (overwrite) of it; the new restore reading is slice by slice, so also try a very old format 1 file if one exists. Then DP42 check 5 (fresh install shows Database encryption On), then cleanup of `encbench.js` and the Diagnostics row. Phase 17 D, Phase 18 B and the light-theme pass each still need approval.
+
 **Session 101**
 
 Phase 17 C, whole-database encryption (Decision 158), approved by the owner with the key-source choice left to the assistant. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 152, 156, 157 and ARCHITECTURE §3 and §3c.

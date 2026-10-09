@@ -220,6 +220,12 @@ Open: PBKDF2 iteration count; minimum passcode length or a short-passcode warnin
 
 ## 4. Backup & Restore (full design)
 
+### Archive formats (Decision 159)
+- **Format 2 (written by Export Now and the safety backup):** line 1 is a plain header `{version:2, salt, kdfIterations, hint}`; every later line is `{iv, c}`, one AES-GCM call whose additional data is the line number. Records in order: head (categories, tags, settings, Vault salt, size per category), per entry an entry record then its stored-body pieces and file chunks, end (counts). Backup and restore hold one chunk at a time, never the whole archive.
+- **Format 1 (read always; written by the Drive path):** one JSON object, encrypted as a whole.
+- Restore reads the picked file with `File.slice`. Overwrite reads and decrypts the whole file once, and checks the end record, before the safety backup and before any deletion; append has no first pass.
+- A format 2 file is detected by its header text; anything else is read as format 1.
+
 ### Filenames (Decision 55, letters extended in Decision 57)
 `backup_<letters>_<yyyymmdd_hhmmss>.dz` (the `append_` prefix was removed in Decision 83); `letters` is a fixed-order subset of
 `tviprlmf` (Text/Voice/Image/PDF/Reminder/Location/Money/Files — only the letters for categories
