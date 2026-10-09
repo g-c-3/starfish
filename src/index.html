@@ -166,6 +166,13 @@
         <div id="storage-breakdown-list"></div>
       </details>
 
+      <details id="db-enc-settings" data-tone="green">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">Database encryption</span></summary>
+        <p class="mode-description">Encrypts the database file on this device. The key stays on this device, is not a password, and is not part of any backup. Export Now first.</p>
+        <div id="db-enc-status" class="status-line"></div>
+        <button id="db-enc-btn" class="secondary-btn hidden">Encrypt database</button>
+      </details>
+
       <p class="settings-group">Diagnostics</p>
       <details id="enc-bench-settings" data-tone="blue">
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">Encryption test</span></summary>
