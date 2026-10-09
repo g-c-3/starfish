@@ -2,7 +2,7 @@
 // Control flow and key logic: auth gate, capture pipeline, folders, viewers, Money, Vault.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
-import { initDb, getEncryptionStatus, encryptMainDatabase, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
+import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
@@ -3545,23 +3545,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Database encryption (Decision 158): opt-in, one-way, key held on this device only.
   async function renderDbEnc() {
     const on = await getEncryptionStatus();
-    document.getElementById('db-enc-status').textContent = on ? 'On — the database file is encrypted.' : 'Off — the database file is not encrypted.';
+    const r = getEncryptionResult();
+    const last = !r ? '' : r.state === 'done' ? ' Last attempt: encrypted.'
+      : r.state === 'running' ? ' Last attempt did not finish; check the status above.'
+      : r.state === 'unconfirmed' ? ' Last attempt could not be confirmed.'
+      : ` Last attempt failed: ${r.error || 'unknown error'}.`;
+    document.getElementById('db-enc-status').textContent = (on ? 'On — the database file is encrypted.' : 'Off — the database file is not encrypted.') + last;
     document.getElementById('db-enc-btn').classList.toggle('hidden', on);
   }
   document.getElementById('db-enc-settings').addEventListener('toggle', (e) => { if (e.target.open) renderDbEnc(); });
   document.getElementById('db-enc-btn').addEventListener('click', async () => {
     const ok = await askYesNo({
       title: 'Encrypt the database?',
-      text: 'This converts your main database file and cannot be undone. Run Export Now first: an interruption mid-conversion could lose data. Keep the app open until it reloads.',
+      text: 'The app restarts and converts your main database file. This cannot be undone. Run Export Now first: an interruption mid-conversion could lose data. Keep the app open until it finishes.',
       yes: 'Encrypt', no: 'Cancel'
     });
     if (!ok) return;
-    const btn = document.getElementById('db-enc-btn');
-    btn.disabled = true;
-    toast('Encrypting…', true);
-    const r = await encryptMainDatabase(db);
-    toast(r.ok ? 'Database encrypted. Reloading…' : `Encryption not confirmed${r.error ? ': ' + r.error : ''}. Reloading…`, true);
-    setTimeout(() => location.reload(), 1500);
+    document.getElementById('db-enc-btn').disabled = true;
+    requestEncryption();
+    toast('Restarting to encrypt…', true);
+    setTimeout(() => location.reload(), 800);
   });
 
   // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).

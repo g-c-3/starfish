@@ -137,13 +137,30 @@ async function tableCounts(conn) {
   return out;
 }
 
-// One-way conversion of the live database. Closes `db`; the caller reloads the page afterwards, success or not.
-async function encryptMainDatabase(db) {
-  const before = await tableCounts(db);
-  await ensureSecret();
-  await db.close();
-  await _sqlite.closeConnection(DB_NAME, false);
+const ENC_FLAG = 'dz_enc_pending';
+const ENC_RESULT = 'dz_enc_result';
+
+// Conversion runs at the next start, before any connection exists (Decision 158).
+function requestEncryption() {
+  localStorage.setItem(ENC_FLAG, '1');
+}
+
+function getEncryptionResult() {
+  try { return JSON.parse(localStorage.getItem(ENC_RESULT) || 'null'); } catch (e) { return null; }
+}
+
+// One attempt per request: the flag is cleared first, so a hang cannot repeat on the next launch.
+async function convertAtStartup() {
+  localStorage.removeItem(ENC_FLAG);
+  localStorage.setItem(ENC_RESULT, JSON.stringify({ state: 'running' }));
+  let result;
   try {
+    const plain = await _sqlite.createConnection(DB_NAME, false, 'no-encryption', SCHEMA_VERSION, false);
+    await plain.open();
+    const before = await tableCounts(plain);
+    await plain.close();
+    await _sqlite.closeConnection(DB_NAME, false);
+    await ensureSecret();
     const enc = await _sqlite.createConnection(DB_NAME, true, 'encryption', SCHEMA_VERSION, false);
     await enc.open();
     const after = await tableCounts(enc);
@@ -151,18 +168,27 @@ async function encryptMainDatabase(db) {
     await _sqlite.closeConnection(DB_NAME, false);
     const same = Object.keys(before).every((k) => before[k] === after[k]);
     const encrypted = (await _sqlite.isDatabaseEncrypted(DB_NAME)).result;
-    return { ok: same && encrypted, same, encrypted };
+    result = { state: same && encrypted ? 'done' : 'unconfirmed', same, encrypted };
   } catch (e) {
     try { await _sqlite.closeConnection(DB_NAME, false); } catch (x) { /* not open */ }
-    return { ok: false, error: e.message || String(e) };
+    result = { state: 'failed', error: e.message || String(e) };
   }
+  localStorage.setItem(ENC_RESULT, JSON.stringify(result));
 }
 
 async function initDb(sqlite) {
   _sqlite = sqlite;
+  // A page reload leaves native connections open; close any the page no longer holds.
+  try { await sqlite.checkConnectionsConsistency(); } catch (e) { /* none open */ }
   const exists = (await sqlite.isDatabase(DB_NAME)).result;
-  const encrypted = exists && (await sqlite.isDatabaseEncrypted(DB_NAME)).result;
-  // Decision 158: a new install starts encrypted; an existing plain file stays plain until encryptMainDatabase().
+  let encrypted = exists && (await sqlite.isDatabaseEncrypted(DB_NAME)).result;
+  if (localStorage.getItem(ENC_FLAG) && exists && !encrypted) {
+    await convertAtStartup();
+    encrypted = (await sqlite.isDatabaseEncrypted(DB_NAME)).result;
+  } else {
+    localStorage.removeItem(ENC_FLAG);
+  }
+  // Decision 158: a new install starts encrypted; an existing plain file stays plain until requestEncryption() runs at the next start.
   const useKey = !exists || encrypted;
   if (!exists) await ensureSecret();
   if (encrypted && !(await sqlite.isSecretStored()).result) {
@@ -395,7 +421,7 @@ const MAX_TAGS = 2; // Decision 90 — an entry holds at most two tags
 
 export {
   MAX_TAGS, listTagsForScope,
-  initDb, getEncryptionStatus, encryptMainDatabase, insertEntry, searchEntries, softDelete, VAULT_PLACEHOLDER_LABEL,
+  initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, VAULT_PLACEHOLDER_LABEL,
   listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
   listAllTags, listLabelHistory, SCHEMA_SQL
 };
