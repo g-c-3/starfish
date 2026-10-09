@@ -2019,3 +2019,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Shown on unlock and after a restore; not on single-entry updates. The record build itself still runs one entry at a time and can block the screen briefly on a very large file, so the count may pause.
 - No new dependency, no permission, no network, no stored data.
 
+
+**158. Whole-database encryption (Phase 17 C).** Implements Decision 144 item C and settles its key-source question.
+- Engine: SQLCipher through `@capacitor-community/sqlite` 6.0.2 (the 8.x line needs a newer Capacitor). `capacitor.config.json` sets `androidIsEncryption: true`.
+- Key: random 256-bit value generated on the device, stored by the plugin in Keystore-backed encrypted preferences. Not derived from the app-open password, the Vault PIN or the backup passkey; the three credentials stay independent. Never in a backup. If the key is lost (app data cleared) the encrypted file cannot be opened; recovery is a backup restore, and startup stops with a clear message instead of failing silently.
+- Not the app password: it is optional, changing it would rewrite the whole file, and a forgotten one would lose data. An optional password wrapper around the same key stays open.
+- Fresh install: the database is created encrypted. Existing install: stays plain until the owner taps Settings, Database encryption, Encrypt database. Opt-in, one-way, warns to run Export Now first.
+- Conversion runs at the next start, before any connection exists (`initDb`). One attempt per request: the flag is cleared before the attempt, so a hang cannot repeat. Row counts of every table (FTS shadow tables skipped) are compared before and after, and the file must report as encrypted. The result is stored (`dz_enc_result`) and shown in Settings. `checkConnectionsConsistency()` runs at every start to close native connections left by a reload.
+- An in-app conversion that closed the live connection first hung and was dropped; the cause was not identified.
+- Measured on device: encrypted open 6 to 16 ms (plain 5 to 8); 50 FTS searches 132 to 469 ms (plain 121 to 315) over three runs; the real schema with its FTS5 table plus a 10 MB blob converted in 666 ms with all rows and search hits intact. The owner's own database converted with every Home count unchanged.
+- `scripts/patch-manifest.js` sets `android:allowBackup="false"`: an OS backup would restore the file without its key. The app's own Export and Restore are unaffected.
+- The plaintext schedule columns and timestamps of Vault reminders now sit inside the encrypted file. Vault entries stay under the Vault PIN on top.
+- `encbench.js` and its Settings row (Diagnostics) remain until cleanup.
+- No new dependency, no permission, no network, no account.

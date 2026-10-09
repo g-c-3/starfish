@@ -4,6 +4,32 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 101**
+
+Phase 17 C, whole-database encryption (Decision 158), approved by the owner with the key-source choice left to the assistant. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 152, 156, 157 and ARCHITECTURE §3 and §3c.
+- Plugin check from the published 6.0.2 source: SQLCipher 4.5.3 on Android; the secret is held in Keystore-backed encrypted preferences. 8.x needs a newer Capacitor.
+- `capacitor.config.json`: `androidIsEncryption: true`.
+- `src/js/encbench.js` (new) and a Settings, Diagnostics, Encryption test row in `src/index.html`: scratch databases only, never `dumpzone.db`. Plain vs encrypted timing, FTS5 under SQLCipher, and conversion of a database with the real schema and a 10 MB blob. Removes its scratch files.
+- `src/js/db.js`: random key (`ensureSecret`); new installs start encrypted; encrypted files open in `secret` mode; missing key stops with a clear message; `requestEncryption`, `getEncryptionResult`, `convertAtStartup` (flag cleared first, row counts compared, result stored); `checkConnectionsConsistency()` at every start.
+- `src/js/app.js` and `src/index.html`: Settings, Security, Database encryption row (status, last attempt, Encrypt database with a warning dialog).
+- `scripts/patch-manifest.js`: `android:allowBackup="false"` added after the permission step; tested on a mock manifest, safe to run twice.
+- Confirmed on device: the scratch test (encrypted file, same search hits, small timing cost, 10 MB real-schema conversion in 666 ms); the owner's database converted, Settings shows On with "Last attempt: encrypted", Home counts unchanged.
+
+Bugs fixed:
+- In-app conversion hung on a sticky "Encrypting…" toast. Cause not identified; the live connection was closed and converted while the app ran. Fix: conversion moved to the next start, before any connection exists. Correct because the same sequence worked on scratch databases.
+- Scratch test inserted rows without `created_at` and `updated_at` (required columns), and reused a file name that held an old encrypted file. Fix: columns added, files opened with the stored key and deleted. The first reading of both results was therefore wrong.
+- An earlier note said the plugin stored its secret in plain preferences. It uses Keystore-backed encrypted preferences. Corrected before any decision was written.
+
+Decisions made: 158.
+
+Verified in the authoring environment: syntax check of every changed file; manifest script run on a mock file; plugin behaviour read from its published source. Verified on device: see above. Not verified: Vault entries, reminders, image and PDF opening, Export Now and Restore on the encrypted file, a fresh install starting encrypted (DP42).
+
+Open: DP42. The Encryption test row can be removed once DP42 passes. If the Keystore key is lost the file is unrecoverable except from a backup. The optional password wrapper around the key is not built. D (per-file encryption), E and F remain; Phase 18 B and haptics still need approval.
+
+Next session start point: DP42 on the owner's phone. Then remove the Encryption test, or Phase 17 D, Phase 18 B or haptics (each needs approval).
+
+---
+
 **Session 100**
 
 Phase 15 item 4, entrance motion (Decision 155). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 86 and 144 and ARCHITECTURE §3c. Credentials and backup are not touched.

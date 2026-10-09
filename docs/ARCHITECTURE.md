@@ -169,7 +169,7 @@ deliberate differences, all safety-necessary rather than arbitrary:
    back to disk unencrypted except at the explicit moment Download is invoked (point 3 below).
 1a. **Description is encrypted too.** A Vault entry's description lives in `encrypted_description` (same AES-GCM
    calls); `description` stays NULL. It is decrypted into the in-memory index on unlock and is searchable there.
-   The label is encrypted too (Decision 145): `label` holds the placeholder `Vault item`, `encrypted_label` the real one. The schedule columns of a Vault Reminder, `type` and the timestamps stay plaintext until Phase 17 C.
+   The label is encrypted too (Decision 145): `label` holds the placeholder `Vault item`, `encrypted_label` the real one. The schedule columns of a Vault Reminder, `type` and the timestamps are inside the encrypted database file since Phase 17 C (Decision 158).
 2. **Search is a fresh in-memory index built on unlock, discarded on lock — nothing persisted, not even
    encrypted** (Decision 39). Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
    autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
@@ -199,24 +199,24 @@ category (was a notes-only `private_notes` category before this pivot) — see b
 per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
-## 3c. Encryption at rest (planned — Decision 144, nothing built)
+## 3c. Encryption at rest (Decision 144; A, B, C built)
 
 Goal: nothing readable by reading the database file or the files on disk, and still fast. Key derivation stays PBKDF2 with AES-GCM on Web Crypto; no external crypto library.
 
 | Stage | What | State |
 |---|---|---|
-| A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; not device-tested |
-| B | Vault index updated per entry, not rebuilt on every change | built (Session 98, Decision 151), not device-tested |
-| C | Whole-database encryption, FTS5 search kept | planned; plugin support not yet checked |
+| A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; confirmed on device |
+| B | Vault index updated per entry, not rebuilt on every change | built (Session 98, Decision 151); confirmed on device |
+| C | Whole-database encryption, FTS5 search kept | built, Session 101, Decision 158; owner's database converted; DP42 pending |
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | planned |
 | E | Backup and restore adapted at every stage | planned |
 | F | One-time migration of existing data on a successful unlock | planned |
 
-Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key (Android keystore or the app password) is not decided; the app password is optional, so it cannot be the only source.
+Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
 **Backup rules (binding on every stage):** a backup is encrypted only under the backup passkey and never holds a device key; it restores on a different device with the passkey, plus the old Vault PIN for Vault entries (append re-keys); restore re-encrypts for the current device; pre-plan backups stay restorable and are encrypted on the way in; append stays the default and the safety-backup rule is unchanged; a failed restore must not leave a mix of old and new encryption. Check §4 before touching any of this.
 
-Open: database key source; PBKDF2 iteration count; minimum passcode length or a short-passcode warning; sqlite plugin support for database encryption and its speed cost; speed of backup and restore with many files.
+Open: PBKDF2 iteration count; minimum passcode length or a short-passcode warning; an optional app-password wrapper around the database key; speed of backup and restore with many files.
 
 ## 4. Backup & Restore (full design)
 
