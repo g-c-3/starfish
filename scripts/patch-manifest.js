@@ -53,21 +53,28 @@ let xml = fs.readFileSync(MANIFEST_PATH, 'utf8');
 const missing = REQUIRED_PERMISSIONS.filter((p) => !xml.includes(p));
 
 if (missing.length === 0) {
-  console.log('patch-manifest.js: all required permissions already present, nothing to do.');
-  process.exit(0);
+  console.log('patch-manifest.js: all required permissions already present.');
+} else {
+  // Insert right after the opening <manifest ...> tag's closing '>', not the first '>'
+  // in the file (an XML declaration's "?>" would match that instead if present).
+  const manifestTagStart = xml.indexOf('<manifest');
+  if (manifestTagStart === -1) {
+    console.error('patch-manifest.js: no <manifest> tag found — unexpected file content, aborting.');
+    process.exit(1);
+  }
+  const insertAt = xml.indexOf('>', manifestTagStart) + 1;
+  const block = '\n' + missing.map((p) => `    <uses-permission android:name="${p}" />`).join('\n');
+  xml = xml.slice(0, insertAt) + block + xml.slice(insertAt);
+  console.log(`patch-manifest.js: inserted ${missing.length} permission(s): ${missing.join(', ')}`);
 }
 
-// Insert right after the opening <manifest ...> tag's closing '>', not the first '>'
-// in the file (an XML declaration's "?>" would match that instead if present).
-const manifestTagStart = xml.indexOf('<manifest');
-if (manifestTagStart === -1) {
-  console.error('patch-manifest.js: no <manifest> tag found — unexpected file content, aborting.');
-  process.exit(1);
+// Decision 158: no OS backup copy of app data. The database key never leaves this device, so a restored file would be unreadable.
+if (/android:allowBackup="true"/.test(xml)) {
+  xml = xml.replace(/android:allowBackup="true"/, 'android:allowBackup="false"');
+  console.log('patch-manifest.js: allowBackup set to false.');
+} else if (!/android:allowBackup=/.test(xml)) {
+  xml = xml.replace('<application', '<application android:allowBackup="false"');
+  console.log('patch-manifest.js: allowBackup=false added.');
 }
-const insertAt = xml.indexOf('>', manifestTagStart) + 1;
-
-const block = '\n' + missing.map((p) => `    <uses-permission android:name="${p}" />`).join('\n');
-xml = xml.slice(0, insertAt) + block + xml.slice(insertAt);
 
 fs.writeFileSync(MANIFEST_PATH, xml, 'utf8');
-console.log(`patch-manifest.js: inserted ${missing.length} permission(s): ${missing.join(', ')}`);
