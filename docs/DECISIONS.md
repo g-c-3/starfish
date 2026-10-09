@@ -2049,3 +2049,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Idle auto-lock (app and Vault) is held for the duration of Export Now and Restore, then re-armed. Cause of the lock seen on device: a long restore receives no taps, so the idle timer fired mid-restore. Overwrite also reports each phase (checking the file, safety backup N of M, replacing current data, restoring N of M), since the first two had no progress text and looked frozen.
 - After a restore the Vault shows "Preparing Vault: N of M" once at the next unlock: the per-file metadata cache (Decision 156) is not part of a backup and is rebuilt. Expected, one time.
 
+**160. Encryption test removed (Phase 17 C cleanup).** Closes the last bullet of Decision 158.
+- Removed: `src/js/encbench.js`, the Settings Diagnostics group with its Encryption test row, and the script tag in `index.html`. Nothing else imported it.
+- It only ever touched scratch databases. No schema, stored data, credential, backup format or CI change.
+- Committed after DP42 check 5 (fresh install shows Database encryption On), so the test stays available if that check fails.
+- No new dependency, no permission, no network, no account.

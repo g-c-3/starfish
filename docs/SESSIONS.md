@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 103**
+
+Phase 17 C cleanup (Decision 160). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 158, 159 and ARCHITECTURE §3c.
+- `src/index.html`: Diagnostics group (Encryption test row) and the `encbench.js` script tag removed.
+- `src/js/encbench.js`: deleted on GitHub (not deliverable as a file).
+- Searched `src/`, `scripts/`, `.github/`, `capacitor.config.json`, `package.json`, `android-notes/` for `encbench`, `enc-bench`, bench, Diagnostics: no other reference. `encbench.js` imported only `@capacitor-community/sqlite` and `SCHEMA_SQL` from `db.js`; nothing imports it.
+
+Bugs fixed: none.
+
+Decisions made: 160.
+
+Verified in the authoring environment: `npm install` and `vite build` pass; no `encbench` or `enc-bench` string in the build output. Not verified: CI, how Settings looks on a device.
+
+Open: DP42 check 5 (fresh install shows Database encryption On) still pending; commit this cleanup after it passes. A format 1 backup from before Session 102, if the owner has one, is worth one append restore. Phase 17 D, Phase 18 B, haptics and the light-theme pass each need approval.
+
+Next session start point: DP42 check 5. Then Phase 17 D, Phase 18 B, haptics or light-theme tuning (each needs approval).
+
+---
+
 **Session 102**
 
 DP42 device pass on the encrypted database, then the backup crash it exposed (Decision 159), approved by the owner with the approach left to the assistant. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 152, 158 and ARCHITECTURE §3, §3c and §4.
