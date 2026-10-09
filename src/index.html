@@ -173,14 +173,6 @@
         <button id="db-enc-btn" class="secondary-btn hidden">Encrypt database</button>
       </details>
 
-      <p class="settings-group">Diagnostics</p>
-      <details id="enc-bench-settings" data-tone="blue">
-        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">Encryption test</span></summary>
-        <p class="mode-description">Times plain vs encrypted storage on temporary databases and removes them. Your data is not touched.</p>
-        <button id="enc-bench-btn" class="secondary-btn">Run test</button>
-        <pre id="enc-bench-out" class="status-line" style="white-space:pre-wrap"></pre>
-      </details>
-
       <p class="settings-group">Security</p>
       <details id="app-lock-settings" data-tone="green">
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">App lock</span></summary>
@@ -662,6 +654,5 @@
   </div>
 
   <script type="module" src="js/app.js"></script>
-  <script type="module" src="js/encbench.js"></script>
 </body>
 </html>
