@@ -7,6 +7,9 @@
     "allowMixedContent": false
   },
   "plugins": {
+    "CapacitorSQLite": {
+      "androidIsEncryption": true
+    },
     "LocalNotifications": {
       "smallIcon": "ic_stat_notify",
       "iconColor": "#488AFF",
