@@ -13,8 +13,11 @@ DP42 device pass on the encrypted database, then the backup crash it exposed (De
 - `src/js/crypto.js`: chunk helpers, exports, faster `fromBase64`.
 - `src/js/app.js`: Export Now shows "Backing up N of M"; restore reads the header first, passes the picked file for format 2, shows plain reasons for failures, and refreshes the lists when a restore stops part-way.
 - Tested in Node (real crypto, real SQLite, in-memory and disk-backed file stubs): 37 checks pass; `vite build` passes; not run through CI.
+- Device pass of format 2: Export Now with everything ticked finished and saved; Restore (append) reported 29 exact duplicates and added 0; Restore (overwrite) restored every file but the screen looked frozen for a while, then the app locked, and the first Vault unlock showed "Preparing Vault: 3 of 4" (expected, the metadata cache is rebuilt).
+- `src/js/app.js`: idle auto-lock held during Export Now and Restore (`withoutIdleLock`); `src/js/backup.js`: `onPhase` text for the overwrite phases.
 
 Bugs fixed:
+- The app locked itself in the middle of a long overwrite restore. Cause (from the code, the screen showed no taps for minutes): the idle auto-lock timer fired, as nothing re-armed it. Fix: both idle timers held during backup and restore, re-armed after. Correct because the timers are the only path that locks on idle. The freeze looked longer than it was because the file check and safety backup had no progress text; both now do.
 - Export Now crashed on large data. Cause: the whole archive lived in memory as several copies of one string, and the payload was built twice. Fix: format 2 writes one encrypted chunk per line and sizes the backup without building it. Correct because memory now follows one chunk (68 MB against about 990 MB on 150 MB of data in the same test).
 - Restore of a large file would have failed the same way (whole file read and parsed). Fix: sliced reading, one entry at a time.
 - A wrong passkey on a format 1 file raised an unhandled error. Fix: caught and reported.

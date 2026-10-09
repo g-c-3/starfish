@@ -2046,4 +2046,6 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Unchanged: append default, overwrite warning and safety-backup rules, cross-PIN Vault re-key, selective categories, file name pattern, the three independent credentials.
 - Measured in Node on 150 MB of files: peak extra memory about 990 MB (format 1) against 68 MB (format 2) with disk-backed storage; tests cover round trip, byte-identical files at chunk boundaries, empty and missing files, an oversized Vault body, truncation, reordered lines, wrong passkey, overwrite refusal, and format 1 restore. Not yet run on a device.
 - `crypto.js`: `encryptChunk`, `decryptChunk` added and `toBase64`, `fromBase64` exported; `fromBase64` rewritten as a plain loop (same output, much faster on multi-MB strings).
+- Idle auto-lock (app and Vault) is held for the duration of Export Now and Restore, then re-armed. Cause of the lock seen on device: a long restore receives no taps, so the idle timer fired mid-restore. Overwrite also reports each phase (checking the file, safety backup N of M, replacing current data, restoring N of M), since the first two had no progress text and looked frozen.
+- After a restore the Vault shows "Preparing Vault: N of M" once at the next unlock: the per-file metadata cache (Decision 156) is not part of a backup and is rebuilt. Expected, one time.
 
