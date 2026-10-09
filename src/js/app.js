@@ -2,7 +2,7 @@
 // Control flow and key logic: auth gate, capture pipeline, folders, viewers, Money, Vault.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
-import { initDb, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
+import { initDb, getEncryptionStatus, encryptMainDatabase, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
@@ -3540,6 +3540,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const backupSection = document.getElementById('backup-settings');
     backupSection.open = true;
     backupSection.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Database encryption (Decision 158): opt-in, one-way, key held on this device only.
+  async function renderDbEnc() {
+    const on = await getEncryptionStatus();
+    document.getElementById('db-enc-status').textContent = on ? 'On — the database file is encrypted.' : 'Off — the database file is not encrypted.';
+    document.getElementById('db-enc-btn').classList.toggle('hidden', on);
+  }
+  document.getElementById('db-enc-settings').addEventListener('toggle', (e) => { if (e.target.open) renderDbEnc(); });
+  document.getElementById('db-enc-btn').addEventListener('click', async () => {
+    const ok = await askYesNo({
+      title: 'Encrypt the database?',
+      text: 'This converts your main database file and cannot be undone. Run Export Now first: an interruption mid-conversion could lose data. Keep the app open until it reloads.',
+      yes: 'Encrypt', no: 'Cancel'
+    });
+    if (!ok) return;
+    const btn = document.getElementById('db-enc-btn');
+    btn.disabled = true;
+    toast('Encrypting…', true);
+    const r = await encryptMainDatabase(db);
+    toast(r.ok ? 'Database encrypted. Reloading…' : `Encryption not confirmed${r.error ? ': ' + r.error : ''}. Reloading…`, true);
+    setTimeout(() => location.reload(), 1500);
   });
 
   // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).

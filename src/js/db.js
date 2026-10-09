@@ -111,8 +111,64 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
+const DB_NAME = 'dumpzone.db';
+let _sqlite = null;
+
+// Decision 158: random 256-bit key, held by the plugin in Keystore-backed storage. Never derived from a password.
+function randomKey() {
+  const b = new Uint8Array(32);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+async function ensureSecret() {
+  if (!(await _sqlite.isSecretStored()).result) await _sqlite.setEncryptionSecret(randomKey());
+}
+
+async function getEncryptionStatus() {
+  return !!(await _sqlite.isDatabaseEncrypted(DB_NAME)).result;
+}
+
+// Row count per user table (FTS shadow tables skipped); compared before and after conversion.
+async function tableCounts(conn) {
+  const names = ((await conn.query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'entries_fts%' ORDER BY name`)).values || []).map((r) => r.name);
+  const out = {};
+  for (const n of names) out[n] = ((await conn.query(`SELECT COUNT(*) AS n FROM "${n}"`)).values || [{ n: -1 }])[0].n;
+  return out;
+}
+
+// One-way conversion of the live database. Closes `db`; the caller reloads the page afterwards, success or not.
+async function encryptMainDatabase(db) {
+  const before = await tableCounts(db);
+  await ensureSecret();
+  await db.close();
+  await _sqlite.closeConnection(DB_NAME, false);
+  try {
+    const enc = await _sqlite.createConnection(DB_NAME, true, 'encryption', SCHEMA_VERSION, false);
+    await enc.open();
+    const after = await tableCounts(enc);
+    await enc.close();
+    await _sqlite.closeConnection(DB_NAME, false);
+    const same = Object.keys(before).every((k) => before[k] === after[k]);
+    const encrypted = (await _sqlite.isDatabaseEncrypted(DB_NAME)).result;
+    return { ok: same && encrypted, same, encrypted };
+  } catch (e) {
+    try { await _sqlite.closeConnection(DB_NAME, false); } catch (x) { /* not open */ }
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
 async function initDb(sqlite) {
-  const db = await sqlite.createConnection('dumpzone.db', false, 'no-encryption', SCHEMA_VERSION, false);
+  _sqlite = sqlite;
+  const exists = (await sqlite.isDatabase(DB_NAME)).result;
+  const encrypted = exists && (await sqlite.isDatabaseEncrypted(DB_NAME)).result;
+  // Decision 158: a new install starts encrypted; an existing plain file stays plain until encryptMainDatabase().
+  const useKey = !exists || encrypted;
+  if (!exists) await ensureSecret();
+  if (encrypted && !(await sqlite.isSecretStored()).result) {
+    throw new Error('The database is encrypted but its key is missing on this device. Clear app data, then restore a backup.');
+  }
+  const db = await sqlite.createConnection(DB_NAME, useKey, useKey ? 'secret' : 'no-encryption', SCHEMA_VERSION, false);
   await db.open();
   await db.execute(SCHEMA_SQL);
 
@@ -339,7 +395,7 @@ const MAX_TAGS = 2; // Decision 90 — an entry holds at most two tags
 
 export {
   MAX_TAGS, listTagsForScope,
-  initDb, insertEntry, searchEntries, softDelete, VAULT_PLACEHOLDER_LABEL,
+  initDb, getEncryptionStatus, encryptMainDatabase, insertEntry, searchEntries, softDelete, VAULT_PLACEHOLDER_LABEL,
   listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash,
   listAllTags, listLabelHistory, SCHEMA_SQL
 };
