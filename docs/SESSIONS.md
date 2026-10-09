@@ -15,6 +15,7 @@ DP42 device pass on the encrypted database, then the backup crash it exposed (De
 - Tested in Node (real crypto, real SQLite, in-memory and disk-backed file stubs): 37 checks pass; `vite build` passes; not run through CI.
 - Device pass of format 2: Export Now with everything ticked finished and saved; Restore (append) reported 29 exact duplicates and added 0; Restore (overwrite) restored every file but the screen looked frozen for a while, then the app locked, and the first Vault unlock showed "Preparing Vault: 3 of 4" (expected, the metadata cache is rebuilt).
 - `src/js/app.js`: idle auto-lock held during Export Now and Restore (`withoutIdleLock`); `src/js/backup.js`: `onPhase` text for the overwrite phases.
+- Device pass of the rebuilt version: Restore (overwrite) with the safety backup showed each phase (safety backup 22 of 29, replacing current data, restoring 25 of 29, done), took a few minutes, restored all 29 entries and left the app unlocked. DP42 check 4 confirmed. The lock seen earlier did not return, which supports the idle-timer cause.
 
 Bugs fixed:
 - The app locked itself in the middle of a long overwrite restore. Cause (from the code, the screen showed no taps for minutes): the idle auto-lock timer fired, as nothing re-armed it. Fix: both idle timers held during backup and restore, re-armed after. Correct because the timers are the only path that locks on idle. The freeze looked longer than it was because the file check and safety backup had no progress text; both now do.
@@ -24,7 +25,7 @@ Bugs fixed:
 
 Decisions: 159.
 
-Next: owner device pass on the new build: Export Now with everything ticked, then Restore (append) of that file, then Restore (overwrite) of it; the new restore reading is slice by slice, so also try a very old format 1 file if one exists. Then DP42 check 5 (fresh install shows Database encryption On), then cleanup of `encbench.js` and the Diagnostics row. Phase 17 D, Phase 18 B and the light-theme pass each still need approval.
+Next: DP42 check 5 (fresh install shows Database encryption On), then cleanup of `encbench.js` and the Diagnostics row. A format 1 backup from before this session, if the owner has one, is worth one append restore. Phase 17 D, Phase 18 B and the light-theme pass each still need approval.
 
 **Session 101**
 
