@@ -156,3 +156,6 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-10 | Session 104 (continued, 2) | Decision 164 | Update check and download for the private repo: token in Settings, authenticated release list, native APK download, installer hand-off; DP45 added; not run through CI or on a device |
 | 2026-10-10 | Session 104 (continued, 3) | Decision 165 | DP44 confirmed on device; app renamed to Arkly with persisted identifiers kept; CI skips docs-only pushes; DP46 added; not run through CI or on a device |
 | 2026-10-10 | Session 104 (continued, 4) | none | DP45 partly confirmed: token and update check work on device; download failed on a missing folder, fixed with mkdir; not yet re-run |
+| 2026-10-10 | Session 104 (continued, 5) | none | Lock screen status message no longer persists across locks; DP47 added; not run through CI or on a device |
+| 2026-10-10 | Session 104 (device pass, 3) | none | DP45 and DP46 confirmed: private-repo update check, download and install; rename to Arkly; docs-only commits skip CI |
+| 2026-10-10 | Session 104 (end) | none | DP47 confirmed; Session 104 closed: Phase 17 D, E, F, update check for the private repo, rename to Arkly, docs-only CI skip, lock message fix |

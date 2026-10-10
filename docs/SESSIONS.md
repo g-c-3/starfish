@@ -43,9 +43,13 @@ Rename to Arkly and CI filter (Decision 165), on "Start".
 
 Device pass, update check: DP45 partly confirmed. Token saved, the check found the newer build and enabled Download update. Download failed: "open failed: ENOENT" on `cache/update/`. Cause: `Filesystem.downloadFile` does not create the parent folder and ignores `recursive`. Fix: `mkdir` the folder first (`src/js/update-install.js`). Why correct: the plugin source opens a `FileOutputStream` on the resolved path with no folder creation.
 
+Bug fixed (reported with screenshots): the lock screen kept "Wrong password." or "Biometric unlock failed" after a successful unlock and the next lock. Cause: the status line `password-hint` was only ever written, never cleared. Fix (`src/js/app.js`): it clears when the lock screen is shown (`showScreen`, which every lock path uses), when typing starts, and when a new attempt begins. Why correct: the line then reflects only the latest attempt.
+
+Device pass: DP47 confirmed. DP45 and DP46 confirmed (update download and install, rename, docs-only commit starts no Actions run).
+
 Decisions made (continued): 163, 164, 165.
 
-Next session start point: DP45 and DP46 on a device (DP45 needs a build newer than the installed one to update to), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
+Next session start point: delete the stray `src/js/native-setup.md` and `src/js/style.css` from the repo, then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
 
 ---
 
