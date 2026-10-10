@@ -19,7 +19,7 @@ import * as Money from './money.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { checkForUpdate } from './update-check.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
-import { initFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
+import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
@@ -379,6 +379,13 @@ async function bootstrap() {
   const sqlite = new SQLiteConnection(CapacitorSQLite);
   db = await initDb(sqlite);
   initFiles(db); // per-file encryption for Home files (Decision 161); the master key lives in this database
+  // One-time conversion of plain Home files (Decision 163). Runs before anything can read or restore a file; a no-op once done.
+  try {
+    let shown = false;
+    const res = await migratePlainFiles({ onProgress: ({ done, total }) => { shown = true; toast(`Securing files: ${done + 1} of ${total}`, true); } });
+    if (shown) hideToast();
+    if (res.failed || res.missing) toast(`${res.failed + res.missing} file(s) could not be secured; will retry at next start.`);
+  } catch { /* startup continues; the conversion retries at the next start */ }
 
   applyAppearance(await getAppearance()); // apply theme before rendering the lock screen
 

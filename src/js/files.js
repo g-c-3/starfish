@@ -41,6 +41,11 @@ function deviceIo() {
     async remove(path) {
       const { Filesystem, Directory } = await fs();
       await Filesystem.deleteFile({ path, directory: Directory.Data });
+    },
+    async list(dir) {
+      const { Filesystem, Directory } = await fs();
+      try { return (await Filesystem.readdir({ path: dir, directory: Directory.Data })).files.map((f) => f.name); }
+      catch { return []; } // no folder yet
     }
   };
 }
@@ -89,4 +94,55 @@ async function removeFile(row) {
   try { await io.remove(row.file_path); } catch { /* already gone */ }
 }
 
-export { initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile };
+// ---- One-time migration of plain Home files (Phase 17 F, Decision 163) ----
+const MIGRATED_META = 'files_migrated';
+const sameBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+
+async function plainRows() {
+  return (await boundDb.query(
+    `SELECT id, file_path FROM entries WHERE file_path IS NOT NULL AND file_key IS NULL AND is_private = 0`)).values || [];
+}
+
+// Per file: write the encrypted copy, read it back and compare, point the entry at it, then remove the plain file.
+// A file that is missing or fails stays plain and is retried at the next start. Once every plain file is converted, files in
+// files/ that no entry points to (left by earlier versions, or by an interruption here) are removed, once.
+// -> { total, migrated, failed, missing, orphans }
+async function migratePlainFiles({ onProgress } = {}) {
+  const out = { total: 0, migrated: 0, failed: 0, missing: 0, orphans: 0 };
+  const flag = ((await boundDb.query(`SELECT value FROM meta WHERE key = ?`, [MIGRATED_META])).values || [])[0]?.value;
+  if (flag === '1') return out;
+  const rows = await plainRows();
+  out.total = rows.length;
+  let done = 0;
+  for (const row of rows) {
+    onProgress?.({ done, total: rows.length });
+    done++;
+    let plain;
+    try { plain = await io.read(row.file_path); } catch { out.missing++; continue; }
+    let saved = null;
+    try {
+      saved = await need().write(plain);
+      const back = await need().read({ file_path: saved.path, file_key: saved.fileKey });
+      if (!sameBytes(back, plain)) throw new Error('mismatch');
+      await boundDb.run(`UPDATE entries SET file_path = ?, file_key = ? WHERE id = ?`, [saved.path, saved.fileKey, row.id]);
+      out.migrated++;
+    } catch {
+      if (saved) { try { await io.remove(saved.path); } catch { /* nothing written */ } }
+      out.failed++;
+      continue;
+    }
+    try { await io.remove(row.file_path); } catch { /* swept below or at the next start */ }
+  }
+  if (out.failed === 0 && out.missing === 0) {
+    const kept = new Set(((await boundDb.query(`SELECT file_path FROM entries WHERE file_path IS NOT NULL`)).values || []).map((r) => r.file_path));
+    for (const name of await io.list('files')) {
+      const path = `files/${name}`;
+      if (kept.has(path)) continue;
+      try { await io.remove(path); out.orphans++; } catch { /* leave it */ }
+    }
+    await boundDb.run(`INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')`, [MIGRATED_META]);
+  }
+  return out;
+}
+
+export { migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile };
