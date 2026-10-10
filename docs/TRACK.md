@@ -160,3 +160,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-10 | Session 104 (device pass, 3) | none | DP45 and DP46 confirmed: private-repo update check, download and install; rename to Arkly; docs-only commits skip CI |
 | 2026-10-10 | Session 104 (end) | none | DP47 confirmed; Session 104 closed: Phase 17 D, E, F, update check for the private repo, rename to Arkly, docs-only CI skip, lock message fix |
 | 2026-10-10 | Session 105 | Decision 166 | Phase 18 B built: own mark-up and form fill on `pdf-lib` (highlight, text, draw, stamp, undo, new copy or replace, Vault copies encrypted); export checked in Node against pdf.js geometry; roadmap lines for Phase 17 D and E corrected; DP48 added; `vite build` passes; not run through CI or on a device |
+| 2026-10-10 | Session 105 (device pass) | none | DP48 confirmed on device, all checks; Phase 18 B done on device |

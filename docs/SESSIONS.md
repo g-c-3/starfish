@@ -22,9 +22,11 @@ Decisions made: 166.
 
 Verified in the authoring environment: 6 page configurations (rotation 0, 90, 180, 270, rotation with crop box, crop box) against pdf.js viewport conversion: text position and upright, highlight rectangle, stamp text, own mapping equals pdf.js; forms (text, check box, dropdown, radio set and still fillable, unknown field reported); `?` for unsupported characters; password-protected file refused; 2001 marks refused; `vite build` passes (new chunks `pdfmark` 432 kB and `pdfmark-ui` 11 kB, viewer chunk unchanged). Not verified: CI, any device behavior (DP48), the bar over the bottom area, touch drawing next to pinch zoom, saving a large PDF, `saveMarkedPdf` and the Vault path (import Capacitor, not run in Node).
 
-Open: DP48. Then Phase 18 C, Phase 17 open items, haptics and the light-theme pass, each needing approval.
+Device pass: DP48 confirmed, all checks (Mark up, Highlight, Draw, Text, Stamp, Undo, Form, Save new copy, Replace original, Discard, password-protected PDF, Vault, long PDF). No bug reported.
 
-Next session start point: device pass DP48, fix what it finds, then Phase 18 C on approval.
+Open: Phase 18 C, Phase 17 open items, haptics and the light-theme pass, each needing approval.
+
+Next session start point: Phase 18 C on approval (check `pdf-lib` bundle effect and CI first); Phase 17 open items, haptics and the light-theme pass also need approval.
 
 ---
 
