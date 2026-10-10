@@ -36,9 +36,14 @@ Update check for the private repo (Decision 164), on "Continue".
 - `scripts/patch-manifest.js`: `REQUEST_INSTALL_PACKAGES`.
 - Verified: update check against stubbed responses (no token, newer, current, 401, 403, 404, 500, no APK); `vite build` passes; token, release list and signed-URL download checked with curl. Not verified: CI, device (DP45), the installer hand-off.
 
-Decisions made (continued): 163, 164.
+Rename to Arkly and CI filter (Decision 165), on "Start".
+- DP44 confirmed on device (14 of 25 files secured on the first launch, app opened, files as before).
+- Code, scripts, workflow, config and android notes renamed; persisted identifiers kept (Decision 165). `src/js/gdrive.js` still finds the earlier Drive folder. `.github/workflows/build-android.yml`: `paths-ignore` for docs-only pushes.
+- Verified: `vite build`, syntax check of the patch scripts, JSON files parse. Not verified: CI, device (DP46).
 
-Next session start point: DP44 and DP45 on a device (Export Now first; DP45 needs a newer build to update to), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
+Decisions made (continued): 163, 164, 165.
+
+Next session start point: DP45 and DP46 on a device (DP45 needs a build newer than the installed one to update to), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
 
 ---
 
@@ -73,7 +78,7 @@ Next session start point: wire `filestore.js` (Phase 17 D with E): `file_key` co
 
 DP42 device pass on the encrypted database, then the backup crash it exposed (Decision 159), approved by the owner with the approach left to the assistant. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 152, 158 and ARCHITECTURE §3, §3c and §4.
 - DP42 checks 1 to 3 confirmed on device: Vault entries, images, PDFs and files open on the encrypted file; a reminder fires with Snooze and Done and repeats; nothing lost after lock and unlock. First Vault unlock after the install looked frozen until the biometric prompt was tapped; later unlocks about half a second. Logged as an observation, cause not identified.
-- DP42 check 4 failed: Export Now froze, then "Dumpzone keeps stopping". Settings showed 19 entries and about 109 MB (Vault not counted).
+- DP42 check 4 failed: Export Now froze, then "Arkly keeps stopping". Settings showed 19 entries and about 109 MB (Vault not counted).
 - `src/js/backup.js`: format 2 writer and reader; restore split into shared helpers (`planEntryTarget`, `wipeCategories`, `insertRestoredEntry`, `restoreTagsAndSettings`); `readBackupHeader` added; format 1 reading and the Drive path untouched.
 - `src/js/crypto.js`: chunk helpers, exports, faster `fromBase64`.
 - `src/js/app.js`: Export Now shows "Backing up N of M"; restore reads the header first, passes the picked file for format 2, shows plain reasons for failures, and refreshes the lists when a restore stops part-way.
@@ -303,13 +308,13 @@ Phase 4 Money capture, step 6 of Decision 124's build order: Vault Money. Fresh 
 - Viewer header actions (Decision 141): Share, Download and Delete in the Money, Reminder, Location and Voice viewers (`app.js`).
 - Bug found in the DP17 lock check (Decision 139): idle, background and screen-off Vault locks left the Vault content showing, with counts and no PIN prompt. `lockVault()` now redraws the gate, empties counts and search, closes a Select files screen with Vault items; the app lock closes the static overlays above the lock screen (`app.js`).
 - Undo (Decision 137): toast with an Undo button after every delete, 6 seconds, restores from trash (`app.js`, `style.css`). Android Back and back gesture run the on-screen Back action (Decision 138, `app.js`).
-- Follow-up (Decision 136): row action buttons glow individually, the row no longer reacts to them (`style.css`, `app.js`); every Download goes to `Documents/Dumpzone` with a ` (n)` suffix on a name clash; Location, Reminder and Money (and legacy Expense) download as readable `.txt`; a Download toast, or a failure toast, from one wrapper (`fileactions.js`, `app.js`).
+- Follow-up (Decision 136): row action buttons glow individually, the row no longer reacts to them (`style.css`, `app.js`); every Download goes to `Documents/Arkly` with a ` (n)` suffix on a name clash; Location, Reminder and Money (and legacy Expense) download as readable `.txt`; a Download toast, or a failure toast, from one wrapper (`fileactions.js`, `app.js`).
 
 Decisions made: 135, 136, 137, 138, 139, 140, 141.
 
 Verified in the authoring environment: syntax checks, `vite build`, 27 Node checks on `vault.js` (details round trip, unreadable text gives null, invalid and overrunning details refused, ciphertext holds no amount or person, `money_json` NULL, label generic, description encrypted, index details and search by person, category, summary, repayment note and description, corrupt entry still listed, index cleared) and on the Share and Download text. Not run: the Vault UI on a device, real SQLite, backup and restore of a Vault Money entry, CI.
 
-Open: Home Money Share sends the summary only (the Download empty-file gap is closed by Decision 136). A Vault Money Download and Share omit the note, which is not part of the decrypted content. Backups still save to the Documents root, outside `Dumpzone`. Other viewers still show only Edit in the header (Decision 134 open point), Money included. A single repayment cannot be edited in place. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing). DP13 next-day fire and DP17 and DP26 confirmed on device. The device backlog is clear. DP13 confirmed on device; the rest of DP17 still pending. The Undo window is 6 seconds (`UNDO_MS`); left as is. The glow, `:has` rule, Download names, toast and `.txt` bodies are not run on a device; the naming and text bodies were checked in Node, `vite build` passes.
+Open: Home Money Share sends the summary only (the Download empty-file gap is closed by Decision 136). A Vault Money Download and Share omit the note, which is not part of the decrypted content. Backups still save to the Documents root, outside `Arkly`. Other viewers still show only Edit in the header (Decision 134 open point), Money included. A single repayment cannot be edited in place. After a restore the dark-mode theme is not re-applied until relaunch (pre-existing). DP13 next-day fire and DP17 and DP26 confirmed on device. The device backlog is clear. DP13 confirmed on device; the rest of DP17 still pending. The Undo window is 6 seconds (`UNDO_MS`); left as is. The glow, `:has` rule, Download names, toast and `.txt` bodies are not run on a device; the naming and text bodies were checked in Node, `vite build` passes.
 
 Next session start point: Vault Location, or Phase 16 remaining items. DP27 confirmed on device; the device backlog is clear.
 
@@ -421,7 +426,7 @@ Decisions made: 118, 119, 120, 121, 122, 123, 124, 125.
 
 Verified in the authoring environment: syntax checks, `npm install`, `vite build`, extension-to-type lookup and badge rendering (case, dot prefix, four-character cap, empty, escaping) in Node. PDF: fit scale, pixel budget, page-at-scroll, zoom steps, base64 and error messages in Node; the bundled pdf.js parsed a two-page test PDF (page count, page sizes, text, bad input) in Node; `vite build` emitted the worker (about 1.36 MB) and viewer (about 380 KB) chunks. Password open: tested in Node against a real encrypted PDF (right password, wrong then right, give up, a throwing callback, an unprotected file never asks, garbage still errors); the prompt screen itself is not run on a device. Drawing onto a canvas was not run here: not run through CI, not run on a device. Multi-select: a simulated page test covered tap-opens, long press starts, the click after a long press is swallowed, taps toggle, row actions are ignored, movement cancels, Select all, bulk delete ids, exit on finish, exit on deselecting the last item, cancel, and a stale long press not eating the next tap. Nav alignment is a CSS change measured from your screenshots (Back circle 44 px up against 32 px, at 1.5 pixel density); not seen on a device. Not run through CI, not run on a device. The plugin's native code and file provider were read from the published package, not compiled here.
 
-Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on; tap a row and the matching app opens at once (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Dumpzone and open the next file: no stale copy opens. Search for a file name and open it.
+Device checks (DP14): Home, Files folder: the row icon reads PDF, DOCX and so on; tap a row and the matching app opens at once (try a text file and a document). A file with no extension: the app list appears. A file type with no app: a plain message. Vault: same, then confirm the Vault locks per its settings. Return to Arkly and open the next file: no stale copy opens. Search for a file name and open it.
 
 Open: DP13 next-day fire. PDF entries still show the "coming later" toast. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
@@ -461,7 +466,7 @@ Decisions made: 106, 107, 108, 109.
 
 Verified in the authoring environment: syntax checks, `vite build`, gesture, search and occurrence logic against real SQLite and a scratch DOM, `javac` syntax pass on the receiver. Device-confirmed: everything listed as passed above.
 
-Open: the Device pass backlog (ROADMAP, DP1 to DP13), including the day-after fire of a daily repeat and weekly and monthly repeats. The Android picker app "Photos and videos" crashes if a screenshot is taken while it is open; it is the system app, not Dumpzone. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
+Open: the Device pass backlog (ROADMAP, DP1 to DP13), including the day-after fire of a daily repeat and weekly and monthly repeats. The Android picker app "Photos and videos" crashes if a screenshot is taken while it is open; it is the system app, not Arkly. Lock and power buttons still sit behind overlays. Picked audio files have no player. Battery-optimisation prompt and "X scheduled" indicator not built.
 
 Next session start point: run the Device pass backlog (ROADMAP DP1 to DP13) one check at a time, as one question per check, before any new work. Then Phase 16 G (open Files with a phone app) or H (PDF viewer); both choices still open. Money capture shape still to be given.
 
@@ -581,7 +586,7 @@ Decisions made: 101.
 
 Verified: `node --check`, patch script run against a sample manifest (inserts both, second run is a no-op), plugin source read for the exact-alarm branch. Not run through CI or on device; the exact delivery was not exercised.
 
-Device checks: install the new build, set a reminder 2 minutes ahead, close the app from recents, turn the screen off; the banner appears at the set minute. Repeat after the phone has sat idle for 30+ minutes. If it is still late, set Dumpzone to unrestricted battery use and allow autostart in the phone's app settings, then retest, and report phone make and Android version.
+Device checks: install the new build, set a reminder 2 minutes ahead, close the app from recents, turn the screen off; the banner appears at the set minute. Repeat after the phone has sat idle for 30+ minutes. If it is still late, set Arkly to unrestricted battery use and allow autostart in the phone's app settings, then retest, and report phone make and Android version.
 
 Open: phone-maker battery limits (battery-optimisation prompt not built). Repeating reminders unverified. Notification small icon drawable. Play distribution: both exact-alarm permissions are restricted there.
 
@@ -659,7 +664,7 @@ Decisions made: 96.
 
 Verified: `node --check`, `vite build`. Not run through CI or on device; the channel migration and the banner look were not exercised.
 
-Device checks: install over the existing app, set a reminder 2 minutes ahead, leave the app; a banner with the default sound should appear. Check Settings, Apps, Dumpzone, Notifications: only "Reminders" listed, set to pop on screen. An old reminder still upcoming before the update should still fire.
+Device checks: install over the existing app, set a reminder 2 minutes ahead, leave the app; a banner with the default sound should appear. Check Settings, Apps, Arkly, Notifications: only "Reminders" listed, set to pop on screen. An old reminder still upcoming before the update should still fire.
 
 Open (needs approval): exact timing via `USE_EXACT_ALARM` in `patch-manifest.js`. Same plain banner, no alarm screen or sound; only the time becomes reliable. Reverses the "inexact" part of Decision 3.
 Open: battery-optimisation prompt and "X scheduled" indicator (documented, not built).
@@ -1095,7 +1100,7 @@ Screen-off needed real thought: Android pauses the Activity identically for "scr
 "switched to another app" — `appStateChange` genuinely cannot distinguish them, this isn't a JS gap
 to work around. `Intent.ACTION_SCREEN_OFF` is the actual distinct signal, but it only reaches a
 receiver registered in code, not the manifest. Added a `BroadcastReceiver` in `MainActivity` that
-dispatches a plain `dumpzone-screen-off` DOM event into the WebView via `evaluateJavascript()` —
+dispatches a plain `arkly-screen-off` DOM event into the WebView via `evaluateJavascript()` —
 deliberately not a full Capacitor plugin, which would need its own Gradle module and `cap sync`
 discovery, more untestable-here moving parts than this narrow signal needs. New
 `scripts/patch-screenlock.js` applies it, same idempotent-CI-script pattern as `patch-manifest.js`/
@@ -1278,7 +1283,7 @@ defaultLabel)` (app.js), built the same way as the already-established `promptFo
 labels while tags stays plain — consistency over a one-off improvement, and real chip UI is still
 Phase 4's job either way. Wired to both existing voice-capture label prompts (main + vault capture
 bars) — the only two places in the app today where a label is actually typed by hand rather than
-auto-derived from the text or filename. Also exposed `listLabelHistory` on `window.Dumpzone`,
+auto-derived from the text or filename. Also exposed `listLabelHistory` on `window.Arkly`,
 matching `listAllTags`'s existing exposure.
 
 No privacy work needed: `insertEntry()`'s existing `is_private` guard (Decision 40) already keeps
@@ -2238,7 +2243,7 @@ design — the guard means that's fine to defer).
 **Session 20**
 
 Third device test — no longer a blank screen (confirms Session 19's Vite fix actually worked), but
-a native "Dumpzone keeps stopping" crash instead. This is a different failure class entirely: JS
+a native "Arkly keeps stopping" crash instead. This is a different failure class entirely: JS
 module loading now succeeds, and something is throwing at the native Android layer.
 
 **No confirmed root cause this session — being explicit about that rather than shipping another
@@ -2328,11 +2333,11 @@ background color. Fixed: import `CapacitorSQLite`/`SQLiteConnection` directly fr
 `@capacitor-community/sqlite` (already a real dependency) instead of reading a global.
 
 Audited for the same bug shape before handing this back, rather than fixing only the one reported
-symptom: found a second, separate bug of the identical class. Every `window.Dumpzone.X` function is
+symptom: found a second, separate bug of the identical class. Every `window.Arkly.X` function is
 nested under that object, but several button handlers (Share/Download/Download-for-append/Edit,
 restore-from-trash, permanently-delete) called bare `window.X()` — none of which exist at that path.
 These would have thrown the moment anyone clicked past the (now-fixed) blank screen. Fixed all six
-call sites to go through `window.Dumpzone.X`.
+call sites to go through `window.Arkly.X`.
 
 Also: `crypto.js` and `intents.js` had never been staged into the working sandbox across any prior
 session (only ever read, never modified, so never copied in) — meaning no session's syntax checks or

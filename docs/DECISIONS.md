@@ -296,7 +296,7 @@ them resolvable in a real browser engine. The fix is entirely in the build pipel
 ---
 
 **47. `gdrive.js` never calls `GoogleAuth.signIn()` until `GOOGLE_DRIVE_CONFIGURED` is manually
-flipped to `true`.** Root cause of the actual "Dumpzone keeps stopping" crash, confirmed by a real
+flipped to `true`.** Root cause of the actual "Arkly keeps stopping" crash, confirmed by a real
 device crash log (Session 21) — not the SQLite/bundling issues from Sessions 18–19, which were both
 real and correctly fixed. The plugin's native `signIn()` method has no null-check on its internal
 `GoogleSignInClient` before calling it; with no client ID configured, that's a guaranteed uncaught
@@ -809,7 +809,7 @@ Requested directly. Three changes, all UI-only — no schema, no credential, no 
 3. **Power button:** a single `#power-close-btn` element, fixed top-right, living directly under
    `<body>` rather than inside any `.screen` div — so it's present regardless of which screen
    `showScreen()` currently shows, without duplicating it into first-run/lock/main/vault/ad-gate
-   individually. Confirms (`confirm('Close Dumpzone?')`) before acting, since this is a hard process
+   individually. Confirms (`confirm('Close Arkly?')`) before acting, since this is a hard process
    kill, not the existing lock-on-background behavior (Decision 45) — that's unaffected and still
    covers what the person sees on next open regardless of whether they used this button or the OS's
    own back/recents gesture. Calls `@capacitor/app`'s `App.exitApp()` (already a project dependency,
@@ -854,7 +854,7 @@ Requested directly, all four in one session:
    background, `stroke="currentColor"`, button `color: var(--danger)`. Reads correctly in both
    light and dark mode without a separate dark-mode override, since `--danger` (unlike `--bg`/`--fg`/
    `--card-bg`) is the same red in both themes already — nothing new needed there.
-3. **Confirmation removed:** the `confirm('Close Dumpzone?')` gate is gone — tapping the button now
+3. **Confirmation removed:** the `confirm('Close Arkly?')` gate is gone — tapping the button now
    calls `exitApp()` immediately (still guarded by the same `Capacitor.isNativePlatform()` check as
    before, for the browser-preview case). Removed on request; flagged as the accepted tradeoff — a
    mistaken tap now closes the app with no chance to cancel, same as a mistaken tap of the device's
@@ -1091,7 +1091,7 @@ Only wired to voice capture's label prompt (both the main and vault capture bars
 call sites) — the one place in the app today where a label is actually free-typed by hand. Note
 labels come from the text itself (`text.slice(0, 40)`), and file/image/pdf/generic-file labels come
 from the picked file's name — neither has a free-text prompt to attach a hint to, so neither was
-touched. Also exposed `listLabelHistory` on `window.Dumpzone`, matching `listAllTags`'s existing
+touched. Also exposed `listLabelHistory` on `window.Arkly`, matching `listAllTags`'s existing
 exposure, in case a future capture screen wants to read suggestions before opening a prompt rather
 than only inside one.
 
@@ -1248,7 +1248,7 @@ identically whether the screen turned off or the person switched to another app 
 can't tell them apart, full stop. `Intent.ACTION_SCREEN_OFF` is a separate, system-wide broadcast that
 only fires on an actual screen-off, but it's one of the broadcasts Android has never allowed to be
 declared in the manifest — only a receiver registered in code can catch it. Went with a `MainActivity`
-`BroadcastReceiver` dispatching a plain `dumpzone-screen-off` DOM event into the WebView via
+`BroadcastReceiver` dispatching a plain `arkly-screen-off` DOM event into the WebView via
 `evaluateJavascript()`, rather than a full Capacitor plugin — a real plugin needs its own Gradle
 module, manifest entry, and `cap sync` discovery, a lot of untestable-here moving parts for one narrow
 signal. `src/js/app.js` listens with an ordinary `window.addEventListener()`, no Capacitor plugin API
@@ -1539,7 +1539,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `openLocation()` on the shared `openViewer()` shell. Main entries only.
 - Coordinates shown as degrees with hemisphere letters, plus decimal values to six places.
 - Plot: inline SVG on a 30° latitude/longitude grid, x = longitude + 180, y = 90 − latitude, pin clamped 6 units inside the frame. No map tiles or coastline data, so nothing is fetched and the single-network-call rule holds.
-- Open in Maps: `geo:lat,lng?q=lat,lng(label)` through `window.location.assign`, as in Decision 77. Dumpzone makes no request; the phone's maps app does whatever it does. Leaving the app triggers the normal background lock.
+- Open in Maps: `geo:lat,lng?q=lat,lng(label)` through `window.location.assign`, as in Decision 77. Arkly makes no request; the phone's maps app does whatever it does. Leaving the app triggers the normal background lock.
 - Copy: `navigator.clipboard`, no plugin added.
 - No stored coordinates: notice only, no actions.
 
@@ -1583,14 +1583,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The app opening is the plugin: `@capacitor/local-notifications` 6.x builds every action button with `PendingIntent.getActivity`, so Snooze and Done always launch the app (to the lock screen if locked). The handler runs from the database and needs no unlock. Avoiding the launch needs a native broadcast receiver; not built.
 - The grey row was correct under Decision 92 (a one-off whose time has passed is "fired") but misleading after a snooze. New status `snoozed`: `snoozed_until` (existing column, previously unused) set to now + 10 minutes by the Snooze action.
 - A snoozed reminder is active: not greyed, meta reads "Snoozed until <time>", the viewer shows a Snoozed pill and "Mark done". After the snooze time it returns to the plain rule (one-off: fired; repeating: upcoming). Done and a new time both clear `snoozed_until`.
-- A Snooze or Done from a notification while the app is open redraws the list through the `dumpzone-reminders-changed` event.
+- A Snooze or Done from a notification while the app is open redraws the list through the `arkly-reminders-changed` event.
 - The snooze notification itself uses `allowWhileIdle` (Decision 97).
 
 ---
 
 **100. Notification buttons send the app back after acting.** Follows Decision 99.
 - Device result: Snooze 10 min fires its second notification (Decisions 96 and 97 build). Done also opens the app, same plugin cause as Snooze.
-- After a Snooze or Done is handled, the app calls `App.minimizeApp()` when that button launched it, so the person returns to the launcher or previous app instead of staying in Dumpzone. Backgrounding locks the app as usual.
+- After a Snooze or Done is handled, the app calls `App.minimizeApp()` when that button launched it, so the person returns to the launcher or previous app instead of staying in Arkly. Backgrounding locks the app as usual.
 - Launch detection: the action arrives within 6 seconds of the app last coming to the foreground (`lastResumeAt`, set at load and on every resume). A button tapped from the shade over an app already in use does not minimise.
 - Limits: the app still appears briefly, since the launch itself cannot be prevented without a native receiver. The 6-second window is a heuristic; a cold start slower than that leaves the app open.
 
@@ -1677,7 +1677,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **111. Restore refreshes the Vault index and the lists.**
 - Cause: the Vault list reads an in-memory index built at unlock (Decision 39); restore never rebuilt it, so restored Vault entries stayed hidden until a relock.
-- Fix: after a successful restore, `buildVaultIndex` runs if the Vault is unlocked, then a `dumpzone-data-restored` event redraws Home counts and folder and the Vault lists. A locked Vault needs nothing: unlock builds the index fresh.
+- Fix: after a successful restore, `buildVaultIndex` runs if the Vault is unlocked, then a `arkly-data-restored` event redraws Home counts and folder and the Vault lists. A locked Vault needs nothing: unlock builds the index fresh.
 
 **112. Append restore does not treat trashed entries as duplicates.** Refines Decision 7.
 - Cause: the exact-UUID and same-label checks read every row, so an entry sitting in Trash made its restored copy skip, or take a "(Restored)" suffix.
@@ -1716,7 +1716,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause: Files rows had no viewer; tapping showed a "coming later" toast.
 - Rule: tapping a Files row opens a detail view (name, type and size, description, tags, saved time) with an Open with app button. The button hands the file to the phone's matching app through `@capacitor-community/file-opener` 6.x (the 7.x and 8.x lines need a newer Capacitor core). Unknown or missing extension offers every app that accepts a file. No matching app, or a missing file, shows a plain message.
 - Home files: opened from their stored path; no copy is made.
-- Vault files: decrypted into memory, written to `cache/open/<id>.<ext>`, then handed off. The copy is outside the Vault's encryption from that moment, the same boundary as Share and Download. It is removed on app launch, on resume and before the next open, so it never outlives the person's return to Dumpzone.
+- Vault files: decrypted into memory, written to `cache/open/<id>.<ext>`, then handed off. The copy is outside the Vault's encryption from that moment, the same boundary as Share and Download. It is removed on app launch, on resume and before the next open, so it never outlives the person's return to Arkly.
 - Not removed on viewer close or on lock: leaving the app locks it (Decision 93) and would delete the file while the other app is still reading it.
 - Lock behaviour: opening another app is a background event and locks as the person's lock settings say, the same as Open in Maps. No picker exemption is used.
 - No new network call, permission or manifest change: the plugin brings its own file provider for app data and cache.
@@ -1850,9 +1850,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **136. Row-button feedback and the download folder.**
 - Each row action button (Edit, Share, Download, Delete) glows on its own, with the Back button's animation; Delete glows in the danger colour. Cause of the old behaviour: `:active` also matches every ancestor, so pressing a button lit the whole row. The row now reacts only to a press outside `.row-actions`.
-- Every Download writes to `Documents/Dumpzone`. A name already there gets ` (2)`, ` (3)` and so on; an earlier copy is never overwritten. Backup files and Extract to device storage keep their own paths: restore reads backups from the Documents root.
+- Every Download writes to `Documents/Arkly`. A name already there gets ` (2)`, ` (3)` and so on; an earlier copy is never overwritten. Backup files and Extract to device storage keep their own paths: restore reads backups from the Documents root.
 - Location, Reminder and Money (and legacy Expense rows) download as a readable `.txt`. Location: name, coordinates, map link, saved time, note. Reminder: name, time, repeat, status, note. Money: summary, date, method, due, returned, remaining, repayments, note.
-- Download shows `Downloaded to Documents/Dumpzone/<name>`; a failure shows `Could not download: <reason>`. The message comes from one wrapper, so every Download entry point shows it.
+- Download shows `Downloaded to Documents/Arkly/<name>`; a failure shows `Could not download: <reason>`. The message comes from one wrapper, so every Download entry point shows it.
 
 **137. Undo after delete.** Every Delete (row button, image viewer, Select files, multi-select, Clear items older than 30 days) shows `Moved to trash` or `N moved to trash` with an Undo button for 6 seconds.
 - Undo is a restore from the 30-day trash (`restoreFromTrash`), so a deleted reminder goes back on the schedule. The Vault index is rebuilt once per batch.
@@ -1872,7 +1872,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **140. Vault Reminder.**
 - Capture: Vault, Reminder, New opens one Save dialog (name, note, when, repeat, tags), as Home does. The name defaults to `Reminder <time>`.
-- Notification and lock screen: title `Dumpzone Reminder`, text `Vault Reminder`. The name and note are read only inside the Vault. The same text is used for a snooze and for every occurrence of a repeating reminder. Nothing else from the Vault appears in a notification.
+- Notification and lock screen: title `Arkly Reminder`, text `Vault Reminder`. The name and note are read only inside the Vault. The same text is used for a snooze and for every occurrence of a repeating reminder. Nothing else from the Vault appears in a notification.
 - Snooze and Done stay on the notification: they show nothing and need no PIN. A tap on the notification still opens nothing (Decision 92).
 - Storage: type `reminder`, `is_private` 1. `fire_at`, `repeat_rule`, `completed_at` and `snoozed_until` are plaintext columns, because the notification needs them while the app and the Vault are locked. The name is the plaintext label, as for every Vault row; the note is in `encrypted_description`; the body is empty.
 - Rows, viewer, Done, Reopen, Reschedule, Edit, Share, Download, Delete with Undo and restore from trash work as on Home. Share and Download give text (name, time, repeat, status).
@@ -2092,3 +2092,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `REQUEST_INSTALL_PACKAGES` added to `patch-manifest.js`. Android asks the owner once to allow installs from this app. The downloaded APK is purged at launch.
 - Network calls are now the ad unit, the optional Drive backup, Verify link and this tap: the last carries a credential. Token and request details checked from the authoring environment: release list 200, asset API url 302 to a signed URL, native-style download with both headers 206.
 - Risk: token rotation or expiry stops updates until a new one is saved. An APK that carried the token would expose it to anyone holding the APK; it does not.
+
+**165. App renamed to Arkly; CI builds only for code changes.**
+- The user-visible name and everything derived from it changed: app name, notification titles and channel description, biometric prompts, the Documents download folder, the restore extraction folder, the Drive folder name, DOM event names, the global object, the workflow artifact and release title, the package name in `package.json`, and all docs.
+- Kept as they were, because changing them would break upgrades, signing or saved data: package id `com.dumpzone.app` (a new id installs as a different app with no data, and the Drive sign-in is tied to it), keystore alias `dumpzone`, database file `dumpzone.db`, notification channel ids `dumpzone_reminders_v2` and `dumpzone_reminders`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`, the `.dz` backup extension and the format magic bytes.
+- Drive: backups go to `Arkly Backups`; an existing `Dumpzone Backups` folder is still found and used, so earlier backups stay listed.
+- Decision 12 and the Session 4 entry keep the earlier name, since they record how the name was chosen and changed.
+- `build-android.yml` has `paths-ignore` for `docs/**`, `**/*.md` and `android-notes/**`. A push builds unless every changed file matches; a push with any code, workflow, script or config change builds. Manual runs (`workflow_dispatch`) are unchanged. Run numbers only advance on builds, so the update check is unaffected.
+- Risk: a docs-only push never produces an APK; a build needs a code change or a manual run.

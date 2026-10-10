@@ -1,11 +1,11 @@
-# Architecture — Dumpzone
+# Architecture — Arkly
 
 A fully offline-first, privacy-first personal capture & action app for Android, built with Capacitor.
 No account or server is required for anything the app does by default. No automated inference, no
 external verification. An entirely optional, opt-in Google Drive backup exists for anyone who wants
 an off-device copy (see §4b) — everything else stays local-only, with or without it.
 
-> Working name history: prototyped as "Actioner" during early design; finalized as **Dumpzone**.
+> Working name history: prototyped as "Actioner" during early design; finalized as **Arkly**.
 
 Last updated: 2026-09-19 (seed session — full design consolidated from pre-repo conversation; no code beyond the scaffold committed yet).
 
@@ -281,7 +281,7 @@ written with them anymore.
 - The same backup file can be re-opened later for a follow-up partial restore of a different category — not a
   one-shot, all-or-nothing use of the file.
 - **"Extract to device storage" (no DB import):** lets the user pull a category's raw files out to a normal
-  folder (e.g. `Downloads/Dumpzone-Restore/`) without touching the app's database — solves the "I already added
+  folder (e.g. `Downloads/Arkly-Restore/`) without touching the app's database — solves the "I already added
   new files in this category, don't want to disturb them, but want to see what's in the backup" case. Each
   extracted file is accompanied by a metadata sidecar (label/tags/timestamp/category) so it can be re-added
   later with minimal effort. (Applies to file-bearing categories only — Tags and App Settings have no raw files
@@ -339,7 +339,7 @@ same "never stored" rule for the passkey. Google's servers only ever see the enc
 as if it were sitting on the device's own storage.
 
 **Auth scope: `drive.file` only, never full Drive access.** This scope grants access only to files
-the app itself creates — Dumpzone can never browse, read, or touch anything else in the person's
+the app itself creates — Arkly can never browse, read, or touch anything else in the person's
 Drive. It's also Google's "non-sensitive" tier, which matters practically: it needs only basic app
 verification, not the restricted-scope security assessment (CASA) that full/readonly Drive access
 would require — the difference between a solo developer being able to ship this at all and not.
@@ -399,7 +399,7 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
 
-Downloads: `Documents/Dumpzone/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
+Downloads: `Documents/Arkly/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 
 Download for append, its per-entry encrypted zip and the "Append files from download" import screen were
 removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
@@ -417,7 +417,7 @@ removed in Decision 83. The only way to move data between devices or installs is
    Share/Download: content leaves the vault's encryption boundary as plaintext from that point on. `copyPrivateNote()`
    still exists as an extra convenience for vault text specifically, not a replacement for Share/Download anymore.
 3. **Download (plain)** — unencrypted raw file only, written using the entry's **label** as the filename (not
-   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Dumpzone). **Works for
+   the internal UUID), meant for genuinely leaving the app (open elsewhere, send outside Arkly). **Works for
    Vault entries too** (Decision 41, pivot) — decrypted into memory first, written out plain only at the moment
    this is explicitly invoked. Built (`downloadPlain()`).
 4. **Delete** — soft-delete into the 30-day trash bin (main or Vault's own — §3b); consistent with
@@ -557,7 +557,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` so the plugin sets an exact alarm that wakes the phone in Doze
   (Decisions 97, 101). Snooze/Done run in a native receiver with no app launch (Decision 102, see the section below);
   Snooze stores `snoozed_until`, giving a `snoozed` status that stays active (Decision 99).
-- **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Dumpzone from
+- **Reminder reliability UX** — on first reminder ever set, explicitly prompt the user to exempt Arkly from
   battery optimization, with a plain explanation ("so Android doesn't delay or kill your reminder"). The
   reminders list/settings screen shows a simple trust indicator — "X reminders scheduled" — so the user has a
   visible signal that scheduling actually worked, rather than silently hoping it fires.
@@ -594,7 +594,7 @@ notification does nothing, so content is never opened ahead of the lock screen. 
 notifications; restoring a pending one reschedules it.
 
 ### Restore refresh and Discard confirmation (Decisions 111, 114)
-After a restore the Vault index is rebuilt when the Vault is unlocked and `dumpzone-data-restored` redraws Home and Vault lists.
+After a restore the Vault index is rebuilt when the Vault is unlocked and `arkly-data-restored` redraws Home and Vault lists.
 In a capture Save dialog (Discard label) Discard and Back ask Yes/No through `askYesNo()` before dropping the take. The text editor (changed text) and the voice recorder (recording or review) do the same on Back (Decision 115); the tap-twice rule is gone.
 
 ### Add location by coordinates (Decisions 116, 117)
@@ -610,7 +610,7 @@ While the fix is pending a sticky "Fetching location…" message shows and the H
 ### Location detail (Decision 93)
 Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG
 grid plot (30° lines, no map data). Open in Maps hands a `geo:` URI to the phone's maps app; Copy writes the decimal
-pair to the clipboard. Dumpzone makes no network request for either. Main entries only; an entry with no coordinates
+pair to the clipboard. Arkly makes no network request for either. Main entries only; an entry with no coordinates
 shows a notice and no actions.
 
 ### Voice recorder and player (Decision 103)
@@ -739,7 +739,7 @@ to resolve a bare specifier like `'@capacitor/filesystem'` without one. `capacit
 
 ## 12. Folder structure
 ```
-dumpzone/
+arkly/
   src/                  -> the REAL source (HTML/JS/CSS) — edit here, not www/
     index.html
     css/style.css
@@ -829,7 +829,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ## Vault index updates (Decision 151)
 - `vault.js` `refreshVaultIndexEntries(db, key, ids)`: for each id, reads the row (`rowid AS rid, *`); a live Vault row is upserted through `indexEntryFromRow`, anything else is removed from the cache. Cache order follows `rid`.
 - Callers (`app.js`): `captureToVault`, `restoreEntry`, `permanentlyDelete`, `deleteVaultEntry`, `runBulkFileAction` (delete), `offerUndo`, Vault Trash Undo, and the text, Money and repayment edit paths.
-- Full `buildVaultIndex` (with `migrateVaultLabels`): unlock, backup restore, `dumpzone-reminders-changed`.
+- Full `buildVaultIndex` (with `migrateVaultLabels`): unlock, backup restore, `arkly-reminders-changed`.
 - The cache is memory only and cleared on lock; backup, restore and credentials are untouched.
 
 ## PDF reading tools (Decision 153)
@@ -841,3 +841,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Tap only. `GET api.github.com/repos/<repo>/releases` with `Authorization: Bearer <token>`; newest release by CI run number.
 - Token: `meta.update_token`, entered in Settings > Updates, never in a backup, the repo, the workflow, the docs or the APK.
 - Download: the asset's API `url` with the token and `Accept: application/octet-stream`, natively into `cache/update/`, then the system installer. Needs `REQUEST_INSTALL_PACKAGES`.
+
+## Name and identifiers (Decision 165)
+- The app is Arkly. Pre-rename identifiers kept: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
+- CI (`build-android.yml`) does not run for pushes that change only `docs/**`, `**/*.md` or `android-notes/**`.
