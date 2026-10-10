@@ -1,6 +1,6 @@
 {
   "appId": "com.dumpzone.app",
-  "appName": "Dumpzone",
+  "appName": "Arkly",
   "webDir": "www",
   "bundledWebRuntime": false,
   "android": {
