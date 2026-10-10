@@ -20,9 +20,11 @@ Decisions made: 162.
 
 Verified in the authoring environment: 17 Node checks on `files.js` (round trips, streaming in odd pieces, empty file, abort, missing file, plain legacy file, key lookup for a row without `file_key`, copy under another name fails, master key stored once); `vite build` passes. Not verified: CI, any device behavior, `backup.js` restore paths (not run in Node: they import Capacitor), `permanentlyDeleteEntry` file removal, Home grid speed without the thumbnail cache.
 
-Open: DP43 on a device. F, the migration of existing plain files (also the orphaned files from earlier versions). Phase 18 B, haptics and the light-theme pass each need approval.
+Device pass: DP43 confirmed, all checks. Export Now, Restore (append: 38 exact duplicates skipped) and Restore (overwrite) with the safety backup (safety backup 24 of 38, replacing current data, 38 added) all finished.
 
-Next session start point: run DP43; fix what it finds; then Phase 17 F (one-time migration of existing data on a successful unlock, ARCHITECTURE §3c backup rules apply).
+Open: F, the migration of existing plain files (also the orphaned files from earlier versions). Phase 18 B, haptics and the light-theme pass each need approval.
+
+Next session start point: Phase 17 F (one-time migration of existing data on a successful unlock, ARCHITECTURE §3c backup rules apply).
 
 ---
 
