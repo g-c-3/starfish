@@ -2101,3 +2101,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Decision 12 and the Session 4 entry keep the earlier name, since they record how the name was chosen and changed.
 - `build-android.yml` has `paths-ignore` for `docs/**`, `**/*.md` and `android-notes/**`. A push builds unless every changed file matches; a push with any code, workflow, script or config change builds. Manual runs (`workflow_dispatch`) are unchanged. Run numbers only advance on builds, so the update check is unaffected.
 - Risk: a docs-only push never produces an APK; a build needs a code change or a manual run.
+
+**166. PDF mark-up and forms (Phase 18 B): own mark-up on `pdf-lib`. Replaces the pdf.js annotation editor named for item B in Decision 152.**
+- Cause: the viewer draws its own pages on the core pdf.js API. The pdf.js annotation editor belongs to pdf.js's own viewer; wiring it into this one uses undocumented parts and cannot be checked without a device.
+- Tools: highlight (3 colours), text (fixed size), draw (3 colours), stamp (7 fixed labels, 3 colours), undo, form fill. Marks are held in memory as fractions of the displayed page, so zoom does not move them. Saving draws them into the page: a saved mark cannot be edited again. Form fields stay fillable in the saved file.
+- Save: a new copy by default (label plus " (marked)", same tags and description). Replace original is a separate choice with a second confirmation: the original is deleted for good and its date is not kept. The new entry is written first, the original deleted after. Home copies go through the per-file encryption of Decision 162; Vault copies are encrypted under the Vault key like any Vault entry.
+- Close and Back with unsaved marks ask Discard (Decision 133). Back closes the form first.
+- Not supported: password-protected PDFs (open for reading only, stated when Mark up is tapped), XFA forms (standard fields only), button and signature fields, editing a saved mark, characters outside the standard Latin set (drawn as `?`, noted after saving).
+- Dependency: `pdf-lib` 1.17.1, pinned. Not a crypto library. It is a separate chunk (432 kB, 179 kB gzip) loaded when Mark up is tapped; opening a PDF does not load it.
+- Privacy: marks, typed text and form values live in memory only and are dropped on Close, on closing the viewer and on a lock. No network, no new permission, nothing stored until Save.
+- Geometry: page rotation, crop box and media box are applied once, on export. Checked in Node against pdf.js viewport conversion for rotations 0, 90, 180, 270 and a crop box (text position and upright, highlight rectangle, stamp).
+- Risks: not run through CI or on a device. A large PDF is held as bytes, a base64 string and the output while saving. Touch drawing, the bar over the bottom area and the form list are untested on a phone.

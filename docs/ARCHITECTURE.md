@@ -845,3 +845,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ## Name and identifiers (Decision 165)
 - The app is Arkly. Pre-rename identifiers kept: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
 - CI (`build-android.yml`) does not run for pushes that change only `docs/**`, `**/*.md` or `android-notes/**`.
+
+## PDF mark-up (Decision 166)
+- `src/js/pdfmark-ui.js` (screen, loaded after the viewer) and `src/js/pdfmark.js` (export on `pdf-lib`, loaded when Mark up is tapped). Shared constants in `pdfmarkconst.js`. The viewer exposes `pageEls()` only.
+- Marks: `{ page, kind, ... }` in fractions of the displayed page, origin top-left. Layers sit over each page box, redrawn from the mark list at the page's current size.
+- Export maps displayed fractions to PDF space with rotation and crop box (`toPdf`), draws into the page content, fills form fields through the form API. Password-protected files are refused before mark-up opens.
+- Save goes through `captureFile` (Home) or `captureToVault`; Replace writes first, then `permanentlyDelete`.
+- Bytes are read again when mark-up starts (pdf.js consumes the viewer's copy) and dropped when it ends.

@@ -4,6 +4,30 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 105**
+
+Phase 18 B (Decision 166). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 152, 153, 165 and the Phase 17 and 18 roadmap lines.
+- Approach changed with the owner's approval: own mark-up on `pdf-lib` instead of the pdf.js annotation editor (Decision 166).
+- `src/js/pdfmarkconst.js` (NEW): colours, stamp labels, sizes, baseline constants.
+- `src/js/pdfmark.js` (NEW): export. Displayed fractions to PDF space with rotation and crop box; highlight, draw, text, stamp drawn into the page; form fields listed and filled; password-protected files refused.
+- `src/js/pdfmark-ui.js` (NEW) and `src/css/pdfmark.css` (NEW): Mark up button, bar (Highlight, Text, Draw, Stamp, colours, Undo, Form, Save, Close), per-page layers, form list, save choice (new copy or replace, replace confirmed twice).
+- `src/js/pdfviewer.js`: `pageEls()`.
+- `src/js/app.js`: `saveMarkedPdf`, mark-up context, mount after the reading tools (a failure to load it leaves the reading tools), Back closes form or mark-up first.
+- `package.json`: `pdf-lib` 1.17.1.
+- Docs: ROADMAP (Phase 17 D and E lines no longer say "until F"; Phase 18 B; DP48), ARCHITECTURE (PDF mark-up), DECISIONS (166).
+
+Bugs fixed: none. Stale docs fixed: Phase 17 D and E lines.
+
+Decisions made: 166.
+
+Verified in the authoring environment: 6 page configurations (rotation 0, 90, 180, 270, rotation with crop box, crop box) against pdf.js viewport conversion: text position and upright, highlight rectangle, stamp text, own mapping equals pdf.js; forms (text, check box, dropdown, radio set and still fillable, unknown field reported); `?` for unsupported characters; password-protected file refused; 2001 marks refused; `vite build` passes (new chunks `pdfmark` 432 kB and `pdfmark-ui` 11 kB, viewer chunk unchanged). Not verified: CI, any device behavior (DP48), the bar over the bottom area, touch drawing next to pinch zoom, saving a large PDF, `saveMarkedPdf` and the Vault path (import Capacitor, not run in Node).
+
+Open: DP48. Then Phase 18 C, Phase 17 open items, haptics and the light-theme pass, each needing approval.
+
+Next session start point: device pass DP48, fix what it finds, then Phase 18 C on approval.
+
+---
+
 **Session 104**
 
 Phase 17 D wiring and E (Decision 162). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144 and 161 and ARCHITECTURE §3c.
