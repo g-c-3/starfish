@@ -4204,7 +4204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return btoa(bin);
   }
-  async function saveMarkedPdf(item, bytes, { replace, isVault }) {
+  async function saveMarkedPdf(item, bytes, { replace, isVault, suffix = 'marked' }) {
     let label, tags = [], description = '';
     if (isVault) {
       if (!privateSessionKey) throw new Error('Vault locked');
@@ -4216,7 +4216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       label = row.label; description = row.description || '';
       tags = ((await db.query(`SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE et.entry_id = ?`, [item.id])).values || []).map((r) => r.name);
     }
-    const newLabel = replace ? label : `${label} (marked)`;
+    const newLabel = replace ? label : `${label} (${suffix})`;
     const args = { type: 'pdf', label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: 'pdf' };
     if (isVault) await captureToVault(args); else await captureFile('pdf', args);
     if (replace) await permanentlyDelete(item.id);
@@ -4266,6 +4266,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
       save: (bytes, opts) => saveMarkedPdf(item, bytes, { ...opts, isVault })
     };
+    // Page tools (Decision 167): same save route, always a new copy, label suffix chosen by the tool.
+    const pagesCtx = { ...markupCtx, save: (bytes, { suffix }) => saveMarkedPdf(item, bytes, { replace: false, isVault, suffix }) };
     viewerScreen.classList.add('pdf-mode');
     await openViewer({
       title: item.label || 'PDF', isVault,
@@ -4315,6 +4317,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const mk = mountMarkup(body, view, markupCtx);
             tools = { closeTop: async () => (await mk.closeTop()) || base.closeTop(), destroy: () => { mk.destroy(); base.destroy(); } };
           } catch { /* reading tools only */ }
+          try { // page tools are an extra too: if they cannot load, the tools so far stay
+            const base = tools;
+            const { mountPageTools } = await import('./pdfpages-ui.js');
+            if (mine !== token || !body.isConnected) return;
+            const pg = mountPageTools(body, view, pagesCtx);
+            tools = { closeTop: async () => (await pg.closeTop()) || base.closeTop(), destroy: () => { pg.destroy(); base.destroy(); } };
+          } catch { /* tools so far only */ }
         } catch (err) {
           if (mine !== token) return;
           scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}<button type="button" class="pdf-fallback">Open with app</button></div>`;
