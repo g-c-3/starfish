@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 104**
+
+Phase 17 D wiring and E (Decision 162). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144 and 161 and ARCHITECTURE §3c.
+- `src/js/files.js` (NEW): binds `filestore.js` to the device.
+- `src/js/db.js`: `entries.file_key` column (create and `ensureColumn`), `insertEntry` takes it, `permanentlyDeleteEntry` removes the file.
+- `src/js/app.js`: `initFiles(db)` after the database opens; `captureFile` saves through `files.js`; image, voice and PDF reads decrypt through it; thumbnail disk cache removed and `cache/thumbs/` purged at launch.
+- `src/js/fileactions.js`: Share, Download and size through `files.js`.
+- `src/js/fileopen.js`: `plainUriFor` (decrypted copy in `cache/open/` for encrypted files).
+- `src/js/backup.js`: reads through `files.js`, drops `file_key` from both formats, restore writes through the streaming writer, overwrite wipe removes files, restored rows carry `file_key`.
+
+Bugs fixed: none. Gaps closed: entry deletion left the file on disk; Home thumbnails were cached as plain JPEGs.
+
+Decisions made: 162.
+
+Verified in the authoring environment: 17 Node checks on `files.js` (round trips, streaming in odd pieces, empty file, abort, missing file, plain legacy file, key lookup for a row without `file_key`, copy under another name fails, master key stored once); `vite build` passes. Not verified: CI, any device behavior, `backup.js` restore paths (not run in Node: they import Capacitor), `permanentlyDeleteEntry` file removal, Home grid speed without the thumbnail cache.
+
+Open: DP43 on a device. F, the migration of existing plain files (also the orphaned files from earlier versions). Phase 18 B, haptics and the light-theme pass each need approval.
+
+Next session start point: run DP43; fix what it finds; then Phase 17 F (one-time migration of existing data on a successful unlock, ARCHITECTURE §3c backup rules apply).
+
+---
+
 **Session 103**
 
 Phase 17 C cleanup (Decision 160). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 144, 158, 159 and ARCHITECTURE §3c.

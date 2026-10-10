@@ -199,7 +199,7 @@ category (was a notes-only `private_notes` category before this pivot) — see b
 per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
-## 3c. Encryption at rest (Decision 144; A, B, C built and confirmed)
+## 3c. Encryption at rest (Decision 144; A, B, C built and confirmed; D, E built, not device-tested)
 
 Goal: nothing readable by reading the database file or the files on disk, and still fast. Key derivation stays PBKDF2 with AES-GCM on Web Crypto; no external crypto library.
 
@@ -208,13 +208,15 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | A | Vault labels encrypted (`encrypted_label`, generic placeholder in `label`) | built, Session 94, Decision 145; confirmed on device |
 | B | Vault index updated per entry, not rebuilt on every change | built (Session 98, Decision 151); confirmed on device |
 | C | Whole-database encryption, FTS5 search kept | built, Session 101, Decision 158; owner's database converted; DP42 confirmed on device, Session 103 |
-| D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; not wired in |
-| E | Backup and restore adapted at every stage | planned |
+| D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; wired, Session 104, Decision 162; not device-tested |
+| E | Backup and restore adapted at every stage | built with D, Session 104, Decision 162; not device-tested |
 | F | One-time migration of existing data on a successful unlock | planned |
 
 Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
 **Backup rules (binding on every stage):** a backup is encrypted only under the backup passkey and never holds a device key; it restores on a different device with the passkey, plus the old Vault PIN for Vault entries (append re-keys); restore re-encrypts for the current device; pre-plan backups stay restorable and are encrypted on the way in; append stays the default and the safety-backup rule is unchanged; a failed restore must not leave a mix of old and new encryption. Check §4 before touching any of this.
+
+**Home files (Decision 162):** stored as `files/<32 hex>` with `entries.file_key`; plain files (`file_key` null) are read as they are until F. Thumbnails are memory only. Other apps get a decrypted copy in `cache/open/`. Deleting an entry removes its file.
 
 Open: PBKDF2 iteration count; minimum passcode length or a short-passcode warning; an optional app-password wrapper around the database key; speed of backup and restore with many files.
 
@@ -749,7 +751,9 @@ dumpzone/
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
       vault.js          -> Private Vault: content bundling, save/load, in-memory search index
       fileactions.js    -> per-file actions: share, plain download, edit, delete + Select files bulk support
-      fileopen.js       -> hand a saved file to the phone's matching app (Vault copies in cache/open/, purged)
+      fileopen.js       -> hand a saved file to the phone's matching app (decrypted copies in cache/open/, purged)
+      filestore.js      -> per-file encryption format (chunked AES-GCM, Decision 161), IO injected
+      files.js          -> binds filestore.js to the device; every Home file read, write, size and removal (Decision 162)
       pdfviewer.js      -> in-app PDF viewer on bundled pdf.js (lazy-loaded; pages drawn on demand)
       pdfmath.js        -> pure helpers for the PDF viewer: fit scale, pixel budget, page-at-scroll, zoom steps
       pdfopen.js        -> opens a PDF, asking for a password only when needed (memory only; testable in Node)

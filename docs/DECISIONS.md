@@ -2066,3 +2066,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Measured in Node on real crypto: 41 MB written in 607 ms, read in 70 ms. Not measured on a device.
 - No new dependency, no permission, no network, no account.
 
+**162. Per-file encryption wired (Phase 17 D, E).** Carries out the call-site plan of Decision 161.
+- `src/js/files.js` (NEW) binds `filestore.js` to the device: `initFiles(db)` (idempotent per database; master key in `meta`), save, streaming writer, read, size, remove. A row without `file_key` is looked up in `entries` before it is read, so a list row never reads an encrypted file as a plain one.
+- New Home captures and restored files are written as `files/<32 hex>` with `entries.file_key`; the type stays in `entries.extension`. Existing files keep `file_key` null and stay plain until F.
+- Image, voice and PDF reads, Share, Download, open with phone app and sizes go through `files.js`. Share and open with phone app of an encrypted file use a decrypted copy in `cache/open/`, purged like the Vault copies.
+- Backup reads decrypted bytes under the backup passkey only and drops `file_key` from the archive; both formats are unchanged. Restore writes through the streaming writer, so files are encrypted for the current device on the way in; an entry restored without file bytes has `file_key` null.
+- The thumbnail disk cache is removed (Home and Vault thumbnails are memory only); `cache/thumbs/` is purged at launch. Cost: a Home grid decodes its images again after a restart. Not measured on a device.
+- Permanent delete, trash purge and the overwrite-restore wipe remove the file with its entry. Files orphaned by earlier versions stay until F.
+- Memory: an encrypted file is decrypted whole when backed up, opened or viewed, one file at a time. Largest tested so far 41 MB.
+- No new dependency, no permission, no network, no account. Credentials unchanged.
