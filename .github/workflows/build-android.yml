@@ -3,6 +3,11 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
+    # A push whose every changed file matches here does not build (private-repo Actions minutes). Any other changed file builds.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'android-notes/**'
   workflow_dispatch: {}
 
 permissions:
@@ -99,7 +104,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dumpzone-release-apk
+          name: arkly-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
 
       # Every push to main gets its own tagged Release with the APK attached — separate from the
@@ -114,5 +119,5 @@ jobs:
         run: |
           gh release create "v${{ env.APP_VERSION_NAME }}" \
             android/app/build/outputs/apk/release/app-release.apk \
-            --title "Dumpzone v${{ env.APP_VERSION_NAME }}" \
+            --title "Arkly v${{ env.APP_VERSION_NAME }}" \
             --notes "Automated build from commit ${{ github.sha }}."
