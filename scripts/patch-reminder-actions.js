@@ -22,7 +22,7 @@ const MANIFEST = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManife
 const PLUGIN_JAVA = path.join(ROOT, 'node_modules', '@capacitor', 'local-notifications', 'android', 'src', 'main',
   'java', 'com', 'capacitorjs', 'plugins', 'localnotifications', 'LocalNotificationManager.java');
 const RECEIVER = 'ReminderActionReceiver';
-const MARKER = 'dumpzone-reminder-action';
+const MARKER = 'arkly-reminder-action';
 
 function fail(msg) { console.error(`patch-reminder-actions.js: ${msg}`); process.exit(1); }
 
@@ -185,10 +185,10 @@ if (plugin.includes(MARKER)) {
                 PendingIntent actionPendingIntent;
                 if ("snooze".equals(notificationAction.getId()) || "done".equals(notificationAction.getId())) {
                     // ${MARKER}: broadcast to the app's receiver, no Activity launch (Decision 102)
-                    Intent dumpzoneIntent = new Intent();
-                    dumpzoneIntent.setComponent(new android.content.ComponentName(context.getPackageName(), "${receiverClass}"));
-                    dumpzoneIntent.putExtras(actionIntent);
-                    actionPendingIntent = PendingIntent.getBroadcast(context, actionRequestCode, dumpzoneIntent, flags);
+                    Intent arklyIntent = new Intent();
+                    arklyIntent.setComponent(new android.content.ComponentName(context.getPackageName(), "${receiverClass}"));
+                    arklyIntent.putExtras(actionIntent);
+                    actionPendingIntent = PendingIntent.getBroadcast(context, actionRequestCode, arklyIntent, flags);
                 } else {
                     actionPendingIntent = PendingIntent.getActivity(context, actionRequestCode, actionIntent, flags);
                 }`;

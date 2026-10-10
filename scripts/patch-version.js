@@ -11,7 +11,7 @@
 // versionCode to increase for the package manager to treat an install as an upgrade rather than
 // a conflict). versionName combines package.json's "version" (bump that by hand for real
 // releases — it's the human-meaningful part) with the same run number, so a build installed on a
-// device can always be identified from Settings > Apps > Dumpzone without checking CI logs.
+// device can always be identified from Settings > Apps > Arkly without checking CI logs.
 //
 // Not idempotent by design, unlike patch-manifest.js — it's meant to overwrite the version every
 // run, not skip once already set.

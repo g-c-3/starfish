@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Patches MainActivity.java to dispatch a 'dumpzone-screen-off' DOM event into the WebView
+// Patches MainActivity.java to dispatch a 'arkly-screen-off' DOM event into the WebView
 // whenever Android's screen turns off (Intent.ACTION_SCREEN_OFF).
 //
 // Why this exists: the "lock when the phone screen locks" toggle (Decision 74) needs a signal
@@ -13,7 +13,7 @@
 // Deliberately not a full Capacitor plugin: a plugin needs its own Gradle module, registration,
 // and `cap sync` discovery — much more moving parts than this one narrow signal needs. Instead,
 // MainActivity dispatches a plain DOM event straight into the WebView via evaluateJavascript();
-// src/js/app.js listens for it with a normal window.addEventListener('dumpzone-screen-off', ...).
+// src/js/app.js listens for it with a normal window.addEventListener('arkly-screen-off', ...).
 //
 // Why a script, not a checked-in file: android/ is not committed (see patch-manifest.js's own
 // comment for why) — CI runs `npx cap add android` fresh every time. Idempotent, and handles
@@ -41,7 +41,7 @@ function findMainActivity(dir) {
 }
 
 const JAVA_ROOT = path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'java');
-const MARKER = 'dumpzone-screen-off'; // also the DOM event name itself — one string, one meaning
+const MARKER = 'arkly-screen-off'; // also the DOM event name itself — one string, one meaning
 
 if (!fs.existsSync(JAVA_ROOT)) {
   console.error(`patch-screenlock.js: ${JAVA_ROOT} not found — did "cap add android" run first?`);
@@ -70,14 +70,14 @@ const IMPORTS = [
 ].join('\n');
 
 const FIELD =
-  '    private final BroadcastReceiver dumpzoneScreenOffReceiver = new BroadcastReceiver() {\n' +
+  '    private final BroadcastReceiver arklyScreenOffReceiver = new BroadcastReceiver() {\n' +
   '        @Override\n' +
   '        public void onReceive(Context context, Intent intent) {\n' +
-  '            // dumpzone-screen-off (patch-screenlock.js) — posted to the WebView\'s own thread,\n' +
+  '            // arkly-screen-off (patch-screenlock.js) — posted to the WebView\'s own thread,\n' +
   '            // matching how Capacitor plugins dispatch their own JS callbacks.\n' +
   '            getBridge().getWebView().post(() ->\n' +
   '                getBridge().getWebView().evaluateJavascript(\n' +
-  '                    "window.dispatchEvent(new Event(\'dumpzone-screen-off\'))", null));\n' +
+  '                    "window.dispatchEvent(new Event(\'arkly-screen-off\'))", null));\n' +
   '        }\n' +
   '    };\n';
 
@@ -88,12 +88,12 @@ const REGISTER_LINE =
   // OS can ever send it — so it's exempt; the plain two-arg registerReceiver() is correct as-is.
   // Flagged here explicitly since omitting the newer overload could otherwise look like an
   // oversight rather than a deliberate, documented exemption.
-  '        registerReceiver(dumpzoneScreenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));\n';
+  '        registerReceiver(arklyScreenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));\n';
 const UNREGISTER_METHOD =
   '\n' +
   '    @Override\n' +
   '    public void onDestroy() {\n' +
-  '        unregisterReceiver(dumpzoneScreenOffReceiver);\n' +
+  '        unregisterReceiver(arklyScreenOffReceiver);\n' +
   '        super.onDestroy();\n' +
   '    }\n';
 

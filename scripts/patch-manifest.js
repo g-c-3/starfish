@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Patches android/app/src/main/AndroidManifest.xml with the permissions Dumpzone needs.
+// Patches android/app/src/main/AndroidManifest.xml with the permissions Arkly needs.
 //
 // Why this exists: android/ is not committed to the repo (build-android.yml runs
 // `npx cap add android` fresh whenever the folder is missing — currently every run).
