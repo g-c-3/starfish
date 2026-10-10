@@ -2075,3 +2075,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Permanent delete, trash purge and the overwrite-restore wipe remove the file with its entry. Files orphaned by earlier versions stay until F.
 - Memory: an encrypted file is decrypted whole when backed up, opened or viewed, one file at a time. Largest tested so far 41 MB.
 - No new dependency, no permission, no network, no account. Credentials unchanged.
+
+**163. Migration of plain Home files (Phase 17 F).** Runs once, at start, after the database opens and before the lock screen can be passed.
+- Rows with a file, `file_key` null and `is_private` 0 are converted one at a time: write the encrypted copy, read it back and compare every byte, point the entry at it, remove the plain file. `updated_at` is not changed.
+- A file that is missing, or fails any step, stays as it was (the partial encrypted copy is removed) and is retried at the next start. A failure never blocks startup.
+- Only when every file converted and none was missing: files in `files/` that no entry points to (left by earlier versions of deletion, or by an interruption between the row update and the removal) are removed, and `meta.files_migrated` is set. Later starts skip all of it. Nothing creates plain files afterwards: capture and restore both write encrypted.
+- The notice is a sticky "Securing files: N of M"; a failure shows a count.
+- Not covered: thumbnails (no longer on disk, Decision 162); Vault files (already inside `encrypted_body`).
+- Risk: the conversion rewrites the owner's real files in place. Export Now first.

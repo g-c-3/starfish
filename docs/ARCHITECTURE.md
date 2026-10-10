@@ -210,11 +210,13 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | C | Whole-database encryption, FTS5 search kept | built, Session 101, Decision 158; owner's database converted; DP42 confirmed on device, Session 103 |
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; wired, Session 104, Decision 162; not device-tested |
 | E | Backup and restore adapted at every stage | built with D, Session 104, Decision 162; not device-tested |
-| F | One-time migration of existing data on a successful unlock | planned |
+| F | One-time migration of existing plain Home files | built, Session 104, Decision 163; runs at start; not device-tested |
 
 Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
 **Backup rules (binding on every stage):** a backup is encrypted only under the backup passkey and never holds a device key; it restores on a different device with the passkey, plus the old Vault PIN for Vault entries (append re-keys); restore re-encrypts for the current device; pre-plan backups stay restorable and are encrypted on the way in; append stays the default and the safety-backup rule is unchanged; a failed restore must not leave a mix of old and new encryption. Check §4 before touching any of this.
+
+**Migration (Decision 163):** plain Home files are converted once at start (write, read back and compare, repoint, remove); orphans in `files/` are swept once after a clean run.
 
 **Home files (Decision 162):** stored as `files/<32 hex>` with `entries.file_key`; plain files (`file_key` null) are read as they are until F. Thumbnails are memory only. Other apps get a decrypted copy in `cache/open/`. Deleting an entry removes its file.
 

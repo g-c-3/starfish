@@ -24,7 +24,14 @@ Device pass: DP43 confirmed, all checks. Export Now, Restore (append: 38 exact d
 
 Open: F, the migration of existing plain files (also the orphaned files from earlier versions). Phase 18 B, haptics and the light-theme pass each need approval.
 
-Next session start point: Phase 17 F (one-time migration of existing data on a successful unlock, ARCHITECTURE §3c backup rules apply).
+Phase 17 F (Decision 163), started on the owner's "Start" in the same session after DP43 closed.
+- `src/js/files.js`: `migratePlainFiles`, device `list`.
+- `src/js/app.js`: runs it after the database opens, with a "Securing files" notice.
+- Verified: 8 Node checks (3 files incl. empty, orphan sweep, missing source, write failure rollback, second run no-op) and the 17 earlier ones; `vite build` passes. Not verified: CI, device (DP44).
+
+Decisions made (continued): 163.
+
+Next session start point: DP44 on a device (Export Now first), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
 
 ---
 
