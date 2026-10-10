@@ -82,7 +82,7 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 
 function showScreen(id, { tab } = {}) {
   exitSelection();
-  if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); } // an open editor/dialog must never sit above the lock screen; no typed password may remain
+  if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
   if (id === 'lock-screen') closeTrash();
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
@@ -2297,17 +2297,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       vaultPinHint: document.getElementById('setup-vault-pin-hint').value
     });
   });
+  // The status line shows only the latest result: it clears when the lock screen appears (showScreen), when typing
+  // starts, and when a new attempt begins, so an old "Wrong password." never sits under a fresh lock.
+  const lockStatus = document.getElementById('password-hint');
+  document.getElementById('password-input').addEventListener('input', () => { lockStatus.textContent = ''; });
   document.getElementById('unlock-btn').addEventListener('click', async () => {
+    lockStatus.textContent = '';
     const result = await window.attemptUnlock(document.getElementById('password-input').value);
     if (result.success) clearSecretInputs(['password-input']);
-    else document.getElementById('password-hint').textContent = 'Wrong password.';
+    else lockStatus.textContent = 'Wrong password.';
   });
   const bioUnlockBtn = document.getElementById('biometric-unlock-btn');
   if (bioUnlockBtn) {
     bioUnlockBtn.classList.toggle('hidden', !window.biometricUnlockAvailable);
     bioUnlockBtn.addEventListener('click', async () => {
+      lockStatus.textContent = '';
       const result = await window.tryBiometricUnlockApp();
-      if (!result.success) document.getElementById('password-hint').textContent = 'Biometric unlock failed — enter your password.';
+      if (!result.success) lockStatus.textContent = 'Biometric unlock failed — enter your password.';
     });
   }
 
