@@ -339,6 +339,7 @@ function exitSelection() {
 function backAction() {
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
+  if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
   if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
   if (selection) return exitSelection; // Back leaves selection mode first (Decision 122)
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
@@ -1380,6 +1381,7 @@ function offerUndo(ids, { isVault = false, message = null, after = null } = {}) 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
 let activeText = null;       // { finish, isVault } — the in-app single-field text sheet
+let activeCompose = null;    // { finish, isVault } — the order sheet of Merge PDFs and Make a PDF (Decision 168)
 let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
@@ -1470,6 +1472,7 @@ function dismissOverlays(vaultOnly = false) {
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
   if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
+  if (activeCompose && (!vaultOnly || activeCompose.isVault)) activeCompose.finish(null);
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
   if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
@@ -3526,6 +3529,50 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (action === 'delete' && done) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault, message: msg });
       else toast(msg);
     }
+    // Merge PDFs, or Make a PDF from pictures (Decision 168): the selected items, in an order set on a sheet, become one new PDF.
+    async function runMakePdf() {
+      if (!selection || selection.ids.size === 0) return;
+      const { isVault } = selection;
+      const ids = [...selection.ids];
+      arm();
+      let rows;
+      if (isVault) { if (!privateSessionKey) return; const idx = getVaultIndex() || []; rows = ids.map((id) => idx.find((e) => e.id === id)).filter(Boolean); }
+      else rows = (await Promise.all(ids.map(async (id) => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [id])).values || [])[0]))).filter(Boolean);
+      const types = new Set(rows.map((r) => r.type));
+      const pdfs = types.size === 1 && types.has('pdf'), pics = types.size === 1 && types.has('image');
+      if (!pdfs && !pics) { toast('Select PDFs to merge, or pictures to make a PDF.'); return; }
+      if (pdfs && rows.length < 2) { toast('Select two or more PDFs to merge.'); return; }
+      const compose = await import('./pdfcompose-ui.js');
+      const first = rows[0].label || (pdfs ? 'PDF' : 'Pictures');
+      const res = await compose.askCompose({
+        title: pdfs ? 'Merge PDFs' : 'Make a PDF',
+        text: 'Pages follow this order. The originals stay as they are.',
+        items: rows.map((r) => ({ id: r.id, label: r.label || (pdfs ? 'PDF' : 'Picture') })),
+        name: pdfs ? `${first} (merged)` : (rows.length === 1 ? first : `${first} +${rows.length - 1}`),
+        hooks: { open: (finish) => { activeCompose = { finish, isVault }; updateBackButtonState(); }, close: () => { activeCompose = null; updateBackButtonState(); } }
+      });
+      if (!res) return;
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const ordered = res.ids.map((id) => byId.get(id));
+      toast('Making PDF…', true);
+      try {
+        arm();
+        const bytesOf = async (row) => (isVault ? base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, row.id)).content.fileData) : readStoredBytes(row));
+        const pages = await import('./pdfpages.js');
+        const r = pdfs
+          ? await pages.mergePdfs(ordered.map((row) => () => bytesOf(row)))
+          : await pages.imagesToPdf(ordered.map((row) => async () => ({ bytes: await compose.toJpegBytes(await bytesOf(row)), kind: 'jpg' })));
+        await saveComposedPdf(r.bytes, res.name, isVault);
+        exitSelection();
+        if (isVault) renderVault();
+        else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
+        toast(`Saved as ${res.name} (${r.pages} page${r.pages > 1 ? 's' : ''})`);
+      } catch (err) {
+        const who = err && Number.isInteger(err.index) && ordered[err.index] ? `“${ordered[err.index].label || 'An item'}”` : 'An item';
+        toast(err && err.code === 'encrypted' ? `${who} is password-protected. Remove its password first.` : err && Number.isInteger(err.index) ? `${who} could not be read.` : `Could not make the PDF: ${String((err && err.message) || err)}`);
+      }
+    }
+    document.getElementById('sel-pdf').addEventListener('click', runMakePdf);
     document.getElementById('sel-share').addEventListener('click', () => runSelection('share'));
     document.getElementById('sel-download').addEventListener('click', () => runSelection('download'));
     document.getElementById('sel-delete').addEventListener('click', () => runSelection('delete'));
@@ -4221,6 +4268,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isVault) await captureToVault(args); else await captureFile('pdf', args);
     if (replace) await permanentlyDelete(item.id);
     return newLabel;
+  }
+
+  // Merge and Make a PDF output (Decision 168): always a new entry, no tags or description (the sources may differ).
+  async function saveComposedPdf(bytes, label, isVault) {
+    const args = { type: 'pdf', label, tags: [], description: '', fileData: bytesToBase64(bytes), extension: 'pdf' };
+    if (isVault) { if (!privateSessionKey) throw new Error('Vault locked'); await captureToVault(args); } else await captureFile('pdf', args);
   }
 
   async function openPdf(item, isVault) {

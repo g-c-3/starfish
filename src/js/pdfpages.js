@@ -82,13 +82,17 @@ async function splitPdf(bytes, ranges) {
   return out;
 }
 
-// Whole PDFs, in the order given, as one new PDF. Returns { bytes, pages }.
+// Whole PDFs, in the order given, as one new PDF. Each item is bytes or a function returning bytes (read one at a time, so
+// only one source is held). A failure carries `index`, the item that caused it. Returns { bytes, pages }.
 async function mergePdfs(list) {
   if (!Array.isArray(list) || list.length < 2) throw fail('empty', 'Pick at least two PDFs to merge.');
   const out = await blank();
   let total = 0;
-  for (const bytes of list) {
-    const src = await loadSource(bytes);
+  for (let i = 0; i < list.length; i++) {
+    let src;
+    try {
+      src = await loadSource(typeof list[i] === 'function' ? await list[i]() : list[i]);
+    } catch (err) { throw Object.assign(err, { index: i }); }
     total += src.getPageCount();
     if (total > MAX_PAGES) throw fail('limit', `Too many pages (limit ${MAX_PAGES}).`);
     for (const page of await out.copyPages(src, src.getPageIndices())) out.addPage(page);
@@ -96,20 +100,22 @@ async function mergePdfs(list) {
   return { bytes: await out.save(), pages: total };
 }
 
-// images: [{ bytes, kind: 'jpg' | 'png' }] — one page each, in order. A page is A4 in the image's orientation,
-// the image scaled to fill it. Returns { bytes, pages }.
+// images: [{ bytes, kind: 'jpg' | 'png' }] or functions returning that, one page each, in order. A page is A4 in the image's
+// orientation, the image scaled to fill it. A failure carries `index`. Returns { bytes, pages }.
 async function imagesToPdf(images) {
   if (!Array.isArray(images) || !images.length) throw fail('empty', 'No images given.');
   if (images.length > MAX_IMAGES) throw fail('limit', `Too many images (limit ${MAX_IMAGES}).`);
   const out = await blank();
-  for (const im of images) {
-    const img = im.kind === 'png' ? await out.embedPng(im.bytes) : await out.embedJpg(im.bytes);
-    const landscape = img.width > img.height;
-    const [mw, mh] = landscape ? [A4[1], A4[0]] : A4;
-    const k = Math.min(mw / img.width, mh / img.height);
-    const w = img.width * k, h = img.height * k;
-    const page = out.addPage([w, h]);
-    page.drawImage(img, { x: 0, y: 0, width: w, height: h });
+  for (let i = 0; i < images.length; i++) {
+    try {
+      const im = typeof images[i] === 'function' ? await images[i]() : images[i];
+      const img = im.kind === 'png' ? await out.embedPng(im.bytes) : await out.embedJpg(im.bytes);
+      const landscape = img.width > img.height;
+      const [mw, mh] = landscape ? [A4[1], A4[0]] : A4;
+      const k = Math.min(mw / img.width, mh / img.height);
+      const w = img.width * k, h = img.height * k;
+      out.addPage([w, h]).drawImage(img, { x: 0, y: 0, width: w, height: h });
+    } catch (err) { throw Object.assign(err, { index: i }); }
   }
   return { bytes: await out.save(), pages: images.length };
 }
