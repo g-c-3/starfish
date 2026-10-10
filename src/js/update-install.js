@@ -18,9 +18,12 @@ async function downloadAndInstallUpdate({ assetUrl, token }) {
   if (!token) throw new Error('Add a GitHub access token first.');
   await purgeUpdateDownload();
   const path = `${DIR}/arkly-update.apk`;
+  // downloadFile opens the target directly and ignores `recursive` (plugin 6.0.4), so the folder must exist first.
+  try { await Filesystem.mkdir({ path: DIR, directory: Directory.Cache, recursive: true }); }
+  catch { /* already there */ }
   try {
     await Filesystem.downloadFile({
-      url: assetUrl, path, directory: Directory.Cache, recursive: true,
+      url: assetUrl, path, directory: Directory.Cache,
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' }
     });
   } catch (err) {
