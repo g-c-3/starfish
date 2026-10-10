@@ -148,3 +148,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-10 | Session 103 | Decision 160 | Phase 17 C cleanup built: Encryption test row, Diagnostics group and `encbench.js` removed; vite build passes; not run through CI; commit after DP42 check 5 |
 | 2026-10-10 | Session 103 (device pass) | none | DP42 check 5 confirmed on device: fresh install shows Database encryption On; DP42 closed; Phase 17 C done; Encryption test cleanup cleared to commit |
 | 2026-10-10 | Session 103 (device pass, 2) | none | Format 1 backup append restore confirmed on device; format 2 compatibility with older backups closed |
+| 2026-10-10 | Session 103 (continued) | Decision 161 | Phase 17 D core module built (`filestore.js`: chunked per-file encryption, streaming writer, plain fallback), not wired in; 25 Node checks; vite build passes; not run through CI |

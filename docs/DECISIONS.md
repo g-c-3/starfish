@@ -2054,3 +2054,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - It only ever touched scratch databases. No schema, stored data, credential, backup format or CI change.
 - Committed after DP42 check 5 (fresh install shows Database encryption On), which passed.
 - No new dependency, no permission, no network, no account.
+
+**161. Per-file encryption: format and core module (Phase 17 D).** Implements Decision 144 item D. Module only; nothing calls it yet.
+- File on disk: `files/<32 hex>`, no extension. Header 16 bytes (`DZF1`, 8-byte nonce prefix, chunk size). Then 1 MiB chunks, each AES-GCM under the file key; IV is the prefix plus the chunk index; additional data is the index plus a final-chunk flag. Truncation, extension, reordering and a copy under another name all fail to decrypt.
+- File key: random 256-bit, wrapped under the master key with the stored path as additional data, kept in a new `entries.file_key` column. The type stays in `entries.extension`, inside the encrypted database.
+- Master key: random 256-bit in the `meta` table of the encrypted database. Not derived from the app password, the Vault PIN or the backup passkey; never in a backup. Lost with the database; recovery is a backup restore, as in Decision 158.
+- Files from before this stage have `file_key` null and are read as plain files. Both kinds work side by side until the migration (F).
+- Backup and restore (E): backup reads through the module, so the archive holds file bytes under the backup passkey only and the format does not change. Restore writes through the streaming writer, so files are encrypted for the current device on the way in.
+- Opening in another app and Share of a Home file need plaintext: a decrypted copy goes to the cache folder already used for Vault files and is purged the same way.
+- Open before wiring: the thumbnail cache in the cache folder holds plain JPEGs; encrypt it or stop caching Home thumbnails. Entry deletion leaves the file behind today; deletion must remove the file.
+- Measured in Node on real crypto: 41 MB written in 607 ms, read in 70 ms. Not measured on a device.
+- No new dependency, no permission, no network, no account.
+

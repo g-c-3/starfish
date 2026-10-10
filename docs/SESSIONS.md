@@ -11,19 +11,23 @@ Phase 17 C cleanup (Decision 160). Fresh session; Tier 1 docs read, Tier 2 read 
 - `src/js/encbench.js`: deleted on GitHub (not deliverable as a file).
 - Searched `src/`, `scripts/`, `.github/`, `capacitor.config.json`, `package.json`, `android-notes/` for `encbench`, `enc-bench`, bench, Diagnostics: no other reference. `encbench.js` imported only `@capacitor-community/sqlite` and `SCHEMA_SQL` from `db.js`; nothing imports it.
 
+Phase 17 D started (Decision 161): `src/js/filestore.js` (NEW), not imported by any other file.
+- Chunked AES-GCM files named `files/<32 hex>`, per-file key wrapped under a master key held in the `meta` table, streaming writer, plain-file fallback for files from before this stage.
+- Call sites that must move to it, found by search: `app.js` (`captureFile`, `imageBlobUrl`, voice source, `readStoredBytes`), `fileactions.js` (Share, Download, size), `fileopen.js` (`openStoredFile`), `backup.js` (read, size, restore writes).
+
 Bugs fixed: none.
 
-Decisions made: 160.
+Decisions made: 160, 161.
 
-Verified in the authoring environment: `npm install` and `vite build` pass; no `encbench` or `enc-bench` string in the build output. Not verified: CI, how Settings looks on a device.
+Verified in the authoring environment: `npm install` and `vite build` pass; no `encbench` or `enc-bench` string in the build output. `filestore.js`: 25 Node checks on real Web Crypto (round trips at chunk edges, streaming in odd pieces, plain fallback, no plaintext on disk, unique names, bit flip, truncation, extension, chunk swap, bad header, wrong path, wrong master key, abort, 41 MB). Not verified: CI, how Settings looks on a device, `filestore.js` speed on a device.
 
 Device pass: DP42 check 5 confirmed (fresh install shows Database encryption On); DP42 closed, all checks. Cleanup cleared to commit.
 
 Device pass: an append restore of a format 1 backup (made before Session 102) succeeded; format 1 restore confirmed on device.
 
-Open: Phase 17 D, Phase 18 B, haptics and the light-theme pass each need approval.
+Open: wiring Phase 17 D (with E), then F. Phase 18 B, haptics and the light-theme pass each need approval. Context ran low before the wiring.
 
-Next session start point: Phase 17 D, Phase 18 B, haptics or light-theme tuning (each needs approval).
+Next session start point: wire `filestore.js` (Phase 17 D with E): `file_key` column and `ensureColumn`, the call sites listed above, thumbnail cache, file removal on delete. Then F, the migration of existing files.
 
 ---
 
