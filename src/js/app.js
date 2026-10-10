@@ -18,6 +18,7 @@ import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEnt
 import * as Money from './money.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { checkForUpdate } from './update-check.js';
+import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
@@ -2040,6 +2041,32 @@ async function handleDriveBackupNow() {
   }
 }
 
+// The update token (Decision 164): one value in the encrypted database's meta table. Not in APP_SETTINGS_KEYS, so no
+// backup carries it. Read only on the update taps below.
+const UPDATE_TOKEN_KEY = 'update_token';
+async function getUpdateToken() {
+  const r = await db.query(`SELECT value FROM meta WHERE key = ?`, [UPDATE_TOKEN_KEY]);
+  return (r.values || [])[0]?.value || null;
+}
+
+async function renderUpdateTokenStatus() {
+  document.getElementById('update-token-status').textContent = (await getUpdateToken()) ? 'Token saved on this phone.' : 'No token saved.';
+}
+
+async function handleSaveUpdateToken() {
+  const input = document.getElementById('update-token-input');
+  const value = input.value.trim();
+  if (!value) return;
+  await db.run(`INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)`, [UPDATE_TOKEN_KEY, value]);
+  input.value = '';
+  await renderUpdateTokenStatus();
+}
+
+async function handleClearUpdateToken() {
+  await db.run(`DELETE FROM meta WHERE key = ?`, [UPDATE_TOKEN_KEY]);
+  await renderUpdateTokenStatus();
+}
+
 // Manual only (Decision 72) — runs when "Check for updates" is tapped in Settings, never on app
 // open. Sideloaded APKs can't update themselves, so a match offers a direct download of the new
 // APK (Decision 75) rather than the release page — one tap fewer, straight into the OS download
@@ -2060,7 +2087,7 @@ async function handleCheckForUpdateClick() {
     return;
   }
 
-  const result = await checkForUpdate({ currentVersion });
+  const result = await checkForUpdate({ currentVersion, token: await getUpdateToken() });
   if (result.status === 'up_to_date') {
     statusEl.textContent = `You're up to date — ${result.version}.`;
   } else if (result.status === 'update_available') {
@@ -2069,6 +2096,9 @@ async function handleCheckForUpdateClick() {
     downloadBtn.disabled = false;
   } else {
     const messages = {
+      no_token: 'Save the GitHub access token above first.',
+      token_rejected: 'GitHub refused the token. It may be expired or revoked — save a new one.',
+      no_apk: 'The latest release has no APK attached.',
       offline: 'Offline — connect and try again.',
       network_error: 'Could not reach GitHub — try again later.',
       unparseable_version: 'Could not compare versions.'
@@ -2143,6 +2173,7 @@ window.Dumpzone = {
 document.addEventListener('DOMContentLoaded', async () => {
   await bootstrap();
   purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
+  purgeUpdateDownload(); // the downloaded APK from an earlier update (Decision 164)
   import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than
@@ -2209,10 +2240,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   // the download properly. @capacitor/browser is no longer used anywhere else in this codebase;
   // dropped from package.json.
   document.getElementById('check-update-btn').addEventListener('click', handleCheckForUpdateClick);
-  document.getElementById('update-download-btn').addEventListener('click', (e) => {
-    const url = e.currentTarget.dataset.url;
-    if (url) window.location.assign(url);
+  // The download is native with the token (Decision 164) — a browser hand-off cannot send it, so Decision 77's
+  // window.location.assign() no longer applies to a private repo.
+  document.getElementById('update-download-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const assetUrl = btn.dataset.url;
+    if (!assetUrl) return;
+    const statusEl = document.getElementById('update-check-status');
+    btn.disabled = true;
+    statusEl.textContent = 'Downloading…';
+    try {
+      await downloadAndInstallUpdate({ assetUrl, token: await getUpdateToken() });
+      statusEl.textContent = 'Downloaded. Follow the installer prompt.';
+    } catch (err) {
+      statusEl.textContent = err.message;
+    }
+    btn.disabled = false;
   });
+  document.getElementById('update-token-save-btn').addEventListener('click', handleSaveUpdateToken);
+  document.getElementById('update-token-clear-btn').addEventListener('click', handleClearUpdateToken);
+  renderUpdateTokenStatus();
 
   // Backup & Restore (local) wiring
   renderCategoryCheckboxes('backup-categories', 'backup');

@@ -3,9 +3,9 @@
 // on/off setting from Decision 71 are gone — a check now happens only on that explicit tap, so
 // there's nothing left to gate.
 //
-// Same network call it always was: a GET to GitHub's public REST API for one public repo's recent
-// releases. No auth, no account, no personal data sent beyond what any HTTP request exposes
-// (IP/User-Agent) — now only when tapped, never on app open.
+// One GET to GitHub's REST API for the private repo's recent releases (Decision 164), authenticated with the
+// read-only token the owner saved in Settings. The token goes to api.github.com only, only on this tap. No
+// token saved -> no request is made.
 
 const REPO = 'g-c-3/starfish';
 const FETCH_TIMEOUT_MS = 5000;
@@ -21,14 +21,15 @@ function extractRunNumber(versionOrTag) {
 
 // Returns one of:
 //   { status: 'up_to_date', version }
-//   { status: 'update_available', version, url, downloadUrl }
-//   { status: 'error', reason }  — 'offline' | 'network_error' | 'http_<code>' | 'unparseable_version'
+//   { status: 'update_available', version, downloadUrl }
+//   { status: 'error', reason }  — 'no_token' | 'token_rejected' | 'offline' | 'network_error' | 'http_<code>'
+//                                   | 'unparseable_version' | 'no_apk'
 //
-// downloadUrl is the release's .apk asset link directly (Decision 75) — build-android.yml's
-// "Create GitHub Release" step attaches exactly one file, the signed APK, so this is a straight
-// lookup, not a guess. Falls back to the release page itself only if no .apk asset is found (would
-// mean that CI step changed shape without this being updated to match).
-async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
+// downloadUrl is the .apk asset's API url, not browser_download_url: on a private repo the browser link needs a
+// browser session, while the API url downloads with the token and Accept: application/octet-stream
+// (update-install.js). build-android.yml attaches exactly one file, the signed APK.
+async function checkForUpdate({ currentVersion, token, fetchImpl = fetch } = {}) {
+  if (!token) return { status: 'error', reason: 'no_token' };
   if (!navigator.onLine) return { status: 'error', reason: 'offline' };
 
   // Not /releases/latest (Decision 80): that endpoint ranks by commit date and is cached for 60s,
@@ -38,11 +39,13 @@ async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
   try {
     const res = await Promise.race([
       fetchImpl(`https://api.github.com/repos/${REPO}/releases?per_page=15&_=${Date.now()}`, {
-        headers: { Accept: 'application/vnd.github+json' },
+        headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` },
         cache: 'no-store'
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), FETCH_TIMEOUT_MS))
     ]);
+    // A private repo answers 404 to a token that cannot see it, so 404 reads as a rejected token too.
+    if (res.status === 401 || res.status === 403 || res.status === 404) return { status: 'error', reason: 'token_rejected' };
     if (!res.ok) return { status: 'error', reason: `http_${res.status}` };
     const releases = await res.json();
     release = (Array.isArray(releases) ? releases : [])
@@ -62,12 +65,8 @@ async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
     return { status: 'up_to_date', version: currentVersion };
   }
   const apkAsset = (release.assets || []).find((a) => a.name && a.name.endsWith('.apk'));
-  return {
-    status: 'update_available',
-    version: release.tag_name,
-    url: release.html_url,
-    downloadUrl: apkAsset ? apkAsset.browser_download_url : release.html_url
-  };
+  if (!apkAsset) return { status: 'error', reason: 'no_apk' };
+  return { status: 'update_available', version: release.tag_name, downloadUrl: apkAsset.url };
 }
 
 export { checkForUpdate };
