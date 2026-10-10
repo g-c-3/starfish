@@ -25,6 +25,7 @@
     "@capgo/capacitor-native-biometric": "^6.0.4",
     "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "cap-voice-rec": "^6.0.1",
+    "pdf-lib": "1.17.1",
     "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
