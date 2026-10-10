@@ -1,0 +1,28 @@
+/* PDF mark-up (Decision 166). Loaded with pdfmark-ui.js. */
+.pdf-mark-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.pdf-mark-layer.active { pointer-events: auto; }
+.pdf-mark-layer.capture { touch-action: none; cursor: crosshair; }
+.pdf-mk-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.pdf-mk-items { position: absolute; inset: 0; pointer-events: none; }
+.pdf-mk-text { position: absolute; white-space: pre; line-height: 1.2; font-family: Helvetica, Arial, sans-serif; }
+.pdf-mk-stamp { position: absolute; white-space: nowrap; line-height: 1; font-weight: 700; font-family: Helvetica, Arial, sans-serif; border: 0.1em solid; box-sizing: content-box; }
+.pdf-marking .pdf-tools, .pdf-marking .pdf-zoom { bottom: calc(190px + env(safe-area-inset-bottom, 0px)); }
+.pdf-markbar { position: absolute; left: 8px; right: 8px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 16px; background: rgba(20, 20, 26, 0.94); color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); }
+.pdf-mk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pdf-markbar button { margin: 0; min-height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.25); background: transparent; color: #fff; box-shadow: none; font-size: 14px; }
+.pdf-markbar button.on { background: rgba(255, 255, 255, 0.22); border-color: #fff; }
+.pdf-markbar button:disabled { opacity: 0.4; }
+.pdf-markbar .pdf-mk-save { background: #2e7d32; border-color: #2e7d32; }
+.pdf-markbar .pdf-mk-save:disabled { background: transparent; border-color: rgba(255, 255, 255, 0.25); }
+.pdf-markbar .pdf-mk-dot { width: 32px; min-height: 32px; height: 32px; padding: 0; border-radius: 50%; }
+.pdf-markbar .pdf-mk-dot.on { outline: 2px solid #fff; outline-offset: 2px; }
+.pdf-markbar .pdf-mk-chip { min-height: 32px; padding: 0 10px; font-size: 12px; }
+.pdf-mk-hint { font-size: 12px; opacity: 0.8; }
+.pdf-mk-form { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; background: var(--surface); color: var(--fg); }
+.pdf-mk-form-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.pdf-mk-form-head button { margin: 0; }
+.pdf-mk-form-body { flex: 1; overflow: auto; padding: 8px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
+.pdf-mk-field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.pdf-mk-field span { font-size: 13px; color: var(--muted); word-break: break-word; }
+.pdf-mk-field input[type="checkbox"] { width: 24px; height: 24px; }
+.pdf-mk-field input[type="text"], .pdf-mk-field textarea, .pdf-mk-field select { width: 100%; margin: 0; }
