@@ -4,6 +4,7 @@
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
+import { readBase64, withKey } from './files.js';
 
 const OPEN_DIR = 'open';
 
@@ -51,11 +52,22 @@ async function purgeOpenCopies() {
   catch { /* nothing to remove */ }
 }
 
-// row: entries row with file_path and extension.
+// URI another app can read. A plain file is read in place; an encrypted Home file is decrypted into cache/open/,
+// purged like the Vault copies (Decision 161).
+async function plainUriFor(entryRow) {
+  if (!entryRow.file_path) throw new Error('This entry has no stored file.');
+  const row = await withKey(entryRow);
+  if (!row.file_key) return (await Filesystem.getUri({ path: row.file_path, directory: Directory.Data })).uri;
+  await purgeOpenCopies();
+  const ext = row.extension ? `.${String(row.extension).replace(/^\./, '')}` : '';
+  const path = `${OPEN_DIR}/${row.id}${ext}`;
+  await Filesystem.writeFile({ path, directory: Directory.Cache, data: await readBase64(row), recursive: true });
+  return (await Filesystem.getUri({ path, directory: Directory.Cache })).uri;
+}
+
+// row: entries row with id, file_path, file_key and extension.
 async function openStoredFile(row) {
-  if (!row.file_path) throw new Error('This entry has no stored file.');
-  const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
-  await launch(uri, row.extension);
+  await launch(await plainUriFor(row), row.extension);
 }
 
 // Vault file: base64 bytes already decrypted in memory. The copy stays until the next purge so the
@@ -69,4 +81,4 @@ async function openDecryptedFile(id, extension, base64) {
   await launch(uri, extension);
 }
 
-export { mimeForExtension, openStoredFile, openDecryptedFile, purgeOpenCopies };
+export { mimeForExtension, openStoredFile, openDecryptedFile, plainUriFor, purgeOpenCopies };

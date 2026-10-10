@@ -19,6 +19,7 @@ import * as Money from './money.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { checkForUpdate } from './update-check.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
+import { initFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
@@ -377,6 +378,7 @@ async function bootstrap() {
   // until now. @capacitor-community/sqlite exports these directly; no global needed.
   const sqlite = new SQLiteConnection(CapacitorSQLite);
   db = await initDb(sqlite);
+  initFiles(db); // per-file encryption for Home files (Decision 161); the master key lives in this database
 
   applyAppearance(await getAppearance()); // apply theme before rendering the lock screen
 
@@ -791,19 +793,17 @@ async function applyTags(entryId, tagNames) {
 
 // ---- Non-text capture (voice/image/pdf/file) — didn't exist at all until now; captureText/saveNote
 // only ever handled typed text. Mirrors vault.js's captureToVault() but unencrypted, matching the
-// file-storage convention (Directory.Data/files/<uuid>.<ext>) already established for backup/restore. ----
+// file-storage convention (Directory.Data/files/<32 hex>, encrypted, Decision 161) already established for backup/restore. ----
 async function captureFile(type, { label, tags = [], description = '', fileData, extension, autoCategory = null }) {
-  const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const id = crypto.randomUUID();
-  const filePath = `files/${id}.${extension || 'bin'}`;
-  await Filesystem.writeFile({ path: filePath, directory: Directory.Data, data: fileData, recursive: true });
+  const { path: filePath, fileKey } = await saveBase64(fileData); // files/<32 hex>, encrypted; the type stays in extension
 
   // OCR for image/pdf isn't implemented yet — Phase 5's native plugin wiring (ML Kit/Tesseract) is
   // still just documented, not coded (android-notes/native-setup.md §6). body_text stays null until
   // that lands rather than pretending OCR ran; searching by label/tags still works meanwhile.
   await insertEntry(db, {
     id, type, label: label || `${VAULT_TYPE_LABELS[type] || type} ${new Date().toLocaleDateString()}`,
-    file_path: filePath, extension, auto_category: autoCategory, description: description || null
+    file_path: filePath, file_key: fileKey, extension, auto_category: autoCategory, description: description || null
   });
   await applyTags(id, tags);
   return id;
@@ -1643,8 +1643,8 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
 }
 
 // ---- Image thumbnails and zoom/pan (Phase 16 D, Decision 105) ----
-// Thumbnails: longest side THUMB_PX, JPEG. Home ones are also cached as files in Directory.Cache (the OS may clear
-// them; they are rebuilt). Vault ones live only in this map, which lockVault() empties; nothing is written to disk.
+// Thumbnails: longest side THUMB_PX, JPEG. Held only in this map, Home and Vault alike; nothing is written to disk
+// (Decision 162: a cached thumbnail would be a plain copy of an encrypted image). lockVault() empties the Vault ones.
 const THUMB_PX = 320;
 const thumbMem = new Map(); // 'h:<id>' | 'v:<id>' -> data URL
 function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k.startsWith('v:')) thumbMem.delete(k); }
@@ -1679,24 +1679,14 @@ async function imageBlobUrl(item, isVault) {
   if (isVault) return (await openVaultEntry(item.id)).blobUrl;
   const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
   if (!row) throw new Error('Image not found');
-  const { Filesystem, Directory } = await import('@capacitor/filesystem');
-  const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
-  return base64ToBlobUrl(data, mimeTypeForVaultRow({ extension: row.extension }));
+  return URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: mimeTypeForVaultRow({ extension: row.extension }) }));
 }
 async function thumbFor(item, isVault) {
   const key = `${isVault ? 'v' : 'h'}:${item.id}`;
   if (thumbMem.has(key)) return thumbMem.get(key);
-  const cachePath = `thumbs/${item.id}.jpg`;
-  let FS = null, dataUrl = null;
-  if (!isVault) {
-    FS = await import('@capacitor/filesystem');
-    try { dataUrl = `data:image/jpeg;base64,${(await FS.Filesystem.readFile({ path: cachePath, directory: FS.Directory.Cache })).data}`; } catch { /* not cached yet */ }
-  }
-  if (!dataUrl) {
-    const url = await imageBlobUrl(item, isVault);
-    try { dataUrl = await downscaleToDataUrl(url, THUMB_PX); } finally { URL.revokeObjectURL(url); }
-    if (FS) FS.Filesystem.writeFile({ path: cachePath, data: dataUrl.split(',')[1], directory: FS.Directory.Cache, recursive: true }).catch(() => {});
-  }
+  let dataUrl;
+  const url = await imageBlobUrl(item, isVault);
+  try { dataUrl = await downscaleToDataUrl(url, THUMB_PX); } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
   return dataUrl;
@@ -2146,6 +2136,7 @@ window.Dumpzone = {
 document.addEventListener('DOMContentLoaded', async () => {
   await bootstrap();
   purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
+  import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than
   // calling armAppAutoLock() from every capture/search/browse function individually. Harmless
@@ -4014,9 +4005,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (url) return url;
       if (isVault) { url = (await openVaultEntry(item.id)).blobUrl; return url; }
       const row = await fresh();
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
-      url = base64ToBlobUrl(data, audioMimeForExtension(row.extension));
+      url = URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: audioMimeForExtension(row.extension) }));
       return url;
     };
     await openViewer({
@@ -4145,18 +4134,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // decrypted into memory only and dropped on close or lock. A document that cannot be read offers the phone's app.
   // Stored file as bytes, read through the app's own file URL so a large file is not also held as a base64 string and its
   // decoded copy (Decision 154). Falls back to the base64 read if the URL read fails.
-  async function readStoredBytes(path) {
-    const { Filesystem, Directory } = await import('@capacitor/filesystem');
-    try {
-      const { Capacitor } = await import('@capacitor/core');
-      const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-      const res = await fetch(Capacitor.convertFileSrc(uri));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return new Uint8Array(await res.arrayBuffer());
-    } catch {
-      return base64ToBytes((await Filesystem.readFile({ path, directory: Directory.Data })).data);
-    }
-  }
+  // files.js keeps that route for the file URL read and decrypts in memory (Decision 161).
+  const readStoredBytes = (row) => readEntryBytes(row);
 
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
@@ -4210,7 +4189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           } else {
             dbRow = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
             if (!dbRow) throw new Error('PDF not found');
-            bytes = await readStoredBytes(dbRow.file_path);
+            bytes = await readStoredBytes(dbRow);
           }
           if (!bytes) bytes = base64ToBytes(b64); // Vault: the stored entry is base64 inside the encrypted record
           const { createPdfView } = await import('./pdfviewer.js');

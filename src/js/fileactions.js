@@ -10,6 +10,8 @@ import {
 import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 import * as Money from './money.js';
+import { initFiles, readBase64, fileSize } from './files.js';
+import { plainUriFor } from './fileopen.js';
 import { repeatLabel } from './reminders.js';
 
 async function getEntryCategory(db, entryId) {
@@ -72,6 +74,7 @@ const TEXT_EXPORT_TYPES = new Set(['note', 'location', 'reminder', 'money', 'exp
 // leaves the vault's encryption boundary as plaintext from that point on, same as Download below).
 // ---------------------------------------------------------------------------
 async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
+  initFiles(db);
   const { row, cat } = await getEntryCategory(db, entryId);
 
   if (row.is_private) {
@@ -106,8 +109,7 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
   } else if (row.type === 'money' || row.type === 'expense') { // full details and the note, as in the Vault (Decision 143)
     await Share.share({ text: moneyRowPlainText(row), title: row.label });
   } else if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
-    const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
-    await Share.share({ url: uri, title: row.label });
+    await Share.share({ url: await plainUriFor(row), title: row.label });
   } else {
     await Share.share({ text: row.body_text || row.label, title: row.label });
   }
@@ -155,6 +157,7 @@ async function copyPrivateNote(plaintext, clearAfterMs = 45000) {
 // point the person explicitly asked for a plaintext copy outside the vault.
 // ---------------------------------------------------------------------------
 async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
+  initFiles(db);
   const { row, cat } = await getEntryCategory(db, entryId);
   const ext = row.extension ? `.${row.extension}` : (TEXT_EXPORT_TYPES.has(row.type) ? '.txt' : '');
   let base = `${sanitizeFilename(row.label)}${ext}`;
@@ -185,8 +188,7 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
 
   const path = await freeDownloadPath(base);
   if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
-    const { data } = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
-    await Filesystem.writeFile({ path, directory: Directory.Documents, data, recursive: true });
+    await Filesystem.writeFile({ path, directory: Directory.Documents, data: await readBase64(row), recursive: true });
   } else if (row.type === 'location') {
     await text(path, locationPlainText(row));
   } else if (row.type === 'reminder') {
@@ -293,6 +295,7 @@ function rowExtraBytes(row) {
 }
 
 async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = {}) {
+  initFiles(db);
   const rows = scope === 'vault' ? [] : (await db.query(`SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0`)).values || [];
   const groups = {};
   for (const row of rows) {
@@ -300,8 +303,7 @@ async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = 
     if (!cat) continue;
     let sizeBytes = 0;
     if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
-      try { sizeBytes = (await Filesystem.stat({ path: row.file_path, directory: Directory.Data })).size; }
-      catch { sizeBytes = 0; } // file missing/unreadable — still list the entry, just with an unknown size
+      sizeBytes = await fileSize(row); // 0 when the file is missing or unreadable — the entry is still listed, with an unknown size
     } else if (row.body_text) {
       sizeBytes = new Blob([row.body_text]).size;
     }

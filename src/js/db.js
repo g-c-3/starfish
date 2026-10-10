@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS entries (
   file_path TEXT,                    -- voice/image/pdf/file WHEN is_private=0 only. Vault entries keep this NULL —
                                       -- their bytes live inside encrypted_body instead, so nothing sits on disk unencrypted.
   extension TEXT,                    -- generic files
+  file_key TEXT,                     -- Home files only (Decision 161): per-file key wrapped under the master key; NULL = plain file from before per-file encryption
   auto_category TEXT,                -- generic files: Documents/Audio/Archives/Other
   noise_reduction INTEGER,           -- voice only
   latitude REAL,
@@ -222,6 +223,7 @@ async function initDb(sqlite) {
   await ensureColumn(db, 'entries', 'encrypted_description', 'BLOB');
   await ensureColumn(db, 'entries', 'encrypted_label', 'BLOB');
   await ensureColumn(db, 'entries', 'encrypted_meta', 'BLOB');
+  await ensureColumn(db, 'entries', 'file_key', 'TEXT');
   // Money details as JSON text (Decision 124). Home only; Vault Money keeps the same JSON inside encrypted_body.
   await ensureColumn(db, 'entries', 'money_json', 'TEXT');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
@@ -259,18 +261,18 @@ const VAULT_PLACEHOLDER_LABEL = 'Vault item';
 async function insertEntry(db, entry) {
   const {
     id, type, label, body_text = null, is_private = 0, encrypted_body = null,
-    file_path = null, extension = null, auto_category = null, noise_reduction = null,
+    file_path = null, file_key = null, extension = null, auto_category = null, noise_reduction = null,
     latitude = null, longitude = null, amount = null, expense_category = null,
     replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null, encrypted_label = null, money_json = null
   } = entry;
   const now = Date.now();
 
   await db.run(
-    `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path,
+    `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, file_key,
       extension, auto_category, noise_reduction, latitude, longitude, amount, expense_category,
       replied, fire_at, repeat_rule, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, type, label, body_text, is_private, encrypted_body, file_path, extension, auto_category,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, type, label, body_text, is_private, encrypted_body, file_path, file_key, extension, auto_category,
      noise_reduction, latitude, longitude, amount, expense_category, replied, fire_at, repeat_rule,
      description, encrypted_description, encrypted_label, money_json, now, now]
   );
@@ -361,9 +363,13 @@ async function restoreFromTrash(db, id) {
 // User-triggered "delete permanently" from within a trash bin — same cascade-safe deletion
 // purgeOldTrash already does, just invoked on demand for one id instead of everything past 30 days.
 async function permanentlyDeleteEntry(db, id) {
+  const row = ((await db.query(`SELECT file_path FROM entries WHERE id = ?`, [id])).values || [])[0];
   await db.run(`DELETE FROM entries_fts WHERE id = ?`, [id]);
   await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [id]); // explicit — see purgeOldTrash's own note
   await db.run(`DELETE FROM entries WHERE id = ?`, [id]);
+  if (row?.file_path) { // the file goes with its entry (Decision 162); after the row, so a failed delete never orphans an entry
+    try { const files = await import('./files.js'); files.initFiles(db); await files.removeFile(row); } catch { /* file already gone */ }
+  }
 }
 
 async function purgeOldTrash(db) {

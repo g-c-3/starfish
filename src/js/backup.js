@@ -11,13 +11,14 @@
 //   then an end record with the counts. Memory grows with one chunk, not the total.
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { initFiles, withKey, readBase64 as readStoredBase64, readBytes as readStoredBytes, fileSize, saveBase64, beginFile, removeFile } from './files.js';
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
-import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, toBase64, fromBase64 } from './crypto.js';
+import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64 } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
 const SCHEMA_VERSION = 1;
-const FILES_DIR = 'files'; // Directory.Data/files/<uuid>.<ext> — where captured file bytes live on-device
+// Home file bytes live in Directory.Data/files/ as files/<32 hex> (Decision 161), read and written through files.js.
 const FORMAT2 = 2;
 const KDF_ITERATIONS = 300000;
 const FILE_CHUNK_BYTES = 3 * 1024 * 1024;  // raw file bytes per encrypted line
@@ -105,12 +106,10 @@ async function getStorageEstimate() {
 // ---------------------------------------------------------------------------
 // Building a backup payload
 // ---------------------------------------------------------------------------
-async function readFileBase64(filePath) {
-  const res = await Filesystem.readFile({ path: filePath, directory: Directory.Data });
-  return res.data; // already base64
-}
+const readFileBase64 = (row) => readStoredBase64(row); // decrypted, base64
 
 async function buildBackupPayload(db, categories) {
+  initFiles(db);
   const wantAll = (name) => categories.includes(name);
   const payload = {
     schemaVersion: SCHEMA_VERSION,
@@ -130,8 +129,9 @@ async function buildBackupPayload(db, categories) {
       if (!cat) continue;
       const out = { ...row, _category: cat };
       delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
+      delete out.file_key; // a device key wrap; never in a backup (Decision 161)
       if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
-        out.fileData = await readFileBase64(row.file_path); // raw bytes travel with the entry
+        out.fileData = await readFileBase64(row); // raw bytes travel with the entry, decrypted; the backup passkey is their only key
       }
       const tagRows = (await db.query(
         `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`,
@@ -171,33 +171,36 @@ async function estimateBackupSize(db, categories) {
 // ---------------------------------------------------------------------------
 // Format 2 writer (Decision 159)
 // ---------------------------------------------------------------------------
-// File as a Blob through the app's own file URL (the Decision 154 route), so it is never held as a base64 string.
-// null when the file is missing.
-async function readFileBlob(filePath) {
+// File as a Blob, never as a base64 string. A plain file (file_key null) comes through the app's own file URL (the
+// Decision 154 route); an encrypted file is decrypted in memory, one file at a time. null when the file is missing.
+async function readFileBlob(entryRow) {
+  const row = await withKey(entryRow);
+  if (row.file_key) {
+    try { return new Blob([await readStoredBytes(row)]); } catch { return null; }
+  }
   try {
-    const { uri } = await Filesystem.getUri({ path: filePath, directory: Directory.Data });
+    const { uri } = await Filesystem.getUri({ path: row.file_path, directory: Directory.Data });
     const res = await fetch(Capacitor.convertFileSrc(uri));
     if (res.ok) return await res.blob();
   } catch { /* fall back below */ }
   try {
-    const r = await Filesystem.readFile({ path: filePath, directory: Directory.Data });
+    const r = await Filesystem.readFile({ path: row.file_path, directory: Directory.Data });
     return new Blob([fromBase64(r.data)]);
   } catch { return null; }
 }
 
-async function statSize(filePath) {
-  try { return (await Filesystem.stat({ path: filePath, directory: Directory.Data })).size || 0; } catch { return 0; }
-}
+const statSize = (row) => fileSize(row); // decrypted size; 0 when missing
 
 // Sizes only, no payload: one light query plus a stat per file. requiredBytes is the written file's expected size.
 async function planBackup(db, categories) {
+  initFiles(db);
   const names = Object.keys(ENTRY_CATEGORIES).filter((c) => categories.includes(c));
   const items = [];
   const sizeByCategory = {};
   let bytes = 0;
   if (names.length > 0) {
     const rows = (await db.query(
-      `SELECT id, type, is_private, file_path,
+      `SELECT id, type, is_private, file_path, file_key,
          COALESCE(LENGTH(encrypted_body),0) + COALESCE(LENGTH(body_text),0) + COALESCE(LENGTH(description),0) +
          COALESCE(LENGTH(encrypted_description),0) + COALESCE(LENGTH(encrypted_label),0) + COALESCE(LENGTH(money_json),0) AS rb
        FROM entries WHERE deleted_at IS NULL`
@@ -205,7 +208,7 @@ async function planBackup(db, categories) {
     for (const row of rows) {
       const cat = names.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;
-      const fileSize = (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) ? await statSize(row.file_path) : 0;
+      const fileSize = (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) ? await statSize(row) : 0;
       const size = 600 + (row.rb || 0) + fileSize;
       items.push({ id: row.id, cat });
       sizeByCategory[cat] = (sizeByCategory[cat] || 0) + size;
@@ -284,6 +287,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
       if (!row) continue; // removed since the plan was made
       const out = { ...row, _category: it.cat };
       delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
+      delete out.file_key; // a device key wrap; never in a backup (Decision 161)
       const tagRows = (await db.query(
         `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`, [row.id]
       )).values || [];
@@ -297,7 +301,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
       }
       let blob = null;
       if (FILE_BEARING_CATEGORIES.has(it.cat) && row.file_path) {
-        blob = await readFileBlob(row.file_path);
+        blob = await readFileBlob(row);
         if (!blob) skippedFiles += 1;
       }
       const nFile = blob ? Math.ceil(blob.size / FILE_CHUNK_BYTES) : 0;
@@ -470,6 +474,7 @@ async function planEntryTarget(db, entry, mode, summary) {
 
 // Overwrite: remove the selected categories' live rows (their files on disk are left, as before).
 async function wipeCategories(db, categories) {
+  initFiles(db);
   for (const cat of categories.filter((c) => ENTRY_CATEGORIES[c])) {
     const predicate = ENTRY_CATEGORIES[cat];
     const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
@@ -479,12 +484,20 @@ async function wipeCategories(db, categories) {
         await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
         await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
         await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
+        await removeFile(full); // the file goes with its entry (Decision 162)
       }
     }
   }
 }
 
-// Insert one entry whose file (if any) is already written and whose file_path is set.
+// A restored file is written for this device, so file_key starts empty and is set when the file is saved.
+// The type stays in entries.extension; a backup that only carried it in the old file name gives it back.
+function prepareRestoredFile(entry) {
+  entry.file_key = null;
+  if (!entry.extension && /\.[A-Za-z0-9]+$/.test(entry.file_path || '')) entry.extension = entry.file_path.split('.').pop();
+}
+
+// Insert one entry whose file (if any) is already written and whose file_path and file_key are set.
 async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultSalt, summary) {
   let bodyText = entry.body_text;
   let encryptedBody = entry.encrypted_body;
@@ -512,11 +525,11 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaul
   }
 
   await db.run(
-    `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, extension,
+    `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, file_key, extension,
       auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
       fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path, entry.file_key || null,
      entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
      entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
      entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null,
@@ -567,6 +580,7 @@ async function restoreTagsAndSettings(db, src, categories, summary) {
 //   format 1: archiveObj          format 2: file (the picked File) + header (from readBackupHeader) + onProgress({done,total}) + onPhase(text)
 // }
 async function restoreBackup(db, opts) {
+  initFiles(db);
   if (opts.file && opts.header) return restoreFormat2(db, opts);
   const { passphrase, archiveObj, mode, categories, takeSafetyBackup, confirmedDestructive } = opts;
 
@@ -595,11 +609,11 @@ async function restoreBackup(db, opts) {
   for (const entry of payload.entries.filter((e) => categories.includes(e._category))) {
     const target = await planEntryTarget(db, entry, mode, summary);
     if (!target) continue;
+    prepareRestoredFile(entry);
     if (entry.fileData) {
-      const ext = entry.extension || (entry.file_path || '').split('.').pop() || 'bin';
-      const fileName = `${FILES_DIR}/${target.targetId}.${ext}`;
-      await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: entry.fileData, recursive: true });
-      entry.file_path = fileName;
+      const saved = await saveBase64(entry.fileData);
+      entry.file_path = saved.path;
+      entry.file_key = saved.fileKey;
     }
     await insertRestoredEntry(db, entry, target.targetId, target.label, opts, payload.privateVaultSalt, summary);
   }
@@ -611,6 +625,7 @@ async function restoreBackup(db, opts) {
 // Format 2: one pass, one entry at a time. Overwrite reads the whole file once first, so a damaged file is found
 // before anything is deleted.
 async function restoreFormat2(db, opts) {
+  initFiles(db);
   const { file, header, passphrase, mode, categories, takeSafetyBackup, confirmedDestructive, onProgress, onPhase } = opts;
 
   let key, head, cur;
@@ -669,18 +684,15 @@ async function restoreFormat2(db, opts) {
         for (let i = 0; i < rec.nBody; i++) body += DEC_T.decode(await cur.nextBytes());
         entry.encrypted_body = body;
       }
+      prepareRestoredFile(entry);
       if (rec.hasFile) {
-        const ext = entry.extension || (entry.file_path || '').split('.').pop() || 'bin';
-        const fileName = `${FILES_DIR}/${target.targetId}.${ext}`;
-        if (rec.nFile === 0) {
-          await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: '', encoding: 'utf8', recursive: true });
-        }
-        for (let c = 0; c < rec.nFile; c++) {
-          const b64 = toBase64(await cur.nextBytes());
-          if (c === 0) await Filesystem.writeFile({ path: fileName, directory: Directory.Data, data: b64, recursive: true });
-          else await Filesystem.appendFile({ path: fileName, directory: Directory.Data, data: b64 });
-        }
-        entry.file_path = fileName;
+        const w = await beginFile(); // encrypted for this device as it streams in
+        try {
+          for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());
+          const saved = await w.finish();
+          entry.file_path = saved.path;
+          entry.file_key = saved.fileKey;
+        } catch (err) { await w.abort(); throw err; }
       }
       await insertRestoredEntry(db, entry, target.targetId, target.label, opts, head.privateVaultSalt, summary);
     }
