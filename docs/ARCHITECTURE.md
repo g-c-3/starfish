@@ -857,5 +857,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `src/js/pdfpages-ui.js` (editor screen, loaded after the mark-up) and `src/js/pdfpages.js` (pure: bytes in, bytes out, loaded when Edit pages is tapped). Styles in `src/css/pdfpages.css`.
 - The edit is a list `{ src, turn }` in output order; a page left out is deleted. `applyPagePlan` copies the listed pages into a new document and adds the turns to each page's angle.
 - Thumbnails come from the viewer's `attachThumbnails`; the cards take the thumbnail buttons over, so drawing and release stay with the viewer.
-- Also in `pdfpages.js`, without a screen yet: `parseRanges`, `splitPdf`, `mergePdfs`, `imagesToPdf` (JPEG and PNG, one A4-fit page per image).
+- Also in `pdfpages.js`: `parseRanges`, `splitPdf`, `mergePdfs`, `imagesToPdf` (JPEG and PNG, one A4-fit page per image). `mergePdfs` and `imagesToPdf` take items as bytes or as functions that return them, and a failure carries `index`.
 - Save goes through `saveMarkedPdf` with a label suffix and never replaces. Bytes are read again for each save.
+
+### Merge PDFs and Make a PDF (Decision 168)
+- Button `sel-pdf` in the selection bar; `runMakePdf` in `app.js` (inside `wireSelection`) reads the selected rows (Home: database rows; Vault: the unlocked index) and requires all PDFs or all pictures.
+- `src/js/pdfcompose-ui.js`: `askCompose` (order sheet, routed through `activeCompose` so Back and locks close it) and `toJpegBytes` (canvas conversion).
+- Sources are read one at a time through `readStoredBytes` (Home) or `loadVaultEntryContent` (Vault). `saveComposedPdf` writes the output through `captureFile` or `captureToVault`.

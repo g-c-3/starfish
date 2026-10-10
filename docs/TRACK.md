@@ -162,3 +162,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-10 | Session 105 | Decision 166 | Phase 18 B built: own mark-up and form fill on `pdf-lib` (highlight, text, draw, stamp, undo, new copy or replace, Vault copies encrypted); export checked in Node against pdf.js geometry; roadmap lines for Phase 17 D and E corrected; DP48 added; `vite build` passes; not run through CI or on a device |
 | 2026-10-10 | Session 105 (device pass) | none | DP48 confirmed on device, all checks; Phase 18 B done on device |
 | 2026-10-11 | Session 106 | Decision 167 | Phase 18 C1 built: page tools on the open PDF (rotate, delete, reorder, extract, split), pure merge and image to PDF functions; DP49 added; 31 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-11 | Session 106 (device pass) | none | DP49 confirmed on device: page tools; Phase 18 C1 done on device |
+| 2026-10-11 | Session 106 (continued) | Decision 168 | Phase 18 C2 built: Make a PDF in the selection bar (merge PDFs, pictures to one PDF), order sheet, Home and Vault; DP50 added; 35 Node checks; vite build passes; not run through CI or on a device |

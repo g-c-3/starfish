@@ -2123,3 +2123,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Dependency: none new. `pdf-lib` is already bundled (Decision 166); the new code is two small chunks (`pdfpages` 2.9 kB, `pdfpages-ui` 6.6 kB), loaded when Edit pages is tapped.
 - Privacy: the page list, selection and thumbnails live in memory only and are dropped on Close, on closing the viewer and on a lock. Bytes are read again for each save and not kept. No network, no new permission.
 - Risks: not run through CI or on a device. The screen (thumbnail cards, rotated thumbnails, buttons over the viewer, split prompt) is untested on a phone. A page with an unusual size shrinks to fit its card.
+
+**168. Merge PDFs and Make a PDF from pictures (Phase 18 C, second part).**
+- Entry: the selection bar (long press a row, as in Decision 122) gets one button, Make a PDF. It works on a selection of PDFs only (two or more: merge) or of pictures only (one or more), in a Home folder, the Vault, or a search list. Any other selection says what to select. No file picker and nothing outside the app is read.
+- Order: an order sheet lists the selected items in the order they were selected, with earlier and later buttons and a name field. The pages follow that order. Back, Cancel and any lock close the sheet and make nothing.
+- Output: a new PDF entry, no tags or description, named as typed (default: first label plus "(merged)", or the first label plus a count for pictures). The originals stay. Home output goes through the per-file encryption of Decision 162; Vault output is encrypted under the Vault key.
+- Pictures: each is drawn to a canvas first and encoded as JPEG (quality 0.9, long side at most 3000 px, transparency on white), so camera orientation is applied and any format the phone can decode works. Cost: a picture is recompressed. Each page is A4 in the picture's orientation with the picture filling it.
+- Memory: sources are read one at a time, not all at once.
+- Limits: 2000 pages in a merge, 200 pictures in one PDF. A password-protected PDF stops the merge naming the file; a file that cannot be read stops it naming the file.
+- Dependency: none new. New chunk `pdfcompose-ui` (loaded when the button is tapped); `pdfpages` now also takes items as functions and reports the failing item's position.
+- Privacy: the list, name and converted pictures live in memory only. No network, no new permission.
+- Risks: not run through CI or on a device. The selection bar now holds one more button on narrow screens. Canvas conversion and the order sheet are untested on a phone. A very large merge is held as one output in memory.

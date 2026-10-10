@@ -18,9 +18,26 @@ Decisions made: 167.
 
 Verified in the authoring environment: 31 Node checks on `pdfpages.js` against pdf.js text extraction (reorder, repeated page, rotation added to an existing angle, extract order, split ranges, merge of 12 and 90 pages, range parsing and rejection, empty and out-of-range plans, 2001-page limit, damaged file, PNG to A4-fit landscape page); `vite build` passes. Not verified: CI, any device behavior (DP49), the editor screen (rotated thumbnails, card layout, buttons over the viewer), `saveMarkedPdf` with a suffix and the Vault path (import Capacitor, not run in Node), a password-protected file (message path only), JPEG input to `imagesToPdf`.
 
-Open: C2 (merge, image to PDF screens), C3 (signature picture), Phase 17 open items, haptics and the light-theme pass, each needing approval.
+Device pass: DP49 confirmed.
 
-Next session start point: DP49 on the device; then C2 on approval (merge needs a picker for other PDFs; image to PDF converts through a canvas first).
+Phase 18 C2 (Decision 168), on the owner's go-ahead after DP49.
+- `src/js/pdfcompose-ui.js` (NEW): order sheet (`askCompose`) and picture to JPEG conversion (`toJpegBytes`).
+- `src/js/pdfpages.js`: `mergePdfs` and `imagesToPdf` take items as bytes or functions and report the failing item's position.
+- `src/css/pdfpages.css`: order sheet styles.
+- `src/index.html`: Make a PDF button in the selection bar.
+- `src/js/app.js`: `runMakePdf` in the selection wiring, `saveComposedPdf`, `activeCompose` in Back and in the lock dismissal.
+- Entry through the existing selection mode instead of a file picker: sources are entries already in the app, read through their own decryption; the same route serves the Vault.
+- Docs: ROADMAP (C2, DP50, DP49 confirmed), ARCHITECTURE (Merge PDFs and Make a PDF), DECISIONS (168).
+
+Bugs fixed: none.
+
+Decisions made (continued): 168.
+
+Verified in the authoring environment: 35 Node checks on `pdfpages.js` (earlier 31 plus lazy items, failing item position for a merge and for a picture, lazy picture); a real JPEG (landscape 4:3, portrait 3:5) gives A4-fit pages 794x595 and 505x842 points; `vite build` passes. Not verified: CI, any device behavior (DP50), canvas conversion (`toJpegBytes` needs a browser), the order sheet, the selection bar width with the extra button, Vault path, a password-protected source (message path only).
+
+Open: C3 (signature picture), Phase 17 open items, haptics and the light-theme pass, each needing approval.
+
+Next session start point: DP50 on the device; then C3 on approval.
 
 ---
 
