@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 106**
+
+Phase 18 C, first part (Decision 167). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 152, 166 and the PDF architecture sections. The stray `native-setup.md` and `style.css` under `src/js/` are already gone from the repo.
+- `src/js/pdfpages.js` (NEW): pure page functions. `applyPagePlan` (rotate, delete, reorder), `extractPages`, `parseRanges`, `splitPdf`, `mergePdfs`, `imagesToPdf`, `inspectPages`.
+- `src/js/pdfpages-ui.js` (NEW) and `src/css/pdfpages.css` (NEW): Edit pages button, page grid, per-page rotate, move and delete, select, Save copy, Extract, Split, Reset, Discard on close.
+- `src/js/app.js`: `saveMarkedPdf` takes a label suffix (default unchanged); page tools mounted after the mark-up, Back closes them first; a failure to load them leaves the tools before.
+- Docs: ROADMAP (Phase 18 C split into C1 to C3, DP49), ARCHITECTURE (PDF page tools), DECISIONS (167).
+
+Bugs fixed: none.
+
+Decisions made: 167.
+
+Verified in the authoring environment: 31 Node checks on `pdfpages.js` against pdf.js text extraction (reorder, repeated page, rotation added to an existing angle, extract order, split ranges, merge of 12 and 90 pages, range parsing and rejection, empty and out-of-range plans, 2001-page limit, damaged file, PNG to A4-fit landscape page); `vite build` passes. Not verified: CI, any device behavior (DP49), the editor screen (rotated thumbnails, card layout, buttons over the viewer), `saveMarkedPdf` with a suffix and the Vault path (import Capacitor, not run in Node), a password-protected file (message path only), JPEG input to `imagesToPdf`.
+
+Open: C2 (merge, image to PDF screens), C3 (signature picture), Phase 17 open items, haptics and the light-theme pass, each needing approval.
+
+Next session start point: DP49 on the device; then C2 on approval (merge needs a picker for other PDFs; image to PDF converts through a canvas first).
+
+---
+
 **Session 105**
 
 Phase 18 B (Decision 166). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 152, 153, 165 and the Phase 17 and 18 roadmap lines.

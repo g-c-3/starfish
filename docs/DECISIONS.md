@@ -2112,3 +2112,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Privacy: marks, typed text and form values live in memory only and are dropped on Close, on closing the viewer and on a lock. No network, no new permission, nothing stored until Save.
 - Geometry: page rotation, crop box and media box are applied once, on export. Checked in Node against pdf.js viewport conversion for rotations 0, 90, 180, 270 and a crop box (text position and upright, highlight rectangle, stamp).
 - Risks: not run through CI or on a device. A large PDF is held as bytes, a base64 string and the output while saving. Touch drawing, the bar over the bottom area and the form list are untested on a phone.
+
+**167. PDF page tools (Phase 18 C, first part): rotate, delete, reorder, extract, split.**
+- Scope: Phase 18 C is built in parts. This part covers the pages of one open PDF. Merge, image to PDF and the signature picture follow, each its own approval. The pure functions for merge and image to PDF already exist in `pdfpages.js` and are checked in Node, but have no screen yet.
+- Tools: Edit pages button in the viewer opens a page grid. Per page: rotate left or right, move earlier or later, delete. Tap a page to select it. Save copy writes the pages as shown; Extract writes the selected pages; Split writes one PDF per typed range (such as 1-3, 4-6) of the pages as shown. Reset restores the original order and angles. The last page cannot be deleted.
+- Output is always a new entry beside the original (label plus a suffix: edited, extract, page N, pages A-B), same tags and description. There is no replace choice. Home copies go through the per-file encryption of Decision 162; Vault copies are encrypted under the Vault key.
+- Method: the chosen pages are copied into a new document. Outline, form fields and document metadata of the source are not carried over; links and annotations on a copied page stay with it. Rotation is added to the page's own angle.
+- Limits: 2000 pages in one output, 20 parts in one split, 200 images in one image to PDF. Password-protected PDFs are refused with the reading-only message, as in Decision 166.
+- Close and Back with unsaved edits ask Discard (Decision 133).
+- Dependency: none new. `pdf-lib` is already bundled (Decision 166); the new code is two small chunks (`pdfpages` 2.9 kB, `pdfpages-ui` 6.6 kB), loaded when Edit pages is tapped.
+- Privacy: the page list, selection and thumbnails live in memory only and are dropped on Close, on closing the viewer and on a lock. Bytes are read again for each save and not kept. No network, no new permission.
+- Risks: not run through CI or on a device. The screen (thumbnail cards, rotated thumbnails, buttons over the viewer, split prompt) is untested on a phone. A page with an unusual size shrinks to fit its card.
