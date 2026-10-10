@@ -41,6 +41,9 @@ const REQUIRED_PERMISSIONS = [
   // Android 13+; SCHEDULE_EXACT_ALARM covers Android 12. Still a normal banner notification, no alarm screen.
   'android.permission.USE_EXACT_ALARM',
   'android.permission.SCHEDULE_EXACT_ALARM',
+  // Lets the in-app update hand the downloaded APK to the system installer (Decision 164). Android still asks the owner
+  // once to allow installs from this app.
+  'android.permission.REQUEST_INSTALL_PACKAGES',
 ];
 
 if (!fs.existsSync(MANIFEST_PATH)) {
