@@ -4197,6 +4197,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   // files.js keeps that route for the file URL read and decrypts in memory (Decision 161).
   const readStoredBytes = (row) => readEntryBytes(row);
 
+  // Mark-up output (Decision 166): the marked PDF becomes a new entry beside the original (label + " (marked)", same tags
+  // and description), or replaces it: the new entry is written first, then the original is deleted for good.
+  function bytesToBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  async function saveMarkedPdf(item, bytes, { replace, isVault }) {
+    let label, tags = [], description = '';
+    if (isVault) {
+      if (!privateSessionKey) throw new Error('Vault locked');
+      const e = (getVaultIndex() || []).find((x) => x.id === item.id) || item;
+      label = e.label; tags = e.tags || []; description = e.description || '';
+    } else {
+      const row = ((await db.query(`SELECT label, description FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+      if (!row) throw new Error('The original is no longer there');
+      label = row.label; description = row.description || '';
+      tags = ((await db.query(`SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE et.entry_id = ?`, [item.id])).values || []).map((r) => r.name);
+    }
+    const newLabel = replace ? label : `${label} (marked)`;
+    const args = { type: 'pdf', label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: 'pdf' };
+    if (isVault) await captureToVault(args); else await captureFile('pdf', args);
+    if (replace) await permanentlyDelete(item.id);
+    return newLabel;
+  }
+
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
     let view = null, tools = null, token = 0, pwResolve = null;
@@ -4226,11 +4252,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTimeout(() => input.focus(), 50);
     });
     const clearHeader = () => viewerScreen.querySelectorAll('.pdf-hdr').forEach((n) => n.remove());
+    // Mark-up (Decision 166): bytes are read again when it starts, so the viewer's copy (consumed by pdf.js) is not kept.
+    const markupCtx = {
+      isVault, onActivity: arm, askText, askYesNo, askDiscard, toast,
+      closeViewer: () => { if (activeViewer) activeViewer.finish(); },
+      loadBytes: async () => {
+        if (isVault) {
+          if (!privateSessionKey) throw new Error('Vault locked');
+          armVaultAutoLock();
+          return base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
+        }
+        return readStoredBytes(await fresh());
+      },
+      save: (bytes, opts) => saveMarkedPdf(item, bytes, { ...opts, isVault })
+    };
     viewerScreen.classList.add('pdf-mode');
     await openViewer({
       title: item.label || 'PDF', isVault,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      guard: async () => !(tools && tools.closeTop()), // Back closes the Pages panel, then Find, before it leaves the viewer (Decision 153)
+      guard: async () => !(tools && await tools.closeTop()), // Back closes the form or mark-up, then the Pages panel, then Find, before it leaves the viewer (Decisions 153, 166)
       onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } },
       render: async (body) => {
         const row = await fresh();
@@ -4268,6 +4308,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { mountPdfTools } = await import('./pdftools.js');
           if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
           tools = mountPdfTools(body, view, { onActivity: arm });
+          try { // mark-up is an extra: if it cannot load, the reading tools stay
+            const base = tools;
+            const { mountMarkup } = await import('./pdfmark-ui.js');
+            if (mine !== token || !body.isConnected) return;
+            const mk = mountMarkup(body, view, markupCtx);
+            tools = { closeTop: async () => (await mk.closeTop()) || base.closeTop(), destroy: () => { mk.destroy(); base.destroy(); } };
+          } catch { /* reading tools only */ }
         } catch (err) {
           if (mine !== token) return;
           scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}<button type="button" class="pdf-fallback">Open with app</button></div>`;

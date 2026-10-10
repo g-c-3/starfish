@@ -269,6 +269,7 @@ async function createPdfView(container, bytes, { onPage = () => {}, onActivity =
     zoomOut: () => setZoom(nextZoom(zoom, -1)),
     goToPage,
     currentPage,
+    pageEls: () => slots.map((s) => s.el), // page boxes, for the mark-up layers (Decision 166)
     search,
     stepHit,
     clearSearch,
