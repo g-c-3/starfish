@@ -41,6 +41,8 @@ Rename to Arkly and CI filter (Decision 165), on "Start".
 - Code, scripts, workflow, config and android notes renamed; persisted identifiers kept (Decision 165). `src/js/gdrive.js` still finds the earlier Drive folder. `.github/workflows/build-android.yml`: `paths-ignore` for docs-only pushes.
 - Verified: `vite build`, syntax check of the patch scripts, JSON files parse. Not verified: CI, device (DP46).
 
+Device pass, update check: DP45 partly confirmed. Token saved, the check found the newer build and enabled Download update. Download failed: "open failed: ENOENT" on `cache/update/`. Cause: `Filesystem.downloadFile` does not create the parent folder and ignores `recursive`. Fix: `mkdir` the folder first (`src/js/update-install.js`). Why correct: the plugin source opens a `FileOutputStream` on the resolved path with no folder creation.
+
 Decisions made (continued): 163, 164, 165.
 
 Next session start point: DP45 and DP46 on a device (DP45 needs a build newer than the installed one to update to), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.

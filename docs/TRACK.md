@@ -155,3 +155,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-10 | Session 104 (continued) | Decision 163 | Phase 17 F built: one-time conversion of plain Home files at start (read-back check, orphan sweep); DP44 added; 8 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-10 | Session 104 (continued, 2) | Decision 164 | Update check and download for the private repo: token in Settings, authenticated release list, native APK download, installer hand-off; DP45 added; not run through CI or on a device |
 | 2026-10-10 | Session 104 (continued, 3) | Decision 165 | DP44 confirmed on device; app renamed to Arkly with persisted identifiers kept; CI skips docs-only pushes; DP46 added; not run through CI or on a device |
+| 2026-10-10 | Session 104 (continued, 4) | none | DP45 partly confirmed: token and update check work on device; download failed on a missing folder, fixed with mkdir; not yet re-run |
