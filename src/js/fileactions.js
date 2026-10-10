@@ -25,8 +25,8 @@ function sanitizeFilename(label) {
   return (label || 'untitled').replace(/[^a-z0-9\-_ ]/gi, '_').slice(0, 80);
 }
 
-// Every download lands in Documents/Dumpzone. An existing name gets " (2)", " (3)" … so an earlier copy is never overwritten.
-const DOWNLOAD_DIR = 'Dumpzone';
+// Every download lands in Documents/Arkly. An existing name gets " (2)", " (3)" … so an earlier copy is never overwritten.
+const DOWNLOAD_DIR = 'Arkly';
 async function freeDownloadPath(fileName) {
   const dot = fileName.lastIndexOf('.');
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;

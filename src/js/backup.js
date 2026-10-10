@@ -708,7 +708,7 @@ async function restoreFormat2(db, opts) {
 // ---------------------------------------------------------------------------
 // Extract to device storage — no DB import, raw files + sidecar only.
 // ---------------------------------------------------------------------------
-async function extractCategoryToStorage(payload, category, destDir = 'Dumpzone-Restore') {
+async function extractCategoryToStorage(payload, category, destDir = 'Arkly-Restore') {
   const entries = payload.entries.filter((e) => e._category === category && e.fileData);
   const written = [];
   for (const e of entries) {

@@ -5,7 +5,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { nextOccurrences } from './reminders.js';
 
 // An Android channel's importance and sound are fixed once created, so a changed style needs a new id (Decision 96).
-const CHANNEL_ID = 'dumpzone_reminders_v2';
+const CHANNEL_ID = 'dumpzone_reminders_v2'; // persisted channel ids keep their pre-rename names (Decision 165)
 const OLD_CHANNEL_ID = 'dumpzone_reminders';
 
 // A Vault reminder shows only this text, on the shade and on the lock screen: what it is about is read inside the Vault (Decision 140).
@@ -16,7 +16,7 @@ async function ensureChannel() {
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: 'Reminders',
-    description: 'Dumpzone reminder alerts',
+    description: 'Arkly reminder alerts',
     importance: 4, // high — heads-up banner, default notification sound, no alarm behaviour
     visibility: 1  // show full content on lock screen
   });
@@ -44,7 +44,7 @@ const occurrenceId = (entryId, k) => hashIdToInt(k === 0 ? entryId : `${entryId}
 async function scheduleReminder(entry, { windowSize = null } = {}) {
   // entry: { id, label, fire_at, repeat_rule, is_private } — callers pass the database row, so is_private is never lost
   await ensureChannel();
-  const base = { title: 'Dumpzone Reminder', body: notificationBody(entry), channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
+  const base = { title: 'Arkly Reminder', body: notificationBody(entry), channelId: CHANNEL_ID, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
   // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
   const times = REPEAT_WINDOW[entry.repeat_rule]
     ? nextOccurrences(entry.fire_at, entry.repeat_rule, Date.now() + 1000, Math.min(windowSize || REPEAT_WINDOW[entry.repeat_rule], MAX_OCCURRENCES))
@@ -86,7 +86,7 @@ async function snoozeReminder(entry, minutes = 10) {
   await LocalNotifications.schedule({
     notifications: [{
       id: hashIdToInt(`${entry.id}:snooze`),
-      title: 'Dumpzone Reminder',
+      title: 'Arkly Reminder',
       body: notificationBody(entry),
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + minutes * 60 * 1000), allowWhileIdle: true },

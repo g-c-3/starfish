@@ -22,6 +22,7 @@
 
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
+// Keystore entry names keep their pre-rename form; renaming would drop saved biometric enrolment (Decision 165).
 const SERVER_APP = 'dumpzone.app-password';
 const SERVER_VAULT = 'dumpzone.vault-pin';
 
@@ -47,7 +48,7 @@ async function enableBiometric(kind, secret) {
   const server = serverFor(kind);
   await NativeBiometric.verifyIdentity({
     title: 'Confirm biometric unlock',
-    description: kind === 'app' ? 'Use this to unlock Dumpzone' : 'Use this to unlock your Vault',
+    description: kind === 'app' ? 'Use this to unlock Arkly' : 'Use this to unlock your Vault',
   });
   await NativeBiometric.setCredentials({ username: kind, password: secret, server });
 }
@@ -67,7 +68,7 @@ async function unlockWithBiometric(kind) {
   const server = serverFor(kind);
   try {
     await NativeBiometric.verifyIdentity({
-      title: kind === 'app' ? 'Unlock Dumpzone' : 'Unlock Vault',
+      title: kind === 'app' ? 'Unlock Arkly' : 'Unlock Vault',
     });
     const { password } = await NativeBiometric.getCredentials({ server });
     return password;

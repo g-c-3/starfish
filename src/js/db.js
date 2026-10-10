@@ -1,4 +1,4 @@
-// db.js — SQLite schema & init for Dumpzone
+// db.js — SQLite schema & init for Arkly
 // Uses @capacitor-community/sqlite. All data is local-only.
 
 const SCHEMA_VERSION = 1;
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
-const DB_NAME = 'dumpzone.db';
+const DB_NAME = 'dumpzone.db'; // persisted file name from before the rename to Arkly; changing it would orphan existing data (Decision 165)
 let _sqlite = null;
 
 // Decision 158: random 256-bit key, held by the plugin in Keystore-backed storage. Never derived from a password.

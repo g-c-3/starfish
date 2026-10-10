@@ -431,7 +431,7 @@ async function bootstrap() {
         // Persisted so the row shows "Snoozed until" rather than greyed-out "Fired" (Decision 99).
         await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ?`, [Date.now() + 10 * 60 * 1000, Date.now(), entryId]);
       }
-      window.dispatchEvent(new Event('dumpzone-reminders-changed'));
+      window.dispatchEvent(new Event('arkly-reminders-changed'));
     } catch { /* a failed action leaves the reminder as it was */ }
     // The button launched the app only to deliver the action; send it back where the person was (Decision 100).
     // Skipped when the app was already in use, so tapping a button from the shade over the open app stays put.
@@ -481,7 +481,7 @@ async function registerBackgroundLock() {
   // turned off" and "switched to another app" identically. Not a Capacitor plugin: MainActivity
   // dispatches this as a plain DOM event via evaluateJavascript() directly into the WebView,
   // avoiding a full plugin-registration/cap-sync setup for one narrow signal.
-  window.addEventListener('dumpzone-screen-off', () => handleLockTrigger('screenoff'));
+  window.addEventListener('arkly-screen-off', () => handleLockTrigger('screenoff'));
 }
 
 // Shared by both triggers above — trigger is 'background' or 'screenoff', matching the
@@ -1242,10 +1242,10 @@ async function handleLocalRestore() {
     // The Vault list reads an in-memory index built at unlock (Decision 39); rebuild it so restored
     // Vault entries show without a relock (a full rebuild: many entries changed). Locked Vault: nothing to do, unlock builds it fresh.
     if (privateSessionKey) await buildVaultIndexWithNotice();
-    window.dispatchEvent(new Event('dumpzone-data-restored'));
+    window.dispatchEvent(new Event('arkly-data-restored'));
   } else if (result.summary?.added) { // stopped part-way: what was restored is real, show it
     if (privateSessionKey) await buildVaultIndexWithNotice();
-    window.dispatchEvent(new Event('dumpzone-data-restored'));
+    window.dispatchEvent(new Event('arkly-data-restored'));
   }
 }
 
@@ -1930,7 +1930,7 @@ async function drainQueuedReminderActions() {
       else if (it.a === 'snooze') await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t + SNOOZE_MS, it.t, it.e]);
     }
     for (const key of mine) await Preferences.remove({ key }); // after the writes: a failure above is retried, same result
-    window.dispatchEvent(new Event('dumpzone-reminders-changed'));
+    window.dispatchEvent(new Event('arkly-reminders-changed'));
     if (items.some((it) => it.a === 'done')) { lastRefillAt = 0; refillRepeating(); } // re-arm a series a pre-Decision-108 notification cut short
   } catch { /* retried on the next tick */ }
   finally { drainingQueuedActions = false; }
@@ -2139,7 +2139,7 @@ async function checkAutoBackupOnOpen() {
   }
 }
 
-window.Dumpzone = {
+window.Arkly = {
   bootstrap, captureText, saveNote, batchAddWithCommonLabel,
   search: (q) => searchEntries(db, q),
   softDelete: (id) => softDelete(db, id), restoreEntry, permanentlyDelete, showTrash,
@@ -2212,7 +2212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chipsEl.addEventListener('click', (e) => { const b = e.target.closest('button[data-sym]'); if (b) apply(b.dataset.sym); });
     document.getElementById('currency-apply-btn').addEventListener('click', () => apply(custom.value));
     custom.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(custom.value); });
-    window.addEventListener('dumpzone-data-restored', () => paint().catch(() => {}));
+    window.addEventListener('arkly-data-restored', () => paint().catch(() => {}));
     paint().catch(() => {});
   })();
 
@@ -2406,7 +2406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const restore = e.target.closest('.trash-restore-btn'), purge = e.target.closest('.trash-purge-btn');
     if (restore) {
       const id = restore.dataset.id, was = trashRows.find((r) => r.id === id)?.deleted_at ?? Date.now();
-      await window.Dumpzone.restoreEntry(id);
+      await window.Arkly.restoreEntry(id);
       await loadTrash();
       renderMainTimeline().catch(() => {});
       toast('Restored', false, { label: 'Undo', isVault: false, run: async () => { // back into the trash with its original deleted date
@@ -2675,8 +2675,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
       renderVault();
     }));
-    container.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
-    container.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
+    container.querySelectorAll('.vault-share-btn').forEach((b) => b.addEventListener('click', () => window.Arkly.shareEntry(b.dataset.id)));
+    container.querySelectorAll('.vault-download-btn').forEach((b) => b.addEventListener('click', () => window.Arkly.downloadPlain(b.dataset.id)));
     container.querySelectorAll('.vault-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       await editEntryUI(items.find((i) => i.id === b.dataset.id), true);
       renderVault();
@@ -3386,8 +3386,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await openEntry(r.dataset.id, false, rows.find((x) => x.id === r.dataset.id));
       await renderMainTimeline();
     }));
-    document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.shareEntry(b.dataset.id)));
-    document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Dumpzone.downloadPlain(b.dataset.id)));
+    document.querySelectorAll('.main-share-btn').forEach((b) => b.addEventListener('click', () => window.Arkly.shareEntry(b.dataset.id)));
+    document.querySelectorAll('.main-download-btn').forEach((b) => b.addEventListener('click', () => window.Arkly.downloadPlain(b.dataset.id)));
     document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       const row = rows.find((r) => r.id === b.dataset.id);
       await editEntryUI(row, false);
@@ -3424,11 +3424,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
   // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
-  window.addEventListener('dumpzone-data-restored', () => {
+  window.addEventListener('arkly-data-restored', () => {
     renderMainTimeline().catch(() => {});
     if (privateSessionKey) renderVault();
   });
-    window.addEventListener('dumpzone-reminders-changed', () => {
+    window.addEventListener('arkly-reminders-changed', () => {
       renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {});
       if (privateSessionKey) buildVaultIndex(db, privateSessionKey).then(() => renderVault()).catch(() => {}); // Vault rows show the status
     });
@@ -3691,7 +3691,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
-      await window.Dumpzone.editEntry(item.id, fields, opts);
+      await window.Arkly.editEntry(item.id, fields, opts);
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // list/search read this in-memory index
       toast(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
@@ -3711,7 +3711,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!d && overlayAbortCount !== mark) return;
     }
     try {
-      await window.Dumpzone.editEntry(item.id, { label: d.name, text, description: d.description }, {});
+      await window.Arkly.editEntry(item.id, { label: d.name, text, description: d.description }, {});
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
       toast('Saved');
@@ -3748,8 +3748,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           b.innerHTML = iconSvg(icon); b.onclick = run;
           $('viewer-edit-btn').parentNode.append(b);
         };
-        add('Share', 'share', '', () => window.Dumpzone.shareEntry(entry.id));
-        add('Download', 'download', '', () => window.Dumpzone.downloadPlain(entry.id));
+        add('Share', 'share', '', () => window.Arkly.shareEntry(entry.id));
+        add('Download', 'download', '', () => window.Arkly.downloadPlain(entry.id));
         add('Delete', 'trash', ' warning-text', async () => {
           try { if (isVault) await deleteVaultEntry(entry.id); else await softDelete(db, entry.id); }
           catch (err) { toast(`Could not delete: ${err.message || err}`); return; }
@@ -3870,7 +3870,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!d && overlayAbortCount !== mark) return; // locked meanwhile
     }
     try {
-      await window.Dumpzone.editEntry(item.id, isVault
+      await window.Arkly.editEntry(item.id, isVault
         ? { label: d.name, description: d.description, money: details }
         : { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
       await setEntryTags(item.id, d.tags);
@@ -3930,7 +3930,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const next = await openRepayDialog({ details: cur, items: isVault ? vaultMoneyItems() : await moneyItems(), symbol: currencySymbol, hooks: isVault ? vaultMoneyHooks : moneyHooks });
           if (!next) return;
           try {
-            await window.Dumpzone.editEntry(row.id, isVault ? { money: next } : { money_json: Money.toJson(next) }, {});
+            await window.Arkly.editEntry(row.id, isVault ? { money: next } : { money_json: Money.toJson(next) }, {});
             if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [row.id]);
             toast('Repayment added');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
@@ -3982,7 +3982,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
           </div>`;
         const t = document.getElementById('rv-toggle-btn');
-        if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); window.dispatchEvent(new Event('dumpzone-reminders-changed')); await refresh(); };
+        if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); window.dispatchEvent(new Event('arkly-reminders-changed')); await refresh(); };
         document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), isVault); await refresh(); };
       }
     });
@@ -4041,7 +4041,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           try { await navigator.clipboard.writeText(`${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`); toast('Coordinates copied'); }
           catch { toast('Could not copy'); }
         };
-        // geo: URI hands off to the phone's maps app; nothing is fetched by Dumpzone. Leaving the app locks it like any background.
+        // geo: URI hands off to the phone's maps app; nothing is fetched by Arkly. Leaving the app locks it like any background.
         document.getElementById('lv-maps-btn').onclick = () => {
           window.location.assign(`geo:${row.latitude.toFixed(6)},${row.longitude.toFixed(6)}?q=${row.latitude.toFixed(6)},${row.longitude.toFixed(6)}(${encodeURIComponent(row.label)})`);
         };
@@ -4140,8 +4140,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           b.addEventListener('pointerup', (e) => e.stopPropagation());
           b.addEventListener('click', () => go(step));
         }
-        shareBtn.onclick = () => window.Dumpzone.shareEntry(item.id);
-        downloadBtn.onclick = () => window.Dumpzone.downloadPlain(item.id);
+        shareBtn.onclick = () => window.Arkly.shareEntry(item.id);
+        downloadBtn.onclick = () => window.Arkly.downloadPlain(item.id);
         deleteBtn.onclick = async () => {
           if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
           offerUndo([item.id], { isVault });

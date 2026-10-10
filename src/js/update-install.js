@@ -17,7 +17,7 @@ async function purgeUpdateDownload() {
 async function downloadAndInstallUpdate({ assetUrl, token }) {
   if (!token) throw new Error('Add a GitHub access token first.');
   await purgeUpdateDownload();
-  const path = `${DIR}/dumpzone-update.apk`;
+  const path = `${DIR}/arkly-update.apk`;
   try {
     await Filesystem.downloadFile({
       url: assetUrl, path, directory: Directory.Cache, recursive: true,
