@@ -1,5 +1,7 @@
 # Native Android notes
 
+> Rename to Arkly (Decision 165): these pre-rename identifiers are kept on purpose, because changing them would break installs, signing or saved data: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, notification channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
+
 These are steps/edits needed inside the generated `android/` folder (created by `npx cap add android`).
 **`android/` has never actually been committed** (confirmed Session 25 — build-android.yml's `if [ ! -d
 "android" ]` check has been true on every run so far), so anything that needs to land inside it — like
@@ -226,7 +228,7 @@ regardless of what actually shipped, with no way to tell builds apart.
 `scripts/patch-version.js`, run by CI right after `scripts/patch-manifest.js`, fixes this:
 `versionCode` is set to the GitHub Actions run number (`github.run_number` — a strictly increasing
 integer, no manual step, always available), and `versionName` is `<package.json version>+<run number>`,
-e.g. `0.1.0+42`. Check **Settings > Apps > Dumpzone > App info** on-device to see the installed build's
+e.g. `0.1.0+42`. Check **Settings > Apps > Arkly > App info** on-device to see the installed build's
 exact version. Bump `package.json`'s `"version"` by hand for anything worth calling a real release; the
 run-number suffix always changes regardless, so every CI build is distinguishable even between
 deliberate version bumps.
@@ -278,9 +280,9 @@ dispatches a plain DOM event straight into the WebView via `evaluateJavascript()
 ```java
 getBridge().getWebView().post(() ->
     getBridge().getWebView().evaluateJavascript(
-        "window.dispatchEvent(new Event('dumpzone-screen-off'))", null));
+        "window.dispatchEvent(new Event('arkly-screen-off'))", null));
 ```
-`src/js/app.js` listens with an ordinary `window.addEventListener('dumpzone-screen-off', ...)` —
+`src/js/app.js` listens with an ordinary `window.addEventListener('arkly-screen-off', ...)` —
 no Capacitor plugin API involved on the JS side either.
 
 **`scripts/patch-screenlock.js`** applies this, same idempotent-CI-script pattern as
