@@ -1,4 +1,4 @@
-/* Dumpzone visual system (Decision 86). Rules, so later passes stay consistent:
+/* Arkly visual system (Decision 86). Rules, so later passes stay consistent:
    - Surfaces are layered (bg < surface < surface-2) with a hairline border and one soft shadow; no
      flat boxes, no heavy outlines.
    - Color carries meaning: one hue per capture type (--tc-rgb / --tc-ink, set from data-type or
