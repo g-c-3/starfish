@@ -2083,3 +2083,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The notice is a sticky "Securing files: N of M"; a failure shows a count.
 - Not covered: thumbnails (no longer on disk, Decision 162); Vault files (already inside `encrypted_body`).
 - Risk: the conversion rewrites the owner's real files in place. Export Now first.
+
+**164. Update check and download for the private repo.** Supersedes the public-repo parts of Decisions 72, 75, 77 and 80; the tap-only rule of Decision 72 stands.
+- The repo is private: the unauthenticated release list returns 404 and the browser asset link needs a browser session.
+- The owner saves a read-only fine-grained token once in Settings > Updates. It is stored as `meta.update_token` in the encrypted database. It is not in `APP_SETTINGS_KEYS`, so no backup carries it, and it is not in the repo, the workflow, the docs or the built APK. It is a fourth stored secret, independent of the three credentials.
+- "Check for updates" sends `Authorization: Bearer <token>` to `api.github.com` only, only on that tap. No token saved: no request, and the status says so. 401, 403 and 404 report "token refused" (a private repo answers 404 to a token that cannot see it).
+- The asset is the API `url`, not `browser_download_url`. Download is native (`Filesystem.downloadFile`, token and `Accept: application/octet-stream`), into `cache/update/`, then handed to the system installer. A browser hand-off (Decision 77) cannot send the token; an in-page fetch is blocked because the signed asset URL answers without CORS headers.
+- `REQUEST_INSTALL_PACKAGES` added to `patch-manifest.js`. Android asks the owner once to allow installs from this app. The downloaded APK is purged at launch.
+- Network calls are now the ad unit, the optional Drive backup, Verify link and this tap: the last carries a credential. Token and request details checked from the authoring environment: release list 200, asset API url 302 to a signed URL, native-style download with both headers 206.
+- Risk: token rotation or expiry stops updates until a new one is saved. An APK that carried the token would expose it to anyone holding the APK; it does not.

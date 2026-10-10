@@ -29,9 +29,16 @@ Phase 17 F (Decision 163), started on the owner's "Start" in the same session af
 - `src/js/app.js`: runs it after the database opens, with a "Securing files" notice.
 - Verified: 8 Node checks (3 files incl. empty, orphan sweep, missing source, write failure rollback, second run no-op) and the 17 earlier ones; `vite build` passes. Not verified: CI, device (DP44).
 
-Decisions made (continued): 163.
+Update check for the private repo (Decision 164), on "Continue".
+- `src/js/update-check.js`: token header, API asset url, new failure reasons.
+- `src/js/update-install.js` (NEW): native download with the token, then the installer.
+- `src/index.html`, `src/js/app.js`: token field in Settings > Updates, download via the installer.
+- `scripts/patch-manifest.js`: `REQUEST_INSTALL_PACKAGES`.
+- Verified: update check against stubbed responses (no token, newer, current, 401, 403, 404, 500, no APK); `vite build` passes; token, release list and signed-URL download checked with curl. Not verified: CI, device (DP45), the installer hand-off.
 
-Next session start point: DP44 on a device (Export Now first), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
+Decisions made (continued): 163, 164.
+
+Next session start point: DP44 and DP45 on a device (Export Now first; DP45 needs a newer build to update to), then Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper) each needing approval.
 
 ---
 

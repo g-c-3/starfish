@@ -14,7 +14,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
   reminders, expenses, or local backup/restore.
 - The only network calls this app will ever make are the ad SDK (deferred — see below), only if
   the person explicitly opts in, Google Drive backup (§4b), and two actions the person starts with a
-  tap: Check for updates and Verify link (short map link, Decision 117). None is reachable from, or
+  tap: Check for updates (private repo; carries a saved read-only token, Decision 164) and Verify link (short map link, Decision 117). None is reachable from, or
   required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
@@ -837,3 +837,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `pdfviewer.js`: `drawText` adds the layer after each canvas draw; `search` fills `hits` and `hitsByPage`; `applyHits` marks spans when a layer is drawn; the page text cache is cleared by `clearSearch` and `destroy`. `getOutline` resolves named and direct destinations to page numbers. `attachThumbnails` draws and releases thumbnails with an `IntersectionObserver` rooted in the panel body.
 - `pdftools.js`: mounted by `openPdf` after the document opens; `closeTop()` backs the viewer's `guard`; `destroy()` runs from `onClose`, which also covers a Vault lock.
 
+## Update check, private repo (Decision 164)
+- Tap only. `GET api.github.com/repos/<repo>/releases` with `Authorization: Bearer <token>`; newest release by CI run number.
+- Token: `meta.update_token`, entered in Settings > Updates, never in a backup, the repo, the workflow, the docs or the APK.
+- Download: the asset's API `url` with the token and `Accept: application/octet-stream`, natively into `cache/update/`, then the system installer. Needs `REQUEST_INSTALL_PACKAGES`.
