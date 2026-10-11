@@ -35,9 +35,25 @@ Decisions made (continued): 168.
 
 Verified in the authoring environment: 35 Node checks on `pdfpages.js` (earlier 31 plus lazy items, failing item position for a merge and for a picture, lazy picture); a real JPEG (landscape 4:3, portrait 3:5) gives A4-fit pages 794x595 and 505x842 points; `vite build` passes. Not verified: CI, any device behavior (DP50), canvas conversion (`toJpegBytes` needs a browser), the order sheet, the selection bar width with the extra button, Vault path, a password-protected source (message path only).
 
-Open: C3 (signature picture), Phase 17 open items, haptics and the light-theme pass, each needing approval.
+Device pass: DP50 confirmed.
 
-Next session start point: DP50 on the device; then C3 on approval.
+Phase 18 C3 (Decision 169), on "Next" after DP50.
+- `src/js/pdfmarkconst.js`: picture sizes, maximum side, clear-background thresholds.
+- `src/js/pdfmark.js`: `sign` mark drawn with the page rotation; one embedded copy per picture.
+- `src/js/pdfmark-ui.js`: Picture tool, `buildPicture` (canvas to PNG, optional clearing of light pixels), size chips, Clear background, Choose or Change picture, preview addresses released on close.
+- `src/css/pdfmark.css`: placed picture style.
+- `src/js/app.js`: `pickImage` in the mark-up context (system picker after `beginPickerLaunch`).
+- Docs: ROADMAP (C3, DP51, DP50 confirmed), ARCHITECTURE (picture mark), DECISIONS (169).
+
+Bugs fixed: none.
+
+Decisions made (continued): 169.
+
+Verified in the authoring environment: placement of two pictures on 6 page configurations (rotation 0, 90, 180, 270, crop box, rotation with crop box) against pdf.js: both corners of each within 0.6 point, after composing the full transform chain; the same picture placed twice embeds one image and one mask; `vite build` passes. Not verified: CI, any device behavior (DP51), `buildPicture` (needs a browser), the picker return with the app lock, the bar with the extra row on a narrow screen, the Vault path.
+
+Phase 18 C is built in full (C1 to C3). Open: DP51, Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper), haptics and the light-theme pass, each needing approval.
+
+Next session start point: DP51 on the device; then the owner picks among the open items.
 
 ---
 

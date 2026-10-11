@@ -852,6 +852,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Export maps displayed fractions to PDF space with rotation and crop box (`toPdf`), draws into the page content, fills form fields through the form API. Password-protected files are refused before mark-up opens.
 - Save goes through `captureFile` (Home) or `captureToVault`; Replace writes first, then `permanentlyDelete`.
 - Bytes are read again when mark-up starts (pdf.js consumes the viewer's copy) and dropped when it ends.
+- Picture mark (Decision 169): `{ page, kind: 'sign', x, y, w, ratio, png, url }`. `buildPicture` (in `pdfmark-ui.js`) converts the picked file to PNG on a canvas, with optional clearing of light pixels; `pdfmark.js` embeds each distinct `png` once and draws it with the page rotation. The picker is `pickImage` in the mark-up context in `app.js`, launched after `beginPickerLaunch()`.
 
 ## PDF page tools (Decision 167)
 - `src/js/pdfpages-ui.js` (editor screen, loaded after the mark-up) and `src/js/pdfpages.js` (pure: bytes in, bytes out, loaded when Edit pages is tapped). Styles in `src/css/pdfpages.css`.
