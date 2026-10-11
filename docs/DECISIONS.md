@@ -2179,3 +2179,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Decision: dropped, as agreed beforehand (stop rule: no vibration on the third build). Removed: the dependency, `src/js/haptics.js`, the Settings row, every call site (`toastSaved` is gone, success toasts are plain `toast` again). The install-time VIBRATE permission leaves with the plugin.
 - Not removed: a `haptics_enabled` row may remain in `meta` on a phone that ran those builds; nothing reads it.
 - Revisit only with a phone where it works and a reason; a native `performHapticFeedback` route is the untried alternative.
+
+**174. Vault batch numbering continues from the existing labels (Phase 8, part).**
+- The Vault multi-select save (Image, PDF, Files) already offered one common name, numbered. It restarted at 1 on every batch, so a second batch named "Invoice" gave a second "Invoice 1". Home continues from the counter in `label_history` (Decision 84).
+- The Vault keeps no plaintext label history (labels are encrypted, Decision 145), so none is added. The start is read from the in-memory Vault index: `nextBatchStart(entries, type, baseName)` in `src/js/batch-number.js` returns the highest N among labels exactly `<baseName> N` of the same type (N a plain positive integer of up to 9 digits), or 0. The batch then numbers from that value plus one.
+- Counted: entries in the Vault index (not in the Vault Trash). A name that matches only as text (`Invoice 2b`, `Invoice 02`, `Old Invoice 40`) is ignored. Individual (keep each name) saves and single files are unchanged. Home is unchanged.
+- Differs from Home: Home continues from how many times the base label was used; the Vault continues from the highest number present, so deleting the highest-numbered entry lets its number be used again.
+- Risks: not run through CI or on a device (DP57).
