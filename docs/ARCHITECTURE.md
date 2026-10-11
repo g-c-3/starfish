@@ -519,9 +519,9 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   **Home layout (Decision 81):** the eight cards are folders, each listing only its type (Money also lists
   expenses) with a New button inside; a universal New on Home asks which type; the mixed timeline is now
   search results only. The Vault mirrors this exactly (Decision 85).
-- **Confidence-based confirmation, not silent action** — when the intent engine detects a reminder,
-  show a small inline confirmation chip with an auto-dismiss into the as-parsed default if ignored, rather than committing silently with no visible
-  feedback. Builds trust since nothing infers silently — every action traces to a visible rule.
+- **Confirmation, not silent action (Decision 175)** — when typed note text reads as a reminder with a time still
+  ahead, a Yes/No sheet shows the parsed label and time after the Save dialog (Set reminder / Keep as note). Back or No
+  keeps a plain note, so an unanswered sheet never creates an entry nobody confirmed. Every action traces to a visible rule.
 - **Map view for saved locations** — entries with a lat/long get a lightweight map view (in addition to the flat
   timeline), since location was otherwise dead metadata on a card.
 - **Label autocomplete from history** — implemented via the `label_history` table in `db.js` (also what powers
@@ -790,7 +790,7 @@ of this has been run on an actual device or through CI yet** — that remains th
 flagged at the end of every session since Phase 1.
 
 Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the
-map view, and the confidence-confirmation chip UI. These are the next
+map view. These are the next
 implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.

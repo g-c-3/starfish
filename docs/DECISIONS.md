@@ -2186,3 +2186,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Counted: entries in the Vault index (not in the Vault Trash). A name that matches only as text (`Invoice 2b`, `Invoice 02`, `Old Invoice 40`) is ignored. Individual (keep each name) saves and single files are unchanged. Home is unchanged.
 - Differs from Home: Home continues from how many times the base label was used; the Vault continues from the highest number present, so deleting the highest-numbered entry lets its number be used again.
 - Risks: not run through CI or on a device (DP57).
+
+**175. Reminder wording in a typed note is offered, not applied (Phase 9, confirmation item).**
+- Cause: a note typed in the Home editor that contained "remind me" was converted to a reminder with no question (Decision 124 kept reminder text detection). The conversion dropped the tags and description set in the Save dialog, kept only the parsed words as the label, and ended with a "Note saved" toast.
+- Rule: after the Save dialog, text that reads as a reminder with a time still ahead opens a Yes/No sheet: the parsed label and time, "Set reminder" or "Keep as note". Back or No keeps a plain note. A lock while the sheet is open saves nothing, as for the other capture dialogs.
+- Differs from the plan in ARCHITECTURE §7 (auto-dismiss into the parsed default): an unanswered sheet would then create the entry nobody confirmed. The default is the note, the same as typing without the phrase.
+- Reminder from the sheet: name, tags and description come from the Save dialog; when the description is empty and the name differs from the text, the typed text is stored as the description so it is not lost. Time and repeat are the parsed time and none; Reschedule in the viewer changes them. The toast shows the time and distance (Decision 95).
+- Code: `reminderOffer(text, now)` in `intents.js` (parsed reminder with a future time, else null). `captureText` in `app.js` no longer detects anything; it makes a reminder only when called with `reminderAt`. The Vault note path never detected and is unchanged.
+- Unchanged: the phrases and the time parsing, the Reminder card (Save dialog with its own time fields), notifications, Vault, backup.
+- Risks: not run through CI or on a device (DP58). The sheet over the Save dialog and the lock-while-open path need a device check.

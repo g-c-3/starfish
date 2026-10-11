@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 108**
+
+Phase 9, confirmation item (Decision 175), chosen as the smallest open item that needs no new dependency, no device review and no change to credentials or backups. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 124, 131, 164 and 172 to 174, ARCHITECTURE §7, §8, §13 and the update-check section. Source read: `intents.js`, the capture path in `app.js`.
+- Finding: the update check for the private repo (token header, API asset url, tap only) is already built and confirmed (Decision 164, DP45); nothing to build there.
+- Finding, bug: a typed note containing "remind me" became a reminder silently, losing the Save dialog's tags and description, with a "Note saved" toast.
+- `src/js/intents.js`: `reminderOffer(text, now)`.
+- `src/js/app.js`: Yes/No sheet after the Save dialog when `reminderOffer` matches; `captureText` makes a reminder only when `reminderAt` is passed; `detectIntent` import and `buildFromHandler` removed.
+- Docs: ROADMAP (Phase 9, DP58), ARCHITECTURE (§7, §13), DECISIONS (175).
+
+Bugs fixed:
+- Cause: `captureText` converted any text matching the reminder phrase and rebuilt the entry from the parsed words only. Fix: conversion happens only after a confirmed offer, and the entry takes name, tags and description from the Save dialog. Correct because the only caller now decides, and the default (Back, No) is the plain note.
+
+Decisions made: 175.
+
+Verified in the authoring environment: 9 Node checks on `reminderOffer` (tomorrow at 9am gives the next day 9:00 and the label, 5pm ahead today, a past time with "today" refused, a past time with no day word rolls to tomorrow, plain text, expense text and empty text give none, case-insensitive phrase); syntax check of both files; `vite build` passes. Not verified: CI, the sheet over the Save dialog on a device, Back and lock while it is open, the notification firing for a reminder made this way (DP58).
+
+Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning. Each needs approval or a device review.
+
+Next session start point: DP58 on the device; then the owner picks among the open items.
+
+---
+
 **Session 107**
 
 Phase 17 item K (Decision 172), chosen on the owner's delegation. Reason: no new dependency, no change to backups or to any stored secret, and the hash count (210000) was the lowest of the three credentials. Haptics needs a new dependency and approval, light-theme needs a device review, the Vault key count means re-encrypting the Vault, the app-password wrapper is large. Fresh session; Tier 1 and Tier 2 docs read; `crypto.js`, `db.js`, `app.js` credential paths and `backup.js` credential reads checked first.
