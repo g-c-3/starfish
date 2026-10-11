@@ -883,6 +883,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
 
 ### Haptic feedback (Decision 173)
-- `src/js/haptics.js` wraps `@capacitor/haptics`. Kinds: `tick`, `saved`, `delete`, `warning`. On by default; `meta.haptics_enabled`; Settings, Haptic feedback.
+- `src/js/haptics.js` wraps `@capacitor/haptics`. Kinds: `tick` 40 ms, `saved` 70 ms, `delete` 90 ms, `warning` 220 ms, all `vibrate({ duration })`. On by default; `meta.haptics_enabled`; Settings, Haptic feedback.
 - Call sites: multi-select start, `toastSaved` (every success toast of a save), `offerUndo`, wrong app password, wrong Vault PIN.
+- Settings, Haptic feedback, Test vibration: one 300 ms buzz that reports the plugin's answer.
 - The plugin adds the install-time `VIBRATE` permission. No network, no stored data.

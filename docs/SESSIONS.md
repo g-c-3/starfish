@@ -18,13 +18,13 @@ Then haptics (Phase 15 polish item 4, Decision 173), on the owner's delegation a
 - `src/index.html`: Haptic feedback switch in Settings. `src/js/app.js`: switch wiring and bootstrap apply (`meta.haptics_enabled`, on by default), `toastSaved` for the success toasts of saves, calls in `offerUndo`, multi-select start, wrong password and wrong PIN.
 - Docs: ROADMAP (Haptics, DP56), ARCHITECTURE (Haptic feedback), DECISIONS (173).
 
-Bugs fixed: none.
+Bugs fixed: haptics built on the plugin's impact and notification patterns gave no vibration on the owner's phone (DP56, first build). Cause: not confirmed; the patterns are 20 to 60 ms pulses behind a zero-amplitude segment, or the phone is blocking vibration. Fix: every kind now uses `vibrate({ duration })` (40, 70, 90, 220 ms) and Settings has a Test vibration button that shows what the plugin answered. Why correct: a one-shot of a chosen length is felt on any motor, and the test separates a plugin or permission error from a phone setting.
 
 Decisions made: 172, 173.
 
 Verified in the authoring environment (K): 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Device pass (DP55) confirmed: the first unlock of the password and the first unlock of the Vault PIN each took longer (the upgrades); everything works after. Not verified: CI.
 
-Verified in the authoring environment (haptics): 5 Node checks on `haptics.js` against a stub plugin (each kind maps to its impact or notification, nothing when off, a rejection and a synchronous throw swallowed, works again after errors); `vite build` passes. Not verified: CI, any device behavior (DP56), whether the phone's vibration settings suppress it.
+Verified in the authoring environment (haptics): 7 Node checks on `haptics.js` against a stub plugin (each kind maps to its duration, nothing when off, the test ignores the switch and buzzes 300 ms, the test reports an error and the last error, a rejection and a synchronous throw swallowed, works again after errors); `vite build` passes. Not verified: CI, any device behavior (DP56), whether the phone's vibration settings suppress it.
 
 Open: DP56, Phase 17 (Vault key count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
 
