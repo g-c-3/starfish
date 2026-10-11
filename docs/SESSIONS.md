@@ -86,7 +86,9 @@ Bug fixed, in `src/js/backup.js` (`wipeCategories`):
 - Fix: one pass reading each entry once, deleting it when it matches any selected category, with a per-entry count in the status line.
 - Why correct: the set of removed entries is the union of the categories' matches, the same as before; checked in Node against the previous function on a mock database (same rows left and removed for five category selections, queries 595 to 111 for 110 entries and all categories).
 
-Next session start point: DP54 on the device (Overwrite restore speed); then the owner picks among the open items.
+Device pass: DP54 confirmed (Overwrite restore is fast).
+
+Next session start point: the owner picks among the open items. Haptics needs approval for a new dependency; light-theme tuning needs a device review; Phase 17 has the password-hash and Vault-key iteration count and the app-password wrapper.
 
 ---
 
