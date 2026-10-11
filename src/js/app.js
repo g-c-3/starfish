@@ -22,6 +22,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
+import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
@@ -1153,6 +1154,7 @@ async function handleBackupNow() {
   const categories = getCheckedCategories('backup');
   if (!passphrase) { statusEl.textContent = 'Enter a backup passkey first.'; return; }
   if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
+  if (!(await confirmStrength('passkey', passphrase))) return;
 
   statusEl.textContent = 'Checking storage…';
   const result = await withoutIdleLock(() => createBackup(db, {
@@ -1413,6 +1415,12 @@ const vaultMoneyHooks = moneyHooksFor(true); // a Vault lock closes this one; an
 
 // Yes/No sheet. Resolves true on Yes, false on No, Back or a lock. One at a time; a second call returns false.
 // explicitNo: the No button resolves 'no'; Back or a lock still resolves false, so a dismissal is never read as a choice.
+// Advisory check when a secret is set (Decision 170): a weak one is shown with Use it or Change it. Resolves true to go on.
+async function confirmStrength(kind, secret) {
+  const w = weakness(kind, secret);
+  return !w || askYesNo({ title: w.title, text: w.text, yes: 'Use it', no: 'Change it' });
+}
+
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false } = {}) {
   if (activeYesNo) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -2028,7 +2036,7 @@ async function handleDriveRestore(fileId, accessToken) {
 async function handleDriveBackupNow() {
   const statusEl = document.getElementById('drive-backup-status');
   const passphrase = await askText({ title: 'Backup passkey', text: 'Never stored. Needed for this upload only.', password: true, ok: 'Back up' });
-  if (!passphrase) return;
+  if (!passphrase || !(await confirmStrength('passkey', passphrase))) return;
   statusEl.textContent = 'Checking Drive storage…';
   try {
     const result = await backupToDrive(db, { passphrase, categories: ALL_CATEGORIES });
@@ -2127,7 +2135,7 @@ async function checkAutoBackupOnOpen() {
         runBtn.removeEventListener('click', onRun);
         skipBtn.removeEventListener('click', onSkip);
       };
-      const onRun = () => { const v = input.value; cleanup(); resolve(v || null); };
+      const onRun = async () => { const v = input.value; if (v && !(await confirmStrength('passkey', v))) return; cleanup(); resolve(v || null); }; // a declined weak passkey keeps the banner open
       const onSkip = () => { cleanup(); resolve(null); };
       runBtn.addEventListener('click', onRun);
       skipBtn.addEventListener('click', onSkip);
@@ -2293,6 +2301,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- First-run setup / lock screen ----
   document.getElementById('first-run-continue-btn').addEventListener('click', async () => {
+    if (!(await confirmStrength('password', document.getElementById('setup-app-password').value))) return;
+    if (!(await confirmStrength('pin', document.getElementById('setup-vault-pin').value))) return;
     await window.completeFirstRunSetup({
       appPassword: document.getElementById('setup-app-password').value || null,
       appPasswordHint: document.getElementById('setup-app-password-hint').value,
@@ -2497,6 +2507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
+    if (!(await confirmStrength('pin', document.getElementById('vault-setup-pin-input').value))) return;
     await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
     await refreshVaultGateView();
   });
