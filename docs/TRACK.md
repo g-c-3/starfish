@@ -166,3 +166,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-11 | Session 106 (continued) | Decision 168 | Phase 18 C2 built: Make a PDF in the selection bar (merge PDFs, pictures to one PDF), order sheet, Home and Vault; DP50 added; 35 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-11 | Session 106 (device pass, 2) | none | DP50 confirmed on device: merge PDFs and Make a PDF from pictures; Phase 18 C2 done on device |
 | 2026-10-11 | Session 106 (continued, 2) | Decision 169 | Phase 18 C3 built: Picture tool in the mark-up (placed picture, clear background, three sizes); Phase 18 C built in full; DP51 added; geometry checked in Node against pdf.js; vite build passes; not run through CI or on a device |
+| 2026-10-11 | Session 106 (device pass, 3) | none | DP51 confirmed on device: picture tool; Phase 18 complete |
+| 2026-10-11 | Session 106 (continued, 3) | Decision 170 | Phase 17 I built: weak-secret warning (advisory) at first-run, Vault PIN setup, Backup now, auto-backup banner, Drive Backup now; DP52 added; 12 Node checks; vite build passes; not run through CI or on a device |

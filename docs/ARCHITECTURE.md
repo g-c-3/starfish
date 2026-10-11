@@ -865,3 +865,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Button `sel-pdf` in the selection bar; `runMakePdf` in `app.js` (inside `wireSelection`) reads the selected rows (Home: database rows; Vault: the unlocked index) and requires all PDFs or all pictures.
 - `src/js/pdfcompose-ui.js`: `askCompose` (order sheet, routed through `activeCompose` so Back and locks close it) and `toJpegBytes` (canvas conversion).
 - Sources are read one at a time through `readStoredBytes` (Home) or `loadVaultEntryContent` (Vault). `saveComposedPdf` writes the output through `captureFile` or `captureToVault`.
+
+### Weak-secret warning (Decision 170)
+- `src/js/passcheck.js` returns a message for a weak secret (shorter than 6 for a Vault PIN, 8 for the app-open password, 10 for a backup passkey, or one repeated character) and null otherwise. `confirmStrength` in `app.js` shows it in the yes/no dialog and resolves true to go on.
+- Called where a secret is set: first-run setup, Vault PIN setup, Backup now, the auto-backup banner, Drive Backup now. Advisory only; no credential is stored or compared.

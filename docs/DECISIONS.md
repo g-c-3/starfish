@@ -2144,3 +2144,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Picker: the app lock exemption of Decision 73 covers the one pause and return of the system picker.
 - Privacy: the picture's bytes, its converted copy and its preview address live in memory only; the preview address is released on Close, on closing the viewer and on a lock. No network, no new permission, no new dependency.
 - Risks: not run through CI or on a device. Canvas conversion and the picker return are untested on a phone. Picking a picture while the app lock timer runs relies on the Decision 73 window. A picture with a coloured background keeps its colours where not light.
+
+**170. Weak-secret warning when a credential is set (Phase 17, open item).**
+- Warning only, never a block. A short PIN is a legitimate choice for a quick unlock on a phone that is itself locked, and existing credentials are untouched. The person sees why it is weak and picks Use it or Change it.
+- Thresholds, in characters: Vault PIN 6, app-open password 8, backup passkey 10. The passkey is highest because a backup file leaves the phone and can be guessed against offline. Also flagged at any length: one character repeated.
+- Where it runs: first-run setup (app password, then Vault PIN); Vault PIN setup; Backup now; the auto-backup banner (a declined weak passkey keeps the banner open); Drive Backup now. Not on restore or Drive restore (the passkey there is the one the backup already has), not on unlock, not on empty fields.
+- The three credentials stay independent: each field is checked on its own against its own threshold; nothing is compared across them and nothing is stored.
+- Back on the dialog counts as Change it.
+- Code: `src/js/passcheck.js` (pure, 12 Node checks); `confirmStrength` and the call sites in `app.js`; the existing yes/no dialog.
+- Not done, by choice: a block, a score meter, a dictionary or breach list (no data to ship, nothing to look up), or any change to the PBKDF2 iteration count (existing hashes and backups depend on it; separate decision).
+- Risks: not run through CI or on a device. The dialog appearing over the first-run screen is untested.

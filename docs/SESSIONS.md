@@ -51,9 +51,22 @@ Decisions made (continued): 169.
 
 Verified in the authoring environment: placement of two pictures on 6 page configurations (rotation 0, 90, 180, 270, crop box, rotation with crop box) against pdf.js: both corners of each within 0.6 point, after composing the full transform chain; the same picture placed twice embeds one image and one mask; `vite build` passes. Not verified: CI, any device behavior (DP51), `buildPicture` (needs a browser), the picker return with the app lock, the bar with the extra row on a narrow screen, the Vault path.
 
-Phase 18 C is built in full (C1 to C3). Open: DP51, Phase 17 open items (PBKDF2 iteration count, passcode length warning, optional app-password wrapper), haptics and the light-theme pass, each needing approval.
+Device pass: DP51 confirmed. Phase 18 is complete on device.
 
-Next session start point: DP51 on the device; then the owner picks among the open items.
+Phase 17 item I, chosen by me when asked for "next item is your call" (Decision 170). Reason: no new dependency, no change to existing hashes or backups, and it closes a real gap (nothing checked secret length). Haptics needs a new dependency and approval, light-theme needs a device review, the PBKDF2 count changes what existing hashes and backups depend on, the app-password wrapper is large.
+- `src/js/passcheck.js` (NEW): pure strength check.
+- `src/js/app.js`: `confirmStrength` and calls at first-run setup, Vault PIN setup, Backup now, the auto-backup banner, Drive Backup now.
+- Docs: ROADMAP (I, DP52, DP51 confirmed, Phase 18 complete), ARCHITECTURE (weak-secret warning), DECISIONS (170).
+
+Bugs fixed: none.
+
+Decisions made (continued): 170.
+
+Verified in the authoring environment: 12 Node checks on `passcheck.js` (empty, each threshold on both sides, repeated character, a single character, characters outside the basic range counted as one each, unknown kind, the secret not present in the message); `vite build` passes. Not verified: CI, any device behavior (DP52), the dialog over the first-run screen, the auto-backup banner staying open after Change it.
+
+Open: DP52, Phase 17 (PBKDF2 iteration count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+
+Next session start point: DP52 on the device; then the owner picks among the open items.
 
 ---
 
