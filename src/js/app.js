@@ -3,7 +3,7 @@
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
-import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, deriveAesKey } from './crypto.js';
+import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, deriveAesKey, encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
@@ -661,6 +661,7 @@ window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 
 async function onUnlocked() {
   showScreen('main-screen');
+  if (await commitNoteDrafts()) toast('Unsaved text was saved as Autosave');
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
   // Ads deliberately NOT wired in this build (explicit product decision — deferred to a future
@@ -896,6 +897,7 @@ async function unlockVault(pin) {
   if (!ok) return { success: false };
   const { key } = await deriveAesKey(pin, private_pin_salt);
   privateSessionKey = key;
+  if (await commitNoteDrafts(key)) toast('Unsaved Vault text was saved as Autosave'); // before the index build, so it is listed
   await buildVaultIndexWithNotice(); // in-memory only — see vault.js
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
@@ -1115,7 +1117,61 @@ async function runBulkFileAction(action, entryIds, extraOpts = {}) {
 // data access. Gradient mode removed (Decision 53) — old `gradient_mode`/`gradient_color_1`/
 // `gradient_color_2` meta rows from before this session are simply never read again; harmless to
 // leave in place, including inside any backup file made before this change. ----
-const NOTE_DRAFT_KEY = 'note_draft'; // unsaved Home note text (Decision 176); in the encrypted database, not in backups
+// ---- Text drafts and Autosave (Decisions 176, 177). Typed text is kept in meta while an editor is open and when it closes
+// without a save or an explicit discard. The next unlock (Home) or Vault unlock (Vault) commits it: a new note becomes an entry
+// named "Autosave <date time>", an edit is written onto its entry. Home rows sit in the encrypted database; Vault rows are
+// encrypted under the Vault key. Neither is in a backup (not in APP_SETTINGS_KEYS). ----
+const DRAFT_KEYS = { homeNew: 'note_draft', homeEdit: 'note_edit_draft', vaultNew: 'vault_note_draft', vaultEdit: 'vault_edit_draft' };
+function noteDraftHandlers({ isVault, entryId = null }) {
+  const key = isVault ? (entryId ? DRAFT_KEYS.vaultEdit : DRAFT_KEYS.vaultNew) : (entryId ? DRAFT_KEYS.homeEdit : DRAFT_KEYS.homeNew);
+  return {
+    // The Vault key is read before the first await: a Vault lock calls this just before it clears the key.
+    persist: async (text) => {
+      const payload = entryId ? JSON.stringify({ id: entryId, text }) : text;
+      if (!isVault) { await metaSet(key, payload); return; }
+      const k = privateSessionKey;
+      if (!k) return;
+      await metaSet(key, await encryptPrivateNote(k, payload));
+    },
+    clear: () => metaSet(key, '')
+  };
+}
+function autosaveName() {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  return `Autosave ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Returns how many drafts were committed. A draft that cannot be committed stays for the next unlock.
+async function commitNoteDrafts(vaultKey = null) {
+  let done = 0;
+  const scopes = [{ isVault: false, key: null }];
+  if (vaultKey) scopes.push({ isVault: true, key: vaultKey });
+  for (const { isVault, key } of scopes) {
+    for (const edit of [false, true]) {
+      const mkey = isVault ? (edit ? DRAFT_KEYS.vaultEdit : DRAFT_KEYS.vaultNew) : (edit ? DRAFT_KEYS.homeEdit : DRAFT_KEYS.homeNew);
+      try {
+        let raw = await metaGet(mkey, '');
+        if (!raw) continue;
+        if (isVault) {
+          try { raw = await decryptPrivateNote(key, raw); } catch { await metaSet(mkey, ''); continue; } // made under another PIN: unreadable
+        }
+        let id = null, text = raw;
+        if (edit) { try { ({ id, text } = JSON.parse(raw)); } catch { await metaSet(mkey, ''); continue; } }
+        if (!text || !text.trim()) { await metaSet(mkey, ''); continue; }
+        let applied = false;
+        if (edit) {
+          try { await editEntry(db, id, { text }, { privateSessionKey: key }); applied = true; } catch { applied = false; } // entry gone: keep the text as an Autosave
+        }
+        if (!applied) {
+          if (isVault) await saveVaultEntry(db, key, { type: 'note', label: autosaveName(), tags: [], description: '', text });
+          else await insertEntry(db, { id: crypto.randomUUID(), type: 'note', label: autosaveName(), body_text: text });
+        }
+        await metaSet(mkey, '');
+        done++;
+      } catch { /* left in place, retried at the next unlock */ }
+    }
+  }
+  return done;
+}
 async function metaGet(key, fallback = null) {
   const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
   return (r.values && r.values[0]) ? r.values[0].value : fallback;
@@ -1634,15 +1690,17 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
 }
 
 // Resolves the text on Save, or null on leave. Leaving with unsaved changes needs a second Back within 3 s.
-// draftKey (Home new note only, Decision 176): the text is also written to that meta row while typing and when the editor
-// closes by any route except an explicit discard, so a lock or a screen-off does not lose it. startDirty: the text came from a draft.
-function openTextEditor({ title = 'New note', text = '', isVault = false, draftKey = null, startDirty = false } = {}) {
+// persist(text) / clear() (Decision 177): while typing and when the editor closes with unsaved changes by any route except an
+// explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
+function openTextEditor({ title = 'New note', text = '', isVault = false, persist = null, clear = null } = {}) {
   return new Promise((resolve) => {
     const $ = (id) => document.getElementById(id);
     const screen = $('editor-screen'), ta = $('editor-text');
-    let dirty = startDirty;
+    let dirty = false;
     let draftTimer = null;
-    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (draftKey) metaSet(draftKey, ta.value).catch(() => {}); };
+    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (persist) Promise.resolve(persist(ta.value)).catch(() => {}); };
+    const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
+    document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = title;
     ta.value = text;
     const updateCount = () => {
@@ -1651,8 +1709,9 @@ function openTextEditor({ title = 'New note', text = '', isVault = false, draftK
     };
     updateCount();
     const finish = (result, discarded = false) => {
-      if (draftKey && !discarded) saveDraft(); // lock, screen-off, Save: keep the text
+      document.removeEventListener('visibilitychange', onHide);
       clearTimeout(draftTimer);
+      if (!discarded) { if (dirty) saveDraft(); else if (clear) Promise.resolve(clear()).catch(() => {}); } // lock, screen-off, Save: keep the text
       screen.classList.add('hidden');
       ta.blur();
       ta.oninput = null;
@@ -1664,11 +1723,11 @@ function openTextEditor({ title = 'New note', text = '', isVault = false, draftK
     const requestBack = async () => {
       if (!dirty) { finish(null); return; }
       const yes = await askYesNo({ title: 'Discard changes?', text: 'Your text has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
-      if (yes && activeEditor) { if (draftKey) await metaSet(draftKey, '').catch(() => {}); finish(null, true); }
+      if (yes && activeEditor) { if (clear) await Promise.resolve(clear()).catch(() => {}); finish(null, true); }
     };
     ta.oninput = () => {
-      dirty = startDirty || ta.value !== text; updateCount();
-      if (draftKey) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
+      dirty = ta.value !== text; updateCount();
+      if (persist) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
     };
     $('editor-back-btn').onclick = requestBack;
     $('editor-save-btn').onclick = () => {
@@ -2742,15 +2801,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       if (type === 'note') {
         let text = '', d = null;
+        const draft = noteDraftHandlers({ isVault: true });
         const mark = overlayAbortCount;
         while (!d) {
-          const res = await openTextEditor({ title: 'New vault note', text, isVault: true });
+          const res = await openTextEditor({ title: 'New vault note', text, isVault: true, persist: draft.persist, clear: draft.clear });
           if (res === null) return;
           text = res;
           d = await openSaveDialog({ heading: 'Save vault note', defaultName: defaultNoteName(text), isVault: true, discardLabel: 'Back to editing' });
           if (!d && overlayAbortCount !== mark) return;
         }
         await captureToVault({ type: 'note', label: d.name, tags: d.tags, description: d.description, text });
+        await draft.clear();
         renderVault();
         toast('Saved to the Vault');
       } else if (type === 'voice') {
@@ -3298,36 +3359,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function startCapture(type) {
     if (type === 'note') {
       // Editor, then the Save dialog. Backing out of the dialog returns to the editor with the text kept.
-      let text = (await metaGet(NOTE_DRAFT_KEY, '')) || '', d = null;
-      const restored = !!text;
-      if (restored) toast('Draft restored');
+      let text = '', d = null;
+      const draft = noteDraftHandlers({ isVault: false });
       const mark = overlayAbortCount;
       while (!d) {
-        const res = await openTextEditor({ title: 'New note', text, draftKey: NOTE_DRAFT_KEY, startDirty: restored });
+        const res = await openTextEditor({ title: 'New note', text, persist: draft.persist, clear: draft.clear });
         if (res === null) return;
         text = res;
         d = await openSaveDialog({ heading: 'Save note', defaultName: defaultNoteName(text), discardLabel: 'Back to editing' });
         if (!d && overlayAbortCount !== mark) return; // locked meanwhile
       }
-      // Reminder wording is offered, not applied (Decision 175). Back keeps a note; a lock saves nothing.
+      // The note is always saved. Reminder wording also offers a reminder on top of it (Decisions 175, 178); Back, No or a lock keeps the note only.
       let reminderAt = null;
       const offer = reminderOffer(text);
       if (offer) {
         const markAsk = overlayAbortCount;
-        const yes = await askYesNo({ title: 'Set a reminder?', text: `${offer.label}\n${reminderSetText(offer.fire_at).replace('Reminder set for ', '')}`, yes: 'Set reminder', no: 'Keep as note' });
-        if (overlayAbortCount !== markAsk) return; // locked meanwhile
-        if (yes === true) reminderAt = offer.fire_at;
+        const yes = await askYesNo({ title: 'Also set a reminder?', text: `${offer.label}\n${reminderSetText(offer.fire_at).replace('Reminder set for ', '')}`, yes: 'Set reminder too', no: 'Note only' });
+        if (overlayAbortCount === markAsk && yes === true) reminderAt = offer.fire_at;
       }
-      // A reminder keeps the typed text in its description when the person left that empty, so the text is not lost.
-      const description = reminderAt && !d.description && text.trim() !== d.name ? text : d.description;
-      try {
-        await captureText(text, 'note', { label: d.name, tags: d.tags, description, reminderAt });
-        toast(reminderAt ? reminderSetText(reminderAt) : 'Note saved');
-      } catch (err) {
-        if (!reminderAt) throw err;
-        toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
+      await captureText(text, 'note', { label: d.name, tags: d.tags, description: d.description });
+      if (reminderAt) {
+        try {
+          await captureText(text, 'note', { label: offer.label, tags: d.tags, reminderAt });
+          toast(`Note saved · ${reminderSetText(reminderAt)}`);
+        } catch (err) {
+          toast(`Note saved. The reminder could not be set: ${err.message || err}`);
+        }
+      } else {
+        toast('Note saved');
       }
-      await metaSet(NOTE_DRAFT_KEY, ''); // saved: the draft is no longer needed
+      await draft.clear(); // saved: the draft is no longer needed
       await renderMainTimeline();
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
@@ -3807,9 +3868,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openNote(item, isVault) {
     const tags = item.tags || await getEntryTags(item.id);
     let text = isVault ? (item.searchableText || '') : (item.body_text || ''), d = null;
+    const draft = noteDraftHandlers({ isVault, entryId: item.id });
     const mark = overlayAbortCount;
     while (!d) {
-      const res = await openTextEditor({ title: item.label, text, isVault });
+      const res = await openTextEditor({ title: item.label, text, isVault, persist: draft.persist, clear: draft.clear });
       if (res === null) return;
       text = res;
       d = await openSaveDialog({ heading: 'Save changes', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault, discardLabel: 'Back to editing' });
@@ -3817,6 +3879,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     try {
       await window.Arkly.editEntry(item.id, { label: d.name, text, description: d.description }, {});
+      await draft.clear();
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
       toast('Saved');
