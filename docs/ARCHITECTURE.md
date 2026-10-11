@@ -881,9 +881,3 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `hashPassword` uses 600000 PBKDF2 iterations (SHA-256) for new hashes and returns the count; it is stored in `credentials.app_password_iter` and `credentials.private_pin_iter`. NULL means 210000.
 - `verifyPassword` reads the stored count. After a correct app-open password or Vault PIN, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
 - The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
-
-### Haptic feedback (Decision 173)
-- `src/js/haptics.js` wraps `@capacitor/haptics`. Kinds: `tick` 40 ms, `saved` 70 ms, `delete` 90 ms, `warning` 220 ms, each sent twice at the same length: the plugin's `vibrate({ duration })` and `navigator.vibrate`. On by default; `meta.haptics_enabled`; Settings, Haptic feedback.
-- Call sites: multi-select start, `toastSaved` (every success toast of a save), `offerUndo`, wrong app password, wrong Vault PIN.
-- Settings, Haptic feedback, Test vibration: one 300 ms buzz that reports the plugin's answer.
-- The plugin adds the install-time `VIBRATE` permission. No network, no stored data.

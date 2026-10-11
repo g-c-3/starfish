@@ -12,23 +12,21 @@ Phase 17 item K (Decision 172), chosen on the owner's delegation. Reason: no new
 - `src/js/app.js`: counts stored at first-run setup, password set and remove, Vault PIN set; read at lock screen unlock, Vault unlock and both biometric enable checks; `upgradeCredentialHash` after a correct unlock (salt kept).
 - Docs: ROADMAP (K, DP55), ARCHITECTURE (credential hash counts, open list, backup key derivation line), DECISIONS (172).
 
-Then haptics (Phase 15 polish item 4, Decision 173), on the owner's delegation after the app-password wrapper was reviewed and held back (feasible with the plugin's per-launch secret, but it moves the lock check outside the database, changes forgot-password, and cannot be tested without a device; it needs explicit approval and a staged build).
-- `package.json`: `@capacitor/haptics` ^6.0.3. The plugin's Android source was read first: system Vibrator only, adds the install-time VIBRATE permission.
-- `src/js/haptics.js` (new): `haptic(kind)`, `setHapticsEnabled`.
-- `src/index.html`: Haptic feedback switch in Settings. `src/js/app.js`: switch wiring and bootstrap apply (`meta.haptics_enabled`, on by default), `toastSaved` for the success toasts of saves, calls in `offerUndo`, multi-select start, wrong password and wrong PIN.
-- Docs: ROADMAP (Haptics, DP56), ARCHITECTURE (Haptic feedback), DECISIONS (173).
+Then haptics (Phase 15 polish item 4, Decision 173), on the owner's delegation after the app-password wrapper was reviewed and held back (feasible with the plugin's per-launch secret, but it moves the lock check outside the database, changes forgot-password, and cannot be tested without a device; it needs explicit approval and a staged build). Built on `@capacitor/haptics` 6.0.3, then dropped after three builds with no vibration on the owner's phone.
+- Removed: the dependency in `package.json`, `src/js/haptics.js`, the Settings row in `src/index.html`, and every call site and `toastSaved` in `src/js/app.js`.
+- Docs: ROADMAP (Haptics and DP56 closed), ARCHITECTURE (haptics section removed), DECISIONS (173 rewritten as dropped).
 
-Bugs fixed: haptics built on the plugin's impact and notification patterns gave no vibration on the owner's phone (DP56, first build). Cause: not confirmed; the patterns are 20 to 60 ms pulses behind a zero-amplitude segment, or the phone is blocking vibration. Fix: every kind now uses `vibrate({ duration })` (40, 70, 90, 220 ms) and Settings has a Test vibration button that shows what the plugin answered. Why correct: a one-shot of a chosen length is felt on any motor, and the test separates a plugin or permission error from a phone setting. Second device test: the plugin answered with no error and the phone still did not vibrate (the system dropped the request); every vibration now also goes through `navigator.vibrate`, and the Test button reports whether the web view accepted it. Owner's rule: if the next device test still does not vibrate, haptics is removed.
+Bugs fixed: none. Haptics gave no vibration on the owner's phone in any build (impact and notification patterns; one-shot lengths; one-shot lengths also through the web view). The Test button showed the plugin answering with no error and the web view accepting its call, so the phone's system dropped the request; cause on the phone not found. Dropped by the stop rule set beforehand.
 
 Decisions made: 172, 173.
 
 Verified in the authoring environment (K): 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Device pass (DP55) confirmed: the first unlock of the password and the first unlock of the Vault PIN each took longer (the upgrades); everything works after. Not verified: CI.
 
-Verified in the authoring environment (haptics): 7 Node checks on `haptics.js` against a stub plugin and a stub `navigator.vibrate` (both routes get the same length per kind, nothing when off, the test ignores the switch and buzzes 300 ms on both, the web route reported as accepted, refused or not available, a plugin error still reported, a throw swallowed); `vite build` passes. Not verified: CI, any device behavior (DP56), whether the phone's vibration settings suppress it.
+Verified after the removal: `vite build` passes; the 14 `crypto.js` checks still pass; the password-hash upgrade code is intact. Not verified: CI.
 
-Open: DP56, Phase 17 (Vault key count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+Open: Phase 17 (Vault key count, optional app-password wrapper), light-theme tuning (device review), each needing approval.
 
-Next session start point: device pass for DP56 (if it still does not vibrate, remove haptics), then the owner picks among the open items (the app-password wrapper needs explicit approval).
+Next session start point: the owner picks among the open items (the app-password wrapper needs explicit approval; light-theme needs screenshots).
 
 ---
 
