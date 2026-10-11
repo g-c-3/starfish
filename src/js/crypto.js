@@ -103,15 +103,18 @@ async function decryptPrivateNote(pinDerivedKey, blobJson) {
 }
 
 // ---- Backup helpers ----
+// New backups derive their key with this many PBKDF2 iterations (Decision 171). The count is written in each backup's header and read
+// back on restore, so backups made with an earlier count (300000) still open. The Vault key does not use it (its count is fixed).
+const BACKUP_KDF_ITERATIONS = 600000;
 // Backup file format (conceptually): { version, salt, kdfIterations, hintPlain, iv, cipher }
 // salt + hint are the ONLY unencrypted fields — neither reveals the passkey itself.
 async function encryptBackup(passphrase, plainBytes, hintPlain = '') {
-  const { key, salt } = await deriveAesKey(passphrase, null, 300000);
+  const { key, salt } = await deriveAesKey(passphrase, null, BACKUP_KDF_ITERATIONS);
   const { cipher, iv } = await encryptBytes(key, plainBytes);
   return {
     version: 1,
     salt,
-    kdfIterations: 300000,
+    kdfIterations: BACKUP_KDF_ITERATIONS,
     hint: hintPlain,
     iv,
     cipher
@@ -129,5 +132,5 @@ export {
   encryptBytes, decryptBytes,
   encryptPrivateNote, decryptPrivateNote,
   encryptBackup, decryptBackup,
-  encryptChunk, decryptChunk, toBase64, fromBase64
+  encryptChunk, decryptChunk, toBase64, fromBase64, BACKUP_KDF_ITERATIONS
 };

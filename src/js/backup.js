@@ -14,13 +14,13 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { initFiles, withKey, readBase64 as readStoredBase64, readBytes as readStoredBytes, fileSize, saveBase64, beginFile, removeFile } from './files.js';
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
-import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64 } from './crypto.js';
+import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
 const SCHEMA_VERSION = 1;
 // Home file bytes live in Directory.Data/files/ as files/<32 hex> (Decision 161), read and written through files.js.
 const FORMAT2 = 2;
-const KDF_ITERATIONS = 300000;
+const KDF_ITERATIONS = BACKUP_KDF_ITERATIONS; // written in the header; restore reads the header's count (Decision 171)
 const FILE_CHUNK_BYTES = 3 * 1024 * 1024;  // raw file bytes per encrypted line
 const BODY_PIECE_CHARS = 2 * 1024 * 1024;  // characters of an oversized stored body per encrypted line
 const INLINE_BODY_CHARS = 1024 * 1024;     // a stored body up to this size stays inside its entry record
