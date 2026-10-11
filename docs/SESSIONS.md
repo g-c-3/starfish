@@ -30,7 +30,11 @@ Then Autosave stage 2 (Decision 179), after DP58 and DP59 were confirmed on the 
 - `src/js/app.js`: `autosaveVoice`; the recorder keeps a take on any close that is not a save or an explicit discard (recording, review, finalising); the Home and Vault Save-dialog callbacks keep the take when a lock closed the dialog.
 - Docs: ROADMAP (Phase 19, DP58 and DP59 confirmed, DP60), DECISIONS (179).
 
-Decisions made: 175, 176, 177, 178, 179.
+Then Home background recording (Decision 180), approved after the owner asked for it: a Home-only switch on the recorder screen keeps a take running behind a lock; the recorder reopens on it at the next unlock (`src/js/app.js`: `bgRec`, `resumeRecordingHook`, `homeVoiceSaved`).
+
+Then the Move feature (Phase 20) was designed and approved with the owner (Decision 181); nothing built. Context filled; the session stopped here by the handoff rule.
+
+Decisions made: 175, 176, 177, 178, 179, 180, 181.
 
 Verified (179): syntax check; `vite build` passes. Not verified: any recorder behaviour on a device, CI.
 
@@ -42,7 +46,7 @@ Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscati
 
 Device pass: DP58 and DP59 confirmed.
 
-Next session start point: DP60 on the device; then Autosave stage 3 (Reminder, Location, Money).
+Next session start point: DP60 and DP61 on the device (DP61 shows whether the recorder runs behind a lock); then Phase 20 Move, step 1 (Text, Location, Money); Autosave stage 3 (Reminder, Location, Money) stays open.
 
 ---
 

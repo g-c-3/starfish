@@ -2226,3 +2226,20 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Vault: the Vault key is read before the lock clears it and passed to the save; the take is encrypted like any Vault voice entry. No Vault index refresh at that moment (it would rebuild a cache after the lock); the next Vault unlock builds it in full.
 - Not covered: the app being killed while recording, or the phone powering off; that take is lost (the recorder holds the audio until stopped). The Autosave entry carries no tags or description.
 - Risks: not run through CI or on a device (DP60). Whether the recorder stops and returns its data while the app is in the background after a lock is not verified.
+
+**180. Home voice recording can keep running behind a lock (Phase 19, extends Decision 179).**
+- Request: an option to keep a take recording in the background, enabled before or during a take, Home only.
+- Switch: "Keep recording when the app locks or goes to the background", on the Home recorder screen only, `meta.rec_background`, off by default, changeable before and during a take. Not shown in the Vault recorder.
+- Off: unchanged (Decision 179): a lock stops the take and keeps it as an Autosave entry.
+- On: a lock, a background lock or an idle lock closes the recorder screen and the app locks as usual, but the take is not stopped; `bgRec` holds its start time. At the next unlock the recorder reopens on the running take (timer from the start time); Stop leads to the review and the Save dialog as before. Back with Yes at Discard still discards.
+- Vault: not covered, by choice. A Vault take cannot continue behind a Vault lock without holding the key or plain audio in memory.
+- Limits: if the app is killed while the take runs, it is lost, as in Decision 179. The whole take is returned as one base64 string at Stop, so a very long take is a memory risk; no cap is set yet and the safe length needs a device test. Whether the recorder keeps running behind a lock on the phone is not verified.
+- Risks: not run through CI or on a device (DP61).
+
+**181. Move between Home and Vault (new Phase 20, planned and approved, nothing built).**
+- Request: a fifth row action, Move, before Delete: "Move to Vault" on Home rows, "Move to Home" on Vault rows. Order: Edit, Share, Download, Move, Delete.
+- Home to Vault encrypts under the Vault key; Vault to Home decrypts. Name, tags (up to 2), description and date are carried.
+- Order of steps: write the new entry, read it back and compare, and only then delete the original permanently (no Trash, no Undo). A failure at any step leaves the original untouched and removes any partial copy. Approved by the owner: the deletion happens only after the move succeeded.
+- Moving into the Vault needs the Vault unlocked (the button leads to the PIN screen). Moving out makes name and text searchable in Home; the confirm sheet says both consequences plainly.
+- Reminders are rescheduled on the other side (notification text `Vault Reminder` in the Vault, Decision 140). Large Vault files held as one block need a size check with a plain message instead of risking a crash; the cap needs a device test. Legacy expense rows get no Move.
+- Build order: Text, Location, Money; Reminder; Image, PDF, Files, Voice with the size cap; Move for a selection. Each step needs a device check. Backup format unchanged.
