@@ -93,7 +93,7 @@ function applyForm(doc, values, font) {
   return failed;
 }
 
-function drawMarks(doc, marks, font, bold) {
+function drawMarks(doc, marks, font, bold, images) {
   const pages = doc.getPages();
   let changed = false;
   for (const m of marks) {
@@ -122,6 +122,13 @@ function drawMarks(doc, marks, font, bold) {
         const p = toPdf(g, m.x, m.y + (size * BASELINE_TEXT + i * size * 1.2) / g.Hd);
         page.drawText(s.text, { x: p[0], y: p[1], size, font, color, rotate: degrees(g.rot) });
       });
+    } else if (m.kind === 'sign') {
+      // Picture (Decision 169): displayed top-left (x, y), width a fraction of the displayed width, height by the picture's ratio.
+      const img = images.get(m.png);
+      if (!img) continue;
+      const w = m.w * g.Wd, h = w * m.ratio;
+      const p = toPdf(g, m.x, m.y + h / g.Hd); // the picture's own bottom-left corner in the displayed page
+      page.drawImage(img, { x: p[0], y: p[1], width: w, height: h, rotate: degrees(g.rot) });
     } else if (m.kind === 'stamp') {
       const size = Math.max(4, m.fs * g.Wd);
       const label = safeText(bold, String(m.label || '').toUpperCase());
@@ -147,7 +154,9 @@ async function applyMarkup(bytes, marks, formValues) {
   const doc = await loadForMarkup(bytes);
   const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const failedFields = applyForm(doc, formValues, font);
-  const textChanged = drawMarks(doc, marks || [], font, bold);
+  const images = new Map(); // one embedded copy per picture, however many times it is placed
+  for (const m of marks || []) if (m.kind === 'sign' && m.png && !images.has(m.png)) images.set(m.png, await doc.embedPng(m.png));
+  const textChanged = drawMarks(doc, marks || [], font, bold, images);
   return { bytes: await doc.save(), textChanged, failedFields };
 }
 

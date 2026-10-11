@@ -3,14 +3,41 @@
 // pdf-lib loads when Mark up is tapped, not when the viewer opens.
 
 import '../css/pdfmark.css';
-import { COLORS, HIGHLIGHT_COLORS, INK_COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, TEXT_SIZE, STAMP_SIZE, PEN_WIDTH, STAMP_PAD } from './pdfmarkconst.js';
+import { COLORS, HIGHLIGHT_COLORS, INK_COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, TEXT_SIZE, STAMP_SIZE, PEN_WIDTH, STAMP_PAD, SIGN_SIZES, SIGN_MAX_SIDE, SIGN_WHITE, SIGN_INK } from './pdfmarkconst.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const css = (name) => { const c = COLORS[name] || COLORS.black; return `rgb(${c.map((n) => Math.round(n * 255)).join(',')})`; };
 const ICON_PEN = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg>';
-const TOOLS = [['highlight', 'Highlight'], ['text', 'Text'], ['draw', 'Draw'], ['stamp', 'Stamp']];
+const TOOLS = [['highlight', 'Highlight'], ['text', 'Text'], ['draw', 'Draw'], ['stamp', 'Stamp'], ['sign', 'Picture']];
 
-// ctx: { isVault, loadBytes(), save(bytes, { replace }) -> label, askText, askYesNo, askDiscard, toast, onActivity, closeViewer }
+// Picture for the Picture tool (Decision 169): any picture the WebView can decode, camera orientation applied, long side limited,
+// to PNG. With `clear`, light pixels become transparent (soft edge between SIGN_INK and SIGN_WHITE), so a signature photographed
+// on white paper does not cover the text under it. Returns { png, ratio (height / width), url } — url is for the on-screen preview.
+async function buildPicture(bytes, clear) {
+  const bmp = await createImageBitmap(new Blob([bytes]), { imageOrientation: 'from-image' });
+  try {
+    const k = Math.min(1, SIGN_MAX_SIDE / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0, w, h);
+    if (clear) {
+      const img = g.getImageData(0, 0, w, h), px = img.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        const a = lum >= SIGN_WHITE ? 0 : lum <= SIGN_INK ? 255 : Math.round((255 * (SIGN_WHITE - lum)) / (SIGN_WHITE - SIGN_INK));
+        if (a < px[i + 3]) px[i + 3] = a;
+      }
+      g.putImageData(img, 0, 0);
+    }
+    const blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('The picture could not be converted'))), 'image/png'));
+    c.width = 0; c.height = 0;
+    return { png: new Uint8Array(await blob.arrayBuffer()), ratio: h / w, url: URL.createObjectURL(blob) };
+  } finally { if (bmp.close) bmp.close(); }
+}
+
+// ctx: { isVault, loadBytes(), pickImage() -> bytes | null, save(bytes, { replace }) -> label, askText, askYesNo, askDiscard, toast, onActivity, closeViewer }
 function mountMarkup(body, view, ctx) {
   const toolsEl = body.querySelector('.pdf-tools');
   const openBtn = document.createElement('button');
@@ -36,6 +63,7 @@ function mountMarkup(body, view, ctx) {
       if (m.kind === 'highlight') svg += `<rect x="${m.x * w}" y="${m.y * h}" width="${m.w * w}" height="${m.h * h}" fill="${css(m.color)}" fill-opacity="${HIGHLIGHT_OPACITY}"/>`;
       else if (m.kind === 'draw') svg += `<polyline points="${m.pts.map((p) => `${(p[0] * w).toFixed(1)},${(p[1] * h).toFixed(1)}`).join(' ')}" fill="none" stroke="${css(m.color)}" stroke-width="${Math.max(1, m.width * w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
       else if (m.kind === 'text') html += `<div class="pdf-mk-text" style="left:${m.x * 100}%;top:${m.y * 100}%;font-size:calc(var(--pw) * ${m.fs});color:${css(m.color)}">${esc(m.text)}</div>`;
+      else if (m.kind === 'sign') html += `<img class="pdf-mk-sign" alt="" src="${m.url}" style="left:${m.x * 100}%;top:${m.y * 100}%;width:${m.w * 100}%">`;
       else if (m.kind === 'stamp') html += `<div class="pdf-mk-stamp" style="left:${m.x * 100}%;top:${m.y * 100}%;font-size:calc(var(--pw) * ${m.fs});color:${css(m.color)};border-color:${css(m.color)};padding:${STAMP_PAD}em">${esc(String(m.label).toUpperCase())}</div>`;
     }
     L.svg.innerHTML = svg;
@@ -118,9 +146,15 @@ function mountMarkup(body, view, ctx) {
     L.root.addEventListener('pointerup', end);
     L.root.addEventListener('pointercancel', end);
     L.root.addEventListener('click', async (e) => {
-      if (!st || (st.tool !== 'text' && st.tool !== 'stamp')) return;
+      if (!st || (st.tool !== 'text' && st.tool !== 'stamp' && st.tool !== 'sign')) return;
       ctx.onActivity();
       const [u, v] = point(L, e);
+      if (st.tool === 'sign') {
+        if (!st.sig) { choosePicture(); return; }
+        const w = SIGN_SIZES[st.signSize], hf = (w * st.sig.ratio * L.el.clientWidth) / L.el.clientHeight;
+        addMark({ page: L.n, kind: 'sign', x: Math.min(Math.max(0, u - w / 2), 1 - w), y: Math.min(Math.max(0, v - hf / 2), Math.max(0, 1 - hf)), w, ratio: st.sig.ratio, png: st.sig.png, url: st.sig.url });
+        return;
+      }
       if (st.tool === 'stamp') { addMark({ page: L.n, kind: 'stamp', x: Math.min(u, 0.8), y: Math.min(v, 0.95), label: st.stamp, fs: STAMP_SIZE, color: st.ink }); return; }
       const text = await ctx.askText({ title: 'Add text', placeholder: 'Text', ok: 'Add', isVault: ctx.isVault });
       if (text && text.trim() && st) addMark({ page: L.n, kind: 'text', x: Math.min(u, 0.95), y: Math.min(v, 0.97), text: text.trim(), fs: TEXT_SIZE, color: st.ink });
@@ -135,8 +169,9 @@ function mountMarkup(body, view, ctx) {
     const current = st.tool === 'highlight' ? st.hl : st.ink;
     bar.innerHTML = `<div class="pdf-mk-row">${TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" class="pdf-mk-tool${st.tool === k ? ' on' : ''}">${l}</button>`).join('')}</div>
       ${palette.length ? `<div class="pdf-mk-row pdf-mk-sub">${palette.map((c) => `<button type="button" data-color="${c}" class="pdf-mk-dot${c === current ? ' on' : ''}" style="background:${css(c)}" aria-label="${c}"></button>`).join('')}${st.tool === 'stamp' ? STAMPS.map((s) => `<button type="button" data-stamp="${s}" class="pdf-mk-chip${s === st.stamp ? ' on' : ''}">${s}</button>`).join('') : ''}</div>` : ''}
+      ${st.tool === 'sign' ? `<div class="pdf-mk-row pdf-mk-sub">${Object.keys(SIGN_SIZES).map((k) => `<button type="button" data-size="${k}" class="pdf-mk-chip${k === st.signSize ? ' on' : ''}">${k}</button>`).join('')}<button type="button" data-act="clearbg" class="pdf-mk-chip${st.signClear ? ' on' : ''}">Clear background</button><button type="button" data-act="pick" class="pdf-mk-chip">${st.sig ? 'Change picture' : 'Choose picture'}</button></div>` : ''}
       <div class="pdf-mk-row"><button type="button" data-act="undo" ${st.marks.length ? '' : 'disabled'}>Undo</button>${st.fields.length ? `<button type="button" data-act="form">Form${Object.keys(st.form).length ? ' •' : ''}</button>` : ''}<button type="button" data-act="save" class="pdf-mk-save" ${dirty() ? '' : 'disabled'}>Save</button><button type="button" data-act="close">Close</button></div>
-      ${st.tool === 'draw' || st.tool === 'highlight' ? '<div class="pdf-mk-hint">Drawing is on: tap the tool again to scroll.</div>' : st.tool === 'text' ? '<div class="pdf-mk-hint">Tap the page where the text goes.</div>' : st.tool === 'stamp' ? '<div class="pdf-mk-hint">Pick a stamp, then tap the page.</div>' : ''}`;
+      ${st.tool === 'draw' || st.tool === 'highlight' ? '<div class="pdf-mk-hint">Drawing is on: tap the tool again to scroll.</div>' : st.tool === 'text' ? '<div class="pdf-mk-hint">Tap the page where the text goes.</div>' : st.tool === 'stamp' ? '<div class="pdf-mk-hint">Pick a stamp, then tap the page.</div>' : st.tool === 'sign' ? `<div class="pdf-mk-hint">${st.sig ? 'Tap the page where the picture goes.' : 'Choose a picture, such as a photo of a signature.'}</div>` : ''}`;
     for (const L of st.layers) L.root.classList.toggle('active', st.tool !== null);
     for (const L of st.layers) L.root.classList.toggle('capture', st.tool === 'highlight' || st.tool === 'draw');
   }
@@ -145,12 +180,15 @@ function mountMarkup(body, view, ctx) {
     const b = e.target.closest('button');
     if (!b || !st || b.disabled) return;
     ctx.onActivity();
-    if (b.dataset.tool) { st.tool = st.tool === b.dataset.tool ? null : b.dataset.tool; paintBar(); return; }
+    if (b.dataset.tool) { st.tool = st.tool === b.dataset.tool ? null : b.dataset.tool; paintBar(); if (st.tool === 'sign' && !st.sig) choosePicture(); return; }
+    if (b.dataset.size) { st.signSize = b.dataset.size; paintBar(); return; }
     if (b.dataset.color) { if (st.tool === 'highlight') st.hl = b.dataset.color; else st.ink = b.dataset.color; paintBar(); return; }
     if (b.dataset.stamp) { st.stamp = b.dataset.stamp; paintBar(); return; }
     const act = b.dataset.act;
     if (act === 'undo') { const m = st.marks.pop(); if (m) renderLayer(layerOf(m.page)); paintBar(); }
     else if (act === 'form') openForm();
+    else if (act === 'pick') choosePicture();
+    else if (act === 'clearbg') { st.signClear = !st.signClear; if (st.sigSrc) await usePicture(st.sigSrc); else paintBar(); }
     else if (act === 'save') await save();
     else if (act === 'close') await leave();
   }
@@ -188,6 +226,22 @@ function mountMarkup(body, view, ctx) {
     return true;
   }
 
+  // ---- Picture tool (Decision 169): the picture is chosen with the phone's picker and kept in memory only ----
+  async function usePicture(bytes) {
+    if (!st) return;
+    try {
+      const sig = await buildPicture(bytes, st.signClear);
+      if (!st) { URL.revokeObjectURL(sig.url); return; }
+      st.sigSrc = bytes; st.sig = sig; st.urls.push(sig.url); // earlier placements keep the picture they were made with
+    } catch (err) { ctx.toast(`Could not use that picture: ${String((err && err.message) || err)}`); }
+    paintBar();
+  }
+  async function choosePicture() {
+    if (!st) return;
+    const bytes = await ctx.pickImage();
+    if (bytes && st) await usePicture(bytes);
+  }
+
   // ---- start, save, leave ----
   async function start() {
     if (st || starting || destroyed) return;
@@ -200,7 +254,7 @@ function mountMarkup(body, view, ctx) {
       if (destroyed) return;
       const bar = document.createElement('div');
       bar.className = 'pdf-markbar';
-      st = { src: bytes, marks: [], form: {}, fields: info.fields.filter((f) => !f.readOnly), xfa: info.xfa, tool: null, hl: 'yellow', ink: 'blue', stamp: STAMPS[0], bar, layers: [], formEl: null };
+      st = { src: bytes, marks: [], form: {}, fields: info.fields.filter((f) => !f.readOnly), xfa: info.xfa, tool: null, hl: 'yellow', ink: 'blue', stamp: STAMPS[0], bar, layers: [], formEl: null, sig: null, sigSrc: null, signSize: 'M', signClear: true, urls: [] };
       body.append(bar);
       body.classList.add('pdf-marking');
       bar.addEventListener('click', onBar);
@@ -217,7 +271,8 @@ function mountMarkup(body, view, ctx) {
     st.formEl?.remove();
     st.bar.remove();
     body.classList.remove('pdf-marking');
-    st.src = null; st.marks = []; st.form = {};
+    for (const u of st.urls) URL.revokeObjectURL(u);
+    st.src = null; st.marks = []; st.form = {}; st.sig = null; st.sigSrc = null; st.urls = [];
     st = null;
   }
 

@@ -12,5 +12,9 @@ const PEN_WIDTH = 0.004;
 const BASELINE_TEXT = 0.94;  // first baseline below the top of a text box, in text sizes (matches the on-screen box)
 const BASELINE_STAMP = 0.84; // baseline below the padding of a stamp box
 const STAMP_PAD = 0.35;      // stamp padding, in text sizes
+const SIGN_SIZES = { S: 0.15, M: 0.25, L: 0.4 }; // picture width as a fraction of the page width
+const SIGN_MAX_SIDE = 900;   // longest side of the picture kept, in pixels
+const SIGN_WHITE = 235;      // brightness at and above which a pixel becomes transparent (Clear background)
+const SIGN_INK = 150;        // brightness at and below which a pixel stays fully opaque
 
-export { COLORS, HIGHLIGHT_COLORS, INK_COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, TEXT_SIZE, STAMP_SIZE, PEN_WIDTH, BASELINE_TEXT, BASELINE_STAMP, STAMP_PAD };
+export { COLORS, HIGHLIGHT_COLORS, INK_COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, TEXT_SIZE, STAMP_SIZE, PEN_WIDTH, BASELINE_TEXT, BASELINE_STAMP, STAMP_PAD, SIGN_SIZES, SIGN_MAX_SIDE, SIGN_WHITE, SIGN_INK };

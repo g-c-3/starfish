@@ -4308,6 +4308,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Mark-up (Decision 166): bytes are read again when it starts, so the viewer's copy (consumed by pdf.js) is not kept.
     const markupCtx = {
       isVault, onActivity: arm, askText, askYesNo, askDiscard, toast,
+      // Picture tool (Decision 169): one picture from the phone's picker; resolves null when none is chosen.
+      pickImage: () => new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = async () => { const f = input.files && input.files[0]; resolve(f ? new Uint8Array(await f.arrayBuffer()) : null); };
+        input.addEventListener('cancel', () => resolve(null));
+        beginPickerLaunch();
+        input.click();
+      }),
       closeViewer: () => { if (activeViewer) activeViewer.finish(); },
       loadBytes: async () => {
         if (isVault) {
