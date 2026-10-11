@@ -16,9 +16,13 @@ Phase 9, confirmation item (Decision 175), chosen as the smallest open item that
 Bugs fixed:
 - Cause: `captureText` converted any text matching the reminder phrase and rebuilt the entry from the parsed words only. Fix: conversion happens only after a confirmed offer, and the entry takes name, tags and description from the Save dialog. Correct because the only caller now decides, and the default (Back, No) is the plain note.
 
-Decisions made: 175.
+Then a reported bug (Decision 176): typed note text was lost when the app locked.
+- Cause: a lock closes the editor with no result and nothing had been written.
+- Fix (`src/js/app.js`): `openTextEditor` takes `draftKey` and `startDirty`; Home New note writes `meta.note_draft` while typing and on close, restores it on the next New note, clears it on save or on Yes at Discard. Correct because every route that closes the editor without a discard now keeps the text. Vault editor and existing-note edits are not covered.
 
-Verified in the authoring environment: 9 Node checks on `reminderOffer` (tomorrow at 9am gives the next day 9:00 and the label, 5pm ahead today, a past time with "today" refused, a past time with no day word rolls to tomorrow, plain text, expense text and empty text give none, case-insensitive phrase); syntax check of both files; `vite build` passes. Not verified: CI, the sheet over the Save dialog on a device, Back and lock while it is open, the notification firing for a reminder made this way (DP58).
+Decisions made: 175, 176.
+
+Verified in the authoring environment (175): 9 Node checks on `reminderOffer` (tomorrow at 9am gives the next day 9:00 and the label, 5pm ahead today, a past time with "today" refused, a past time with no day word rolls to tomorrow, plain text, expense text and empty text give none, case-insensitive phrase); syntax check of both files; `vite build` passes. Not verified: CI, the sheet over the Save dialog on a device, Back and lock while it is open, the notification firing for a reminder made this way (DP58).
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning. Each needs approval or a device review.
 

@@ -2195,3 +2195,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Code: `reminderOffer(text, now)` in `intents.js` (parsed reminder with a future time, else null). `captureText` in `app.js` no longer detects anything; it makes a reminder only when called with `reminderAt`. The Vault note path never detected and is unchanged.
 - Unchanged: the phrases and the time parsing, the Reminder card (Save dialog with its own time fields), notifications, Vault, backup.
 - Risks: not run through CI or on a device (DP58). The sheet over the Save dialog and the lock-while-open path need a device check.
+
+**176. Unsaved Home note text is kept as a draft (bug fix).**
+- Cause (reported): text typed in the new-note editor was lost when the app or the phone screen locked. A lock closes the editor and returns nothing, and nothing had been written.
+- Rule: while typing in the Home New note editor, the text is written to `meta.note_draft` (half a second after the last keystroke) and again when the editor closes for any reason except Yes on Discard. New note opens with the draft and a "Draft restored" toast; Back on a restored draft asks Discard, and Yes clears it. A successful save clears it.
+- Privacy: the row sits in the encrypted database (Decision 158), behind the app lock like every note. It is not in `APP_SETTINGS_KEYS`, so no backup carries it. One draft only.
+- Not covered, by choice: the Vault editor (a draft would need the Vault key, which a lock clears), and edits of an existing note (the saved text is still there).
+- Risks: not run through CI or on a device (DP59).

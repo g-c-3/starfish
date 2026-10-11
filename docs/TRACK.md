@@ -184,3 +184,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-11 | Session 107 (CI check, 9) | none | Phase 11 closed on evidence: releases v0.1.0+494, +498 and +499 each published by the workflow's last step after the signed build; docs only |
 | 2026-10-11 | Session 107 (docs, 10) | none | Phase 16 closed: G confirmed by DP14, H by DP15 and DP17, both already confirmed on device but still marked not device-tested; docs only |
 | 2026-10-11 | Session 108 | Decision 175 | Phase 9 confirmation item built: reminder wording in a typed note is offered through a Yes/No sheet instead of converting silently; DP58 added; 9 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-11 | Session 108 (bug fix, 2) | Decision 176 | Unsaved Home note text kept as a draft across locks and restored at the next New note; DP59 added; vite build passes; not run through CI or on a device |
