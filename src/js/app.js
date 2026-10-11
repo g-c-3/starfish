@@ -30,7 +30,6 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
-import { setHapticsEnabled, haptic, testHaptics } from './haptics.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
@@ -397,7 +396,6 @@ async function bootstrap() {
   // covers the lock screen itself, not just the unlocked app. Off by default; persisted the same
   // way as every other on/off setting (metaGet/metaSet).
   setPrivacyScreen((await metaGet('privacy_screen_enabled', 'false')) === 'true');
-  setHapticsEnabled((await metaGet('haptics_enabled', 'true')) === 'true'); // on by default (Decision 173)
 
   await requestPermissions();
   await registerActionTypes();
@@ -1375,9 +1373,6 @@ function toast(message, sticky = false, action = null) {
   clearTimeout(toastTimer);
   if (!sticky) toastTimer = setTimeout(hideToast, action ? UNDO_MS : 3200);
 }
-
-// A toast that confirms a successful save, with a short vibration (Decision 173).
-function toastSaved(message) { haptic('saved'); toast(message); }
 function hideToast() {
   clearTimeout(toastTimer);
   undoState = null;
@@ -1388,7 +1383,6 @@ function hideToast() {
 let refreshAfterUndo = null; // set once the screens exist: redraws Home, search and the Vault
 function offerUndo(ids, { isVault = false, message = null, after = null } = {}) {
   if (!ids.length) return;
-  haptic('delete');
   toast(message || (ids.length === 1 ? 'Moved to trash' : `${ids.length} moved to trash`), false, {
     label: 'Undo', isVault,
     run: async () => {
@@ -2262,30 +2256,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Haptic feedback switch (Decision 173): bootstrap applied the stored value; this reflects it and reacts to changes.
-  const hapticsToggle = document.getElementById('haptics-toggle');
-  if (hapticsToggle) {
-    hapticsToggle.checked = (await metaGet('haptics_enabled', 'true')) === 'true';
-    hapticsToggle.addEventListener('change', async (e) => {
-      await metaSet('haptics_enabled', e.target.checked ? 'true' : 'false');
-      setHapticsEnabled(e.target.checked);
-      haptic('tick'); // a sample when switching on; nothing when switching off
-    });
-  }
-  const hapticsTestBtn = document.getElementById('haptics-test-btn');
-  if (hapticsTestBtn) {
-    hapticsTestBtn.addEventListener('click', async () => {
-      const out = document.getElementById('haptics-test-status');
-      const r = await testHaptics();
-      const where = `Platform ${r.platform}, plugin ${r.pluginAvailable ? 'present' : 'missing'}.`;
-      const last = r.lastError ? ` Last error from an action: ${r.lastError}.` : '';
-      const web = ` Web view vibrate: ${r.web}.`;
-      out.textContent = r.ok
-        ? `Sent a 300 ms vibration. ${where}${web}${last} If you felt nothing, the phone is blocking it: check the system Vibration and touch feedback settings, Do Not Disturb and Battery saver.`
-        : `Vibration failed: ${r.error}. ${where}${web}${last}`;
-    });
-  }
-
   // Update-check settings UI wiring (Decision 72; download-direct in Decision 75, fixed in
   // Decision 77) — manual button, no stored setting: a check happens only when tapped, so
   // there's nothing to populate on load, unlike the toggles above.
@@ -2365,7 +2335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     lockStatus.textContent = '';
     const result = await window.attemptUnlock(document.getElementById('password-input').value);
     if (result.success) clearSecretInputs(['password-input']);
-    else { lockStatus.textContent = 'Wrong password.'; haptic('warning'); }
+    else lockStatus.textContent = 'Wrong password.';
   });
   const bioUnlockBtn = document.getElementById('biometric-unlock-btn');
   if (bioUnlockBtn) {
@@ -2421,7 +2391,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await window.enableVaultBiometric(pinInput.value);
       pinInput.value = '';
       if (result.success) { vaultBioConfirm.classList.add('hidden'); await refreshVaultGateView(); }
-      else { toast('Wrong PIN.'); haptic('warning'); }
+      else toast('Wrong PIN.');
     });
   }
 
@@ -2562,7 +2532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const result = await unlockVault(document.getElementById('vault-pin-input').value);
     if (result.success) { clearSecretInputs(VAULT_SECRET_INPUT_IDS); await refreshVaultGateView(); renderVault(); }
     else if (result.setupNeeded) await refreshVaultGateView();
-    else { toast('Wrong PIN.'); haptic('warning'); }
+    else toast('Wrong PIN.');
   });
   document.getElementById('vault-biometric-unlock-btn')?.addEventListener('click', async () => {
     const result = await window.tryBiometricUnlockVault();
@@ -2778,7 +2748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await captureToVault({ type: 'note', label: d.name, tags: d.tags, description: d.description, text });
         renderVault();
-        toastSaved('Saved to the Vault');
+        toast('Saved to the Vault');
       } else if (type === 'voice') {
         await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
           try {
@@ -2786,7 +2756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!d) { toast('Recording discarded'); return; }
             await captureToVault({ type: 'voice', label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
             renderVault();
-            toastSaved('Saved to the Vault');
+            toast('Saved to the Vault');
           } catch (err) { toast(`Could not save: ${err.message || err}`); }
         }, { isVault: true });
       } else if (type === 'money') {
@@ -2803,7 +2773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await captureToVault({ type: 'money', label: d.name, tags: d.tags, description: d.description, money: details });
         renderVault();
-        toastSaved('Saved to the Vault');
+        toast('Saved to the Vault');
       } else if (type === 'reminder') {
         // Name, note, when and repeat in one Save dialog, as for Home. The notification says only "Vault Reminder" (Decision 140).
         const d = await openSaveDialog({ heading: 'New vault reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard', reminder: {} });
@@ -2812,7 +2782,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderVault();
         try {
           await scheduleReminder({ id, label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule, is_private: 1 });
-          toastSaved(d.repeat_rule ? 'Vault reminder saved' : reminderSetText(d.fire_at));
+          toast(d.repeat_rule ? 'Vault reminder saved' : reminderSetText(d.fire_at));
         } catch (err) {
           toast(`Vault reminder saved, but its notification could not be scheduled: ${err.message || err}`);
         }
@@ -2822,7 +2792,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!picked) return;
         await captureToVault({ type: 'location', label: picked.d.name, tags: picked.d.tags, description: picked.d.description, location: { latitude: picked.lat, longitude: picked.lng } });
         renderVault();
-        toastSaved('Saved to the Vault');
+        toast('Saved to the Vault');
       } else {
         const input = document.createElement('input');
         input.type = 'file';
@@ -2846,7 +2816,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               await captureToVault({ type, label: single ? d.name : numbered ? `${d.name} ${i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
             }
             renderVault();
-            toastSaved(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
+            toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
           } catch (err) { toast(`Could not save: ${err.message || err}`); renderVault(); }
         };
         beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
@@ -3275,7 +3245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await insertEntry(db, { id, type: 'location', label: d.name, latitude, longitude, description: d.description || null });
     await applyTags(id, d.tags);
     await renderMainTimeline();
-    toastSaved('Location saved');
+    toast('Location saved');
   }
 
   // Source chooser, then a GPS fix or pasted coordinates, then the Save dialog. Home and Vault share it (Decision 142).
@@ -3334,14 +3304,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       await captureText(text, 'note', { label: d.name, tags: d.tags, description: d.description });
       await renderMainTimeline();
-      toastSaved('Note saved');
+      toast('Note saved');
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
         const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
         if (!d) { toast('Recording discarded'); return; }
         await captureFile('voice', { label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
-        toastSaved('Recording saved');
+        toast('Recording saved');
       });
     } else if (type === 'reminder') {
       const d = await openSaveDialog({ heading: 'New reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard', reminder: {} });
@@ -3352,7 +3322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await applyTags(id, d.tags);
       try {
         await scheduleReminder({ id, ...saved });
-        toastSaved(saved.repeat_rule ? 'Reminder saved' : reminderSetText(saved.fire_at));
+        toast(saved.repeat_rule ? 'Reminder saved' : reminderSetText(saved.fire_at));
       } catch (err) {
         toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
       }
@@ -3398,7 +3368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           toast(`${ids.length} files added: ${first} to ${last}`);
         } else {
           for (const f of files) await captureFile(type, { label: single ? d.name : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
-          toastSaved(single ? 'Saved' : `${files.length} files added`);
+          toast(single ? 'Saved' : `${files.length} files added`);
         }
         await renderMainTimeline();
       };
@@ -3532,7 +3502,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           swallow = true; // the click that follows this press must not open the entry
           if (!selection) {
             selection = { isVault: vaultNow(), ids: new Set() };
-            haptic('tick');
             document.body.classList.add('selecting');
             document.getElementById('select-bar')?.classList.remove('hidden');
             updateBackButtonState();
@@ -3806,7 +3775,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await window.Arkly.editEntry(item.id, fields, opts);
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // list/search read this in-memory index
-      toastSaved(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
+      toast(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
@@ -3826,7 +3795,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await window.Arkly.editEntry(item.id, { label: d.name, text, description: d.description }, {});
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
-      toastSaved('Saved');
+      toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
@@ -3959,7 +3928,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await insertEntry(db, { id, type: 'money', label: d.name, description: d.description || null, money_json: Money.toJson(details) });
     await applyTags(id, d.tags);
     await renderMainTimeline();
-    toastSaved('Saved');
+    toast('Saved');
   }
 
   // Edit: form, then the Save dialog. A name still equal to the old summary follows the new details; a typed name is kept.
@@ -3987,7 +3956,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         : { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
       await setEntryTags(item.id, d.tags);
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // lists, totals and search read this index
-      toastSaved('Saved');
+      toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
