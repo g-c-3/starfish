@@ -2154,3 +2154,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Code: `src/js/passcheck.js` (pure, 12 Node checks); `confirmStrength` and the call sites in `app.js`; the existing yes/no dialog.
 - Not done, by choice: a block, a score meter, a dictionary or breach list (no data to ship, nothing to look up), or any change to the PBKDF2 iteration count (existing hashes and backups depend on it; separate decision).
 - Risks: not run through CI or on a device. The dialog appearing over the first-run screen is untested.
+
+**171. Backup passkey: 600000 PBKDF2 iterations for new backups (Phase 17, open item, part).**
+- New backups (format 2 from Export Now, the safety backup and auto-backup; the Drive archive) derive their key with 600000 iterations, up from 300000. Still PBKDF2 with SHA-256 and AES-GCM on Web Crypto (Decision 144).
+- Why this credential: a backup file leaves the phone and can be guessed against offline at the attacker's speed. The other two secrets are verified inside the encrypted database on the phone.
+- Compatibility: every backup already carries its own iteration count in its header, and restore reads it. Backups made before this change (300000) open as before; nothing is converted. A restore never changes the count of the file it reads.
+- One constant, `BACKUP_KDF_ITERATIONS` in `crypto.js`, used by the format 2 writer in `backup.js` and by the Drive archive writer. The Vault key derivation keeps its own fixed count; the app-open password and Vault PIN hashes keep theirs.
+- Not done, by choice: raising the app-open password hash or the Vault key count. Neither stores its count, and the Vault key encrypts existing entries, so a different count means re-encrypting the Vault or a versioned rehash at unlock. Separate decision, only with a measured reason.
+- Cost: one derivation per backup or restore takes about twice as long. On a desktop runtime 300000 took 142 ms and 600000 took 282 ms; a phone is slower, to be measured (DP53).
+- Risks: not run through CI or on a device. Restore of a backup made before this change and of one made after it both need a device check.

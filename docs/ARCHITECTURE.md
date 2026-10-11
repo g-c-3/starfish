@@ -220,7 +220,7 @@ Vault entries stay under the Vault PIN on top of any database layer. The three c
 
 **Home files (Decision 162):** stored as `files/<32 hex>` with `entries.file_key`; plain files (`file_key` null) are read as they are until F. Thumbnails are memory only. Other apps get a decrypted copy in `cache/open/`. Deleting an entry removes its file.
 
-Open: PBKDF2 iteration count; minimum passcode length or a short-passcode warning; an optional app-password wrapper around the database key; speed of backup and restore with many files.
+Open: PBKDF2 iteration count for the app-open password hash and the Vault key (the backup count is 600000, Decision 171); an optional app-password wrapper around the database key; speed of backup and restore with many files.
 
 ## 4. Backup & Restore (full design)
 
@@ -869,3 +869,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ### Weak-secret warning (Decision 170)
 - `src/js/passcheck.js` returns a message for a weak secret (shorter than 6 for a Vault PIN, 8 for the app-open password, 10 for a backup passkey, or one repeated character) and null otherwise. `confirmStrength` in `app.js` shows it in the yes/no dialog and resolves true to go on.
 - Called where a secret is set: first-run setup, Vault PIN setup, Backup now, the auto-backup banner, Drive Backup now. Advisory only; no credential is stored or compared.
+
+### Backup key derivation (Decision 171)
+- `BACKUP_KDF_ITERATIONS` (600000) in `crypto.js` is the count for every newly written backup; it is written in the backup's header (`kdfIterations`) and restore derives with the header's count, so earlier backups (300000) still open.
+- The Vault key derivation and the two password hashes keep their fixed counts; changing them needs a versioned rehash or a Vault re-encryption.

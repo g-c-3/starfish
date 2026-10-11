@@ -64,9 +64,22 @@ Decisions made (continued): 170.
 
 Verified in the authoring environment: 12 Node checks on `passcheck.js` (empty, each threshold on both sides, repeated character, a single character, characters outside the basic range counted as one each, unknown kind, the secret not present in the message); `vite build` passes. Not verified: CI, any device behavior (DP52), the dialog over the first-run screen, the auto-backup banner staying open after Change it.
 
-Open: DP52, Phase 17 (PBKDF2 iteration count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+Device pass: DP52 confirmed.
 
-Next session start point: DP52 on the device; then the owner picks among the open items.
+Phase 17 item J, my pick again (Decision 171): backup passkey iterations to 600000 for new backups. Reason: the header already stores the count, so no format change and no conversion; it is the secret that gets attacked offline. Haptics still needs a new dependency and approval, light-theme needs a device review.
+- `src/js/crypto.js`: `BACKUP_KDF_ITERATIONS` (600000), used by `encryptBackup`, exported.
+- `src/js/backup.js`: format 2 writer uses the constant.
+- Docs: ROADMAP (J, DP53, DP52 confirmed), ARCHITECTURE (backup key derivation, open list), DECISIONS (171).
+
+Bugs fixed: none.
+
+Decisions made (continued): 171.
+
+Verified in the authoring environment: 6 Node checks on `crypto.js` (new archives carry 600000, round trip, wrong passkey refused, an archive made with 300000 still decrypts, format 2 chunk round trip at 600000, timing 142 ms to 282 ms on desktop); `vite build` passes. Not verified: CI, any device behavior (DP53), the real extra time on the phone, `createBackup` and `restoreBackup` end to end (they need the plugins; only the key derivation is exercised).
+
+Open: DP53, Phase 17 (PBKDF2 count for the password hash and the Vault key, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+
+Next session start point: DP53 on the device; then the owner picks among the open items.
 
 ---
 
