@@ -12,15 +12,23 @@ Phase 17 item K (Decision 172), chosen on the owner's delegation. Reason: no new
 - `src/js/app.js`: counts stored at first-run setup, password set and remove, Vault PIN set; read at lock screen unlock, Vault unlock and both biometric enable checks; `upgradeCredentialHash` after a correct unlock (salt kept).
 - Docs: ROADMAP (K, DP55), ARCHITECTURE (credential hash counts, open list, backup key derivation line), DECISIONS (172).
 
+Then haptics (Phase 15 polish item 4, Decision 173), on the owner's delegation after the app-password wrapper was reviewed and held back (feasible with the plugin's per-launch secret, but it moves the lock check outside the database, changes forgot-password, and cannot be tested without a device; it needs explicit approval and a staged build).
+- `package.json`: `@capacitor/haptics` ^6.0.3. The plugin's Android source was read first: system Vibrator only, adds the install-time VIBRATE permission.
+- `src/js/haptics.js` (new): `haptic(kind)`, `setHapticsEnabled`.
+- `src/index.html`: Haptic feedback switch in Settings. `src/js/app.js`: switch wiring and bootstrap apply (`meta.haptics_enabled`, on by default), `toastSaved` for the success toasts of saves, calls in `offerUndo`, multi-select start, wrong password and wrong PIN.
+- Docs: ROADMAP (Haptics, DP56), ARCHITECTURE (Haptic feedback), DECISIONS (173).
+
 Bugs fixed: none.
 
-Decisions made: 172.
+Decisions made: 172, 173.
 
-Verified in the authoring environment: 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Not verified: CI, any device behavior (DP55), the SQLite paths (they need the plugin; checked by reading), the extra time on the phone, the upgrade running for each credential at its first unlock, biometric unlock afterwards.
+Verified in the authoring environment (K): 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Device pass (DP55) confirmed: the first unlock of the password and the first unlock of the Vault PIN each took longer (the upgrades); everything works after. Not verified: CI.
 
-Open: DP55, Phase 17 (Vault key count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+Verified in the authoring environment (haptics): 5 Node checks on `haptics.js` against a stub plugin (each kind maps to its impact or notification, nothing when off, a rejection and a synchronous throw swallowed, works again after errors); `vite build` passes. Not verified: CI, any device behavior (DP56), whether the phone's vibration settings suppress it.
 
-Next session start point: device pass for DP55, then the owner picks among the open items.
+Open: DP56, Phase 17 (Vault key count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+
+Next session start point: device pass for DP56, then the owner picks among the open items (the app-password wrapper needs explicit approval).
 
 ---
 
