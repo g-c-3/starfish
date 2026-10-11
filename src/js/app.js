@@ -1115,6 +1115,7 @@ async function runBulkFileAction(action, entryIds, extraOpts = {}) {
 // data access. Gradient mode removed (Decision 53) — old `gradient_mode`/`gradient_color_1`/
 // `gradient_color_2` meta rows from before this session are simply never read again; harmless to
 // leave in place, including inside any backup file made before this change. ----
+const NOTE_DRAFT_KEY = 'note_draft'; // unsaved Home note text (Decision 176); in the encrypted database, not in backups
 async function metaGet(key, fallback = null) {
   const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
   return (r.values && r.values[0]) ? r.values[0].value : fallback;
@@ -1633,11 +1634,15 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
 }
 
 // Resolves the text on Save, or null on leave. Leaving with unsaved changes needs a second Back within 3 s.
-function openTextEditor({ title = 'New note', text = '', isVault = false } = {}) {
+// draftKey (Home new note only, Decision 176): the text is also written to that meta row while typing and when the editor
+// closes by any route except an explicit discard, so a lock or a screen-off does not lose it. startDirty: the text came from a draft.
+function openTextEditor({ title = 'New note', text = '', isVault = false, draftKey = null, startDirty = false } = {}) {
   return new Promise((resolve) => {
     const $ = (id) => document.getElementById(id);
     const screen = $('editor-screen'), ta = $('editor-text');
-    let dirty = false;
+    let dirty = startDirty;
+    let draftTimer = null;
+    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (draftKey) metaSet(draftKey, ta.value).catch(() => {}); };
     $('editor-title').textContent = title;
     ta.value = text;
     const updateCount = () => {
@@ -1645,7 +1650,9 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
       $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${ta.value.length} characters`;
     };
     updateCount();
-    const finish = (result) => {
+    const finish = (result, discarded = false) => {
+      if (draftKey && !discarded) saveDraft(); // lock, screen-off, Save: keep the text
+      clearTimeout(draftTimer);
       screen.classList.add('hidden');
       ta.blur();
       ta.oninput = null;
@@ -1657,9 +1664,12 @@ function openTextEditor({ title = 'New note', text = '', isVault = false } = {})
     const requestBack = async () => {
       if (!dirty) { finish(null); return; }
       const yes = await askYesNo({ title: 'Discard changes?', text: 'Your text has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
-      if (yes && activeEditor) finish(null);
+      if (yes && activeEditor) { if (draftKey) await metaSet(draftKey, '').catch(() => {}); finish(null, true); }
     };
-    ta.oninput = () => { dirty = ta.value !== text; updateCount(); };
+    ta.oninput = () => {
+      dirty = startDirty || ta.value !== text; updateCount();
+      if (draftKey) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
+    };
     $('editor-back-btn').onclick = requestBack;
     $('editor-save-btn').onclick = () => {
       if (!ta.value.trim()) { toast('Nothing to save yet'); return; }
@@ -3288,10 +3298,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function startCapture(type) {
     if (type === 'note') {
       // Editor, then the Save dialog. Backing out of the dialog returns to the editor with the text kept.
-      let text = '', d = null;
+      let text = (await metaGet(NOTE_DRAFT_KEY, '')) || '', d = null;
+      const restored = !!text;
+      if (restored) toast('Draft restored');
       const mark = overlayAbortCount;
       while (!d) {
-        const res = await openTextEditor({ title: 'New note', text });
+        const res = await openTextEditor({ title: 'New note', text, draftKey: NOTE_DRAFT_KEY, startDirty: restored });
         if (res === null) return;
         text = res;
         d = await openSaveDialog({ heading: 'Save note', defaultName: defaultNoteName(text), discardLabel: 'Back to editing' });
@@ -3315,6 +3327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!reminderAt) throw err;
         toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
       }
+      await metaSet(NOTE_DRAFT_KEY, ''); // saved: the draft is no longer needed
       await renderMainTimeline();
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
