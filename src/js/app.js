@@ -30,6 +30,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
+import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
@@ -2811,9 +2812,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (!d) return;
             const numbered = !single && d.mode === 'number';
+            const start = numbered ? nextBatchStart(getVaultIndex(), type, d.name) : 0; // continues after the highest "<name> N" (Decision 174)
             for (let i = 0; i < files.length; i++) {
               const f = files[i];
-              await captureToVault({ type, label: single ? d.name : numbered ? `${d.name} ${i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+              await captureToVault({ type, label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
             }
             renderVault();
             toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
