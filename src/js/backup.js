@@ -473,20 +473,24 @@ async function planEntryTarget(db, entry, mode, summary) {
 }
 
 // Overwrite: remove the selected categories' live rows (their files on disk are left, as before).
-async function wipeCategories(db, categories) {
+// One pass over the entries: each row is read once and removed when it belongs to any selected category.
+// (Reading every row once per category stalled Overwrite on its "Replacing" step.) onStep({ done, total }) after each row.
+async function wipeCategories(db, categories, onStep) {
   initFiles(db);
-  for (const cat of categories.filter((c) => ENTRY_CATEGORIES[c])) {
-    const predicate = ENTRY_CATEGORIES[cat];
-    const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
-    for (const row of rows) {
-      const full = (await db.query(`SELECT * FROM entries WHERE id=?`, [row.id])).values[0];
-      if (predicate(full)) {
-        await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
-        await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
-        await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
-        await removeFile(full); // the file goes with its entry (Decision 162)
-      }
+  const preds = categories.filter((c) => ENTRY_CATEGORIES[c]).map((c) => ENTRY_CATEGORIES[c]);
+  if (!preds.length) return;
+  const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
+  let done = 0;
+  for (const row of rows) {
+    const full = ((await db.query(`SELECT * FROM entries WHERE id=?`, [row.id])).values || [])[0];
+    if (full && preds.some((match) => match(full))) {
+      await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
+      await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
+      await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
+      await removeFile(full); // the file goes with its entry (Decision 162)
     }
+    done += 1;
+    if (onStep) onStep({ done, total: rows.length });
   }
 }
 
@@ -661,7 +665,10 @@ async function restoreFormat2(db, opts) {
   }
 
   const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false };
-  if (mode === 'overwrite') { onPhase?.('Replacing current data…'); await wipeCategories(db, categories); }
+  if (mode === 'overwrite') {
+    onPhase?.('Replacing current data…');
+    await wipeCategories(db, categories, ({ done, total }) => onPhase?.(`Replacing current data, ${done} of ${total}…`));
+  }
 
   let seen = 0;
   let end = null;
