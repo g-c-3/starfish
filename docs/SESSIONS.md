@@ -46,7 +46,9 @@ Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscati
 
 Device pass: DP58 and DP59 confirmed.
 
-Next session start point: DP60 and DP61 on the device (DP61 shows whether the recorder runs behind a lock); then Phase 20 Move, step 1 (Text, Location, Money); Autosave stage 3 (Reminder, Location, Money) stays open.
+Device pass: DP60 and DP61 confirmed (voice autosave; recording behind a lock).
+
+Next session start point: Phase 20 Move, step 1 (Text, Location, Money); Autosave stage 3 (Reminder, Location, Money) stays open.
 
 ---
 
