@@ -662,6 +662,7 @@ window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 async function onUnlocked() {
   showScreen('main-screen');
   if (await commitNoteDrafts()) toast('Unsaved text was saved as Autosave');
+  if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
   // Ads deliberately NOT wired in this build (explicit product decision — deferred to a future
@@ -1121,6 +1122,10 @@ async function runBulkFileAction(action, entryIds, extraOpts = {}) {
 // without a save or an explicit discard. The next unlock (Home) or Vault unlock (Vault) commits it: a new note becomes an entry
 // named "Autosave <date time>", an edit is written onto its entry. Home rows sit in the encrypted database; Vault rows are
 // encrypted under the Vault key. Neither is in a backup (not in APP_SETTINGS_KEYS). ----
+// Home voice recording that keeps running behind a lock (Decision 180). Set when the recorder screen is closed by a lock
+// while the switch is on; the recorder reopens on the running take at the next unlock. Home only.
+let bgRec = null;            // { startedAt } while a take runs with no screen
+let resumeRecordingHook = null; // set by the capture wiring
 const DRAFT_KEYS = { homeNew: 'note_draft', homeEdit: 'note_edit_draft', vaultNew: 'vault_note_draft', vaultEdit: 'vault_edit_draft' };
 function noteDraftHandlers({ isVault, entryId = null }) {
   const key = isVault ? (entryId ? DRAFT_KEYS.vaultEdit : DRAFT_KEYS.vaultNew) : (entryId ? DRAFT_KEYS.homeEdit : DRAFT_KEYS.homeNew);
@@ -3140,16 +3145,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch { /* nothing more can be done; the take is dropped as before */ }
   }
+  // Home take handed over by the recorder: Save dialog, then the entry. Also used when the recorder reopens on a take that
+  // kept running behind a lock (Decision 180).
+  async function homeVoiceSaved({ recordDataBase64, mimeType }) {
+    const mark = overlayAbortCount;
+    const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
+    if (!d) {
+      if (overlayAbortCount !== mark) await autosaveVoice({ isVault: false, key: null, base64: recordDataBase64, mimeType }); // locked meanwhile: keep the take
+      else toast('Recording discarded');
+      return;
+    }
+    await captureFile('voice', { label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
+    await renderMainTimeline();
+    toast('Recording saved');
+  }
+  resumeRecordingHook = (r) => startVoiceRecordingUI(homeVoiceSaved, { resume: r });
   // Recorder screen: ready -> recording -> review (player) -> Save hands the take to onStopped (the Save dialog).
   // Backing out of a take asks Yes/No; a lock, background or forced close keeps it as an Autosave entry (Decision 179).
-  async function startVoiceRecordingUI(onStopped, { isVault = false } = {}) {
+  async function startVoiceRecordingUI(onStopped, { isVault = false, resume = null } = {}) {
     // Asked before the screen opens: the system prompt pauses the app, which a lock would treat as backgrounding.
-    try {
-      const has = await VoiceRecorder.hasAudioRecordingPermission();
-      if (!has.value && !(await VoiceRecorder.requestAudioRecordingPermission()).value) { toast('Microphone permission denied'); return; }
-    } catch (err) { toast(`Microphone unavailable: ${err.message || err}`); return; }
+    if (!resume) {
+      try {
+        const has = await VoiceRecorder.hasAudioRecordingPermission();
+        if (!has.value && !(await VoiceRecorder.requestAudioRecordingPermission()).value) { toast('Microphone permission denied'); return; }
+      } catch (err) { toast(`Microphone unavailable: ${err.message || err}`); return; }
+    }
+    // Home only (Decision 180): keep recording behind a lock. Off by default; can be changed before and during a take.
+    let bgOn = false;
+    if (!isVault) bgOn = (await metaGet('rec_background', '0')) === '1';
 
     let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
+    if (resume) { state = 'recording'; startedAt = resume.startedAt; }
     let bodyEl = null, closeFn = null, discarded = false, autoKey = null;
     const dropReview = () => {
       if (player) { player.destroy(); player = null; }
@@ -3162,6 +3188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       autoKey = privateSessionKey; // before a Vault lock clears it
       dropReview();
       const keep = !discarded && !saved; // a lock, background or forced close keeps the take (Decision 179)
+      if (was === 'recording' && keep && bgOn && !isVault) { bgRec = { startedAt }; return; } // the take keeps running (Decision 180)
       if (was === 'recording') {
         VoiceRecorder.stopRecording().then((r) => { if (keep && r && r.value) return autosaveVoice({ isVault, key: autoKey, base64: r.value.recordDataBase64, mimeType: r.value.mimeType }); }).catch(() => {});
       } else if (keep && was === 'review' && held) {
@@ -3243,13 +3270,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="detail-actions">
           <button id="rec-main-btn" class="${recording ? 'rec-stop' : ''}"${state === 'stopping' ? ' disabled' : ''}>${recording ? 'Stop' : 'Record'}</button>
-        </div>`;
+        </div>
+        ${isVault ? '' : `<label class="switch-row"><input type="checkbox" id="rec-bg-switch"${bgOn ? ' checked' : ''} /> Keep recording when the app locks or goes to the background</label>
+        <p class="mode-description">Off: a lock stops the take and keeps it as an Autosave entry.</p>`}`;
       body.querySelector('#rec-main-btn').onclick = recording ? stop : start;
+      const bgSw = body.querySelector('#rec-bg-switch');
+      if (bgSw) bgSw.onchange = () => { bgOn = bgSw.checked; metaSet('rec_background', bgOn ? '1' : '0').catch(() => {}); };
     }
 
     await openViewer({
       title: 'Record voice', isVault, guard, onClose: cleanup,
-      render: async (body, { close }) => { bodyEl = body; closeFn = close; draw(); }
+      render: async (body, { close }) => { bodyEl = body; closeFn = close; if (resume && !timer) timer = setInterval(tick, 250); draw(); }
     });
     if (saved) await onStopped({ recordDataBase64: saved.base64, mimeType: saved.mimeType, msDuration: saved.ms });
   }
@@ -3422,18 +3453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await draft.clear(); // saved: the draft is no longer needed
       await renderMainTimeline();
     } else if (type === 'voice') {
-      await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
-        const mark = overlayAbortCount;
-        const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
-        if (!d) {
-          if (overlayAbortCount !== mark) await autosaveVoice({ isVault: false, key: null, base64: recordDataBase64, mimeType }); // locked meanwhile: keep the take
-          else toast('Recording discarded');
-          return;
-        }
-        await captureFile('voice', { label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
-        await renderMainTimeline();
-        toast('Recording saved');
-      });
+      await startVoiceRecordingUI(homeVoiceSaved);
     } else if (type === 'reminder') {
       const d = await openSaveDialog({ heading: 'New reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard', reminder: {} });
       if (!d) return;
