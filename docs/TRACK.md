@@ -170,3 +170,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-11 | Session 106 (continued, 3) | Decision 170 | Phase 17 I built: weak-secret warning (advisory) at first-run, Vault PIN setup, Backup now, auto-backup banner, Drive Backup now; DP52 added; 12 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-11 | Session 106 (device pass, 4) | none | DP52 confirmed on device: weak-secret warning |
 | 2026-10-11 | Session 106 (continued, 4) | Decision 171 | Phase 17 J built: new backups derive their key with 600000 PBKDF2 iterations (earlier backups still open); DP53 added; 6 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-11 | Session 106 (device pass, 5) | none | DP53 confirmed on device: backup and restore with 600000 iterations; Overwrite restore found slow on its Replacing step |
+| 2026-10-11 | Session 106 (continued, 5) | none | Overwrite restore: wipe step reads each entry once and shows progress; DP54 added; mock-database comparison against the old function; vite build passes; not run through CI or on a device |

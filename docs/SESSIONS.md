@@ -79,7 +79,14 @@ Verified in the authoring environment: 6 Node checks on `crypto.js` (new archive
 
 Open: DP53, Phase 17 (PBKDF2 count for the password hash and the Vault key, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
 
-Next session start point: DP53 on the device; then the owner picks among the open items.
+Device pass: DP53 confirmed (backup and restore both worked with the new count). The owner reported that an Overwrite restore of 43 entries sat on "Replacing current data…" for a long time.
+
+Bug fixed, in `src/js/backup.js` (`wipeCategories`):
+- Cause: the wipe re-read every entry once per selected category (about 5 times the queries for ten categories), and the status did not change while it ran. Inferred from the code and the status shown, not measured on the device.
+- Fix: one pass reading each entry once, deleting it when it matches any selected category, with a per-entry count in the status line.
+- Why correct: the set of removed entries is the union of the categories' matches, the same as before; checked in Node against the previous function on a mock database (same rows left and removed for five category selections, queries 595 to 111 for 110 entries and all categories).
+
+Next session start point: DP54 on the device (Overwrite restore speed); then the owner picks among the open items.
 
 ---
 

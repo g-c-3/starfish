@@ -873,3 +873,6 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ### Backup key derivation (Decision 171)
 - `BACKUP_KDF_ITERATIONS` (600000) in `crypto.js` is the count for every newly written backup; it is written in the backup's header (`kdfIterations`) and restore derives with the header's count, so earlier backups (300000) still open.
 - The Vault key derivation and the two password hashes keep their fixed counts; changing them needs a versioned rehash or a Vault re-encryption.
+
+### Overwrite restore, wipe step
+- `wipeCategories` reads each entry once and removes it when it belongs to any selected category, reporting `{ done, total }` per entry; the status line shows "Replacing current data, n of m…". Entries in the trash are not touched, as before.
