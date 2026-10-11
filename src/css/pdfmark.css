@@ -26,3 +26,6 @@
 .pdf-mk-field span { font-size: 13px; color: var(--muted); word-break: break-word; }
 .pdf-mk-field input[type="checkbox"] { width: 24px; height: 24px; }
 .pdf-mk-field input[type="text"], .pdf-mk-field textarea, .pdf-mk-field select { width: 100%; margin: 0; }
+
+/* Picture tool (Decision 169). */
+.pdf-mk-sign { position: absolute; display: block; height: auto; pointer-events: none; user-select: none; -webkit-user-drag: none; }
