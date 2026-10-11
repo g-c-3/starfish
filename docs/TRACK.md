@@ -187,3 +187,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-11 | Session 108 (bug fix, 2) | Decision 176 | Unsaved Home note text kept as a draft across locks and restored at the next New note; DP59 added; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 108 (Autosave, 3) | Decision 177 | Phase 19 added: Autosave stage 1 built (Text, new and edit, Home and Vault; committed at the next unlock); DP59 rewritten; 16 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 108 (reminder and note, 4) | Decision 178 | Text with reminder wording is always saved as a note and a reminder is offered in addition; DP58 rewritten; vite build passes; not run through CI or on a device |
+| 2026-10-12 | Session 108 (device pass, 5) | none | DP58 and DP59 confirmed on device: note and reminder offer; Autosave for Text, Home and Vault |
+| 2026-10-12 | Session 108 (Autosave, 6) | Decision 179 | Phase 19 stage 2 built: Voice autosave on lock, background or close, Home and Vault; DP60 added; vite build passes; not run through CI or on a device |

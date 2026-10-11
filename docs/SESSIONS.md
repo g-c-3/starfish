@@ -26,7 +26,13 @@ Then Autosave stage 1 (Decision 177), on the owner's go-ahead after the report t
 
 Reminder wording changed (Decision 178): the note is always saved and the sheet offers a reminder in addition (`src/js/app.js`).
 
-Decisions made: 175, 176, 177, 178.
+Then Autosave stage 2 (Decision 179), after DP58 and DP59 were confirmed on the device: Voice, Home and Vault.
+- `src/js/app.js`: `autosaveVoice`; the recorder keeps a take on any close that is not a save or an explicit discard (recording, review, finalising); the Home and Vault Save-dialog callbacks keep the take when a lock closed the dialog.
+- Docs: ROADMAP (Phase 19, DP58 and DP59 confirmed, DP60), DECISIONS (179).
+
+Decisions made: 175, 176, 177, 178, 179.
+
+Verified (179): syntax check; `vite build` passes. Not verified: any recorder behaviour on a device, CI.
 
 Verified (177): 16 Node checks on the draft functions with real Web Crypto (Home new and edit stored, Vault rows encrypted with no plain text, no write once the key is gone, Home commit leaves Vault rows alone, Autosave name format, edit applied, rows cleared, Vault commit, second run does nothing, an edit of a missing entry kept as an Autosave note, blank text skipped, a draft under another PIN dropped); syntax check; `vite build` passes. Not verified: the editor and lock paths on a device, CI.
 
@@ -34,7 +40,9 @@ Verified in the authoring environment (175): 9 Node checks on `reminderOffer` (t
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning. Each needs approval or a device review.
 
-Next session start point: DP58 and DP59 on the device; then Autosave stage 2 (Voice), then stage 3 (Reminder, Location, Money).
+Device pass: DP58 and DP59 confirmed.
+
+Next session start point: DP60 on the device; then Autosave stage 3 (Reminder, Location, Money).
 
 ---
 

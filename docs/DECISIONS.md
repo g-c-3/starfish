@@ -2219,3 +2219,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Changes from 175: the note is no longer replaced by the reminder, so the typed text is never lost and the description fallback is gone; a lock during the sheet no longer discards the text (the note is saved).
 - Unchanged: the phrases, the time parsing, `reminderOffer`, the Reminder card, Vault.
 - Risks: not run through CI or on a device (DP58).
+
+**179. Autosave, stage 2: Voice, Home and Vault (Phase 19).**
+- Rule: a take that is neither saved nor discarded by the person, because the app locked, went to the background or the recorder was closed by the system, is saved at once as a voice entry named `Autosave YYYY-MM-DD HH:MM`. Three states: recording (the recorder is stopped and the take kept), a finished take in review, and a take being finalised when the screen closes.
+- Also covered: a take already sent to the Save dialog when a lock closes the dialog. Cancel, the Discard button and Yes at "Discard recording?" are explicit discards and save nothing. Save with a name saves as before.
+- Vault: the Vault key is read before the lock clears it and passed to the save; the take is encrypted like any Vault voice entry. No Vault index refresh at that moment (it would rebuild a cache after the lock); the next Vault unlock builds it in full.
+- Not covered: the app being killed while recording, or the phone powering off; that take is lost (the recorder holds the audio until stopped). The Autosave entry carries no tags or description.
+- Risks: not run through CI or on a device (DP60). Whether the recorder stops and returns its data while the app is in the background after a lock is not verified.
