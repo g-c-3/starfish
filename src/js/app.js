@@ -2279,9 +2279,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const r = await testHaptics();
       const where = `Platform ${r.platform}, plugin ${r.pluginAvailable ? 'present' : 'missing'}.`;
       const last = r.lastError ? ` Last error from an action: ${r.lastError}.` : '';
+      const web = ` Web view vibrate: ${r.web}.`;
       out.textContent = r.ok
-        ? `Sent a 300 ms vibration. ${where}${last} If you felt nothing, the phone is blocking it: check the system Vibration and touch feedback settings, Do Not Disturb and Battery saver.`
-        : `Vibration failed: ${r.error}. ${where}${last}`;
+        ? `Sent a 300 ms vibration. ${where}${web}${last} If you felt nothing, the phone is blocking it: check the system Vibration and touch feedback settings, Do Not Disturb and Battery saver.`
+        : `Vibration failed: ${r.error}. ${where}${web}${last}`;
     });
   }
 
