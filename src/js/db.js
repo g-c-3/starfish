@@ -226,6 +226,9 @@ async function initDb(sqlite) {
   await ensureColumn(db, 'entries', 'file_key', 'TEXT');
   // Money details as JSON text (Decision 124). Home only; Vault Money keeps the same JSON inside encrypted_body.
   await ensureColumn(db, 'entries', 'money_json', 'TEXT');
+  // PBKDF2 count each credential hash was made with (Decision 172). NULL = 210000, the count before it was stored.
+  await ensureColumn(db, 'credentials', 'app_password_iter', 'INTEGER');
+  await ensureColumn(db, 'credentials', 'private_pin_iter', 'INTEGER');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
   await ensureColumn(db, 'credentials', 'biometric_vault_enabled', 'INTEGER DEFAULT 0');
   // Three independent lock triggers per lock (Decision 74), replacing "idle timer + always-on

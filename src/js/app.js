@@ -3,7 +3,7 @@
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
-import { hashPassword, verifyPassword, deriveAesKey } from './crypto.js';
+import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, deriveAesKey } from './crypto.js';
 import { detectIntent, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
@@ -511,7 +511,7 @@ function beginPickerLaunch() {
 
 // ---- Auth gate — app-open password is optional ("quick access"); Vault PIN is separate and unaffected ----
 async function showLockScreen() {
-  const row = await db.query(`SELECT app_password_hash, app_password_salt FROM credentials WHERE id=1`);
+  const row = await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`);
 
   if (!row.values || row.values.length === 0) {
     window.needsFirstRunSetup = true; // informational only — showScreen() below is what actually does the work
@@ -519,7 +519,7 @@ async function showLockScreen() {
     return { firstRun: true };
   }
 
-  const { app_password_hash, app_password_salt } = row.values[0];
+  const { app_password_hash, app_password_salt, app_password_iter } = row.values[0];
   if (!app_password_hash) {
     await onUnlocked(); // "quick access" — no password was set, skip the lock screen UI entirely
     return { quickAccess: true };
@@ -527,8 +527,8 @@ async function showLockScreen() {
 
   showScreen('lock-screen');
   window.attemptUnlock = async (password) => {
-    const ok = await verifyPassword(password, app_password_hash, app_password_salt);
-    if (ok) { await onUnlocked(); return { success: true }; }
+    const ok = await verifyPassword(password, app_password_hash, app_password_salt, app_password_iter);
+    if (ok) { await onUnlocked(); await upgradeCredentialHash('app', password, app_password_hash, app_password_salt, app_password_iter); return { success: true }; }
     return { success: false };
   };
 
@@ -554,28 +554,44 @@ async function showLockScreen() {
 // first run (pivot); the vault only exists once its PIN is set, but that can happen later too
 // (Settings), not necessarily during first-run setup.
 window.completeFirstRunSetup = async ({ appPassword = null, appPasswordHint = '', vaultPin = null, vaultPinHint = '' }) => {
-  let passwordHash = null, passwordSalt = null;
-  if (appPassword) ({ hash: passwordHash, salt: passwordSalt } = await hashPassword(appPassword));
+  let passwordHash = null, passwordSalt = null, passwordIter = null;
+  if (appPassword) ({ hash: passwordHash, salt: passwordSalt, iterations: passwordIter } = await hashPassword(appPassword));
 
-  let pinHash = null, pinSalt = null;
-  if (vaultPin) ({ hash: pinHash, salt: pinSalt } = await hashPassword(vaultPin));
+  let pinHash = null, pinSalt = null, pinIter = null;
+  if (vaultPin) ({ hash: pinHash, salt: pinSalt, iterations: pinIter } = await hashPassword(vaultPin));
 
   await db.run(
     `INSERT INTO credentials (id, app_password_hash, app_password_salt, app_password_hint,
-      private_pin_hash, private_pin_salt, private_pin_hint) VALUES (1,?,?,?,?,?,?)`,
-    [passwordHash, passwordSalt, appPasswordHint || null, pinHash, pinSalt, vaultPinHint || null]
+      private_pin_hash, private_pin_salt, private_pin_hint, app_password_iter, private_pin_iter) VALUES (1,?,?,?,?,?,?,?,?)`,
+    [passwordHash, passwordSalt, appPasswordHint || null, pinHash, pinSalt, vaultPinHint || null, passwordIter, pinIter]
   );
   await onUnlocked();
 };
 
+// Upgrade a hash made with an older PBKDF2 count, right after that same secret was verified (Decision 172). The salt is kept:
+// the Vault key derives from the PIN salt, and backups carry it. The UPDATE only applies if the stored hash is still the one that
+// was verified, so a change made in between is never overwritten. A failure leaves the old hash valid; it retries at the next unlock.
+const CRED_COLS = {
+  app: { hash: 'app_password_hash', iter: 'app_password_iter' },
+  pin: { hash: 'private_pin_hash', iter: 'private_pin_iter' },
+};
+async function upgradeCredentialHash(kind, secret, oldHash, salt, iterations) {
+  if (!needsRehash(iterations)) return;
+  try {
+    const c = CRED_COLS[kind];
+    const { hash } = await hashPassword(secret, salt, PASSWORD_HASH_ITERATIONS);
+    await db.run(`UPDATE credentials SET ${c.hash}=?, ${c.iter}=? WHERE id=1 AND ${c.hash}=?`, [hash, PASSWORD_HASH_ITERATIONS, oldHash]);
+  } catch { /* stays at the old count */ }
+}
+
 // Settings-time add/remove — independent of first-run, so "quick access" can be turned on or off later.
 async function setAppPassword(newPassword, hint = '') {
-  const { hash, salt } = await hashPassword(newPassword);
-  await db.run(`UPDATE credentials SET app_password_hash=?, app_password_salt=?, app_password_hint=? WHERE id=1`, [hash, salt, hint]);
+  const { hash, salt, iterations } = await hashPassword(newPassword);
+  await db.run(`UPDATE credentials SET app_password_hash=?, app_password_salt=?, app_password_hint=?, app_password_iter=? WHERE id=1`, [hash, salt, hint, iterations]);
   await disableAppBiometric(); // stored secret (if any) was the old password — stale now, must re-enable explicitly
 }
 async function removeAppPassword() {
-  await db.run(`UPDATE credentials SET app_password_hash=NULL, app_password_salt=NULL, app_password_hint=NULL WHERE id=1`);
+  await db.run(`UPDATE credentials SET app_password_hash=NULL, app_password_salt=NULL, app_password_hint=NULL, app_password_iter=NULL WHERE id=1`);
   await disableAppBiometric(); // nothing left to unlock biometrically
 }
 
@@ -594,9 +610,9 @@ async function getBiometricSettings() {
 }
 
 async function enableAppBiometric(currentPassword) {
-  const row = (await db.query(`SELECT app_password_hash, app_password_salt FROM credentials WHERE id=1`)).values[0];
+  const row = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`)).values[0];
   if (!row?.app_password_hash) return { success: false, reason: 'no-password-set' };
-  const ok = await verifyPassword(currentPassword, row.app_password_hash, row.app_password_salt);
+  const ok = await verifyPassword(currentPassword, row.app_password_hash, row.app_password_salt, row.app_password_iter);
   if (!ok) return { success: false, reason: 'wrong-password' };
   await enableBiometric('app', currentPassword); // shows the biometric prompt itself, throws on cancel/failure
   await db.run(`UPDATE credentials SET biometric_app_enabled=1 WHERE id=1`);
@@ -608,9 +624,9 @@ async function disableAppBiometric() {
 }
 
 async function enableVaultBiometric(currentPin) {
-  const row = (await db.query(`SELECT private_pin_hash, private_pin_salt FROM credentials WHERE id=1`)).values[0];
+  const row = (await db.query(`SELECT private_pin_hash, private_pin_salt, private_pin_iter FROM credentials WHERE id=1`)).values[0];
   if (!row?.private_pin_hash) return { success: false, reason: 'no-pin-set' };
-  const ok = await verifyPassword(currentPin, row.private_pin_hash, row.private_pin_salt);
+  const ok = await verifyPassword(currentPin, row.private_pin_hash, row.private_pin_salt, row.private_pin_iter);
   if (!ok) return { success: false, reason: 'wrong-pin' };
   await enableBiometric('vault', currentPin);
   await db.run(`UPDATE credentials SET biometric_vault_enabled=1 WHERE id=1`);
@@ -863,8 +879,8 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], descri
 // ---- Private Vault: its own PIN, its own unlock session, its own auto-lock timer — all
 // independent of the app-open password (three credentials stay independent, ARCHITECTURE §3) ----
 async function setupVaultPin(pin, hint = '') {
-  const { hash, salt } = await hashPassword(pin);
-  await db.run(`UPDATE credentials SET private_pin_hash=?, private_pin_salt=?, private_pin_hint=? WHERE id=1`, [hash, salt, hint]);
+  const { hash, salt, iterations } = await hashPassword(pin);
+  await db.run(`UPDATE credentials SET private_pin_hash=?, private_pin_salt=?, private_pin_hint=?, private_pin_iter=? WHERE id=1`, [hash, salt, hint, iterations]);
   await disableVaultBiometric(); // stored secret (if any) was the old PIN — stale now, must re-enable explicitly
 }
 
@@ -879,16 +895,17 @@ async function buildVaultIndexWithNotice() {
 }
 
 async function unlockVault(pin) {
-  const row = await db.query(`SELECT private_pin_hash, private_pin_salt FROM credentials WHERE id=1`);
+  const row = await db.query(`SELECT private_pin_hash, private_pin_salt, private_pin_iter FROM credentials WHERE id=1`);
   if (!row.values[0] || !row.values[0].private_pin_hash) return { setupNeeded: true };
-  const { private_pin_hash, private_pin_salt } = row.values[0];
-  const ok = await verifyPassword(pin, private_pin_hash, private_pin_salt);
+  const { private_pin_hash, private_pin_salt, private_pin_iter } = row.values[0];
+  const ok = await verifyPassword(pin, private_pin_hash, private_pin_salt, private_pin_iter);
   if (!ok) return { success: false };
   const { key } = await deriveAesKey(pin, private_pin_salt);
   privateSessionKey = key;
   await buildVaultIndexWithNotice(); // in-memory only — see vault.js
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
+  await upgradeCredentialHash('pin', pin, private_pin_hash, private_pin_salt, private_pin_iter);
   return { success: true };
 }
 

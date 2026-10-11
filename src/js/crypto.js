@@ -23,20 +23,29 @@ function randomBytes(len) {
 
 // ---- Password hashing (for app-open password & private-notes PIN) ----
 // Not reversible; used only to verify a match on unlock.
-async function hashPassword(password, saltB64 = null) {
+// New hashes use PASSWORD_HASH_ITERATIONS (Decision 172). The count is stored beside each hash (`*_iter` columns); a row with no
+// count was made at LEGACY_HASH_ITERATIONS and is upgraded after a correct unlock. The Vault key keeps its own fixed count.
+const PASSWORD_HASH_ITERATIONS = 600000;
+const LEGACY_HASH_ITERATIONS = 210000;
+async function hashPassword(password, saltB64 = null, iterations = PASSWORD_HASH_ITERATIONS) {
   const salt = saltB64 ? fromBase64(saltB64) : randomBytes(16);
   const keyMaterial = await crypto.subtle.importKey('raw', ENC.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     keyMaterial,
     256
   );
-  return { hash: toBase64(bits), salt: toBase64(salt) };
+  return { hash: toBase64(bits), salt: toBase64(salt), iterations };
 }
 
-async function verifyPassword(password, storedHashB64, storedSaltB64) {
-  const { hash } = await hashPassword(password, storedSaltB64);
+// `iterations` is the stored count; null or missing means a hash made before the count was stored.
+async function verifyPassword(password, storedHashB64, storedSaltB64, iterations = null) {
+  const { hash } = await hashPassword(password, storedSaltB64, iterations || LEGACY_HASH_ITERATIONS);
   return constantTimeEqual(hash, storedHashB64);
+}
+
+function needsRehash(iterations) {
+  return (iterations || LEGACY_HASH_ITERATIONS) < PASSWORD_HASH_ITERATIONS;
 }
 
 function constantTimeEqual(a, b) {
@@ -128,7 +137,7 @@ async function decryptBackup(passphrase, backupFileObj) {
 }
 
 export {
-  hashPassword, verifyPassword, deriveAesKey,
+  hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, LEGACY_HASH_ITERATIONS, deriveAesKey,
   encryptBytes, decryptBytes,
   encryptPrivateNote, decryptPrivateNote,
   encryptBackup, decryptBackup,
