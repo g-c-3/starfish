@@ -2817,8 +2817,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (type === 'voice') {
         await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
           try {
+            const mark = overlayAbortCount, key = privateSessionKey; // key read now: a Vault lock clears it
             const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard' });
-            if (!d) { toast('Recording discarded'); return; }
+            if (!d) {
+              if (overlayAbortCount !== mark) await autosaveVoice({ isVault: true, key, base64: recordDataBase64, mimeType }); // locked meanwhile: keep the take
+              else toast('Recording discarded');
+              return;
+            }
             await captureToVault({ type: 'voice', label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
             renderVault();
             toast('Saved to the Vault');
@@ -3120,8 +3125,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const map = { 'audio/aac': 'aac', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
     return map[mimeType] || map[mimeType?.split(';')[0]] || 'aac';
   }
+  // Voice take that was neither saved nor discarded by the person (a lock, background or close): saved at once as an
+  // Autosave entry (Decision 179). The Vault key is passed in, read before the Vault lock cleared it; no index refresh
+  // here (it would rebuild a cache after the lock); the next Vault unlock builds it in full.
+  async function autosaveVoice({ isVault, key, base64, mimeType }) {
+    if (!base64) return;
+    try {
+      const extension = extensionForMimeType(mimeType);
+      if (isVault) {
+        if (!key) return;
+        await saveVaultEntry(db, key, { type: 'voice', label: autosaveName(), tags: [], description: '', fileData: base64, extension });
+      } else {
+        await captureFile('voice', { label: autosaveName(), fileData: base64, extension });
+      }
+    } catch { /* nothing more can be done; the take is dropped as before */ }
+  }
   // Recorder screen: ready -> recording -> review (player) -> Save hands the take to onStopped (the Save dialog).
-  // Backing out of a take asks twice; a lock discards it, as it drops unsaved editor text (Decision 103).
+  // Backing out of a take asks Yes/No; a lock, background or forced close keeps it as an Autosave entry (Decision 179).
   async function startVoiceRecordingUI(onStopped, { isVault = false } = {}) {
     // Asked before the screen opens: the system prompt pauses the app, which a lock would treat as backgrounding.
     try {
@@ -3130,26 +3150,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { toast(`Microphone unavailable: ${err.message || err}`); return; }
 
     let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
-    let bodyEl = null, closeFn = null;
+    let bodyEl = null, closeFn = null, discarded = false, autoKey = null;
     const dropReview = () => {
       if (player) { player.destroy(); player = null; }
       if (url) { URL.revokeObjectURL(url); url = null; }
     };
     const cleanup = () => {
-      const was = state;
+      const was = state, held = taken;
       state = 'closed';
       clearInterval(timer);
+      autoKey = privateSessionKey; // before a Vault lock clears it
       dropReview();
-      if (was === 'recording') VoiceRecorder.stopRecording().catch(() => {}); // take discarded
+      const keep = !discarded && !saved; // a lock, background or forced close keeps the take (Decision 179)
+      if (was === 'recording') {
+        VoiceRecorder.stopRecording().then((r) => { if (keep && r && r.value) return autosaveVoice({ isVault, key: autoKey, base64: r.value.recordDataBase64, mimeType: r.value.mimeType }); }).catch(() => {});
+      } else if (keep && was === 'review' && held) {
+        autosaveVoice({ isVault, key: autoKey, base64: held.base64, mimeType: held.mimeType });
+      }
     };
     // Back with a take in memory asks Yes/No (replaces the earlier tap-twice rule). Resolves true to leave.
     const guard = async () => {
       if (state === 'ready' || state === 'closed') return true;
-      return askYesNo({
+      const yes = await askYesNo({
         title: 'Discard recording?',
         text: state === 'recording' ? 'Recording is in progress and will be lost.' : 'This recording has not been saved.',
         yes: 'Yes, discard', no: 'No, keep it'
       });
+      if (yes) discarded = true;
+      return yes;
     };
     const tick = () => {
       const el = bodyEl && bodyEl.querySelector('#rec-timer');
@@ -3170,7 +3198,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       state = 'stopping';
       try {
         const res = (await VoiceRecorder.stopRecording()).value; // { recordDataBase64, msDuration, mimeType }
-        if (state === 'closed') return;
+        if (state === 'closed') { // closed while the take was being finalised
+          if (!discarded && !saved) autosaveVoice({ isVault, key: autoKey, base64: res.recordDataBase64, mimeType: res.mimeType });
+          return;
+        }
         taken = { base64: res.recordDataBase64, mimeType: res.mimeType, ms: res.msDuration || (Date.now() - startedAt) };
         url = base64ToBlobUrl(taken.base64, taken.mimeType || 'audio/aac');
         state = 'review';
@@ -3200,7 +3231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         player = createAudioPlayer(body.querySelector('#rec-player'), url, { fallbackMs: taken.ms });
         body.querySelector('#rec-save-btn').onclick = () => { saved = taken; closeFn(); };
         body.querySelector('#rec-again-btn').onclick = () => { dropReview(); taken = null; state = 'ready'; draw(); };
-        body.querySelector('#rec-discard-btn').onclick = () => { toast('Recording discarded'); closeFn(); };
+        body.querySelector('#rec-discard-btn').onclick = () => { discarded = true; toast('Recording discarded'); closeFn(); };
         return;
       }
       const recording = state === 'recording' || state === 'stopping';
@@ -3392,8 +3423,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       await renderMainTimeline();
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
+        const mark = overlayAbortCount;
         const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });
-        if (!d) { toast('Recording discarded'); return; }
+        if (!d) {
+          if (overlayAbortCount !== mark) await autosaveVoice({ isVault: false, key: null, base64: recordDataBase64, mimeType }); // locked meanwhile: keep the take
+          else toast('Recording discarded');
+          return;
+        }
         await captureFile('voice', { label: d.name, tags: d.tags, description: d.description, fileData: recordDataBase64, extension: extensionForMimeType(mimeType) });
         await renderMainTimeline();
         toast('Recording saved');
