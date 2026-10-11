@@ -4,7 +4,7 @@
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, deriveAesKey } from './crypto.js';
-import { detectIntent, suggestLabel } from './intents.js';
+import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
@@ -774,25 +774,18 @@ async function clearOldInCategory(category, olderThanDays) {
   return { cleared: ids.length, ids };
 }
 
-// ---- Capture pipeline: any text-producing input (typed, OCR, voice label) flows through here ----
+// ---- Capture pipeline: typed text. A reminder is made only when the person confirmed it (extra.reminderAt, Decision 175);
+// text is never converted on its own. ----
 async function captureText(rawText, sourceType = 'note', extra = {}) {
-  const intent = detectIntent(rawText);
-
-  if (intent && intent.handler === 'reminder') {
-    const partial = { id: crypto.randomUUID(), ...buildFromHandler('reminder', intent.data) };
-    await insertEntry(db, partial);
-    await scheduleReminder(partial);
-    return partial;
+  if (extra.reminderAt) {
+    const id = crypto.randomUUID();
+    const saved = { label: extra.label || rawText.slice(0, 40), fire_at: extra.reminderAt, repeat_rule: null };
+    await insertEntry(db, { id, type: 'reminder', ...saved, description: extra.description || null });
+    await applyTags(id, extra.tags || []);
+    await scheduleReminder({ id, ...saved });
+    return id;
   }
-
-  // Plain note (or private note) fallback
   return saveNote(rawText, extra);
-}
-
-function buildFromHandler(name, data) {
-  // pulls the buildEntry() output from the matching handler — kept simple here since
-  // intents.js's registerIntentHandler already stores handlers internally.
-  if (name === 'reminder') return { type: 'reminder', label: data.label, fire_at: data.fire_at, repeat_rule: null };
 }
 
 // ---- Notes (including private notes) ----
@@ -3304,9 +3297,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         d = await openSaveDialog({ heading: 'Save note', defaultName: defaultNoteName(text), discardLabel: 'Back to editing' });
         if (!d && overlayAbortCount !== mark) return; // locked meanwhile
       }
-      await captureText(text, 'note', { label: d.name, tags: d.tags, description: d.description });
+      // Reminder wording is offered, not applied (Decision 175). Back keeps a note; a lock saves nothing.
+      let reminderAt = null;
+      const offer = reminderOffer(text);
+      if (offer) {
+        const markAsk = overlayAbortCount;
+        const yes = await askYesNo({ title: 'Set a reminder?', text: `${offer.label}\n${reminderSetText(offer.fire_at).replace('Reminder set for ', '')}`, yes: 'Set reminder', no: 'Keep as note' });
+        if (overlayAbortCount !== markAsk) return; // locked meanwhile
+        if (yes === true) reminderAt = offer.fire_at;
+      }
+      // A reminder keeps the typed text in its description when the person left that empty, so the text is not lost.
+      const description = reminderAt && !d.description && text.trim() !== d.name ? text : d.description;
+      try {
+        await captureText(text, 'note', { label: d.name, tags: d.tags, description, reminderAt });
+        toast(reminderAt ? reminderSetText(reminderAt) : 'Note saved');
+      } catch (err) {
+        if (!reminderAt) throw err;
+        toast(`Reminder saved, but its notification could not be scheduled: ${err.message || err}`);
+      }
       await renderMainTimeline();
-      toast('Note saved');
     } else if (type === 'voice') {
       await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
         const d = await openSaveDialog({ heading: 'Save recording', defaultName: `Voice ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard' });

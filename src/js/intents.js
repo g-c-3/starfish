@@ -1,5 +1,6 @@
 // pure rule-based (regex/keyword) intent detection. no automated inference, no network.
 // Reminder phrases only; money entries come from the Money form (Decision 124, 131).
+// A match is only ever offered to the person (reminderOffer), never applied on its own (Decision 175).
 
 // ---- Handler registry (extensible: add new handlers without touching the engine) ----
 const handlers = [];
@@ -81,6 +82,15 @@ registerIntentHandler({
   })
 });
 
+// Offer for typed text: { label, fire_at } when it reads as a reminder with a time still ahead, else null.
+// A time already past ("remind me today at 8am" said at noon) is not offered, so nothing is set for the past.
+function reminderOffer(text, now = Date.now()) {
+  const intent = detectIntent(text);
+  if (!intent || intent.handler !== 'reminder') return null;
+  if (!(intent.data.fire_at > now)) return null;
+  return intent.data;
+}
+
 // ===== OCR keyword-based label suggestion (not blocking, just a helper for the label prompt) =====
 const LABEL_SUGGESTIONS = [
   { keywords: /invoice no|total due|bill to/i, label: 'Invoice' },
@@ -98,4 +108,4 @@ function suggestLabel(ocrText) {
   return null;
 }
 
-export { registerIntentHandler, detectIntent, suggestLabel, parseTimeToEpoch };
+export { registerIntentHandler, detectIntent, reminderOffer, suggestLabel, parseTimeToEpoch };
