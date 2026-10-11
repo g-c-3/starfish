@@ -16,17 +16,25 @@ Phase 9, confirmation item (Decision 175), chosen as the smallest open item that
 Bugs fixed:
 - Cause: `captureText` converted any text matching the reminder phrase and rebuilt the entry from the parsed words only. Fix: conversion happens only after a confirmed offer, and the entry takes name, tags and description from the Save dialog. Correct because the only caller now decides, and the default (Back, No) is the plain note.
 
-Then a reported bug (Decision 176): typed note text was lost when the app locked.
+Then a reported bug (Decision 176, extended by 177): typed note text was lost when the app locked.
 - Cause: a lock closes the editor with no result and nothing had been written.
 - Fix (`src/js/app.js`): `openTextEditor` takes `draftKey` and `startDirty`; Home New note writes `meta.note_draft` while typing and on close, restores it on the next New note, clears it on save or on Yes at Discard. Correct because every route that closes the editor without a discard now keeps the text. Vault editor and existing-note edits are not covered.
 
-Decisions made: 175, 176.
+Then Autosave stage 1 (Decision 177), on the owner's go-ahead after the report that edits of saved notes lost their added text.
+- `src/js/app.js`: `noteDraftHandlers`, `commitNoteDrafts`, `autosaveName`; `openTextEditor` takes `persist` and `clear` instead of the 176 draft key; Home and Vault, new and edit, pass them; commit at Home unlock and at Vault unlock; the 176 restore step and its toast are gone.
+- Docs: ROADMAP (Phase 19, DP59 rewritten), ARCHITECTURE (Autosave), DECISIONS (177).
+
+Reminder wording changed (Decision 178): the note is always saved and the sheet offers a reminder in addition (`src/js/app.js`).
+
+Decisions made: 175, 176, 177, 178.
+
+Verified (177): 16 Node checks on the draft functions with real Web Crypto (Home new and edit stored, Vault rows encrypted with no plain text, no write once the key is gone, Home commit leaves Vault rows alone, Autosave name format, edit applied, rows cleared, Vault commit, second run does nothing, an edit of a missing entry kept as an Autosave note, blank text skipped, a draft under another PIN dropped); syntax check; `vite build` passes. Not verified: the editor and lock paths on a device, CI.
 
 Verified in the authoring environment (175): 9 Node checks on `reminderOffer` (tomorrow at 9am gives the next day 9:00 and the label, 5pm ahead today, a past time with "today" refused, a past time with no day word rolls to tomorrow, plain text, expense text and empty text give none, case-insensitive phrase); syntax check of both files; `vite build` passes. Not verified: CI, the sheet over the Save dialog on a device, Back and lock while it is open, the notification firing for a reminder made this way (DP58).
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning. Each needs approval or a device review.
 
-Next session start point: DP58 on the device; then the owner picks among the open items.
+Next session start point: DP58 and DP59 on the device; then Autosave stage 2 (Voice), then stage 3 (Reminder, Location, Money).
 
 ---
 

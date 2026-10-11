@@ -2202,3 +2202,20 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Privacy: the row sits in the encrypted database (Decision 158), behind the app lock like every note. It is not in `APP_SETTINGS_KEYS`, so no backup carries it. One draft only.
 - Not covered, by choice: the Vault editor (a draft would need the Vault key, which a lock clears), and edits of an existing note (the saved text is still there).
 - Risks: not run through CI or on a device (DP59).
+
+**177. Autosave of unsaved work, stage 1: Text, new and edit, Home and Vault (new Phase 19).**
+- Report: an edit of an already saved note lost the added text when the app locked; the Decision 176 draft covered only a new Home note. Owner request: unsaved work in Text, Voice, Reminder, Location and Money, Home and Vault, is saved as "Autosave <date time>" when the app locks, goes to the background or closes; an edit is saved onto its existing file. Built in stages: 1 Text, 2 Voice, 3 Reminder, Location, Money. This entry is stage 1.
+- Rule: while a text editor is open, its text goes to a draft row in `meta` half a second after the last keystroke, when the app is hidden, and when the editor closes with unsaved changes by any route except Yes on Discard. A clean close or Yes on Discard clears the row. A successful save clears it.
+- Commit: at the next app unlock, Home drafts are committed before the lists draw; at the next Vault unlock, Vault drafts are committed before the index is built. A new note becomes a note named `Autosave YYYY-MM-DD HH:MM`; an edit is written onto its entry (text only, name, tags and description unchanged); if the entry no longer exists the text becomes an Autosave note. A toast says so. A commit that fails leaves the row for the next unlock.
+- Rows: `note_draft`, `note_edit_draft` (Home, in the encrypted database, Decision 158); `vault_note_draft`, `vault_edit_draft` (encrypted under the Vault key, no plain text). Edit rows hold the entry id and the text. None is in `APP_SETTINGS_KEYS`, so no backup carries them. One draft per row; a Vault draft made under another PIN is dropped.
+- Supersedes the restore step of Decision 176: New note no longer reopens a draft, and the "Draft restored" toast is gone; the draft becomes an Autosave note at the next unlock instead.
+- Timing: the entry appears at the next unlock, not at the moment of the lock; the Vault commits at the next Vault unlock. A kill of the app keeps the text stored up to half a second before it.
+- Not covered in this stage: Voice, Reminder, Location, Money; edits of non-text entries.
+- Risks: not run through CI or on a device (DP59). Lock paths, the Vault key at lock, and the commit before the first list draw need a device check.
+
+**178. A note with reminder wording is always saved; a reminder is offered in addition (changes Decision 175).**
+- Request: saving as a note and setting a reminder are both wanted, not one or the other.
+- Rule: the note is saved first, with the name, tags and description from the Save dialog. If the text reads as a reminder with a time still ahead, a Yes/No sheet then asks "Also set a reminder?" (parsed label and time; "Set reminder too" or "Note only"). Yes adds a second entry, a reminder named with the parsed label, carrying the same tags, scheduled at the parsed time, no repeat. Back, No or a lock keeps the note only. The toast reads "Note saved · Reminder set for …".
+- Changes from 175: the note is no longer replaced by the reminder, so the typed text is never lost and the description fallback is gone; a lock during the sheet no longer discards the text (the note is saved).
+- Unchanged: the phrases, the time parsing, `reminderOffer`, the Reminder card, Vault.
+- Risks: not run through CI or on a device (DP58).

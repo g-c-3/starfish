@@ -519,9 +519,9 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   **Home layout (Decision 81):** the eight cards are folders, each listing only its type (Money also lists
   expenses) with a New button inside; a universal New on Home asks which type; the mixed timeline is now
   search results only. The Vault mirrors this exactly (Decision 85).
-- **Confirmation, not silent action (Decision 175)** — when typed note text reads as a reminder with a time still
-  ahead, a Yes/No sheet shows the parsed label and time after the Save dialog (Set reminder / Keep as note). Back or No
-  keeps a plain note, so an unanswered sheet never creates an entry nobody confirmed. Every action traces to a visible rule.
+- **Offer, not silent action (Decisions 175, 178)** — typed note text is always saved as a note. When it reads as a
+  reminder with a time still ahead, a Yes/No sheet after the Save dialog offers a reminder in addition (parsed label and
+  time; Set reminder too / Note only). Back or No keeps the note only. Every action traces to a visible rule.
 - **Map view for saved locations** — entries with a lat/long get a lightweight map view (in addition to the flat
   timeline), since location was otherwise dead metadata on a card.
 - **Label autocomplete from history** — implemented via the `label_history` table in `db.js` (also what powers
@@ -881,3 +881,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `hashPassword` uses 600000 PBKDF2 iterations (SHA-256) for new hashes and returns the count; it is stored in `credentials.app_password_iter` and `credentials.private_pin_iter`. NULL means 210000.
 - `verifyPassword` reads the stored count. After a correct app-open password or Vault PIN, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
 - The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
+
+## Autosave (Decision 177)
+- Text editors keep their text in `meta` while open and when closed with unsaved changes (not on Yes at Discard): `note_draft`, `note_edit_draft` (Home), `vault_note_draft`, `vault_edit_draft` (encrypted under the Vault key). Not in backups.
+- Committed at the next unlock (Home) and next Vault unlock (Vault): new text becomes `Autosave YYYY-MM-DD HH:MM`; an edit is written onto its entry; a missing entry keeps the text as an Autosave note.
+- Stages 2 (Voice) and 3 (Reminder, Location, Money) not built.
