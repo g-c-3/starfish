@@ -30,7 +30,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
-import { setHapticsEnabled, haptic } from './haptics.js';
+import { setHapticsEnabled, haptic, testHaptics } from './haptics.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
 
@@ -2270,6 +2270,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       await metaSet('haptics_enabled', e.target.checked ? 'true' : 'false');
       setHapticsEnabled(e.target.checked);
       haptic('tick'); // a sample when switching on; nothing when switching off
+    });
+  }
+  const hapticsTestBtn = document.getElementById('haptics-test-btn');
+  if (hapticsTestBtn) {
+    hapticsTestBtn.addEventListener('click', async () => {
+      const out = document.getElementById('haptics-test-status');
+      const r = await testHaptics();
+      const where = `Platform ${r.platform}, plugin ${r.pluginAvailable ? 'present' : 'missing'}.`;
+      const last = r.lastError ? ` Last error from an action: ${r.lastError}.` : '';
+      out.textContent = r.ok
+        ? `Sent a 300 ms vibration. ${where}${last} If you felt nothing, the phone is blocking it: check the system Vibration and touch feedback settings, Do Not Disturb and Battery saver.`
+        : `Vibration failed: ${r.error}. ${where}${last}`;
     });
   }
 
