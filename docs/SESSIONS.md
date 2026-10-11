@@ -21,17 +21,23 @@ Then Vault batch numbering (Phase 8, Decision 174), chosen on the owner's delega
 - `src/js/app.js`: the Vault multi-file save numbers from that start plus one.
 - Docs: ROADMAP (Phase 8 lines, DP57), DECISIONS (174).
 
+Device pass: DP57 confirmed (Vault batch numbering continues).
+
+Then Phase 11 (CI/CD) closed on evidence, no code. The read-only token cannot list workflow runs (403, a permission of the token, not an expiry), but the releases v0.1.0+494, +498 and +499 exist, each published by the workflow's last step after the signed build, so those runs were green. Auto-release is confirmed working the same way. Docs: ROADMAP (Phase 11, DP57).
+
+Then Phase 16 closed on the docs' own evidence, no code: G (open Files with the phone's app) is confirmed by DP14 and H (in-app PDF viewer) by DP15 and DP17, but both were still marked built and not device-tested. Both Phase 16 headings and the G and H items are now checked. Docs: ROADMAP (Phase 16).
+
 Bugs fixed: none. Haptics gave no vibration on the owner's phone in any build (impact and notification patterns; one-shot lengths; one-shot lengths also through the web view). The Test button showed the plugin answering with no error and the web view accepting its call, so the phone's system dropped the request; cause on the phone not found. Dropped by the stop rule set beforehand.
 
 Decisions made: 172, 173, 174.
 
 Verified in the authoring environment (K): 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Device pass (DP55) confirmed: the first unlock of the password and the first unlock of the Vault PIN each took longer (the upgrades); everything works after. Not verified: CI.
 
-Verified after the removal: `vite build` passes; the 14 `crypto.js` checks still pass; the password-hash upgrade code is intact. Verified for batch numbering: 7 Node checks on `nextBatchStart` (highest of the same type, numeric not text order, types kept apart, no match gives 0, empty or missing index, oversized tail ignored, name taken literally); `vite build` passes. Not verified: CI, any device behavior (DP57).
+Verified after the removal: `vite build` passes; the 14 `crypto.js` checks still pass; the password-hash upgrade code is intact. Verified for batch numbering: 7 Node checks on `nextBatchStart` (highest of the same type, numeric not text order, types kept apart, no match gives 0, empty or missing index, oversized tail ignored, name taken literally); `vite build` passes. Not verified: the Node checks and builds here are not CI runs; the CI runs themselves are evidenced by the releases.
 
-Open: DP57, Phase 17 (Vault key count, optional app-password wrapper), light-theme tuning (device review), each needing approval.
+Open: Phase 17 (Vault key count, optional app-password wrapper), light-theme tuning (device review), each needing approval.
 
-Next session start point: device pass for DP57, then the owner picks among the open items (the app-password wrapper needs explicit approval; light-theme needs screenshots).
+Next session start point: the owner picks among the open items (the app-password wrapper needs explicit approval; light-theme needs screenshots).
 
 ---
 
