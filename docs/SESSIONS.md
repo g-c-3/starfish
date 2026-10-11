@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 107**
+
+Phase 17 item K (Decision 172), chosen on the owner's delegation. Reason: no new dependency, no change to backups or to any stored secret, and the hash count (210000) was the lowest of the three credentials. Haptics needs a new dependency and approval, light-theme needs a device review, the Vault key count means re-encrypting the Vault, the app-password wrapper is large. Fresh session; Tier 1 and Tier 2 docs read; `crypto.js`, `db.js`, `app.js` credential paths and `backup.js` credential reads checked first.
+- `src/js/crypto.js`: `PASSWORD_HASH_ITERATIONS` (600000), `LEGACY_HASH_ITERATIONS` (210000), `needsRehash`; `hashPassword` takes a count and returns it; `verifyPassword` takes the stored count (none means 210000).
+- `src/js/db.js`: `app_password_iter` and `private_pin_iter` columns through `ensureColumn`.
+- `src/js/app.js`: counts stored at first-run setup, password set and remove, Vault PIN set; read at lock screen unlock, Vault unlock and both biometric enable checks; `upgradeCredentialHash` after a correct unlock (salt kept).
+- Docs: ROADMAP (K, DP55), ARCHITECTURE (credential hash counts, open list, backup key derivation line), DECISIONS (172).
+
+Bugs fixed: none.
+
+Decisions made: 172.
+
+Verified in the authoring environment: 14 Node checks on `crypto.js` (new count returned, round trip, wrong secret refused, a new hash not accepted at the old count, an earlier hash with no stored count verifies, explicit and undefined count, upgraded hash with the same salt verifies and differs, `needsRehash` on null, undefined, 210000, 600000 and above, Vault key derivation unchanged for the same PIN and salt); `vite build` passes. Not verified: CI, any device behavior (DP55), the SQLite paths (they need the plugin; checked by reading), the extra time on the phone, the upgrade running for each credential at its first unlock, biometric unlock afterwards.
+
+Open: DP55, Phase 17 (Vault key count, optional app-password wrapper), haptics (new dependency), light-theme tuning (device review), each needing approval.
+
+Next session start point: device pass for DP55, then the owner picks among the open items.
+
+---
+
 **Session 106**
 
 Phase 18 C, first part (Decision 167). Fresh session; Tier 1 docs read, Tier 2 read for Decisions 152, 166 and the PDF architecture sections. The stray `native-setup.md` and `style.css` under `src/js/` are already gone from the repo.

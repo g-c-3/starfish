@@ -173,3 +173,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-11 | Session 106 (device pass, 5) | none | DP53 confirmed on device: backup and restore with 600000 iterations; Overwrite restore found slow on its Replacing step |
 | 2026-10-11 | Session 106 (continued, 5) | none | Overwrite restore: wipe step reads each entry once and shows progress; DP54 added; mock-database comparison against the old function; vite build passes; not run through CI or on a device |
 | 2026-10-11 | Session 106 (device pass, 6) | none | DP54 confirmed on device: Overwrite restore is fast; backup wipe fix done on device |
+| 2026-10-11 | Session 107 | Decision 172 | Phase 17 K built: app-open password and Vault PIN hashes at 600000 iterations with the count stored and older hashes upgraded after a correct unlock; DP55 added; 14 Node checks; vite build passes; not run through CI or on a device |

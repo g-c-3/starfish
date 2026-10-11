@@ -220,7 +220,7 @@ Vault entries stay under the Vault PIN on top of any database layer. The three c
 
 **Home files (Decision 162):** stored as `files/<32 hex>` with `entries.file_key`; plain files (`file_key` null) are read as they are until F. Thumbnails are memory only. Other apps get a decrypted copy in `cache/open/`. Deleting an entry removes its file.
 
-Open: PBKDF2 iteration count for the app-open password hash and the Vault key (the backup count is 600000, Decision 171); an optional app-password wrapper around the database key; speed of backup and restore with many files.
+Open: PBKDF2 iteration count for the Vault key (the backup count is 600000, Decision 171; the two password hashes are versioned, Decision 172); an optional app-password wrapper around the database key; speed of backup and restore with many files.
 
 ## 4. Backup & Restore (full design)
 
@@ -872,7 +872,12 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 ### Backup key derivation (Decision 171)
 - `BACKUP_KDF_ITERATIONS` (600000) in `crypto.js` is the count for every newly written backup; it is written in the backup's header (`kdfIterations`) and restore derives with the header's count, so earlier backups (300000) still open.
-- The Vault key derivation and the two password hashes keep their fixed counts; changing them needs a versioned rehash or a Vault re-encryption.
+- The Vault key derivation keeps its fixed count; changing it needs a Vault re-encryption. The two password hashes are versioned (Decision 172).
 
 ### Overwrite restore, wipe step
 - `wipeCategories` reads each entry once and removes it when it belongs to any selected category, reporting `{ done, total }` per entry; the status line shows "Replacing current data, n of m…". Entries in the trash are not touched, as before.
+
+### Credential hash counts (Decision 172)
+- `hashPassword` uses 600000 PBKDF2 iterations (SHA-256) for new hashes and returns the count; it is stored in `credentials.app_password_iter` and `credentials.private_pin_iter`. NULL means 210000.
+- `verifyPassword` reads the stored count. After a correct app-open password or Vault PIN, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
+- The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
