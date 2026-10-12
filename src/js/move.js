@@ -77,7 +77,7 @@ export async function moveToVault(db, key, id) {
     if (!row.file_path) throw new Error('This entry has no file.');
     initFiles(db);
     let bytes;
-    try { bytes = await readBytes(row); } catch { throw new Error('Its file could not be read.'); }
+    try { bytes = await readBytes(row); } catch (err) { throw new Error(`Its file could not be read (${String(err?.message || err).replace(/\.$/, '')}).`); }
     file = { fileData: toBase64(bytes), ocrText: OCR_TYPES.includes(row.type) ? (row.body_text || '') : '' };
   }
   let copyId = null;

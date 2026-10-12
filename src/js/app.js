@@ -1143,7 +1143,7 @@ async function moveEntryUI(id, toVault) {
     const problem = kind === 'reminder' ? await rescheduleMovedReminder(id, newId) : null;
     toast(problem ? `${toVault ? 'Moved to the Vault' : 'Moved to Home'}, but its notification could not be updated: ${problem.message || problem}` : toVault ? 'Moved to the Vault' : 'Moved to Home');
   } catch (err) {
-    toast(`Not moved: ${err.message || err}. The original is unchanged.`);
+    toast(`Not moved: ${String(err.message || err).replace(/\.$/, '')}. The original is unchanged.`);
   } finally { moveBusy = false; }
 }
 
