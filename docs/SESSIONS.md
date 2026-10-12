@@ -38,7 +38,7 @@ Then step 4, Move for a selection (Decision 185).
 
 Owner request after the step 4 build: a locked Vault must not throw the person to the Vault tab and lose the selection (single Move had the same problem). Built `unlockVaultInPlace` (Decision 186): biometric when enabled, then a PIN sheet over the current page; the move carries on after unlocking. `src/js/app.js` only.
 
-Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187); selection logic checked on sample data and the file parsed as YAML; not run on GitHub.
+Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187), manual trigger only to save Actions minutes; selection logic checked on sample data and the file parsed as YAML; not run on GitHub.
 
 Decisions made: 182, 183, 184, 185, 186, 187.
 
