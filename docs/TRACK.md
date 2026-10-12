@@ -202,3 +202,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-12 | Session 109 (Move, 8) | Decision 186 | Move with a locked Vault unlocks in place (biometric, then PIN sheet) instead of opening the Vault tab; selection kept; DP65 text updated; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 109 (CI, 9) | Decision 187 | Cleanup workflow added: keeps the latest 3 completed runs per workflow, runs after each build and by hand; not run on GitHub yet |
 | 2026-10-12 | Session 109 (CI, 10) | Decision 187 | Cleanup workflow changed to manual trigger only (no automatic run after builds) |
+| 2026-10-12 | Session 109 (Move, 11) | Decision 188 | In-place unlock confirmed on device with biometric; Move now confirms first, then unlocks; locked state and missing Vault set-up shown in sheets; vite build passes; PIN-only path not device-tested |

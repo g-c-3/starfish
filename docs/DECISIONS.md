@@ -2295,3 +2295,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Permissions: `actions: write`, `contents: read`. Uses the built-in workflow token; no stored secret.
 - Run it from the Actions tab whenever the list grows; the first run clears the existing backlog.
 - Risks: not run on GitHub yet. A run deleted by mistake cannot be restored; the count of 3 is the `KEEP` value in the file.
+
+**188. Move: confirm first, then unlock; locked state and missing set-up shown in sheets.**
+- Replaces the order in Decision 186. The Move sheet comes first; the unlock (biometric when enabled, then the PIN sheet) follows only after the person confirms. Cancelling the Move sheet leaves a locked Vault locked.
+- With the Vault locked the Move sheet adds one sentence saying so, and its button reads `Unlock and move`. The PIN sheet names the move (`Enter your Vault PIN to move 3 items.`).
+- A Vault with no PIN: a sheet `Set up the Vault first` with `Open Vault` / `Close` replaces the notice; Open Vault ends a selection first, then opens the Vault tab.
+- A lock that happens while the Move sheet is open is handled by asking for the unlock afterwards; a lock during the move itself is as before.
+- Risks: not run through CI or on a device (DP65); the PIN-only path is the untested one.

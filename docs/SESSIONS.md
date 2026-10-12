@@ -40,7 +40,9 @@ Owner request after the step 4 build: a locked Vault must not throw the person t
 
 Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187), manual trigger only to save Actions minutes; selection logic checked on sample data and the file parsed as YAML; not run on GitHub.
 
-Decisions made: 182, 183, 184, 185, 186, 187.
+Device finding (DP65, in place unlock): biometric unlock without leaving the page worked. Owner asks: confirm before unlocking, state the locked Vault in the sheet instead of a toast, and cover the PIN-only case. Built (Decision 188): the Move sheet first, with `Unlock and move` and a locked-Vault sentence; the unlock follows; a set-up sheet replaces the toast when no PIN exists. `src/js/app.js` only.
+
+Decisions made: 182, 183, 184, 185, 186, 187, 188.
 
 Verified (185, 186): `move.js` checks unchanged (16 pass); syntax check; `vite build` passes. Not verified: the selection handler, the bar, the in-place unlock (biometric prompt, PIN sheet, wrong PIN, Cancel) on a device, the bar width on a narrow phone (DP65). The handler is DOM code and has no Node check.
 

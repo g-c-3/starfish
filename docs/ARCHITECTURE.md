@@ -896,7 +896,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Home to Vault: content is encrypted under the Vault key (`saveVaultEntry`), the label and note in their encrypted columns, `latitude`, `longitude` and `money_json` empty. Vault to Home: decrypted into the plain columns and the search row.
 - Name, up to two tags, note and the created and updated times are carried. The copy is read back and compared before the original is deleted permanently (no Trash, no Undo); a failure removes the copy.
 - Home to Vault lowers the name's `label_history` count; Home search loses the entry with the original.
-- Needs the Vault unlocked in both directions. Move to Vault with the Vault locked unlocks in place (`unlockVaultInPlace`: biometric when enabled, then a PIN sheet) and carries on; the page and selection stay (Decision 186).
+- Needs the Vault unlocked in both directions. Move to Vault with the Vault locked asks for the Move confirmation first (it says the Vault is locked), then unlocks in place (`unlockVaultInPlace`: biometric when enabled, then a PIN sheet) and carries on; the page and selection stay (Decisions 186, 188).
 - Reminder: schedule, repeat, snooze and done state move with it. `rescheduleMovedReminder` (`app.js`) cancels the old id's notifications and schedules the new entry's, with the text its side shows (Decision 183).
 - Files: Home to Vault reads the file whole into the encrypted body; Vault to Home writes it through the per-file store. No size cap (Decision 184); copy first, compare, then delete, so running out of memory leaves the original.
 - Selection: the Select files bar moves the selected items one at a time through the same two functions; per-item failures are reported, not fatal (Decision 185).
