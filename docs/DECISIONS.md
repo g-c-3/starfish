@@ -2280,3 +2280,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The Vault index is refreshed once at the end for the entries that changed. Reminders are rescheduled per item (Decision 183).
 - No undo: moves are permanent (Decision 181).
 - Risks: one more icon in the bar leaves less room for the selected count on a narrow phone. A large selection of files takes as long as its files add up to; the app is not closed meanwhile. Not run through CI or on a device (DP65). The handler is not covered by the Node checks; `move.js` is.
+
+**186. Move with a locked Vault unlocks in place (replaces the locked-Vault behaviour of Decisions 182 and 185).**
+- Move to Vault, single or from a selection, no longer sends the person to the Vault tab. `unlockVaultInPlace` asks over the current page: the OS biometric prompt when the Vault biometric is enabled and available, then a PIN sheet (password field, Unlock, Cancel). A wrong PIN shows the sheet again with a notice; Cancel moves nothing.
+- It uses the same checks as the Vault gate (`unlockVault`, `tryBiometricUnlockVault`): same PIN check, hash upgrade, draft commit and index build. No new stored value; the PIN typed in the sheet is cleared when the sheet closes, and an app lock closes the sheet.
+- After a successful unlock the page, open folder and selection are unchanged; the Move sheet follows. The Vault stays unlocked under its usual idle and background locks, as after unlocking from the Vault tab.
+- No PIN set: a notice says to set the Vault up in the Vault tab; nothing opens.
+- A second unlock request while one is open is ignored.
+- Risks: the biometric prompt is not wrapped in the picker-return flag (it is a dialog, not an activity pause), as in the Vault tab; not run through CI or on a device (DP65). The app-lock, background and screen-off locks during the sheet are not exercised by Node checks.

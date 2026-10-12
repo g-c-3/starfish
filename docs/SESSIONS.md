@@ -36,9 +36,11 @@ Then step 4, Move for a selection (Decision 185).
 - `src/js/app.js`: `runSelectionMove`; the icon's tooltip follows the selection's screen.
 - Docs: ROADMAP (step 4, DP64 confirmed, DP65), ARCHITECTURE (Move section, bar order), DECISIONS (185).
 
-Decisions made: 182, 183, 184, 185.
+Owner request after the step 4 build: a locked Vault must not throw the person to the Vault tab and lose the selection (single Move had the same problem). Built `unlockVaultInPlace` (Decision 186): biometric when enabled, then a PIN sheet over the current page; the move carries on after unlocking. `src/js/app.js` only.
 
-Verified (185): `move.js` checks unchanged (16 pass); syntax check; `vite build` passes. Not verified: the selection handler and the bar on a device, the bar width on a narrow phone (DP65). The handler is DOM code and has no Node check.
+Decisions made: 182, 183, 184, 185, 186.
+
+Verified (185, 186): `move.js` checks unchanged (16 pass); syntax check; `vite build` passes. Not verified: the selection handler, the bar, the in-place unlock (biometric prompt, PIN sheet, wrong PIN, Cancel) on a device, the bar width on a narrow phone (DP65). The handler is DOM code and has no Node check.
 
 Verified (184): 16 Node checks on `move.js` with an in-memory file store (voice, image, pdf and file both ways with identical bytes and no stray files; a missing file refused; a failed final delete keeps the original file and leaves no copy in either direction; a wrong key writes no file); syntax check; `vite build` passes. Not verified: any file move on a device, behaviour with very large files (DP64).
 
