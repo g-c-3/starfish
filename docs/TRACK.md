@@ -192,3 +192,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-12 | Session 108 (background recording, 7) | Decisions 180, 181 | Home voice recording can keep running behind a lock (switch, off by default); DP61 added; Phase 20 Move between Home and Vault designed and approved, nothing built; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 108 (device pass, 8) | none | DP60 and DP61 confirmed on device: Voice autosave; Home recording behind a lock; Phase 19 stage 2 and 2b done; next Phase 20 Move |
 | 2026-10-12 | Session 109 | Decision 182 | Phase 20 step 1 built: Move for Text, Location, Money, both ways; DP62 added; 11 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-12 | Session 109 (device pass, 2) | none | DP62 confirmed on device: Move for Text, Location, Money |
+| 2026-10-12 | Session 109 (Move, 3) | Decision 183 | Phase 20 step 2 built: Move for Reminder, notifications rescheduled on the other side; DP63 added; 13 Node checks; vite build passes; not run through CI or on a device |

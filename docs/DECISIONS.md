@@ -2253,3 +2253,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Locked Vault: Move on Home opens the Vault tab with a notice (PIN setup when no PIN is set). The move is not queued. A Vault lock while the sheet is open moves nothing.
 - Known risk: `permanentlyDeleteEntry` removes the search row, then the tag links, then the entry. If the last step fails, the copy is removed and the original stays without its search row and tag links until it is edited.
 - Risks: not run through CI or on a device (DP62). Reminder, Image, PDF, Files and Voice not covered (steps 2 and 3).
+
+**183. Move, step 2: Reminder (Phase 20, built).**
+- `move.js` carries a Reminder's `fire_at`, `repeat_rule`, `completed_at` and `snoozed_until` (plain columns on both sides, Decision 140) along with name, note, tags and times. A reminder with no time is refused.
+- The Vault copy keeps an empty body; the note goes to the encrypted description as for any Vault Reminder.
+- Notifications are handled in `app.js` (`rescheduleMovedReminder`), after the database move succeeded, because the copy has a new id: the old id's occurrences and snooze are cancelled, then the new entry is scheduled with its side's text (name on Home, `Vault Reminder` in the Vault). A pending snooze is scheduled again for its remaining time. A done reminder, or a one-off whose time has passed, schedules nothing.
+- If cancelling or scheduling fails, the move stands and a notice says the notification could not be updated. The old notification is cancelled before the new one is scheduled so a name never shows on the lock screen after the move into the Vault.
+- The confirm sheet adds one sentence about the notification text.
+- Risks: notification behaviour, the remaining-time snooze and a repeat window after a restart are not verified (DP63). Not run through CI or on a device. Image, PDF, Files and Voice not covered (step 3).
