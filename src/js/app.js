@@ -1100,6 +1100,22 @@ async function deleteVaultEntry(id) {
   if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
 }
 
+// A moved reminder has a new id, so the old notifications (and a pending snooze) are cancelled and the new entry's are scheduled,
+// with the text its side shows (name on Home, "Vault Reminder" in the Vault, Decision 140). Returns the first error, or null.
+async function rescheduleMovedReminder(oldId, newId) {
+  let problem = null;
+  try { await cancelReminder(oldId); } catch (err) { problem = err; }
+  try {
+    const row = ((await db.query(`SELECT * FROM entries WHERE id=?`, [newId])).values || [])[0];
+    const now = Date.now();
+    if (row && !row.completed_at) {
+      if (row.repeat_rule || row.fire_at > now) await scheduleReminder(row);
+      if (row.snoozed_until && row.snoozed_until > now) await snoozeReminder(row, (row.snoozed_until - now) / 60000);
+    }
+  } catch (err) { problem = problem || err; }
+  return problem;
+}
+
 // ---- Move between Home and Vault (Decision 181). Home to Vault needs the Vault unlocked: a locked Vault opens its PIN screen
 // instead. The original is deleted permanently only after the copy was written and read back (move.js). ----
 async function moveEntryUI(id, toVault) {
@@ -1109,9 +1125,10 @@ async function moveEntryUI(id, toVault) {
     document.querySelector('button[data-nav="vault"]')?.click();
     return;
   }
+  const kind = ((await db.query(`SELECT type FROM entries WHERE id=?`, [id])).values || [])[0]?.type;
   const ok = await askYesNo(toVault
-    ? { title: 'Move to the Vault?', text: 'It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.', yes: 'Move', no: 'Cancel' }
-    : { title: 'Move to Home?', text: 'It leaves the Vault. Its name and text become searchable in Home, and it is no longer under the Vault PIN. It does not go to the trash.', yes: 'Move', no: 'Cancel' });
+    ? { title: 'Move to the Vault?', text: `It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.${kind === 'reminder' ? ' Its notification will read Vault Reminder.' : ''}`, yes: 'Move', no: 'Cancel' }
+    : { title: 'Move to Home?', text: `It leaves the Vault. Its name and text become searchable in Home, and it is no longer under the Vault PIN. It does not go to the trash.${kind === 'reminder' ? ' Its notification will show its name.' : ''}`, yes: 'Move', no: 'Cancel' });
   if (!ok) return;
   const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
   if (!key) { toast('The Vault locked. Nothing was moved.'); return; }
@@ -1119,7 +1136,8 @@ async function moveEntryUI(id, toVault) {
   try {
     const newId = toVault ? await moveToVault(db, key, id) : await moveToHome(db, key, id);
     if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [toVault ? newId : id]);
-    toast(toVault ? 'Moved to the Vault' : 'Moved to Home');
+    const problem = kind === 'reminder' ? await rescheduleMovedReminder(id, newId) : null;
+    toast(problem ? `${toVault ? 'Moved to the Vault' : 'Moved to Home'}, but its notification could not be updated: ${problem.message || problem}` : toVault ? 'Moved to the Vault' : 'Moved to Home');
   } catch (err) {
     toast(`Not moved: ${err.message || err}. The original is unchanged.`);
   }

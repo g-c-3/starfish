@@ -1,4 +1,5 @@
-// move.js — Move between Home and Vault (Decision 181). Step 1: Text, Location, Money.
+// move.js — Move between Home and Vault (Decision 181). Steps 1 and 2: Text, Location, Money, Reminder.
+// A Reminder's schedule columns move with it; its notification is cancelled and scheduled again by the caller (app.js).
 // Order: write the copy, read it back and compare, then delete the original permanently.
 // Any failure removes the copy and leaves the original as it was.
 
@@ -7,10 +8,13 @@ import { saveVaultEntry, loadVaultEntryContent } from './vault.js';
 import { decryptPrivateNote } from './crypto.js';
 import * as Money from './money.js';
 
-export const MOVE_TYPES = ['note', 'location', 'money']; // legacy 'expense' rows get no Move
+export const MOVE_TYPES = ['note', 'location', 'money', 'reminder']; // legacy 'expense' rows get no Move
 export const canMove = (type) => MOVE_TYPES.includes(type);
 
 const first = (res) => (res && res.values && res.values[0]) || null;
+const nul = (v) => (v === undefined ? null : v);
+const sameSchedule = (a, b) => nul(a.fire_at) === nul(b.fire_at) && nul(a.repeat_rule) === nul(b.repeat_rule)
+  && nul(a.completed_at) === nul(b.completed_at) && nul(a.snoozed_until) === nul(b.snoozed_until);
 const same = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 async function tagNames(db, id) {
@@ -35,6 +39,10 @@ async function dropLabelHistory(db, type, label) {
 // Home row to the content object saveVaultEntry takes.
 function homeContent(row) {
   if (row.type === 'note') return { text: row.body_text || '' };
+  if (row.type === 'reminder') {
+    if (!row.fire_at) throw new Error('This reminder has no time.');
+    return { text: '' }; // the note is in the description; the schedule columns are carried separately
+  }
   if (row.type === 'location') {
     if (row.latitude == null || row.longitude == null) throw new Error('This entry has no coordinates.');
     return { location: { latitude: row.latitude, longitude: row.longitude } };
@@ -59,21 +67,23 @@ export async function moveToVault(db, key, id) {
   const content = homeContent(row);
   let copyId = null;
   try {
-    copyId = await saveVaultEntry(db, key, { type: row.type, label: row.label, tags, description: row.description || '', ...content });
-    await db.run(`UPDATE entries SET created_at=?, updated_at=? WHERE id=?`, [row.created_at, row.updated_at, copyId]);
+    const schedule = row.type === 'reminder' ? { fireAt: row.fire_at, repeatRule: row.repeat_rule } : {};
+    copyId = await saveVaultEntry(db, key, { type: row.type, label: row.label, tags, description: row.description || '', ...content, ...schedule });
+    await db.run(`UPDATE entries SET created_at=?, updated_at=?, completed_at=?, snoozed_until=? WHERE id=?`,
+      [row.created_at, row.updated_at, nul(row.completed_at), nul(row.snoozed_until), copyId]);
 
     const back = await loadVaultEntryContent(db, key, copyId);
     const wantDescription = row.description || '';
     const gotDescription = back.row.encrypted_description ? await decryptPrivateNote(key, back.row.encrypted_description) : '';
     let sameContent;
-    if (row.type === 'note') sameContent = back.content.text === content.text;
+    if (row.type === 'note' || row.type === 'reminder') sameContent = back.content.text === content.text;
     else if (row.type === 'location') sameContent = !!back.content.location && back.content.location.latitude === content.location.latitude && back.content.location.longitude === content.location.longitude;
     else {
       const want = Money.normalize(content.money);
       sameContent = want.ok && !!back.content.money && Money.toJson(back.content.money) === Money.toJson(want.value);
     }
     if (!sameContent || back.row.label !== row.label || gotDescription !== wantDescription
-      || back.row.created_at !== row.created_at || !same(await tagNames(db, copyId), tags.slice(0, 2))) {
+      || !sameSchedule(back.row, row) || back.row.created_at !== row.created_at || !same(await tagNames(db, copyId), tags.slice(0, 2))) {
       throw new Error('The copy did not match.');
     }
     await permanentlyDeleteEntry(db, id);
@@ -97,7 +107,11 @@ export async function moveToHome(db, key, id) {
 
   const fields = {};
   if (row.type === 'note') fields.body_text = content.text;
-  else if (row.type === 'location') {
+  else if (row.type === 'reminder') {
+    if (!row.fire_at) throw new Error('This reminder has no time.');
+    fields.fire_at = row.fire_at;
+    fields.repeat_rule = row.repeat_rule || null;
+  } else if (row.type === 'location') {
     if (!content.location) throw new Error('This entry has no readable coordinates.');
     fields.latitude = content.location.latitude;
     fields.longitude = content.location.longitude;
@@ -111,12 +125,13 @@ export async function moveToHome(db, key, id) {
   try {
     await insertEntry(db, { id: copyId, type: row.type, label, description: description || null, ...fields });
     inserted = true;
-    await db.run(`UPDATE entries SET created_at=?, updated_at=? WHERE id=?`, [row.created_at, row.updated_at, copyId]);
+    await db.run(`UPDATE entries SET created_at=?, updated_at=?, completed_at=?, snoozed_until=? WHERE id=?`,
+      [row.created_at, row.updated_at, nul(row.completed_at), nul(row.snoozed_until), copyId]);
     await attachTags(db, copyId, tags);
 
     const back = first(await db.query(`SELECT * FROM entries WHERE id=? AND is_private=0`, [copyId]));
-    const sameFields = !!back && Object.keys(fields).every((k) => back[k] === fields[k]);
-    if (!sameFields || back.label !== label || (back.description || '') !== description
+    const sameFields = !!back && Object.keys(fields).every((k) => nul(back[k]) === nul(fields[k]));
+    if (!sameFields || !sameSchedule(back, row) || back.label !== label || (back.description || '') !== description
       || back.created_at !== row.created_at || !same(await tagNames(db, copyId), tags)) {
       throw new Error('The copy did not match.');
     }
