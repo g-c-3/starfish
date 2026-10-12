@@ -1120,15 +1120,38 @@ async function rescheduleMovedReminder(oldId, newId) {
 
 // ---- Move between Home and Vault (Decision 181). Home to Vault needs the Vault unlocked: a locked Vault opens its PIN screen
 // instead. The original is deleted permanently only after the copy was written and read back (move.js). ----
+// Unlock the Vault without leaving the current page (Decision 186): the OS biometric prompt when it is enabled, then a PIN sheet
+// over the page (the same PIN check as the Vault gate). Returns true when the Vault is unlocked. The page, its selection and any
+// open folder are untouched; cancelling the sheet changes nothing.
+let vaultUnlockBusy = false;
+async function unlockVaultInPlace() {
+  if (privateSessionKey) return true;
+  if (vaultUnlockBusy) return false;
+  vaultUnlockBusy = true;
+  try {
+    const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
+    if (!cred.values[0]?.private_pin_hash) { toast('Set up the Vault first, in the Vault tab.'); return false; }
+    const bio = await getBiometricSettings();
+    if (bio.vaultEnabled && bio.available) {
+      const r = await tryBiometricUnlockVault().catch(() => ({ success: false }));
+      if (r.success) return true; // cancelled or failed: the PIN sheet follows
+    }
+    let text = 'Enter your Vault PIN.';
+    for (;;) {
+      const pin = await askText({ title: 'Unlock the Vault', text, password: true, ok: 'Unlock' });
+      if (pin === null) return false;
+      const r = await unlockVault(pin);
+      if (r.success) return true;
+      if (r.setupNeeded) { toast('Set up the Vault first, in the Vault tab.'); return false; }
+      text = 'Wrong PIN. Try again.';
+    }
+  } finally { vaultUnlockBusy = false; }
+}
+
 let moveBusy = false; // a second tap during a long file move must not start another
 async function moveEntryUI(id, toVault) {
   if (moveBusy) return;
-  if (toVault && !privateSessionKey) {
-    const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
-    toast(cred.values[0]?.private_pin_hash ? 'Unlock the Vault, then tap Move again.' : 'Set up the Vault, then tap Move again.');
-    document.querySelector('button[data-nav="vault"]')?.click();
-    return;
-  }
+  if (toVault && !privateSessionKey && !(await unlockVaultInPlace())) return;
   const kind = ((await db.query(`SELECT type FROM entries WHERE id=?`, [id])).values || [])[0]?.type;
   const ok = await askYesNo(toVault
     ? { title: 'Move to the Vault?', text: `It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.${kind === 'reminder' ? ' Its notification will read Vault Reminder.' : ''}`, yes: 'Move', no: 'Cancel' }
@@ -3763,13 +3786,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { isVault } = selection;
       const toVault = !isVault;
       const ids = [...selection.ids];
-      if (toVault && !privateSessionKey) {
-        exitSelection();
-        const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
-        toast(cred.values[0]?.private_pin_hash ? 'Unlock the Vault, then select and Move again.' : 'Set up the Vault, then select and Move again.');
-        document.querySelector('button[data-nav="vault"]')?.click();
-        return;
-      }
+      if (toVault && !privateSessionKey && !(await unlockVaultInPlace())) return; // the selection stays as it is
+      if (!selection) return; // a lock during the unlock ended it
       arm();
       const n = ids.length;
       const ok = await askYesNo(toVault
