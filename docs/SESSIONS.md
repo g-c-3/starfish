@@ -27,6 +27,8 @@ Then step 3, Voice, Image, PDF, Files (Decision 184), no size cap by owner decis
 - `src/js/app.js`: `moveBusy` guard and a `Moving…` notice for file kinds.
 - Docs: ROADMAP (step 3, DP63 confirmed, DP64), ARCHITECTURE (Move section), DECISIONS (184).
 
+Device finding (DP64, first run): Move to Vault on a Home PDF showed "Its file could not be read". Cause not yet known: the real read error was replaced by that fixed message. Fix: the message now carries the underlying reason, and the doubled full stop in the notice is gone. Next: repeat the move and read the reason.
+
 Decisions made: 182, 183, 184.
 
 Verified (184): 16 Node checks on `move.js` with an in-memory file store (voice, image, pdf and file both ways with identical bytes and no stray files; a missing file refused; a failed final delete keeps the original file and leaves no copy in either direction; a wrong key writes no file); syntax check; `vite build` passes. Not verified: any file move on a device, behaviour with very large files (DP64).
