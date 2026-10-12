@@ -1118,7 +1118,9 @@ async function rescheduleMovedReminder(oldId, newId) {
 
 // ---- Move between Home and Vault (Decision 181). Home to Vault needs the Vault unlocked: a locked Vault opens its PIN screen
 // instead. The original is deleted permanently only after the copy was written and read back (move.js). ----
+let moveBusy = false; // a second tap during a long file move must not start another
 async function moveEntryUI(id, toVault) {
+  if (moveBusy) return;
   if (toVault && !privateSessionKey) {
     const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
     toast(cred.values[0]?.private_pin_hash ? 'Unlock the Vault, then tap Move again.' : 'Set up the Vault, then tap Move again.');
@@ -1133,6 +1135,8 @@ async function moveEntryUI(id, toVault) {
   const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
   if (!key) { toast('The Vault locked. Nothing was moved.'); return; }
   armVaultAutoLock();
+  moveBusy = true;
+  if (['voice', 'image', 'pdf', 'file'].includes(kind)) toast('Moving…'); // a file is read and written whole, which can take a while
   try {
     const newId = toVault ? await moveToVault(db, key, id) : await moveToHome(db, key, id);
     if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [toVault ? newId : id]);
@@ -1140,7 +1144,7 @@ async function moveEntryUI(id, toVault) {
     toast(problem ? `${toVault ? 'Moved to the Vault' : 'Moved to Home'}, but its notification could not be updated: ${problem.message || problem}` : toVault ? 'Moved to the Vault' : 'Moved to Home');
   } catch (err) {
     toast(`Not moved: ${err.message || err}. The original is unchanged.`);
-  }
+  } finally { moveBusy = false; }
 }
 
 // ---- "Select files" multi-select screen — one shared implementation for both main and vault
