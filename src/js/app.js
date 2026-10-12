@@ -16,6 +16,7 @@ import {
 } from './gdrive.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import * as Money from './money.js';
+import { canMove, moveToVault, moveToHome } from './move.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
@@ -1099,6 +1100,31 @@ async function deleteVaultEntry(id) {
   if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
 }
 
+// ---- Move between Home and Vault (Decision 181). Home to Vault needs the Vault unlocked: a locked Vault opens its PIN screen
+// instead. The original is deleted permanently only after the copy was written and read back (move.js). ----
+async function moveEntryUI(id, toVault) {
+  if (toVault && !privateSessionKey) {
+    const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
+    toast(cred.values[0]?.private_pin_hash ? 'Unlock the Vault, then tap Move again.' : 'Set up the Vault, then tap Move again.');
+    document.querySelector('button[data-nav="vault"]')?.click();
+    return;
+  }
+  const ok = await askYesNo(toVault
+    ? { title: 'Move to the Vault?', text: 'It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.', yes: 'Move', no: 'Cancel' }
+    : { title: 'Move to Home?', text: 'It leaves the Vault. Its name and text become searchable in Home, and it is no longer under the Vault PIN. It does not go to the trash.', yes: 'Move', no: 'Cancel' });
+  if (!ok) return;
+  const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
+  if (!key) { toast('The Vault locked. Nothing was moved.'); return; }
+  armVaultAutoLock();
+  try {
+    const newId = toVault ? await moveToVault(db, key, id) : await moveToHome(db, key, id);
+    if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [toVault ? newId : id]);
+    toast(toVault ? 'Moved to the Vault' : 'Moved to Home');
+  } catch (err) {
+    toast(`Not moved: ${err.message || err}. The original is unchanged.`);
+  }
+}
+
 // ---- "Select files" multi-select screen — one shared implementation for both main and vault
 // (spec: "every single thing in non private will be exactly replicated in private vault") ----
 async function getSelectableGroups(scope = 'home') {
@@ -1387,7 +1413,7 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
         <span class="row-meta">${escapeHtml(meta)}</span>
         ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       </span>
-      ${actionPrefix ? `<span class="row-actions">${btn('edit', 'Edit')}${btn('share', 'Share')}${btn('download', 'Download')}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
+      ${actionPrefix ? `<span class="row-actions">${btn('edit', 'Edit')}${btn('share', 'Share')}${btn('download', 'Download')}${canMove(type) ? btn('move', actionPrefix === 'vault' ? 'Move to Home' : 'Move to Vault') : ''}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
     </div>`;
 }
 function emptyStateHtml(kind = 'folder') {
@@ -2786,6 +2812,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       await editEntryUI(items.find((i) => i.id === b.dataset.id), true);
       renderVault();
     }));
+    container.querySelectorAll('.vault-move-btn').forEach((b) => b.addEventListener('click', async () => {
+      await moveEntryUI(b.dataset.id, false);
+      if (privateSessionKey) renderVault();
+    }));
     container.querySelectorAll('.vault-delete-btn').forEach((b) => b.addEventListener('click', async () => {
       await deleteVaultEntry(b.dataset.id);
       renderVault();
@@ -3569,6 +3599,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.main-edit-btn').forEach((b) => b.addEventListener('click', async () => {
       const row = rows.find((r) => r.id === b.dataset.id);
       await editEntryUI(row, false);
+      await renderMainTimeline();
+    }));
+    document.querySelectorAll('.main-move-btn').forEach((b) => b.addEventListener('click', async () => {
+      await moveEntryUI(b.dataset.id, true);
       await renderMainTimeline();
     }));
     document.querySelectorAll('.main-delete-btn').forEach((b) => b.addEventListener('click', async () => {
