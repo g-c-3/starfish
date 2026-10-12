@@ -1124,7 +1124,7 @@ async function rescheduleMovedReminder(oldId, newId) {
 // over the page (the same PIN check as the Vault gate). Returns true when the Vault is unlocked. The page, its selection and any
 // open folder are untouched; cancelling the sheet changes nothing.
 let vaultUnlockBusy = false;
-async function unlockVaultInPlace() {
+async function unlockVaultInPlace(reason = 'Enter your Vault PIN.') {
   if (privateSessionKey) return true;
   if (vaultUnlockBusy) return false;
   vaultUnlockBusy = true;
@@ -1136,7 +1136,7 @@ async function unlockVaultInPlace() {
       const r = await tryBiometricUnlockVault().catch(() => ({ success: false }));
       if (r.success) return true; // cancelled or failed: the PIN sheet follows
     }
-    let text = 'Enter your Vault PIN.';
+    let text = reason;
     for (;;) {
       const pin = await askText({ title: 'Unlock the Vault', text, password: true, ok: 'Unlock' });
       if (pin === null) return false;
@@ -1148,16 +1148,28 @@ async function unlockVaultInPlace() {
   } finally { vaultUnlockBusy = false; }
 }
 
+// Moving into the Vault needs a Vault PIN to exist. A sheet (not a toast) says so and offers the Vault tab. Returns true when set-up is missing.
+async function vaultNeedsSetup(onOpen = null) {
+  const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
+  if (cred.values[0]?.private_pin_hash) return false;
+  const go = await askYesNo({ title: 'Set up the Vault first', text: 'Items can move into the Vault once it has a PIN.', yes: 'Open Vault', no: 'Close' });
+  if (go) { if (onOpen) onOpen(); document.querySelector('button[data-nav="vault"]')?.click(); }
+  return true;
+}
+const LOCKED_NOTE = ' The Vault is locked, so you will unlock it next.';
+
 let moveBusy = false; // a second tap during a long file move must not start another
 async function moveEntryUI(id, toVault) {
   if (moveBusy) return;
-  if (toVault && !privateSessionKey && !(await unlockVaultInPlace())) return;
+  if (toVault && !privateSessionKey && await vaultNeedsSetup()) return;
+  const locked = toVault && !privateSessionKey; // asked after the sheet, so cancelling it leaves the Vault locked (Decision 186)
   const kind = ((await db.query(`SELECT type FROM entries WHERE id=?`, [id])).values || [])[0]?.type;
   const ok = await askYesNo(toVault
-    ? { title: 'Move to the Vault?', text: `It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.${kind === 'reminder' ? ' Its notification will read Vault Reminder.' : ''}`, yes: 'Move', no: 'Cancel' }
+    ? { title: 'Move to the Vault?', text: `It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.${kind === 'reminder' ? ' Its notification will read Vault Reminder.' : ''}${locked ? LOCKED_NOTE : ''}`, yes: locked ? 'Unlock and move' : 'Move', no: 'Cancel' }
     : { title: 'Move to Home?', text: `It leaves the Vault. Its name and text become searchable in Home, and it is no longer under the Vault PIN. It does not go to the trash.${kind === 'reminder' ? ' Its notification will show its name.' : ''}`, yes: 'Move', no: 'Cancel' });
   if (!ok) return;
-  const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
+  if (toVault && !privateSessionKey && !(await unlockVaultInPlace('Enter your Vault PIN to move this item.'))) return;
+  const key = privateSessionKey; // read after the sheet and the unlock: a Vault lock meanwhile clears it
   if (!key) { toast('The Vault locked. Nothing was moved.'); return; }
   armVaultAutoLock();
   moveBusy = true;
@@ -3786,15 +3798,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { isVault } = selection;
       const toVault = !isVault;
       const ids = [...selection.ids];
-      if (toVault && !privateSessionKey && !(await unlockVaultInPlace())) return; // the selection stays as it is
-      if (!selection) return; // a lock during the unlock ended it
+      if (toVault && !privateSessionKey && await vaultNeedsSetup(() => exitSelection())) return;
+      const locked = toVault && !privateSessionKey; // asked after the sheet, so cancelling it leaves the Vault locked (Decision 186)
       arm();
       const n = ids.length;
       const ok = await askYesNo(toVault
-        ? { title: `Move ${n} item${n > 1 ? 's' : ''} to the Vault?`, text: 'They are encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. They do not go to the trash. Reminders will read Vault Reminder.', yes: 'Move', no: 'Cancel' }
+        ? { title: `Move ${n} item${n > 1 ? 's' : ''} to the Vault?`, text: 'They are encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. They do not go to the trash. Reminders will read Vault Reminder.' + (locked ? LOCKED_NOTE : ''), yes: locked ? 'Unlock and move' : 'Move', no: 'Cancel' }
         : { title: `Move ${n} item${n > 1 ? 's' : ''} to Home?`, text: 'They leave the Vault. Names and text become searchable in Home, and they are no longer under the Vault PIN. They do not go to the trash. Reminders will show their names.', yes: 'Move', no: 'Cancel' });
       if (!ok) return;
-      const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
+      if (toVault && !privateSessionKey && !(await unlockVaultInPlace(`Enter your Vault PIN to move ${n} item${n > 1 ? 's' : ''}.`))) return; // the selection stays as it is
+      if (!selection) return; // a lock during the unlock ended it
+      const key = privateSessionKey; // read after the sheet and the unlock: a Vault lock meanwhile clears it
       if (!key) { exitSelection(); toast('The Vault locked. Nothing was moved.'); return; }
       armVaultAutoLock();
       moveBusy = true;
