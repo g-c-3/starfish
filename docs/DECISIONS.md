@@ -2288,3 +2288,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - No PIN set: a notice says to set the Vault up in the Vault tab; nothing opens.
 - A second unlock request while one is open is ignored.
 - Risks: the biometric prompt is not wrapped in the picker-return flag (it is a dialog, not an activity pause), as in the Vault tab; not run through CI or on a device (DP65). The app-lock, background and screen-off locks during the sheet are not exercised by Node checks.
+
+**187. Old workflow runs are deleted automatically; the latest 3 stay.**
+- `.github/workflows/cleanup-runs.yml`: triggers after `Build Android APK` completes and by hand (`workflow_dispatch`). It lists completed runs, groups them by workflow, keeps the newest 3 of each and deletes the rest. Its own runs are kept to 3 the same way.
+- Queued and running runs are never listed, so never deleted. Deleting a run removes its logs and artifacts (the workflow artifact APK of that run); GitHub Releases and their APK assets stay, so the in-app update check (Decisions 72, 164) is unaffected.
+- Permissions: `actions: write`, `contents: read`. Uses the built-in workflow token; no stored secret.
+- A docs-only push does not build (Decision on `paths-ignore`), so it triggers no cleanup. Run it by hand once to clear the existing backlog.
+- Risks: not run on GitHub yet. A run deleted by mistake cannot be restored; the count of 3 is the `KEEP` value in the file.

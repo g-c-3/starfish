@@ -724,6 +724,8 @@ See `.github/workflows/build-android.yml`. On push to `main`, it:
 4. Builds a signed release APK using a keystore stored in GitHub Secrets.
 5. Uploads the APK as a workflow artifact.
 
+`.github/workflows/cleanup-runs.yml` (Decision 187) runs after each build and by hand: it keeps the latest 3 completed runs of each workflow and deletes the older ones with their logs and artifacts. Releases are not touched.
+
 **`src/` is the real source now — `www/` is Vite's build output, not hand-edited.** This split
 didn't exist before the app was ever actually run on a device: everything lived directly in `www/`
 with no bundler, which worked fine for the pure-relative-path files but silently could never load
@@ -767,6 +769,7 @@ arkly/
   capacitor.config.json
   package.json
   .github/workflows/build-android.yml
+  .github/workflows/cleanup-runs.yml
   android-notes/        -> notes on native tweaks needed after `npx cap add android`
 ```
 

@@ -38,7 +38,9 @@ Then step 4, Move for a selection (Decision 185).
 
 Owner request after the step 4 build: a locked Vault must not throw the person to the Vault tab and lose the selection (single Move had the same problem). Built `unlockVaultInPlace` (Decision 186): biometric when enabled, then a PIN sheet over the current page; the move carries on after unlocking. `src/js/app.js` only.
 
-Decisions made: 182, 183, 184, 185, 186.
+Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187); selection logic checked on sample data and the file parsed as YAML; not run on GitHub.
+
+Decisions made: 182, 183, 184, 185, 186, 187.
 
 Verified (185, 186): `move.js` checks unchanged (16 pass); syntax check; `vite build` passes. Not verified: the selection handler, the bar, the in-place unlock (biometric prompt, PIN sheet, wrong PIN, Cancel) on a device, the bar width on a narrow phone (DP65). The handler is DOM code and has no Node check.
 
@@ -50,7 +52,7 @@ Verified (182): 11 Node checks on `move.js` with real Web Crypto and the real sc
 
 Open: Phase 20 DP65; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
 
-Next session start point: DP65 on the device; Phase 20 is then complete. Then the owner picks among the open items.
+Next session start point: run Clean up old runs once by hand (Actions tab) and check only 3 builds remain; DP65 on the device; Phase 20 is then complete. Then the owner picks among the open items.
 
 ---
 
