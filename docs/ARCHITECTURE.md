@@ -397,7 +397,7 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
-Order is fixed everywhere (Decision 134): Edit, Share, Download, Delete. Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
+Order is fixed everywhere (Decision 134, Move added by Decision 181): Edit, Share, Download, Move, Delete. Move shows only for the types it supports (Decision 182). Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
 
 Downloads: `Documents/Arkly/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 
@@ -753,6 +753,7 @@ arkly/
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
       vault.js          -> Private Vault: content bundling, save/load, in-memory search index
       fileactions.js    -> per-file actions: share, plain download, edit, delete + Select files bulk support
+      move.js           -> Move between Home and Vault (Text, Location, Money; Decision 182)
       fileopen.js       -> hand a saved file to the phone's matching app (decrypted copies in cache/open/, purged)
       filestore.js      -> per-file encryption format (chunked AES-GCM, Decision 161), IO injected
       files.js          -> binds filestore.js to the device; every Home file read, write, size and removal (Decision 162)
@@ -886,3 +887,11 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Text editors keep their text in `meta` while open and when closed with unsaved changes (not on Yes at Discard): `note_draft`, `note_edit_draft` (Home), `vault_note_draft`, `vault_edit_draft` (encrypted under the Vault key). Not in backups.
 - Committed at the next unlock (Home) and next Vault unlock (Vault): new text becomes `Autosave YYYY-MM-DD HH:MM`; an edit is written onto its entry; a missing entry keeps the text as an Autosave note.
 - Stages 2 (Voice) and 3 (Reminder, Location, Money) not built.
+
+## Move between Home and Vault (Decisions 181, 182)
+- Step 1 supports Text, Location and Money, through `move.js`. Other types show no Move button.
+- Home to Vault: content is encrypted under the Vault key (`saveVaultEntry`), the label and note in their encrypted columns, `latitude`, `longitude` and `money_json` empty. Vault to Home: decrypted into the plain columns and the search row.
+- Name, up to two tags, note and the created and updated times are carried. The copy is read back and compared before the original is deleted permanently (no Trash, no Undo); a failure removes the copy.
+- Home to Vault lowers the name's `label_history` count; Home search loses the entry with the original.
+- Needs the Vault unlocked in both directions. A locked Vault sends the person to the Vault tab; nothing is queued.
+- Backup format unchanged.

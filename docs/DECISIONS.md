@@ -2243,3 +2243,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Moving into the Vault needs the Vault unlocked (the button leads to the PIN screen). Moving out makes name and text searchable in Home; the confirm sheet says both consequences plainly.
 - Reminders are rescheduled on the other side (notification text `Vault Reminder` in the Vault, Decision 140). Large Vault files held as one block need a size check with a plain message instead of risking a crash; the cap needs a device test. Legacy expense rows get no Move.
 - Build order: Text, Location, Money; Reminder; Image, PDF, Files, Voice with the size cap; Move for a selection. Each step needs a device check. Backup format unchanged.
+
+**182. Move, step 1: Text, Location, Money (Phase 20, built).**
+- `src/js/move.js`: `moveToVault(db, key, id)`, `moveToHome(db, key, id)`, `canMove(type)`. Order as in Decision 181: write the copy, read it back and compare (name, content, note, tags, created time), then `permanentlyDeleteEntry` on the original. Any failure removes the copy and leaves the original.
+- The copy keeps the original's created and updated times (set after the insert).
+- Home to Vault lowers the `label_history` count for the moved name by one, and removes the row at zero, so a Vault name does not stay as a Home suggestion (Decision 40). The Home search row goes with the original. Vault to Home is an ordinary Home insert: search row and suggestion count are added.
+- Vault Location and Money keep their data in `encrypted_body` only; `latitude`, `longitude` and `money_json` stay empty on Vault rows and are filled on Home rows.
+- Button: icon `i-move`, between Download and Delete, only for note, location and money, only on the Home and Vault folder lists. Not in search results, viewers or Select files (step 4). Legacy expense rows never show it.
+- Locked Vault: Move on Home opens the Vault tab with a notice (PIN setup when no PIN is set). The move is not queued. A Vault lock while the sheet is open moves nothing.
+- Known risk: `permanentlyDeleteEntry` removes the search row, then the tag links, then the entry. If the last step fails, the copy is removed and the original stays without its search row and tag links until it is edited.
+- Risks: not run through CI or on a device (DP62). Reminder, Image, PDF, Files and Voice not covered (steps 2 and 3).

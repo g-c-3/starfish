@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 109**
+
+Phase 20 step 1 (Decision 182): Move for Text, Location and Money. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 181, 140 to 143 and ARCHITECTURE §3b, §3c, §5. Source read: `fileactions.js`, `vault.js`, `db.js` (`insertEntry`, `permanentlyDeleteEntry`), `app.js` row, Home and Vault list and lock paths.
+- Finding: the update check for the private repo is already built and confirmed (Decision 164, DP45); the owner instruction that lists it as not yet built is out of date.
+- `src/js/move.js` (new): `moveToVault`, `moveToHome`, `canMove`.
+- `src/js/app.js`: `moveEntryUI`; Move button in `entryRowHtml` before Delete for these types; handlers on the Home and Vault folder lists.
+- `src/index.html`: icon `i-move`.
+- Docs: ROADMAP (Phase 20 step 1, DP62), ARCHITECTURE (§5 order, folder list, Move section), DECISIONS (182).
+
+Decisions made: 182.
+
+Verified: 11 Node checks on `move.js` with real Web Crypto and the real schema in an in-memory SQLite (note, location and money both ways; created and updated times kept; Vault rows hold no plain label, text, coordinates or note; Home search row and suggestion count removed on the way in and added on the way out; a label shared by two Home entries keeps its suggestion; refusals for expense, unreadable money, missing coordinates, locked key, missing and trashed entries leave the original; a wrong key writes nothing; a failed delete of the original removes the copy in both directions); syntax check; `vite build` passes. Not verified: CI, the button and sheets on a device, the PIN-screen path, the Vault lock during the sheet (DP62).
+
+Open: Phase 20 steps 2 to 4; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+
+Next session start point: DP62 on the device; then Phase 20 step 2 (Reminder, rescheduled on the other side).
+
+---
+
 **Session 108**
 
 Phase 9, confirmation item (Decision 175), chosen as the smallest open item that needs no new dependency, no device review and no change to credentials or backups. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 124, 131, 164 and 172 to 174, ARCHITECTURE §7, §8, §13 and the update-check section. Source read: `intents.js`, the capture path in `app.js`.
