@@ -197,3 +197,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-12 | Session 109 (device pass, 3) | none | DP63 confirmed on device: Move for Reminder |
 | 2026-10-12 | Session 109 (Move, 4) | Decision 184 | Phase 20 step 3 built: Move for Voice, Image, PDF, Files, no size cap by owner decision; DP64 added; 16 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 109 (DP64 finding, 5) | none | Move on a Home PDF failed with a file-read error on device; notice now shows the underlying reason; cause open |
+| 2026-10-12 | Session 109 (device pass, 6) | none | DP64 confirmed on device: Move for Voice, Image, PDF, Files |
+| 2026-10-12 | Session 109 (Move, 7) | Decision 185 | Phase 20 step 4 built: Move for a selection from the Select files bar; DP65 added; vite build passes; not run through CI or on a device |

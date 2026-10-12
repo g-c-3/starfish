@@ -397,7 +397,7 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 ## 5. Per-file actions (every entry gets these four — `fileactions.js`, Decision 83)
 
-Order is fixed everywhere (Decision 134, Move added by Decision 181): Edit, Share, Download, Move, Delete. Move shows only for the types it supports (Decisions 182 to 184). Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
+Order is fixed everywhere (Decision 134, Move added by Decision 181): Edit, Share, Download, Move, Delete. Move shows only for the types it supports (Decisions 182 to 184). The Select files bar order is Share, Download, Make a PDF, Move, Delete (Decision 185). Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
 
 Downloads: `Documents/Arkly/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 
@@ -896,4 +896,5 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Needs the Vault unlocked in both directions. A locked Vault sends the person to the Vault tab; nothing is queued.
 - Reminder: schedule, repeat, snooze and done state move with it. `rescheduleMovedReminder` (`app.js`) cancels the old id's notifications and schedules the new entry's, with the text its side shows (Decision 183).
 - Files: Home to Vault reads the file whole into the encrypted body; Vault to Home writes it through the per-file store. No size cap (Decision 184); copy first, compare, then delete, so running out of memory leaves the original.
+- Selection: the Select files bar moves the selected items one at a time through the same two functions; per-item failures are reported, not fatal (Decision 185).
 - Backup format unchanged.

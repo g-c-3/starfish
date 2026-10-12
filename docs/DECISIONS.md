@@ -2270,3 +2270,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Order protects the data when memory runs out: the copy is written first, so a crash leaves the original, at most with an extra copy on the other side. A crash cannot be caught or turned into a message.
 - `moveBusy` stops a second move starting during a long one; file kinds show a `Moving…` notice.
 - Risks: a very large file may exhaust memory and close the app (several copies of the bytes exist at once). Not run through CI or on a device (DP64). Move for a selection not covered (step 4).
+
+**185. Move, step 4: Move for a selection (Phase 20, built).**
+- Select files bar: an icon (`sel-move`, `i-move`) before Delete. Its tooltip follows the screen the selection started on: Move to Vault (Home, search results) or Move to Home (Vault).
+- One sheet states the count and the same consequences as a single move (permanent, not the trash, reminder notification text). Cancel changes nothing.
+- Items move one at a time, in the order selected, each through `moveToVault` or `moveToHome`. A failure leaves that item where it was and the rest go on; one notice gives moved, not moved (with the first reason) and cannot-be-moved counts. Items of a type Move does not cover (legacy expenses) are left in place and counted.
+- Progress is a `Moving i of N…` notice. `moveBusy` stops a second move starting meanwhile.
+- Vault locked on Home: the selection ends and the Vault tab opens with a notice; nothing is queued. The Vault key is read after the sheet; a lock meanwhile moves nothing. A lock during the run does not stop the run.
+- The Vault index is refreshed once at the end for the entries that changed. Reminders are rescheduled per item (Decision 183).
+- No undo: moves are permanent (Decision 181).
+- Risks: one more icon in the bar leaves less room for the selected count on a narrow phone. A large selection of files takes as long as its files add up to; the app is not closed meanwhile. Not run through CI or on a device (DP65). The handler is not covered by the Node checks; `move.js` is.

@@ -29,7 +29,16 @@ Then step 3, Voice, Image, PDF, Files (Decision 184), no size cap by owner decis
 
 Device finding (DP64, first run): Move to Vault on a Home PDF showed "Its file could not be read". Cause not yet known: the real read error was replaced by that fixed message. Fix: the message now carries the underlying reason, and the doubled full stop in the notice is gone. Next: repeat the move and read the reason.
 
-Decisions made: 182, 183, 184.
+Device findings (DP64): the first PDF tried had no file behind its entry (only the name remained); Move refused and kept the row, and the notice now names the reason. A file that opens fine moved both ways. Beta data: no further action on the orphaned rows.
+
+Then step 4, Move for a selection (Decision 185).
+- `src/index.html`: `sel-move` button before Delete.
+- `src/js/app.js`: `runSelectionMove`; the icon's tooltip follows the selection's screen.
+- Docs: ROADMAP (step 4, DP64 confirmed, DP65), ARCHITECTURE (Move section, bar order), DECISIONS (185).
+
+Decisions made: 182, 183, 184, 185.
+
+Verified (185): `move.js` checks unchanged (16 pass); syntax check; `vite build` passes. Not verified: the selection handler and the bar on a device, the bar width on a narrow phone (DP65). The handler is DOM code and has no Node check.
 
 Verified (184): 16 Node checks on `move.js` with an in-memory file store (voice, image, pdf and file both ways with identical bytes and no stray files; a missing file refused; a failed final delete keeps the original file and leaves no copy in either direction; a wrong key writes no file); syntax check; `vite build` passes. Not verified: any file move on a device, behaviour with very large files (DP64).
 
@@ -37,9 +46,9 @@ Verified (183): 13 Node checks on `move.js` (the 11 below plus a repeating snooz
 
 Verified (182): 11 Node checks on `move.js` with real Web Crypto and the real schema in an in-memory SQLite (note, location and money both ways; created and updated times kept; Vault rows hold no plain label, text, coordinates or note; Home search row and suggestion count removed on the way in and added on the way out; a label shared by two Home entries keeps its suggestion; refusals for expense, unreadable money, missing coordinates, locked key, missing and trashed entries leave the original; a wrong key writes nothing; a failed delete of the original removes the copy in both directions); syntax check; `vite build` passes. Not verified: CI, the button and sheets on a device, the PIN-screen path, the Vault lock during the sheet (DP62).
 
-Open: Phase 20 step 4; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+Open: Phase 20 DP65; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
 
-Next session start point: DP64 on the device; then Phase 20 step 4 (Move for a selection).
+Next session start point: DP65 on the device; Phase 20 is then complete. Then the owner picks among the open items.
 
 ---
 
