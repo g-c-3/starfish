@@ -20,15 +20,24 @@ Then step 2, Reminder (Decision 183).
 - `src/js/app.js`: `rescheduleMovedReminder` (cancel old id, schedule new, snooze for its remaining time); sheet sentence about the notification text.
 - Docs: ROADMAP (step 2, DP62 confirmed, DP63), ARCHITECTURE (Move section), DECISIONS (183).
 
-Decisions made: 182, 183.
+Device pass: DP63 confirmed.
+
+Then step 3, Voice, Image, PDF, Files (Decision 184), no size cap by owner decision.
+- `src/js/move.js`: four file types added; bytes, extension, category and OCR text carried; compared byte for byte; partial Home file removed on failure.
+- `src/js/app.js`: `moveBusy` guard and a `Moving…` notice for file kinds.
+- Docs: ROADMAP (step 3, DP63 confirmed, DP64), ARCHITECTURE (Move section), DECISIONS (184).
+
+Decisions made: 182, 183, 184.
+
+Verified (184): 16 Node checks on `move.js` with an in-memory file store (voice, image, pdf and file both ways with identical bytes and no stray files; a missing file refused; a failed final delete keeps the original file and leaves no copy in either direction; a wrong key writes no file); syntax check; `vite build` passes. Not verified: any file move on a device, behaviour with very large files (DP64).
 
 Verified (183): 13 Node checks on `move.js` (the 11 below plus a repeating snoozed reminder both ways with the Vault row holding no plain name or note, a done reminder staying done, a reminder with no time refused); syntax check; `vite build` passes. Not verified: any notification behaviour on a device (DP63).
 
 Verified (182): 11 Node checks on `move.js` with real Web Crypto and the real schema in an in-memory SQLite (note, location and money both ways; created and updated times kept; Vault rows hold no plain label, text, coordinates or note; Home search row and suggestion count removed on the way in and added on the way out; a label shared by two Home entries keeps its suggestion; refusals for expense, unreadable money, missing coordinates, locked key, missing and trashed entries leave the original; a wrong key writes nothing; a failed delete of the original removes the copy in both directions); syntax check; `vite build` passes. Not verified: CI, the button and sheets on a device, the PIN-screen path, the Vault lock during the sheet (DP62).
 
-Open: Phase 20 steps 3 and 4; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+Open: Phase 20 step 4; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
 
-Next session start point: DP63 on the device; then Phase 20 step 3 (Image, PDF, Files, Voice, with the size cap).
+Next session start point: DP64 on the device; then Phase 20 step 4 (Move for a selection).
 
 ---
 

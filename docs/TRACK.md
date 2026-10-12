@@ -194,3 +194,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-12 | Session 109 | Decision 182 | Phase 20 step 1 built: Move for Text, Location, Money, both ways; DP62 added; 11 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-12 | Session 109 (device pass, 2) | none | DP62 confirmed on device: Move for Text, Location, Money |
 | 2026-10-12 | Session 109 (Move, 3) | Decision 183 | Phase 20 step 2 built: Move for Reminder, notifications rescheduled on the other side; DP63 added; 13 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-12 | Session 109 (device pass, 3) | none | DP63 confirmed on device: Move for Reminder |
+| 2026-10-12 | Session 109 (Move, 4) | Decision 184 | Phase 20 step 3 built: Move for Voice, Image, PDF, Files, no size cap by owner decision; DP64 added; 16 Node checks; vite build passes; not run through CI or on a device |

@@ -2261,3 +2261,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - If cancelling or scheduling fails, the move stands and a notice says the notification could not be updated. The old notification is cancelled before the new one is scheduled so a name never shows on the lock screen after the move into the Vault.
 - The confirm sheet adds one sentence about the notification text.
 - Risks: notification behaviour, the remaining-time snooze and a repeat window after a restart are not verified (DP63). Not run through CI or on a device. Image, PDF, Files and Voice not covered (step 3).
+
+**184. Move, step 3: Voice, Image, PDF, Files (Phase 20, built; no size cap).**
+- Owner decision: no size cap and no size number. This replaces the size check named in Decision 181.
+- `move.js` carries `file_path`/`file_key` (Home) or `fileData` (Vault), `extension`, `auto_category`, and for Image and PDF the OCR text (`body_text` on Home, `ocrText` in the Vault envelope).
+- Home to Vault: the file is read whole (`readBytes`), turned into base64 and sealed in `encrypted_body`; `file_path` stays empty. Vault to Home: base64 written through `saveBase64` (per-file encryption, Decision 161), then the row is inserted. In both directions the copy is read back and compared byte for byte (Vault side: the stored base64) before the original is deleted; the original's file goes with it (`permanentlyDeleteEntry`).
+- A failure removes the copy, including a Home file written before its row existed.
+- Order protects the data when memory runs out: the copy is written first, so a crash leaves the original, at most with an extra copy on the other side. A crash cannot be caught or turned into a message.
+- `moveBusy` stops a second move starting during a long one; file kinds show a `Moving…` notice.
+- Risks: a very large file may exhaust memory and close the app (several copies of the bytes exist at once). Not run through CI or on a device (DP64). Move for a selection not covered (step 4).
