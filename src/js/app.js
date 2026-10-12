@@ -329,6 +329,8 @@ function paintSelection() {
   const count = document.getElementById('sel-count');
   if (count) count.textContent = ids ? `${ids.size} selected` : '';
   document.querySelectorAll('#select-bar .sel-act').forEach((b) => { b.disabled = !ids || ids.size === 0; });
+  const mv = document.getElementById('sel-move'); // the direction follows the screen the selection started on (Decision 185)
+  if (mv && selection) { const t = selection.isVault ? 'Move to Home' : 'Move to Vault'; mv.title = t; mv.setAttribute('aria-label', t); }
 }
 function exitSelection() {
   if (!selection) return;
@@ -3754,6 +3756,60 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (action === 'delete' && done) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault, message: msg });
       else toast(msg);
     }
+    // Move the selected items between Home and Vault, one at a time (Decision 185). Each item is its own move (move.js): a failure
+    // leaves that item where it was and the rest go on. Items of a type Move does not cover (legacy expenses) are left alone.
+    async function runSelectionMove() {
+      if (!selection || selection.ids.size === 0 || moveBusy) return;
+      const { isVault } = selection;
+      const toVault = !isVault;
+      const ids = [...selection.ids];
+      if (toVault && !privateSessionKey) {
+        exitSelection();
+        const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
+        toast(cred.values[0]?.private_pin_hash ? 'Unlock the Vault, then select and Move again.' : 'Set up the Vault, then select and Move again.');
+        document.querySelector('button[data-nav="vault"]')?.click();
+        return;
+      }
+      arm();
+      const n = ids.length;
+      const ok = await askYesNo(toVault
+        ? { title: `Move ${n} item${n > 1 ? 's' : ''} to the Vault?`, text: 'They are encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. They do not go to the trash. Reminders will read Vault Reminder.', yes: 'Move', no: 'Cancel' }
+        : { title: `Move ${n} item${n > 1 ? 's' : ''} to Home?`, text: 'They leave the Vault. Names and text become searchable in Home, and they are no longer under the Vault PIN. They do not go to the trash. Reminders will show their names.', yes: 'Move', no: 'Cancel' });
+      if (!ok) return;
+      const key = privateSessionKey; // read after the sheet: a Vault lock meanwhile clears it
+      if (!key) { exitSelection(); toast('The Vault locked. Nothing was moved.'); return; }
+      armVaultAutoLock();
+      moveBusy = true;
+      let moved = 0, skipped = 0, failed = 0, firstError = '', notifyProblem = '';
+      const refresh = [];
+      try {
+        for (let i = 0; i < ids.length; i++) {
+          if (n > 1) toast(`Moving ${i + 1} of ${n}…`, true);
+          const id = ids[i];
+          try {
+            const kind = ((await db.query(`SELECT type FROM entries WHERE id=? AND deleted_at IS NULL`, [id])).values || [])[0]?.type;
+            if (!kind || !canMove(kind)) { skipped++; continue; }
+            const newId = toVault ? await moveToVault(db, key, id) : await moveToHome(db, key, id);
+            refresh.push(toVault ? newId : id);
+            moved++;
+            if (kind === 'reminder') { const problem = await rescheduleMovedReminder(id, newId); if (problem && !notifyProblem) notifyProblem = String(problem.message || problem); }
+          } catch (err) {
+            failed++;
+            if (!firstError) firstError = String(err.message || err).replace(/\.$/, '');
+          }
+        }
+      } finally { moveBusy = false; }
+      if (privateSessionKey && refresh.length) await refreshVaultIndexEntries(db, privateSessionKey, refresh);
+      exitSelection();
+      if (isVault) { if (privateSessionKey) renderVault(); }
+      else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
+      const where = toVault ? 'to the Vault' : 'to Home';
+      const parts = [`${moved} moved ${where}`];
+      if (failed) parts.push(`${failed} not moved (${firstError}), left where they were`);
+      if (skipped) parts.push(`${skipped} cannot be moved`);
+      if (notifyProblem) parts.push(`a reminder notification could not be updated: ${notifyProblem}`);
+      toast(parts.join('; '));
+    }
     // Merge PDFs, or Make a PDF from pictures (Decision 168): the selected items, in an order set on a sheet, become one new PDF.
     async function runMakePdf() {
       if (!selection || selection.ids.size === 0) return;
@@ -3800,6 +3856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sel-pdf').addEventListener('click', runMakePdf);
     document.getElementById('sel-share').addEventListener('click', () => runSelection('share'));
     document.getElementById('sel-download').addEventListener('click', () => runSelection('download'));
+    document.getElementById('sel-move').addEventListener('click', () => runSelectionMove());
     document.getElementById('sel-delete').addEventListener('click', () => runSelection('delete'));
   })();
 
