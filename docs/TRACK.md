@@ -203,3 +203,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-12 | Session 109 (CI, 9) | Decision 187 | Cleanup workflow added: keeps the latest 3 completed runs per workflow, runs after each build and by hand; not run on GitHub yet |
 | 2026-10-12 | Session 109 (CI, 10) | Decision 187 | Cleanup workflow changed to manual trigger only (no automatic run after builds) |
 | 2026-10-12 | Session 109 (Move, 11) | Decision 188 | In-place unlock confirmed on device with biometric; Move now confirms first, then unlocks; locked state and missing Vault set-up shown in sheets; vite build passes; PIN-only path not device-tested |
+| 2026-10-12 | Session 109 (device pass, 12) | none | DP65 confirmed on device: Move for a selection and the in-place unlock; Phase 20 complete |
+| 2026-10-12 | Session 109 (CI, 13) | none | Clean up old runs confirmed on GitHub: manual run left 3 builds |

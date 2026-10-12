@@ -2294,7 +2294,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Queued and running runs are never listed, so never deleted. Deleting a run removes its logs and artifacts (the workflow artifact APK of that run); GitHub Releases and their APK assets stay, so the in-app update check (Decisions 72, 164) is unaffected.
 - Permissions: `actions: write`, `contents: read`. Uses the built-in workflow token; no stored secret.
 - Run it from the Actions tab whenever the list grows; the first run clears the existing backlog.
-- Risks: not run on GitHub yet. A run deleted by mistake cannot be restored; the count of 3 is the `KEEP` value in the file.
+- Confirmed on GitHub: a manual run left 3 builds. A run deleted by mistake cannot be restored; the count of 3 is the `KEEP` value in the file.
 
 **188. Move: confirm first, then unlock; locked state and missing set-up shown in sheets.**
 - Replaces the order in Decision 186. The Move sheet comes first; the unlock (biometric when enabled, then the PIN sheet) follows only after the person confirms. Cancelling the Move sheet leaves a locked Vault locked.

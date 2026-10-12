@@ -38,9 +38,11 @@ Then step 4, Move for a selection (Decision 185).
 
 Owner request after the step 4 build: a locked Vault must not throw the person to the Vault tab and lose the selection (single Move had the same problem). Built `unlockVaultInPlace` (Decision 186): biometric when enabled, then a PIN sheet over the current page; the move carries on after unlocking. `src/js/app.js` only.
 
-Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187), manual trigger only to save Actions minutes; selection logic checked on sample data and the file parsed as YAML; not run on GitHub.
+Owner request: keep only the latest 3 workflow runs. New `.github/workflows/cleanup-runs.yml` (Decision 187), manual trigger only to save Actions minutes; selection logic checked on sample data and the file parsed as YAML; confirmed on GitHub by a manual run.
 
 Device finding (DP65, in place unlock): biometric unlock without leaving the page worked. Owner asks: confirm before unlocking, state the locked Vault in the sheet instead of a toast, and cover the PIN-only case. Built (Decision 188): the Move sheet first, with `Unlock and move` and a locked-Vault sentence; the unlock follows; a set-up sheet replaces the toast when no PIN exists. `src/js/app.js` only.
+
+Device pass: DP65 confirmed, including the in-place unlock with biometric and with the PIN only. Phase 20 complete.
 
 Decisions made: 182, 183, 184, 185, 186, 187, 188.
 
@@ -52,9 +54,9 @@ Verified (183): 13 Node checks on `move.js` (the 11 below plus a repeating snooz
 
 Verified (182): 11 Node checks on `move.js` with real Web Crypto and the real schema in an in-memory SQLite (note, location and money both ways; created and updated times kept; Vault rows hold no plain label, text, coordinates or note; Home search row and suggestion count removed on the way in and added on the way out; a label shared by two Home entries keeps its suggestion; refusals for expense, unreadable money, missing coordinates, locked key, missing and trashed entries leave the original; a wrong key writes nothing; a failed delete of the original removes the copy in both directions); syntax check; `vite build` passes. Not verified: CI, the button and sheets on a device, the PIN-screen path, the Vault lock during the sheet (DP62).
 
-Open: Phase 20 DP65; Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+Open: Phase 19 stage 3; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
 
-Next session start point: run Clean up old runs once by hand (Actions tab) and check only 3 builds remain; DP65 on the device; Phase 20 is then complete. Then the owner picks among the open items.
+Next session start point: the owner picks among the open items. Clean up old runs is confirmed; start it by hand from the Actions tab when the run list is long. Phase 20 is complete and confirmed on device (DP62 to DP65).
 
 ---
 
