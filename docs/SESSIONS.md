@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 111**
+
+OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (headings and latest entries). Source read: `package.json`, `native-setup.md` §6, the OCR call sites in `app.js`, `move.js`, `vault.js`, `intents.js`.
+- Phase 5 OCR was the next open item. Both routes were compared (ML Kit native plugin; `tesseract.js` bundled locally). The owner dropped OCR from the app.
+- Docs: DECISIONS (192), ROADMAP (Phases 3, 5, 8 and the not-doing line), ARCHITECTURE (principles, entry types, Vault envelope, edit actions, label suggestion, batch add, search ranking, file list, status), `android-notes/native-setup.md` (§6 now a stub).
+- No code changed. Unchanged on purpose: the `body_text` and `ocrText` fields; stale comment in `captureFile` and unused `suggestLabel()` (Decision 192).
+
+Decisions made: 192.
+
+Verified: nothing run; docs only. Not verified: CI.
+
+Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: the owner picks among the open items.
+
 **Session 110**
 
 Phase 19 stage 3 (Decision 189): Reminder, Location, Money autosave. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 177 and the Autosave section. Source read: `app.js` (Save dialog, paste dialog, capture flows, `dismissOverlays`, text drafts), `moneyui.js`, `vault.js` (`saveVaultEntry`), `money.js`, `geoparse.js`.

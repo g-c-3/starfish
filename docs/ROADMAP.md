@@ -7,10 +7,10 @@
 - [ ] 2 — Core data layer
 - [ ] 3 — Capture & intent engine
 - [~] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); Vault Location — Session 93 (Decision 142), Vault made to match Home (Decision 143), not device-tested; all 8 Vault capture cards now built; Reminder Session 56 and Location Session 57 built on Home)
-- [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; OCR/noise-toggle/sound asset not)
+- [~] 5 — Native plugin wiring (voice recorder + permissions done, needs device confirm; noise-toggle/sound asset not; OCR dropped, Decision 192)
 - [~] 6 — Backup & restore engine (core logic done, UI wired; real free-space check confirmed on device — Session 97; format 2 chunked backup built after Export Now crashed on 109 MB and confirmed on device (Export Now, Restore append and overwrite) — Session 102, Decision 159)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
-- [~] 8 — Tags & label UX (tag picker, label-history hint, main-capture batch add wired — Session 62; Vault batch add numbering continues — Session 107, Decision 174, confirmed on device (DP57); OCR label pre-fill not)
+- [~] 8 — Tags & label UX (tag picker, label-history hint, main-capture batch add wired — Session 62; Vault batch add numbering continues — Session 107, Decision 174, confirmed on device (DP57); OCR label pre-fill dropped, Decision 192)
 - [~] 9 — Additional features (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; reminder offer instead of silent conversion built — Session 108, Decision 175, not device-tested (DP58); rest not started)
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; obfuscation/ProGuard/signature check not)
 - [x] 11 — CI/CD (build workflow committed; live green runs confirmed — Session 107: releases v0.1.0+494, +498 and +499 exist, each created by the workflow's last step after the signed build; auto-release added Session 49, update check changed to manual Settings button Session 50)
@@ -50,8 +50,8 @@
   `entries_fts` and `label_history` unconditionally — meaning a vault item's title was discoverable
   via ordinary, no-PIN search and could surface in the normal capture bar's autocomplete. Fixed in
   both `insertEntry()` here and `restoreBackup()` in backup.js (Decision 40).
-- [ ] **3 — Capture & intent engine.** `intents.js` (reminder/expense detection, OCR label
-  suggestion), `notifications.js`, `ads.js`. Committed; not device-tested. `notifications.js`'s
+- [ ] **3 — Capture & intent engine.** `intents.js` (reminder/expense detection, label
+  suggestion, unused since Decision 192), `notifications.js`, `ads.js`. Committed; not device-tested. `notifications.js`'s
   stale pre-rebrand naming (channel id, titles) fixed earlier.
 - [~] **4 — App shell & control flow.** `app.js`, `index.html`, `style.css`. **Foundational gap
   found and fixed during the Vault pivot:** nothing anywhere ever toggled screen visibility —
@@ -67,8 +67,8 @@
   storage convention). Also: `showMainTimeline()` returned rows but nothing ever rendered them or
   attached the per-file actions (built in Phase 7, sitting unused ever since) to anything —
   that's now done too, with tags shown per entry (one bulk `GROUP_CONCAT` query, not N+1).
-  OCR for image/pdf still isn't implemented (Phase 5), so captured images/PDFs have no `body_text`
-  yet — labels/tags still work for search. **Visual theme modernized (Session 28, Decision 52)** —
+  OCR for image/pdf is dropped (Decision 192), so captured images/PDFs have no `body_text` —
+  labels/tags work for search. **Visual theme modernized (Session 28, Decision 52)** —
   colorful by default now (per-capture-type color coding across buttons/rows/tabs, one brand
   accent, gradient masthead accent). **Layout rebuilt (Session 29, Decision 53)**: bottom nav
   (Home/Vault/Settings) instead of one long scrolling page; Gradient mode removed entirely (dark
@@ -163,7 +163,7 @@
   service) now applied automatically by CI via `scripts/patch-manifest.js`, not just documented —
   see Decision 49; not yet confirmed against a real build/device, that's next session's first task.
   Noise-reduction toggle still not done, this plugin has no audio-source parameter
-  (`android-notes/native-setup.md` §5). OCR (ML Kit or Tesseract), notification sound asset:
+  (`android-notes/native-setup.md` §5). OCR dropped (Decision 192). Notification sound asset:
   documented, not implemented.
 - [~] **6 — Backup & restore engine.** `backup.js` built: create/encrypt/write, open/decrypt/restore
   (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
@@ -441,7 +441,7 @@ individual items) can be picked up in any order once prerequisites are met.
     - [x] C1 — Built Session 106 (Decision 167): rotate, delete, reorder, extract, split by range, on the open PDF. `vite build` passes (new chunks 2.9 kB and 6.6 kB, `pdf-lib` unchanged); 31 Node checks on `pdfpages.js`; not run through CI; confirmed on device (DP49).
     - [x] C2 — Built Session 106 (Decision 168): Make a PDF button in the selection bar; a selection of PDFs merges, a selection of pictures becomes one PDF (each converted to JPEG first, so orientation is applied); order sheet; output a new entry in Home or the Vault. 35 Node checks on `pdfpages.js` (lazy items, failing item position, real JPEG input); `vite build` passes; not run through CI; confirmed on device (DP50).
     - [x] C3 — Built Session 106 (Decision 169): Picture tool in the mark-up: pick a picture, optional Clear background, tap to place, size S, M or L, saved with the other marks. Placement checked in Node against pdf.js (rotations, crop box); `vite build` passes; not run through CI; confirmed on device (DP51).
-  - Not doing, by decision: conversion to or from Office files, summaries or questions about a document, cloud sharing or collaboration, OCR of scanned PDFs, cryptographic digital signatures. Reasons in Decision 152.
+  - Not doing, by decision: conversion to or from Office files, summaries or questions about a document, cloud sharing or collaboration, OCR of scanned PDFs, cryptographic digital signatures. Reasons in Decision 152. OCR of images and PDFs generally: Decision 192.
 - [~] **DP — Device pass backlog (Sessions 55 to 74).** Built and reasoned from code, never confirmed on a device. Run
   one by one, newest risk first; mark each with the session that confirms it.
   - [x] DP1 — Backup and restore (Session 69, Decision 91): install over an older build, existing entries survive the

@@ -2324,3 +2324,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause (DP67): drafts are committed at unlock, but lists drawn before the lock were not redrawn, so rows showed their old data until opened. Text and Voice autosaves (Decisions 177, 179) had the same gap.
 - Rule: an unlock that commits at least one draft dispatches `arkly-drafts-committed`. Home: after the commit in `onUnlocked`. Vault: after the Vault index is built, because the redraw reads it. The listener redraws the Home lists and totals and, with the Vault unlocked, the Vault lists (the `arkly-data-restored` handler). An unlock that commits nothing dispatches nothing.
 - Risks: not run through CI or on a device (DP68).
+
+**192. OCR dropped from the app (Phase 5).**
+- Rule: no text recognition of images or PDFs. No ML Kit, no `tesseract.js`, no native plugin, no bundled language data. Extends Decision 152, which excluded OCR of scanned PDFs.
+- Cause: owner decision after the two routes were compared. ML Kit needs a custom native plugin and Gradle edits through CI scripts. `tesseract.js` adds an estimated 5 to 15 MB to the APK and is slow on large PDFs. Neither was judged worth it.
+- Effect: images and PDFs are found by label and tags only; `body_text` stays NULL for them on Home. The Phase 8 label pre-fill from recognized text is dropped; `suggestLabel()` has no input and is unused. Phase 5 stays partial: noise-reduction toggle and notification sound asset remain.
+- Kept as is: the `body_text` column, the Vault `ocrText` envelope field, the `o` field of `encrypted_meta` (Decision 156) and their carrying in Move (Decision 184). All hold empty values; removing them would rewrite confirmed code for no gain.
+- Stale in code, not changed: the comment in `captureFile` (`app.js`), `suggestLabel()` and its import. Cleanup is optional and not scheduled.
+- Risks: docs only; no code changed.

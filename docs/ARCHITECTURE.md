@@ -19,7 +19,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
-- Images and PDFs are OCR'd; both label and OCR text are indexed (label ranked higher).
+- Images and PDFs are searchable by label and tags only; no text recognition (Decision 192).
 - Rule-based intent engine (regex/keyword) detects reminders from any text/voice-labeled/typed input — no automated inference. Money is never detected (Decision 131).
 - **Every entry requires a user-supplied label before save completes** (blocking, not optional) — across voice,
   image, PDF, generic file, and note types alike. Labels are what make voice notes and generic files searchable
@@ -36,8 +36,8 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 |---|---|---|---|
 | Text note | typed | label + body | `is_private` |
 | Voice recording | audio file | label only | noise_reduction (bool) |
-| Image | OCR'd | label + OCR text | ocr_text |
-| PDF | OCR'd | label + OCR text | ocr_text |
+| Image | none | label only | — |
+| PDF | none | label only | — |
 | Generic file | none | label only | extension, auto_category |
 | Reminder | text + datetime | label | fire_at, repeat_rule, snoozed_until — manual capture card built Decision 78; Vault variant built Decision 140 (schedule columns plaintext, name in `encrypted_label` (Decision 145), note in `encrypted_description`, notification text `Vault Reminder`), same type/columns the pre-existing `intents.js` auto-detection ("remind me...") already used; the two are indistinguishable once created |
 | Location | none | label only | latitude, longitude — capture card built Decision 79 (main only; Vault variant not built); Share sends label + map link; detail view Decision 93 |
@@ -162,7 +162,7 @@ same search, same trash-with-30-day-restore, same four per-file actions in the s
 deliberate differences, all safety-necessary rather than arbitrary:
 
 1. **Everything lives encrypted at rest, including raw file bytes.** A vault entry's `file_path` stays `NULL`;
-   its content (base64 file bytes, plus OCR text for image/pdf, bundled together as one JSON string) travels
+   its content (base64 file bytes, plus an always-empty OCR text slot for image/pdf, Decision 192, bundled together as one JSON string) travels
    inside `encrypted_body` instead, via the exact same `encryptPrivateNote`/`decryptPrivateNote` AES-GCM calls
    a private note's text always used. A note's own plaintext shape is unchanged, so pre-pivot private notes
    need no migration. Content is only ever decrypted into memory (a `Blob`/object URL for files), never written
@@ -405,8 +405,7 @@ Download for append, its per-entry encrypted zip and the "Append files from down
 removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
 (§4), including Private Vault content.
 
-1. **Edit** — label/tags always editable; note body editable; OCR'd text (image/pdf) editable, useful for
-   correcting misreads that hurt search; expense amount/category editable; reminder time/repeat editable and
+1. **Edit** — label/tags always editable; note body editable; expense amount/category editable; reminder time/repeat editable and
    must reschedule its notification, not just silently update the DB row. **Vault entries of any type**
    (not just text) require the vault PIN already unlocked for that session to edit content — label/tags-only
    edits don't, since those were never encrypted. Built (`editEntry()`), takes a caller-supplied reschedule
@@ -528,7 +527,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   batch-numbering, above). Previously used labels for a given entry type surface as tap-to-select suggestions at
   capture time ("Invoice", "Payment Screenshot", "Receipt"...), so a personal taxonomy builds up naturally
   without the user retyping the same label repeatedly, and without any hardcoded category list.
-- **OCR-based label suggestion** — implemented as `suggestLabel()` in `intents.js`. Keyword matches against OCR
+- **OCR-based label suggestion** — dropped with OCR (Decision 192); `suggestLabel()` in `intents.js` has no input and is unused. As designed: keyword matches against OCR
   text (e.g. "INVOICE NO", "UPI", "prescription", "aadhaar") pre-fill/suggest a label ("Invoice", "Payment
   Screenshot", "Prescription", "ID Proof") at capture time — a plain dictionary lookup, not automated inference. Never blocks
   save; purely a convenience the user can accept or overwrite.
@@ -542,13 +541,10 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
     `label_history` table that already tracks use-counts, so a later "Invoice" batch continues at `Invoice 4`,
     `Invoice 5`, etc. instead of colliding with an earlier batch's numbering.
   - Any tags added at the batch level apply to every file in the batch, saving repeated re-tagging.
-  - OCR still runs **per file individually** — each gets its own `ocr_text` — and `suggestLabel()` can still
-    pre-fill the common label if most/all files in the batch match the same OCR keyword pattern (e.g. a batch of
-    payment screenshots all suggesting "Payment Screenshot" as the shared label).
   - Once saved, every entry from the batch is fully independent — searchable, editable (can be individually
     renamed later via the existing Edit action), and deletable on its own, with no lingering "batch" grouping
     in the data model.
-  - **Status (Decision 84):** built on the main capture bar only (Image/PDF/Files). Chosen by a confirm dialog when more than one file is picked; individual add labels each entry by file name. `suggestLabel()` pre-fill not wired (no OCR text yet). Vault batch add not built.
+  - **Status (Decision 84):** built on the main capture bar only (Image/PDF/Files). Chosen by a confirm dialog when more than one file is picked; individual add labels each entry by file name. No label pre-fill: OCR dropped (Decision 192). Vault batch add not built.
 - **Expense follow-up flow** — removed (Decision 131). Expenses are no longer detected from text; see Money.
 - **Reminder notifications, not alarms** — implemented via `@capacitor/local-notifications` (`notifications.js`),
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
@@ -697,7 +693,7 @@ No network, no new permission.
 ## 9. Search
 SQLite FTS5 virtual table over `(label, body_text)` for all non-private, non-voice, non-generic-file entries.
 Private note bodies are excluded from the FTS index entirely; only unlocked-in-session search covers them.
-Ranking: label match > body/OCR match, then recency.
+Ranking: label match > body match, then recency.
 - **Filters** — by entry type, date range, and "has location" — combinable with the text query, not just a
   plain keyword search.
 - **Snippet/highlight results** — show matched text in context (via FTS5's `snippet()`/`highlight()`) rather
@@ -748,7 +744,7 @@ arkly/
     js/
       db.js             -> SQLite schema + FTS5 setup
       crypto.js         -> KDF + AES helpers for private notes & backups
-      intents.js         -> rule-based reminder/expense detector + OCR label suggestion
+      intents.js         -> rule-based reminder/expense detector (label suggestion unused, Decision 192)
       notifications.js  -> local notification scheduling (banner channel, snooze/done actions)
       ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
@@ -776,7 +772,7 @@ arkly/
 ## 13. Status
 Implemented in code already: schema (tags, label history, soft-delete columns, optional app-password/vault-PIN
 columns), FTS5 search (main app only — Vault search is a separate in-memory index, §3b),
-credential hashing/KDF/AES helpers, the intent engine (reminders, expenses, OCR label suggestion), notification
+credential hashing/KDF/AES helpers, the intent engine (reminders, expenses), notification
 scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
 plus the expense follow-up timeout) including the optional-password/first-run-setup path, the core backup/restore
 engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — blocked on manual OAuth setup for
@@ -795,7 +791,7 @@ flagged at the end of every session since Phase 1.
 
 Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the
 map view. These are the next
-implementation milestones. Native plugin wiring (voice recorder, OCR, exact permissions, signature check)
+implementation milestones. Native plugin wiring (voice recorder, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.
 
