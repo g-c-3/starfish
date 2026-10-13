@@ -344,8 +344,10 @@ async function softDelete(db, id) {
 // of columns or tables: "the vault's bin" is just WHERE is_private=1, "the main bin" is WHERE is_private=0.
 // Same 30-day rule for both (Decision — one soft-delete/purge policy, applied per-bin by this filter).
 async function listTrash(db, { isPrivate = false } = {}) {
+  // Vault file bytes sit in encrypted_body, so a Vault listing names its columns and leaves the body out (Decision 193).
+  const cols = isPrivate ? 'id, type, label, encrypted_label, extension, auto_category, created_at, deleted_at, is_private' : '*';
   const rows = await db.query(
-    `SELECT * FROM entries WHERE deleted_at IS NOT NULL AND is_private = ? ORDER BY deleted_at DESC`,
+    `SELECT ${cols} FROM entries WHERE deleted_at IS NOT NULL AND is_private = ? ORDER BY deleted_at DESC`,
     [isPrivate ? 1 : 0]
   );
   return rows.values || [];
@@ -354,7 +356,8 @@ async function listTrash(db, { isPrivate = false } = {}) {
 async function restoreFromTrash(db, id) {
   await db.run(`UPDATE entries SET deleted_at = NULL WHERE id = ?`, [id]);
   // Put a still-pending reminder back on the schedule.
-  const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+  const kind = ((await db.query(`SELECT type FROM entries WHERE id = ?`, [id])).values || [])[0];
+  const row = kind && kind.type === 'reminder' ? ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0] : null; // whole row only for a reminder: a Vault file's body is large (Decision 193)
   if (row && row.type === 'reminder') { // Vault reminders too: the notification text is generic (Decision 140)
     const { reminderStatus } = await import('./reminders.js');
     if (reminderStatus(row) === 'upcoming') {
