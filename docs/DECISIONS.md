@@ -2319,3 +2319,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - An incomplete form (Money without a readable amount or date, Reminder without a readable time) becomes a Text entry `Autosave YYYY-MM-DD HH:MM` headed `<Kind> edit (not finished)`, then `Entry: <name>` and the filled-in fields; the entry is left as it was. An entry that no longer exists, or whose type changed, gets the same note headed `(entry not found)`. A row that cannot be committed stays for the next unlock.
 - Code: `resolveFormDraft` takes `edit`, `forceNote`, `noteName` and `entryLabel`; `formDraft(kind, isVault, entry)`, `applyEditDraft` and the second pass of `commitFormDrafts` in `app.js`; `editEntryUI` and `editMoney` hold the draft until the save succeeds.
 - Risks: not run through CI or on a device (DP67). The reschedule at unlock, a Vault reminder rescheduled before the Vault index is built, and the same lock and picker points as Decision 189 need a device check.
+
+**191. Redraw of the lists after a committed draft (Phase 19).**
+- Cause (DP67): drafts are committed at unlock, but lists drawn before the lock were not redrawn, so rows showed their old data until opened. Text and Voice autosaves (Decisions 177, 179) had the same gap.
+- Rule: an unlock that commits at least one draft dispatches `arkly-drafts-committed`. Home: after the commit in `onUnlocked`. Vault: after the Vault index is built, because the redraw reads it. The listener redraws the Home lists and totals and, with the Vault unlocked, the Vault lists (the `arkly-data-restored` handler). An unlock that commits nothing dispatches nothing.
+- Risks: not run through CI or on a device (DP68).

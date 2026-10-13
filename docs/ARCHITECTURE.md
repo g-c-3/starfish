@@ -892,6 +892,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Voice (Decisions 179, 180): a take lost to a lock or background is saved as an Autosave entry; Home can keep recording behind a lock.
 - Reminder, Location, Money, new entries (Decision 189): `formDraft` (`app.js`) keeps each open dialog's raw fields in `form_draft_<kind>` (Home) or `vault_form_draft_<kind>` (Vault, encrypted under the Vault key). Written only when a field differs from the first state, half a second after a change, on hide, and by `dismissOverlays` just before a lock closes the dialogs. Not in backups.
 - Committed after the text drafts at the same unlocks through `resolveFormDraft` (`autosave.js`): a complete form becomes its entry, an incomplete one a Text entry `Autosave YYYY-MM-DD HH:MM` listing the filled-in fields. A committed reminder is not scheduled.
+- After an unlock that committed any draft, `arkly-drafts-committed` redraws the Home and Vault lists (Decision 191).
 - Edits of Reminder, Location details and Money (Decision 190): the same draft session with the entry's id and name, in `form_edit_draft_<kind>` / `vault_form_edit_draft_<kind>`. The commit writes a complete form onto the entry through `editEntry` (`applyEditDraft`; a reminder is then scheduled, or cancelled when its time has passed, in a separate step whose failure is reported, not retried), else keeps the work as an Autosave Text entry naming the entry. Voice, Image, PDF and Files details are not covered.
 
 ## Move between Home and Vault (Decisions 181, 182)
