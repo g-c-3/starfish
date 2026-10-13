@@ -118,12 +118,7 @@ Original plan, still the reference for the eventual noise-reduction step:
   built-in AEC/NS/AGC noise suppression at the hardware/OS level — no custom DSP needed).
 
 ## 6. OCR (images & PDFs)
-Recommended: **ML Kit Text Recognition** (on-device, no network call).
-- Add `com.google.mlkit:text-recognition` to `android/app/build.gradle`.
-- For PDFs: render each page to a bitmap first via `PdfRenderer` (Android's built-in class), then run
-  ML Kit text recognition per page and concatenate results into `body_text`.
-- Alternative if you want to avoid Google Play Services entirely: Tesseract via a WASM build
-  (`tesseract.js`) run inside the webview — slower, slightly less accurate, but zero native code.
+Dropped (Decision 192). Nothing to set up.
 
 ## 7. R8/ProGuard (release hardening)
 In `android/app/build.gradle`, under `buildTypes.release`:
