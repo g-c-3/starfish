@@ -2339,3 +2339,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: for the Vault, `listTrash` selects only `id, type, label, encrypted_label, extension, auto_category, created_at, deleted_at, is_private`, which is all the trash rows and `vaultRowLabel` use. Home keeps `SELECT *` (Home file bytes are on disk, not in the row). `restoreFromTrash` reads `type` first and the whole row only for a reminder.
 - Why correct: the trash list never needed the body; a Vault row's size no longer affects the list.
 - Risks: not run through CI or on a device (DP69). If the crash remains, the cause is elsewhere and needs the device log.
+
+**194. Vault tab closes Trash and Settings (bug fix).**
+- Report: Vault Trash drew under the landing tiles instead of as its own view.
+- Cause (likely; the exact tap sequence was not reported): the Vault tab handler called `closeVaultFolder()`, which un-hides the card grid, but left Vault Trash and Vault Settings open. Tapping the Vault tab, or leaving to Home and returning, while either was open showed the grid and that view together.
+- Fix: the tab handler closes Trash first and Settings through `leaveIfClean` (the PIN confirm field asks before discarding), then the folder. The Vault tab lands on the card grid, as the Home tab does (Decision 81).
+- Why correct: all three Vault views are closed by the one entry point that shows the grid.
+- Risks: not run through CI or on a device (DP70). If the overlap shows on a plain tap of the Trash tile, the cause is elsewhere.

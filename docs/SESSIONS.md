@@ -13,13 +13,16 @@ OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (hea
 
 - Bug report: the Vault Trash showed no files and the app stopped. Cause, fix and risk in Decision 193. `src/js/db.js`: `listTrash` names its columns for the Vault; `restoreFromTrash` reads the whole row only for a reminder. DP69 added.
 
-Decisions made: 192, 193.
+- Bug report: Vault Trash drew under the landing tiles. Cause, fix and risk in Decision 194. `src/js/app.js`: the Vault tab handler. DP70 added.
+- Slow open, even with no data: read, not changed. Biometric unlock runs the same verify as a typed entry (Decision 50). App unlock: one PBKDF2 at 600000 (Decision 172). Vault unlock: that, plus a key derivation at 300000, then the index build. Each is a fixed cost per unlock, independent of data. Startup before the lock screen also runs the database open, permission and channel calls, and the reminder queue drain. No timing was taken; the split is not measured. Options held for the owner: time each step on device; skip the repeat verify after a biometric success; keep the Vault key instead of re-deriving it (touches Credentials, Decision 50).
 
-Verified: a Node check of the two `listTrash` queries on a stub (Vault names its columns, Home and the default keep `*`); syntax check of `db.js`. Not verified: `vite build`, CI, any device (DP69). The cause is inferred from the code, not from a device log.
+Decisions made: 192, 193, 194.
+
+Verified: a Node check of the two `listTrash` queries on a stub (Vault names its columns, Home and the default keep `*`); syntax check of `db.js`. Not verified: `vite build`, CI, any device (DP69, DP70). The cause is inferred from the code, not from a device log.
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP69 (Vault Trash) on device; if the crash remains, the device log is needed. Then the owner picks among the open items.
+Next session start point: DP69 and DP70 on device, then the unlock-time question (where the wait is: before the biometric prompt, after it, or Vault only); if the crash remains, the device log is needed. Then the owner picks among the open items.
 
 **Session 110**
 
