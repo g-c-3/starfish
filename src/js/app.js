@@ -2864,7 +2864,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // is wired separately below with its own, different behavior (goBack(), not "jump to this tab").
   document.querySelectorAll('#bottom-nav button[data-nav]').forEach((btn) => btn.addEventListener('click', async () => {
     const tab = btn.dataset.nav;
-    if (tab === 'vault') { closeVaultFolder(); showScreen('vault-screen'); await refreshVaultGateView(); }
+    if (tab === 'vault') {
+      // The Vault tab lands on the card grid (Decision 194): Trash and Settings close too, or closeVaultFolder() would show the grid above them.
+      closeVaultTrash();
+      if (vaultSettingsOpen) { if (!(await leaveIfClean(VAULT_SETTINGS_PENDING))) return; closeVaultSettings(); }
+      closeVaultFolder(); showScreen('vault-screen'); await refreshVaultGateView();
+    }
     else {
       if (tab === 'home') closeFolder(); // tapping Home always lands on the card grid, not an open folder (Decision 81)
       showScreen('main-screen', { tab });
