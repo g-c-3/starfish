@@ -884,10 +884,16 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], descri
 // ---- Private notes unlock (independent PIN, own derived key) ----
 // ---- Private Vault: its own PIN, its own unlock session, its own auto-lock timer — all
 // independent of the app-open password (three credentials stay independent, ARCHITECTURE §3) ----
-async function setupVaultPin(pin, hint = '') {
-  // A Vault entry from before Decision 195 is under a key this build cannot read: stop and change nothing.
-  const old = (await db.query(`SELECT COUNT(*) AS n FROM entries WHERE is_private=1`)).values[0];
-  if (old && old.n > 0) return { success: false, reason: 'old-format' };
+async function setupVaultPin(pin, hint = '', { eraseOld = false } = {}) {
+  // A Vault entry from before Decision 195 is under a key this build cannot read. Without eraseOld: stop and change nothing.
+  // With it (the person confirmed): remove those rows, their scheduled reminders and any Vault drafts, which the new key cannot open either.
+  const old = (await db.query(`SELECT id, type FROM entries WHERE is_private=1`)).values || [];
+  if (old.length && !eraseOld) return { success: false, reason: 'old-format', count: old.length };
+  for (const r of old) {
+    if (r.type === 'reminder') { try { await cancelReminder(r.id); } catch { /* nothing scheduled */ } }
+    await permanentlyDeleteEntry(db, r.id);
+  }
+  if (old.length) await db.run(`DELETE FROM meta WHERE key LIKE 'vault\\_%draft%' ESCAPE '\\'`);
   const { wrap } = await createVaultWrap(pin);
   await db.run(`UPDATE credentials SET vault_wrap=?, private_pin_hint=?, private_pin_hash=NULL, private_pin_salt=NULL, private_pin_iter=NULL WHERE id=1`, [wrap, hint]);
   await disableVaultBiometric(); // stored secret (if any) belongs to the old key — stale now, must re-enable explicitly
@@ -2840,8 +2846,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
     if (!(await confirmStrength('pin', document.getElementById('vault-setup-pin-input').value))) return;
-    const r = await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
-    if (!r.success) { toast('This Vault holds items from an earlier format. Nothing was changed.'); return; }
+    const pinValue = document.getElementById('vault-setup-pin-input').value, hintValue = document.getElementById('vault-setup-pin-hint-input').value;
+    let r = await setupVaultPin(pinValue, hintValue);
+    if (r.reason === 'old-format') {
+      const go = await askYesNo({ title: 'Erase old Vault items?', text: `${r.count} item${r.count === 1 ? '' : 's'} from an earlier Vault format (Vault Trash included) cannot be opened by the new Vault. Erasing them is permanent and cannot be undone.`, yes: 'Erase and continue', no: 'Cancel' });
+      if (!go) return;
+      r = await setupVaultPin(pinValue, hintValue, { eraseOld: true });
+    }
+    if (!r.success) { toast('Vault setup failed. Nothing was changed.'); return; }
     await refreshVaultGateView();
   });
   document.getElementById('vault-unlock-btn').addEventListener('click', async () => {
