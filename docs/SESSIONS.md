@@ -12,14 +12,18 @@ Phase 19 stage 3 (Decision 189): Reminder, Location, Money autosave. Fresh sessi
 - `src/js/app.js`: `formDraft` (one session per flow), `commitFormDrafts`, `insertFormDraft`, `vaultFormDraftArgs`, hide listener; flush in `dismissOverlays`; `draft` option on `openSaveDialog` and `openCoordsDialog`; Home and Vault Reminder, Money and Location flows keep the draft until the entry is saved; unlock toasts.
 - `src/js/moneyui.js`: `draft` option on `openMoneyForm`; chips, kind buttons and repayment changes raise `touch`.
 - Docs: ROADMAP (stage 3, DP66; Phase 20 and DP65 brought in line with Session 109, which confirmed them), ARCHITECTURE (Autosave), DECISIONS (189).
+- DP66 confirmed on device.
+- Stage 4 (Decision 190): edits of Reminder, Location details and Money. `autosave.js`: `edit`, `forceNote`, `noteName`, `entryLabel` options; reminder notes now list When. `app.js`: `formDraft` takes the entry, `formDraftKey`, `applyEditDraft`, second pass in `commitFormDrafts`, toast for applied edits; `editEntryUI` (Reminder, Location) and `editMoney` hold the draft until saved.
 
-Decisions made: 189.
+Decisions made: 189, 190.
 
-Verified: 16 Node checks on `autosave.js` (complete and incomplete forms for each kind, tag cap, loan with repayments, repayments over the amount, unparsed paste); 12 checks on the draft session and commit code cut out of `app.js` and run with stubs (no write when untouched, write on change, 500 ms debounce, return to first state removes the row, clear leaves an unrelated row alone, lock flush marks locked and encrypts the Vault row, Home draft untouched by a Vault-only lock, hide flush, GPS fix part, Home and Vault commit, wrong-key row dropped, second commit finds nothing); `vite build` passes. Not verified: CI, any dialog on a device, the date and time pickers raising change events, the lock paths, the Vault key at lock (DP66). The dialog wiring is DOM code and has no Node check.
+Verified (stage 3): 16 Node checks on `autosave.js` (complete and incomplete forms for each kind, tag cap, loan with repayments, repayments over the amount, unparsed paste); 12 checks on the draft session and commit code cut out of `app.js` and run with stubs (no write when untouched, write on change, 500 ms debounce, return to first state removes the row, clear leaves an unrelated row alone, lock flush marks locked and encrypts the Vault row, Home draft untouched by a Vault-only lock, hide flush, GPS fix part, Home and Vault commit, wrong-key row dropped, second commit finds nothing); `vite build` passes. Not verified: CI, any dialog on a device, the date and time pickers raising change events, the lock paths, the Vault key at lock (DP66). The dialog wiring is DOM code and has no Node check.
 
-Open: Autosave of edits of Reminder, Location, Money; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+Verified (stage 4): 25 Node checks on `autosave.js` (9 new: edit complete and incomplete for each kind, cleared name, entry gone, forced note); 19 on the draft session and commit (7 new: edit key and entry, Vault encryption, same-minute time, finished reminder reopened or left alone, Money Home and Vault shapes, entry gone, type mismatch, malformed row); `vite build` passes. Not verified: CI, a device (DP67), the reschedule at unlock.
 
-Next session start point: DP66 on a device, then the owner picks among the open items (Autosave of edits is the natural continuation of Phase 19).
+Open: Autosave of Voice, Image, PDF and Files Edit details; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
+
+Next session start point: DP67 on a device; Phase 19 closes when it passes. Then the owner picks among the open items.
 
 ---
 

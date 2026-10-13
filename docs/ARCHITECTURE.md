@@ -886,13 +886,13 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `verifyPassword` reads the stored count. After a correct app-open password or Vault PIN, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
 - The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
 
-## Autosave (Decisions 177, 179, 180, 189)
+## Autosave (Decisions 177, 179, 180, 189, 190)
 - Text editors keep their text in `meta` while open and when closed with unsaved changes (not on Yes at Discard): `note_draft`, `note_edit_draft` (Home), `vault_note_draft`, `vault_edit_draft` (encrypted under the Vault key). Not in backups.
 - Committed at the next unlock (Home) and next Vault unlock (Vault): new text becomes `Autosave YYYY-MM-DD HH:MM`; an edit is written onto its entry; a missing entry keeps the text as an Autosave note.
 - Voice (Decisions 179, 180): a take lost to a lock or background is saved as an Autosave entry; Home can keep recording behind a lock.
 - Reminder, Location, Money, new entries (Decision 189): `formDraft` (`app.js`) keeps each open dialog's raw fields in `form_draft_<kind>` (Home) or `vault_form_draft_<kind>` (Vault, encrypted under the Vault key). Written only when a field differs from the first state, half a second after a change, on hide, and by `dismissOverlays` just before a lock closes the dialogs. Not in backups.
 - Committed after the text drafts at the same unlocks through `resolveFormDraft` (`autosave.js`): a complete form becomes its entry, an incomplete one a Text entry `Autosave YYYY-MM-DD HH:MM` listing the filled-in fields. A committed reminder is not scheduled.
-- Edits of Reminder, Location and Money entries are not covered.
+- Edits of Reminder, Location details and Money (Decision 190): the same draft session with the entry's id and name, in `form_edit_draft_<kind>` / `vault_form_edit_draft_<kind>`. The commit writes a complete form onto the entry through `editEntry` (`applyEditDraft`; a reminder is rescheduled), else keeps the work as an Autosave Text entry naming the entry. Voice, Image, PDF and Files details are not covered.
 
 ## Move between Home and Vault (Decisions 181, 182)
 - Steps 1 to 3 support Text, Location, Money, Reminder, Voice, Image, PDF and Files, through `move.js`. Legacy expense rows show no Move button.
