@@ -16,13 +16,15 @@ OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (hea
 - Bug report: Vault Trash drew under the landing tiles. Cause, fix and risk in Decision 194. `src/js/app.js`: the Vault tab handler. DP70 added.
 - Slow open, even with no data: read, not changed. Biometric unlock runs the same verify as a typed entry (Decision 50). App unlock: one PBKDF2 at 600000 (Decision 172). Vault unlock: that, plus a key derivation at 300000, then the index build. Each is a fixed cost per unlock, independent of data. Startup before the lock screen also runs the database open, permission and channel calls, and the reminder queue drain. No timing was taken; the split is not measured. Options held for the owner: time each step on device; skip the repeat verify after a biometric success; keep the Vault key instead of re-deriving it (touches Credentials, Decision 50).
 
-Decisions made: 192, 193, 194.
+- Vault speed: the Vault stores files in the database and decrypts per row at unlock, so cost grows with size and count. Owner: no Vault data and no old backups to keep, fastest and safest wanted. Plan in Decision 195 (stages L to O), nothing built.
+
+Decisions made: 192, 193, 194, 195.
 
 Verified: a Node check of the two `listTrash` queries on a stub (Vault names its columns, Home and the default keep `*`); syntax check of `db.js`. Not verified: `vite build`, CI, any device (DP69, DP70). The cause is inferred from the code, not from a device log.
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP69 and DP70 on device, then the unlock-time question (where the wait is: before the biometric prompt, after it, or Vault only); if the crash remains, the device log is needed. Then the owner picks among the open items.
+Next session start point: DP69 and DP70 on device, then stage L of Decision 195 on approval (the unlock-time question is answered: app and Vault open faster after biometric, owner-confirmed); if the crash remains, the device log is needed. Then the owner picks among the open items.
 
 **Session 110**
 

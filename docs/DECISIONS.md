@@ -2346,3 +2346,22 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: the tab handler closes Trash first and Settings through `leaveIfClean` (the PIN confirm field asks before discarding), then the folder. The Vault tab lands on the card grid, as the Home tab does (Decision 81).
 - Why correct: all three Vault views are closed by the one entry point that shows the grid.
 - Risks: not run through CI or on a device (DP70). If the overlap shows on a plain tap of the Trash tile, the cause is elsewhere.
+
+**195. Vault key hierarchy and speed (Phase 17 L to O): plan, nothing built.** Replaces the open "PBKDF2 count for the Vault key" item. Owner: no Vault data and no old backups to keep, so no migration and no support for the old format. Goal: Vault unlock, open, search and Trash cost independent of file size and count, with the PIN still the only way to the key (Decision 144).
+- L. Key. A random 256-bit Vault master key (VMK), stored only wrapped (AES-GCM) under a key derived from the PIN: PBKDF2 SHA-256 at 600000, the count stored beside the wrapper and raised after a correct unlock as in Decision 172.
+  - A wrong PIN fails the unwrap. The separate `private_pin_hash` verify and the second derivation at 300000 go away: unlock is one PBKDF2 (today 600000 plus 300000). A PIN change re-wraps the VMK only.
+  - First unlock with no wrapper: an empty Vault creates and wraps the VMK; a Vault holding an old-format entry stops with a message and changes nothing.
+  - The VMK is in memory only while unlocked. Entry fields are encrypted under it with the entry id and field name as additional data, so a ciphertext moved to another row or field fails.
+  - Biometric (Decision 50): the Keystore copy holds the VMK instead of the PIN, so a biometric unlock runs no PBKDF2. Cleared on a PIN change or when biometric is turned off, as today. Exposure is the same as the stored PIN: both open the Vault to code running as the app.
+- M. Vault files on disk in the Home format (Decision 161): random name, no extension, 1 MiB chunks, random per-file key wrapped under the VMK in `entries.file_key`; `encrypted_body` stays NULL for voice, image, pdf and file. Delete removes the file; the existing orphan sweep covers both. Move between Home and Vault (Decision 184) re-wraps the file key and copies no bytes.
+- N. Index and search.
+  - One encrypted index blob (VMK) holds, per entry: id, type, normalized label, tags, dates, size, extension. It is read and decrypted once at unlock and written through on each change, debounced.
+  - Rows stay the source of truth: a missing, stale or failing blob is rebuilt from them.
+  - Name search scans the normalized strings in memory (lowercase, accents folded; label, tags, extension), label ranked above tag, for notes and every file type.
+  - Body search: note text sits in a second encrypted blob, decrypted on the first body search of an unlock and held until lock. Label and tag matches show first. Unlock never waits for it.
+  - Thumbnails are small encrypted files with random names, made at capture and decrypted only for visible tiles. Vault Trash lists from the index.
+- O. Backup and restore. The archive stays under the backup passkey (Decision 159) and carries the wrapped VMK with its salt and count, so a restore on another phone needs the old PIN, as now. Append unwraps with the old PIN and re-wraps entries under the current VMK; overwrite replaces the wrapper. Archives from before this plan are refused with a plain message. Append default and the safety-backup rule unchanged.
+- The three credentials stay independent. Keystore keys are never in a backup.
+- Measured on a phone at each stage: unlock at 0, 500 and 5000 items with 20 MB files; Vault Trash; name search; first body search.
+- Open: a minimum length for the Vault PIN. At 600000 a 4-digit PIN still falls offline in minutes; the warning of Decision 170 is advisory.
+- Risks: rewrites the Vault read and write paths and the backup format. Each stage needs approval and a device pass before the next.

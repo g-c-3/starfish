@@ -213,3 +213,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-13 | Session 111 (OCR dropped) | Decision 192 | OCR removed from scope (Phases 5, 8); docs only, no code changed; not run through CI |
 | 2026-10-13 | Session 111 (Vault Trash) | Decision 193 | Vault Trash crash: listing no longer loads file bytes; DP69 added; stub query check only; not run through CI or on a device |
 | 2026-10-13 | Session 111 (Vault tab) | Decision 194 | Vault tab closes Trash and Settings; DP70 added; unlock-time cause read, not changed; not run through CI or on a device |
+| 2026-10-13 | Session 111 (Vault plan) | Decision 195 | Vault key hierarchy planned, stages L to O; docs only; nothing built |
