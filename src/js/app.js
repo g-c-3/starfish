@@ -1327,7 +1327,9 @@ function vaultFormDraftArgs(r) {
   if (r.type === 'money') return { ...a, money: r.details };
   return { ...a, text: r.text };
 }
-// An edit draft written onto its entry, as a normal Save would (a reminder is rescheduled). False when the entry is gone.
+// An edit draft written onto its entry, as a normal Save would. False when the entry is gone. A reminder is then rescheduled
+// on its own, so a notification failure cannot leave the row stuck: 'unscheduled' is returned and the person is told.
+// A time that has already passed is not scheduled (it would fire at once); the old notification is cancelled instead.
 async function applyEditDraft(r, entryId, isVault, key) {
   const row = ((await db.query(`SELECT type, fire_at, repeat_rule, completed_at, snoozed_until FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
   if (!row || row.type !== r.type) return false;
@@ -1342,13 +1344,18 @@ async function applyEditDraft(r, entryId, isVault, key) {
       fields.fire_at = at; fields.repeat_rule = r.repeat_rule;
       if (changed) { fields.completed_at = null; fields.snoozed_until = null; }
     }
-    opts.rescheduleReminder = scheduleReminder;
   } else if (r.type === 'money') Object.assign(fields, isVault ? { money: r.details } : { money_json: Money.toJson(r.details) });
   await editEntry(db, entryId, fields, opts);
   await setEntryTags(entryId, r.tags);
+  if (r.type !== 'reminder') return true;
+  try {
+    const fresh = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [entryId])).values || [])[0];
+    if (fresh && !fresh.completed_at && (fresh.repeat_rule || fresh.fire_at > Date.now())) await scheduleReminder(fresh);
+    else await cancelReminder(entryId);
+  } catch { return 'unscheduled'; }
   return true;
 }
-// Returns what was committed: 'reminder' | 'location' | 'money' (new entry), 'note' (Autosave text), 'edit' (written onto its entry).
+// Returns what was committed: 'reminder' | 'location' | 'money' (new entry), 'note' (Autosave text), 'edit' (written onto its entry), 'edit-unscheduled' (written, its reminder not rescheduled).
 // A row that cannot be committed stays for the next unlock.
 async function commitFormDrafts(vaultKey = null) {
   const done = [];
@@ -1370,7 +1377,8 @@ async function commitFormDrafts(vaultKey = null) {
           const opts = edit ? { edit: true, fallbackName: '', noteName: autosaveName(), entryLabel: entry.label } : { fallbackName: autosaveName() };
           let r = resolveFormDraft(kind, draft.parts, opts);
           if (r && edit && r.type !== 'note') {
-            if (await applyEditDraft(r, entry.id, isVault, key)) { await metaSet(mkey, ''); done.push('edit'); continue; }
+            const applied = await applyEditDraft(r, entry.id, isVault, key);
+            if (applied) { await metaSet(mkey, ''); done.push(applied === 'unscheduled' ? 'edit-unscheduled' : 'edit'); continue; }
             r = resolveFormDraft(kind, draft.parts, { ...opts, forceNote: true }); // the entry is gone: keep the work as an Autosave note
           }
           if (!r) { await metaSet(mkey, ''); continue; }
@@ -1386,6 +1394,7 @@ async function commitFormDrafts(vaultKey = null) {
 }
 function formDraftToast(kinds, vault) {
   const where = vault ? 'Unsaved Vault work' : 'Unsaved work';
+  if (kinds.includes('edit-unscheduled')) return `${where} was saved, but a reminder could not be rescheduled. Open it and save it again.`;
   if (kinds.every((k) => k === 'edit')) return `${where} was saved to its entry`;
   return kinds.includes('reminder') ? `${where} was saved as Autosave. A reminder in it is not scheduled.` : `${where} was saved as Autosave`;
 }
