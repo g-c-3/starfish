@@ -18,13 +18,15 @@ OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (hea
 
 - Vault speed: the Vault stores files in the database and decrypts per row at unlock, so cost grows with size and count. Owner: no Vault data and no old backups to keep, fastest and safest wanted. Plan in Decision 195 (stages L to O), nothing built.
 
-Decisions made: 192, 193, 194, 195.
+- Stage L of Decision 195 built (Decision 196): the PIN wraps a random Vault key; unlock is one PBKDF2; biometric holds the key. Files `crypto.js`, `db.js`, `app.js`, `backup.js`. DP71 added.
 
-Verified: a Node check of the two `listTrash` queries on a stub (Vault names its columns, Home and the default keep `*`); syntax check of `db.js`. Not verified: `vite build`, CI, any device (DP69, DP70). The cause is inferred from the code, not from a device log.
+Decisions made: 192, 193, 194, 195, 196.
+
+Verified: a Node check of the two `listTrash` queries on a stub; 14 Node checks on the Vault key wrapper; `vite build` passes. Not verified: CI, any device (DP69, DP70, DP71). The cause is inferred from the code, not from a device log.
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP69 and DP70 on device, then stage L of Decision 195 on approval (the unlock-time question is answered: app and Vault open faster after biometric, owner-confirmed); if the crash remains, the device log is needed. Then the owner picks among the open items.
+Next session start point: DP69 and DP70 on device, DP71, then stage M of Decision 195 on approval; if the crash remains, the device log is needed. Then the owner picks among the open items.
 
 **Session 110**
 

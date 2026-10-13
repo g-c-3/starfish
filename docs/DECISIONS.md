@@ -2365,3 +2365,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Measured on a phone at each stage: unlock at 0, 500 and 5000 items with 20 MB files; Vault Trash; name search; first body search.
 - Open: a minimum length for the Vault PIN. At 600000 a 4-digit PIN still falls offline in minutes; the warning of Decision 170 is advisory.
 - Risks: rewrites the Vault read and write paths and the backup format. Each stage needs approval and a device pass before the next.
+
+**196. Vault key wrapper built (Phase 17 L).** Carries out stage L of Decision 195.
+- `crypto.js`: `createVaultWrap`, `wrapVmk`, `unwrapVault`, `vmkMatchesWrap`, `vmkToKey`. The wrapper is JSON in `credentials.vault_wrap`: salt, count (600000), IV, the wrapped key (AES-GCM, fixed additional data) and `kcv`, a check value of the key.
+- Unlock: the PIN unwraps the key (one PBKDF2). No PIN hash is stored or compared; a wrong PIN fails the unwrap. A wrapper at a lower count is re-made after a correct unlock.
+- Biometric: the Keystore copy is `vmk1:` plus the Vault key. Unlock checks it against `kcv`, then runs no PBKDF2. A stored PIN from before this decision, or a key that fails the check, is cleared and the PIN sheet follows. Enabling needs the PIN once.
+- Set-up: `setupVaultPin` makes the key and wrapper and writes NULL to the three old PIN columns. It stops with a message, changing nothing, if any Vault row exists. First-run set-up does the same when a PIN is entered. A phone with a PIN from before this build shows "Create your Vault" once.
+- Backup: the archive carries `privateVaultWrap` in place of `privateVaultSalt`. Append unwraps the source key with the old PIN and re-encrypts under the current key as before. An archive with Vault items and no wrapper is refused with a plain message; a wrong PIN is reported as one.
+- Not in this stage: binding each encrypted field to its entry id and field name (moved to N, where entry writes are reworked); a PIN-change screen (none exists, so `wrapVmk` is only used for the upgrade); files on disk, the index blob and thumbnails (M, N); backup format rules beyond the above (O).
+- Checks: 14 Node checks on the wrapper (right and wrong PIN, empty PIN, tampered and unreadable wrapper, unknown version, check value, round trip under the unwrapped key, key not extractable, new wrap each time, re-wrap); `vite build` passes. One unwrap took 95 ms on a desktop; not measured on a phone.
+- Risks: not run through CI or on a device (DP71). Credentials and backup paths changed together; Vault backup and restore are untested on a device.

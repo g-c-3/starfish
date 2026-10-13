@@ -214,3 +214,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-13 | Session 111 (Vault Trash) | Decision 193 | Vault Trash crash: listing no longer loads file bytes; DP69 added; stub query check only; not run through CI or on a device |
 | 2026-10-13 | Session 111 (Vault tab) | Decision 194 | Vault tab closes Trash and Settings; DP70 added; unlock-time cause read, not changed; not run through CI or on a device |
 | 2026-10-13 | Session 111 (Vault plan) | Decision 195 | Vault key hierarchy planned, stages L to O; docs only; nothing built |
+| 2026-10-13 | Session 111 (Vault key) | Decision 196 | Stage L built: PIN wraps a random Vault key, one PBKDF2 at unlock, biometric holds the key, backup carries the wrapper; DP71 added; Node checks and vite build only |

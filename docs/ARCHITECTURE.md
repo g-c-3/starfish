@@ -57,8 +57,8 @@ private variant — out of vault scope.
    set. Recoverable via backup-passkey proof (see below) — only meaningful when a password exists to recover.
    Own idle auto-lock (`auto_lock_minutes`) plus an immediate lock on backgrounding (Decision 45) — moot when
    quick access is enabled, since there's nothing to lock back to.
-2. **Vault PIN** — independent. Derives an AES key for every vault entry (any of the five types, not just
-   text — §3b) via PBKDF2. NOT recoverable via backup; only "reset & wipe the Vault" is available if forgotten.
+2. **Vault PIN** — independent. Wraps a random Vault key (PBKDF2 600000, AES-GCM; Decision 195) that
+   encrypts every vault entry (any of the five types, not just text — §3b). NOT recoverable via backup; only "reset & wipe the Vault" is available if forgotten.
    Its own auto-lock timer (`vault_auto_lock_minutes`), separate from whatever the app-open password's own
    timeout is — locking the app doesn't necessarily lock the Vault and vice versa. Also locks immediately on
    backgrounding, same as the app-open password (Decision 45) — `privateSessionKey` never survives the app
@@ -85,7 +85,7 @@ Nothing stops a user from using the same value for all three (when the app-open 
 that's their call, but Settings should carry a
 soft, non-blocking warning ("Using the same password across all three reduces protection if one is ever
 exposed"). The three are otherwise fully independent: changing the app-open password doesn't touch the PIN or
-require a new backup; changing the PIN only re-encrypts vault entries under a freshly derived key; making a new
+require a new backup; changing the PIN only re-wraps the Vault key (no PIN-change screen exists yet); making a new
 backup only ever uses whatever passkey is typed in at that moment — an older backup keeps working with whatever
 passkey was used when *it* was made.
 
@@ -101,8 +101,8 @@ exact password or PIN the person already set, gated behind a biometric prompt at
 storing and retrieving it. Turning it on doesn't change what "forgot password" or "forgot PIN" do (see
 below) — those flows are untouched, and a forgotten password/PIN is exactly as unrecoverable/recoverable
 as it always was, biometric or not. Changing or removing the underlying password/PIN immediately clears
-whatever was stored for biometric unlock — a stale cached value would otherwise unlock with (or derive a
-vault key from) the *old* credential, silently wrong the moment it changed. Re-enabling after a change
+whatever was stored for biometric unlock — a stale cached value would otherwise unlock with the *old*
+credential (for the Vault, the stored copy is the Vault key itself, not the PIN, Decision 195; one that no longer matches the wrapper is cleared), silently wrong the moment it changed. Re-enabling after a change
 requires confirming the new credential again, same as first-time setup.
 
 Security model, stated plainly: the stored secret sits behind an Android Keystore key that requires the
@@ -220,7 +220,7 @@ Vault entries stay under the Vault PIN on top of any database layer. The three c
 
 **Home files (Decision 162):** stored as `files/<32 hex>` with `entries.file_key`; plain files (`file_key` null) are read as they are until F. Thumbnails are memory only. Other apps get a decrypted copy in `cache/open/`. Deleting an entry removes its file.
 
-Open: PBKDF2 iteration count for the Vault key (the backup count is 600000, Decision 171; the two password hashes are versioned, Decision 172); an optional app-password wrapper around the database key; speed of backup and restore with many files.
+Open: Vault PIN minimum length; an optional app-password wrapper around the database key; speed of backup and restore with many files.
 
 ## 4. Backup & Restore (full design)
 
@@ -311,11 +311,11 @@ written with them anymore.
   Z labeled (Restored) due to matching labels."*
 
 ### Private notes across devices/PIN changes (append mode)
-Each private note is encrypted with a key derived from whatever PIN was active on the device that created it.
+Each private note is encrypted under the Vault key of the device that created it; that key is stored wrapped under that device's PIN (`credentials.vault_wrap`, carried in the backup as `privateVaultWrap`).
 Appending a backup containing private notes encrypted under a *different* PIN requires:
 1. Prompt: *"This backup contains private notes encrypted with a different PIN. Enter the PIN used on the
    source device to bring them in."*
-2. Decrypt each with that source PIN's derived key, then **immediately re-encrypt under the current device's
+2. Unwrap the source Vault key with that PIN, decrypt each entry with it, then **immediately re-encrypt under the current device's
    active private-notes key** before inserting — so every private note in the live DB ends up consistently
    encrypted under one key: whichever PIN is active on this device right now.
    The same decrypt-and-re-encrypt applies to a Vault entry's `encrypted_description` (Decision 91).
@@ -872,15 +872,15 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 ### Backup key derivation (Decision 171)
 - `BACKUP_KDF_ITERATIONS` (600000) in `crypto.js` is the count for every newly written backup; it is written in the backup's header (`kdfIterations`) and restore derives with the header's count, so earlier backups (300000) still open.
-- The Vault key derivation keeps its fixed count; changing it needs a Vault re-encryption. The two password hashes are versioned (Decision 172).
+- The Vault PIN wraps the Vault key at `VAULT_WRAP_ITERATIONS` (600000), stored in the wrapper; a lower-count wrapper is re-made after a correct unlock (Decision 195). The app-open password hash is versioned (Decision 172).
 
 ### Overwrite restore, wipe step
 - `wipeCategories` reads each entry once and removes it when it belongs to any selected category, reporting `{ done, total }` per entry; the status line shows "Replacing current data, n of m…". Entries in the trash are not touched, as before.
 
 ### Credential hash counts (Decision 172)
-- `hashPassword` uses 600000 PBKDF2 iterations (SHA-256) for new hashes and returns the count; it is stored in `credentials.app_password_iter` and `credentials.private_pin_iter`. NULL means 210000.
-- `verifyPassword` reads the stored count. After a correct app-open password or Vault PIN, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
-- The PIN salt never changes here: the Vault key derives from it (fixed 300000) and backups carry it. Hashes and counts are not in any backup.
+- `hashPassword` uses 600000 PBKDF2 iterations (SHA-256) for new hashes and returns the count; it is stored in `credentials.app_password_iter`. NULL means 210000. The Vault PIN no longer has a hash (Decision 195); `private_pin_hash`, `private_pin_salt` and `private_pin_iter` are no longer written.
+- `verifyPassword` reads the stored count. After a correct app-open password, `upgradeCredentialHash` replaces a lower-count hash with the same salt, only if the stored hash is unchanged since it was verified. Failure is silent and retried at the next unlock.
+- Hashes and counts are not in any backup. The wrapped Vault key is (stage L of Decision 195).
 
 ## Autosave (Decisions 177, 179, 180, 189, 190)
 - Text editors keep their text in `meta` while open and when closed with unsaved changes (not on Yes at Discard): `note_draft`, `note_edit_draft` (Home), `vault_note_draft`, `vault_edit_draft` (encrypted under the Vault key). Not in backups.
