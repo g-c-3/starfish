@@ -18,6 +18,7 @@ import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEnt
 import * as Money from './money.js';
 import { canMove, moveToVault, moveToHome } from './move.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
+import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
@@ -664,7 +665,9 @@ window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 
 async function onUnlocked() {
   showScreen('main-screen');
-  if (await commitNoteDrafts()) toast('Unsaved text was saved as Autosave');
+  const homeText = await commitNoteDrafts(), homeForms = await commitFormDrafts();
+  if (homeForms.length) toast(formDraftToast(homeForms, false));
+  else if (homeText) toast('Unsaved text was saved as Autosave');
   if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
@@ -901,7 +904,9 @@ async function unlockVault(pin) {
   if (!ok) return { success: false };
   const { key } = await deriveAesKey(pin, private_pin_salt);
   privateSessionKey = key;
-  if (await commitNoteDrafts(key)) toast('Unsaved Vault text was saved as Autosave'); // before the index build, so it is listed
+  const vaultText = await commitNoteDrafts(key), vaultForms = await commitFormDrafts(key); // before the index build, so they are listed
+  if (vaultForms.length) toast(formDraftToast(vaultForms, true));
+  else if (vaultText) toast('Unsaved Vault text was saved as Autosave');
   await buildVaultIndexWithNotice(); // in-memory only — see vault.js
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
@@ -1261,6 +1266,94 @@ async function commitNoteDrafts(vaultKey = null) {
     }
   }
   return done;
+}
+// ---- Autosave of Reminder, Location and Money forms (Decision 189). A flow keeps the raw fields of its dialogs in one meta row
+// while it is open: half a second after the last change, when the app is hidden, and when a lock closes it. Not written
+// until something differs from the first state. The next unlock (Home) or Vault unlock (Vault) commits the row through
+// resolveFormDraft: a complete form becomes its entry, an incomplete one an Autosave note. A reminder is not scheduled.
+// Rows: form_draft_<kind> (encrypted database) and vault_form_draft_<kind> (encrypted under the Vault key). Not in backups. ----
+const FORM_DRAFT_KEYS = { reminder: 'form_draft_reminder', location: 'form_draft_location', money: 'form_draft_money' };
+const draftSources = new Set(); // flows with an open dialog; flushed on hide and on lock
+document.addEventListener('visibilitychange', () => { if (document.hidden) for (const s of draftSources) s.flush().catch(() => {}); });
+function formDraft(kind, isVault) {
+  const mkey = (isVault ? 'vault_' : '') + FORM_DRAFT_KEYS[kind];
+  const parts = {}, base = {}, live = new Map();
+  let timer = null, wrote = false, marked = false;
+  const dirty = () => marked || Object.keys(parts).some((n) => JSON.stringify(parts[n]) !== base[n]);
+  const api = {
+    isVault, locked: false, // locked: a lock closed the dialogs, so the row is kept
+    // get() returns the dialog's current fields; the returned function detaches and keeps the last values.
+    attach(name, get) {
+      if (!(name in base)) base[name] = JSON.stringify(get());
+      parts[name] = get();
+      live.set(name, get);
+      draftSources.add(api);
+      return () => { if (live.get(name) === get) { parts[name] = get(); live.delete(name); } };
+    },
+    set(name, value) { parts[name] = value; if (!(name in base)) base[name] = 'null'; }, // a part that is not a dialog
+    mark() { marked = true; },
+    touch() { clearTimeout(timer); timer = setTimeout(() => api.flush().catch(() => {}), 500); },
+    // The Vault key is read before the first await: a Vault lock calls this just before it clears the key.
+    async flush() {
+      clearTimeout(timer);
+      for (const [name, get] of live) parts[name] = get();
+      const k = privateSessionKey;
+      if (isVault && !k) return;
+      if (!dirty()) { if (wrote) { wrote = false; await metaSet(mkey, ''); } return; }
+      const payload = JSON.stringify({ v: 1, kind, parts });
+      wrote = true;
+      await metaSet(mkey, isVault ? await encryptPrivateNote(k, payload) : payload);
+    },
+    end() { clearTimeout(timer); draftSources.delete(api); },
+    async clear() { clearTimeout(timer); if (wrote) { wrote = false; await metaSet(mkey, ''); } }
+  };
+  return api;
+}
+// Home: the entry rows. Vault: the arguments of saveVaultEntry. No notification is scheduled for a reminder.
+async function insertFormDraft(r) {
+  const id = crypto.randomUUID();
+  if (r.type === 'reminder') await insertEntry(db, { id, type: 'reminder', label: r.label, fire_at: r.fire_at, repeat_rule: r.repeat_rule, description: r.description || null });
+  else if (r.type === 'location') await insertEntry(db, { id, type: 'location', label: r.label, latitude: r.latitude, longitude: r.longitude, description: r.description || null });
+  else if (r.type === 'money') await insertEntry(db, { id, type: 'money', label: r.label, description: r.description || null, money_json: Money.toJson(r.details) });
+  else await insertEntry(db, { id, type: 'note', label: r.label, body_text: r.text });
+  if (r.type !== 'note') await applyTags(id, r.tags);
+}
+function vaultFormDraftArgs(r) {
+  const a = { type: r.type, label: r.label, tags: r.tags || [], description: r.description || '' };
+  if (r.type === 'reminder') return { ...a, fireAt: r.fire_at, repeatRule: r.repeat_rule };
+  if (r.type === 'location') return { ...a, location: { latitude: r.latitude, longitude: r.longitude } };
+  if (r.type === 'money') return { ...a, money: r.details };
+  return { ...a, text: r.text };
+}
+// Returns the kinds committed, e.g. ['reminder', 'note']. A row that cannot be committed stays for the next unlock.
+async function commitFormDrafts(vaultKey = null) {
+  const done = [];
+  const scopes = [{ isVault: false, key: null }];
+  if (vaultKey) scopes.push({ isVault: true, key: vaultKey });
+  for (const { isVault, key } of scopes) {
+    for (const kind of Object.keys(FORM_DRAFT_KEYS)) {
+      const mkey = (isVault ? 'vault_' : '') + FORM_DRAFT_KEYS[kind];
+      try {
+        let raw = await metaGet(mkey, '');
+        if (!raw) continue;
+        if (isVault) {
+          try { raw = await decryptPrivateNote(key, raw); } catch { await metaSet(mkey, ''); continue; } // made under another PIN: unreadable
+        }
+        const draft = parseFormDraft(raw);
+        const r = draft ? resolveFormDraft(kind, draft.parts, { fallbackName: autosaveName() }) : null;
+        if (!r) { await metaSet(mkey, ''); continue; }
+        if (isVault) await saveVaultEntry(db, key, vaultFormDraftArgs(r));
+        else await insertFormDraft(r);
+        await metaSet(mkey, '');
+        done.push(r.type);
+      } catch { /* left in place, retried at the next unlock */ }
+    }
+  }
+  return done;
+}
+function formDraftToast(kinds, vault) {
+  const where = vault ? 'Unsaved Vault work' : 'Unsaved work';
+  return kinds.includes('reminder') ? `${where} was saved as Autosave. A reminder in it is not scheduled.` : `${where} was saved as Autosave`;
 }
 async function metaGet(key, fallback = null) {
   const r = await db.query(`SELECT value FROM meta WHERE key=?`, [key]);
@@ -1635,6 +1728,7 @@ let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so cap
 
 // vaultOnly: Vault lock closes only Vault overlays; app lock closes everything. Both resolve null.
 function dismissOverlays(vaultOnly = false) {
+  for (const s of draftSources) if (!vaultOnly || s.isVault) { s.locked = true; s.flush().catch(() => {}); } // before the dialogs close (Decision 189)
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
   if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
@@ -1652,7 +1746,7 @@ function dismissOverlays(vaultOnly = false) {
 // Resolves { name, tags, description, mode } or null (cancelled). An untouched Save returns the default
 // name, no tags, no description. count > 1 shows the naming switch: mode 'own' (each file keeps its own
 // name; name is null) or 'number' (one common name, numbered).
-function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null, reminder = null } = {}) {
+function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null, reminder = null, draft = null } = {}) {
   return new Promise(async (resolve) => {
     const $ = (id) => document.getElementById(id);
     const dlg = $('save-dialog'), nameEl = $('sd-name'), descEl = $('sd-desc'), newTagEl = $('sd-new-tag');
@@ -1677,6 +1771,7 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
         else if (b.dataset.preset === 'tonight') { d.setHours(20, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); }
         else { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
         whenEl.value = toLocalInput(d.getTime());
+        if (draft) draft.touch();
       }; });
     }
 
@@ -1711,6 +1806,7 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
         else if (selected.length >= MAX_TAGS) { toast(`An entry can have up to ${MAX_TAGS} tags`); return; }
         else selected.push(t);
         renderChips();
+        if (draft) draft.touch();
       }; });
     };
     renderChips();
@@ -1723,12 +1819,20 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       selected.push(known.find((k) => k.toLowerCase() === t.toLowerCase()) || t);
       newTagEl.value = '';
       renderChips();
+      if (draft) draft.touch();
       return true;
     };
     $('sd-add-tag-btn').onclick = addTag;
     newTagEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } };
 
+    // Draft (Decision 189): the dialog's fields, kept while it is open. Typing, choosing and the date pickers raise input/change.
+    dlg.oninput = dlg.onchange = draft ? () => draft.touch() : null;
+    const detach = draft ? draft.attach('save', () => ({
+      name: nameEl.value, description: descEl.value, tags: selected.slice(), newTag: newTagEl.value,
+      when: reminder ? whenEl.value : '', repeat: reminder ? repeatEl.value : ''
+    })) : null;
     const finish = (result) => {
+      if (detach) detach();
       dlg.classList.add('hidden');
       document.activeElement?.blur?.();
       activeSaveDialog = null;
@@ -2929,20 +3033,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         const items = vaultMoneyItems();
         let details = null, d = null;
         const mark = overlayAbortCount;
-        while (!d) {
-          details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks });
-          if (!details) return;
-          d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: Money.summary(details), isVault: true, discardLabel: 'Back to amount' });
-          if (!d && overlayAbortCount !== mark) return; // locked meanwhile
-        }
+        const draft = formDraft('money', true); // Decision 189
+        try {
+          while (!d) {
+            details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks, draft });
+            if (!details) break;
+            d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: Money.summary(details), isVault: true, discardLabel: 'Back to amount', draft });
+            if (!d && overlayAbortCount !== mark) break; // locked meanwhile
+          }
+        } finally { draft.end(); }
+        if (!d) { if (!draft.locked) await draft.clear(); return; }
         await captureToVault({ type: 'money', label: d.name, tags: d.tags, description: d.description, money: details });
+        await draft.clear();
         renderVault();
         toast('Saved to the Vault');
       } else if (type === 'reminder') {
         // Name, note, when and repeat in one Save dialog, as for Home. The notification says only "Vault Reminder" (Decision 140).
-        const d = await openSaveDialog({ heading: 'New vault reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard', reminder: {} });
-        if (!d) return;
+        const draft = formDraft('reminder', true); // Decision 189
+        let d;
+        try { d = await openSaveDialog({ heading: 'New vault reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard', reminder: {}, draft }); } finally { draft.end(); }
+        if (!d) { if (!draft.locked) await draft.clear(); return; }
         const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
+        await draft.clear();
         renderVault();
         try {
           await scheduleReminder({ id, label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule, is_private: 1 });
@@ -2955,6 +3067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const picked = await pickLocation(true);
         if (!picked) return;
         await captureToVault({ type: 'location', label: picked.d.name, tags: picked.d.tags, description: picked.d.description, location: { latitude: picked.lat, longitude: picked.lng } });
+        await picked.draft.clear();
         renderVault();
         toast('Saved to the Vault');
       } else {
@@ -3405,14 +3518,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Paste dialog. Parsing is offline and live. A short link needs the person's tap on Verify link, the one network step.
   // Resolves { lat, lng, name, text } on Continue, null on Cancel or lock.
-  function openCoordsDialog(text = '', isVault = false) {
+  function openCoordsDialog(text = '', isVault = false, draft = null) {
     const $ = (id) => document.getElementById(id);
     return new Promise((resolve) => {
       const dlg = $('coords-dialog'), input = $('coords-input'), status = $('coords-status');
       const preview = $('coords-preview'), verify = $('coords-verify'), verifyBtn = $('coords-verify-btn'), cont = $('coords-continue-btn');
       let parsed = null;
+      let detach = null;
       const finish = (v) => {
         if (!activeCoords) return;
+        if (detach) detach();
         activeCoords = null;
         dlg.classList.add('hidden');
         input.value = '';
@@ -3432,7 +3547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           status.textContent = note || (!r || r.empty ? '' : r.short ? 'Short link: no coordinates inside.' : r.error);
         }
       };
-      input.oninput = () => render(parseCoordinates(input.value));
+      input.oninput = () => { render(parseCoordinates(input.value)); if (draft) draft.touch(); };
       verifyBtn.onclick = async () => {
         const r = parseCoordinates(input.value);
         if (!r.short) return;
@@ -3450,6 +3565,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const leave = async () => { if (!input.value.trim() || await askDiscard()) finish(null); }; // pasted text counts as unsaved (Decision 133)
       $('coords-cancel-btn').onclick = leave;
       input.value = text;
+      if (draft) detach = draft.attach('coords', () => ({ text: input.value }));
       activeCoords = { finish, isVault };
       dlg.classList.remove('hidden');
       render(parseCoordinates(text));
@@ -3466,8 +3582,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Source chooser, then a GPS fix or pasted coordinates, then the Save dialog. Home and Vault share it (Decision 142).
-  // Resolves { d, lat, lng } or null. Nothing is kept if the Vault locks meanwhile.
+  // Resolves { d, lat, lng, draft } or null. The caller clears `draft` once the entry is saved (Decision 189); a lock keeps it.
   async function pickLocation(isVault) {
+    const draft = formDraft('location', isVault);
+    let res = null;
+    try { res = await pickLocationDialogs(isVault, draft); } finally { draft.end(); }
+    if (!res) { if (!draft.locked) await draft.clear(); return null; }
+    return { ...res, draft };
+  }
+  async function pickLocationDialogs(isVault, draft) {
     const source = await askLocationSource(isVault);
     if (!source) return null;
     const heading = isVault ? 'Save vault location' : 'Save location';
@@ -3491,17 +3614,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         newBtns.forEach((b) => { b.disabled = false; });
       }
       if (isVault && !privateSessionKey) return null; // the Vault locked during the fix
-      const d = await openSaveDialog({ heading, defaultName: fallbackName, isVault, discardLabel: 'Discard' });
+      draft.set('fix', { lat: coords.latitude, lng: coords.longitude }); // the fix counts as work to keep
+      draft.mark();
+      const d = await openSaveDialog({ heading, defaultName: fallbackName, isVault, discardLabel: 'Discard', draft });
       return d ? { d, lat: coords.latitude, lng: coords.longitude } : null;
     }
     // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
     let text = '', d = null, pick = null;
     const mark = overlayAbortCount;
     while (!d) {
-      pick = await openCoordsDialog(text, isVault);
+      pick = await openCoordsDialog(text, isVault, draft);
       if (!pick) return null;
       text = pick.text;
-      d = await openSaveDialog({ heading, defaultName: pick.name || fallbackName, isVault, discardLabel: 'Back to coordinates' });
+      d = await openSaveDialog({ heading, defaultName: pick.name || fallbackName, isVault, discardLabel: 'Back to coordinates', draft });
       if (!d && overlayAbortCount !== mark) return null; // locked meanwhile
     }
     return { d, lat: pick.lat, lng: pick.lng };
@@ -3544,12 +3669,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (type === 'voice') {
       await startVoiceRecordingUI(homeVoiceSaved);
     } else if (type === 'reminder') {
-      const d = await openSaveDialog({ heading: 'New reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard', reminder: {} });
-      if (!d) return;
+      const draft = formDraft('reminder', false); // Decision 189
+      let d;
+      try { d = await openSaveDialog({ heading: 'New reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, discardLabel: 'Discard', reminder: {}, draft }); } finally { draft.end(); }
+      if (!d) { if (!draft.locked) await draft.clear(); return; }
       const id = crypto.randomUUID();
       const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
       await applyTags(id, d.tags);
+      await draft.clear(); // saved: the draft is no longer needed
       try {
         await scheduleReminder({ id, ...saved });
         toast(saved.repeat_rule ? 'Reminder saved' : reminderSetText(saved.fire_at));
@@ -3561,20 +3689,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Current GPS fix (Decision 79) or pasted coordinates / map link (Decisions 116, 117). The saved entry stays
       // on-device; Share (row action) is the only step that sends anything out.
       const picked = await pickLocation(false);
-      if (picked) await saveLocation(picked.d, picked.lat, picked.lng);
+      if (picked) { await saveLocation(picked.d, picked.lat, picked.lng); await picked.draft.clear(); }
     } else if (type === 'money') {
       // Form, then the Save dialog (name defaults to the readable summary; tags; the description is the note).
       await loadCurrencySymbol();
       const items = await moneyItems();
       let details = null, d = null;
       const mark = overlayAbortCount;
-      while (!d) {
-        details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: moneyHooks });
-        if (!details) return;
-        d = await openSaveDialog({ heading: 'Save money entry', defaultName: Money.summary(details), discardLabel: 'Back to amount' });
-        if (!d && overlayAbortCount !== mark) return; // locked meanwhile
-      }
+      const draft = formDraft('money', false); // Decision 189
+      try {
+        while (!d) {
+          details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: moneyHooks, draft });
+          if (!details) break;
+          d = await openSaveDialog({ heading: 'Save money entry', defaultName: Money.summary(details), discardLabel: 'Back to amount', draft });
+          if (!d && overlayAbortCount !== mark) break; // locked meanwhile
+        }
+      } finally { draft.end(); }
+      if (!d) { if (!draft.locked) await draft.clear(); return; }
       await saveMoneyEntry(details, d);
+      await draft.clear();
     } else {
       const input = document.createElement('input');
       input.type = 'file';

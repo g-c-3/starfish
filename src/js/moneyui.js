@@ -13,9 +13,9 @@ const DEFAULT_METHODS = ['Cash', 'UPI', 'Card', 'IMPS', 'RTGS', 'NEFT'];
 const KIND_HINT = 'The kind is fixed once repayments exist.';
 const sameMinute = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.floor(a / 60000) === Math.floor(b / 60000);
 
-function fillChips(box, input, values) {
+function fillChips(box, input, values, onPick = null) {
   box.innerHTML = values.map((v) => `<button type="button" data-v="${esc(v)}">${esc(v)}</button>`).join('');
-  box.querySelectorAll('button').forEach((b) => { b.onclick = () => { input.value = b.dataset.v; }; });
+  box.querySelectorAll('button').forEach((b) => { b.onclick = () => { input.value = b.dataset.v; if (onPick) onPick(); }; });
 }
 
 // Recent methods (entries, then repayments), then the defaults not already listed.
@@ -32,7 +32,8 @@ function methodChoices(items) {
 // Resolves a normalized details object, or null (cancelled). details prefills an edit.
 // Lent and Borrowed carry a repayments section at the end; the kind is fixed while any repayment is listed,
 // because switching it would change what the repayments mean.
-export function openMoneyForm({ details = null, items = [], symbol = '₹', heading = 'New money entry', hooks = {} } = {}) {
+// draft (Decision 189): attach('form', get) keeps the fields while the form is open; touch() follows each change.
+export function openMoneyForm({ details = null, items = [], symbol = '₹', heading = 'New money entry', hooks = {}, draft = null } = {}) {
   return new Promise((resolve) => {
     const dlg = $('money-dialog'), status = $('mf-status');
     const amountEl = $('mf-amount'), catEl = $('mf-category'), methodEl = $('mf-method');
@@ -54,9 +55,10 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
     repAmt.value = ''; repMethod.value = ''; repNote.value = '';
     repWhen.value = toLocalInput(Date.now());
 
-    fillChips($('mf-cat-chips'), catEl, recentValues(items, 'category'));
+    const touch = () => { if (draft) draft.touch(); };
+    fillChips($('mf-cat-chips'), catEl, recentValues(items, 'category'), touch);
     const methods = methodChoices(items);
-    fillChips($('mf-method-chips'), methodEl, methods);
+    fillChips($('mf-method-chips'), methodEl, methods, touch);
     fillChips($('mf-rep-chips'), repMethod, methods);
 
     const kindEl = $('mf-kind');
@@ -75,9 +77,9 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
     const renderReps = () => {
       const list = $('mf-rep-list');
       list.innerHTML = reps.map((r, i) => `<div class="rep-item"><span>${esc(formatAmount(r.amount, symbol))} · ${esc(shortDate(r.at))}${r.method ? ` · ${esc(r.method)}` : ''}${r.note ? ` · ${esc(r.note)}` : ''}</span><button type="button" class="rep-del" data-i="${i}" aria-label="Remove repayment">×</button></div>`).join('');
-      list.querySelectorAll('.rep-del').forEach((b) => { b.onclick = () => { reps.splice(Number(b.dataset.i), 1); renderReps(); applyKind(); }; });
+      list.querySelectorAll('.rep-del').forEach((b) => { b.onclick = () => { reps.splice(Number(b.dataset.i), 1); renderReps(); applyKind(); touch(); }; });
     };
-    kindEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { if (!reps.length) { kind = b.dataset.kind; applyKind(); } }; });
+    kindEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { if (!reps.length) { kind = b.dataset.kind; applyKind(); touch(); } }; });
     renderReps();
     applyKind();
 
@@ -98,11 +100,18 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
       status.textContent = '';
       renderReps();
       applyKind();
+      touch();
     };
 
+    dlg.oninput = dlg.onchange = draft ? touch : null;
+    const detach = draft ? draft.attach('form', () => ({
+      kind, amount: amountEl.value, category: catEl.value, method: methodEl.value, when: whenEl.value,
+      person: personEl.value, due: dueEl.value, reps: reps.map((r) => ({ ...r }))
+    })) : null;
     const finish = (value) => {
       if (done) return;
       done = true;
+      if (detach) detach();
       dlg.classList.add('hidden');
       document.activeElement?.blur?.();
       if (hooks.close) hooks.close();
