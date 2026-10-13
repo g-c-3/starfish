@@ -668,6 +668,7 @@ async function onUnlocked() {
   const homeText = await commitNoteDrafts(), homeForms = await commitFormDrafts();
   if (homeForms.length) toast(formDraftToast(homeForms, false));
   else if (homeText) toast('Unsaved text was saved as Autosave');
+  if (homeText || homeForms.length) window.dispatchEvent(new Event('arkly-drafts-committed'));
   if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
@@ -908,6 +909,7 @@ async function unlockVault(pin) {
   if (vaultForms.length) toast(formDraftToast(vaultForms, true));
   else if (vaultText) toast('Unsaved Vault text was saved as Autosave');
   await buildVaultIndexWithNotice(); // in-memory only — see vault.js
+  if (vaultText || vaultForms.length) window.dispatchEvent(new Event('arkly-drafts-committed')); // after the index: the redraw reads it
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
   await upgradeCredentialHash('pin', pin, private_pin_hash, private_pin_salt, private_pin_iter);
@@ -3871,10 +3873,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
   // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
-  window.addEventListener('arkly-data-restored', () => {
-    renderMainTimeline().catch(() => {});
-    if (privateSessionKey) renderVault();
-  });
+  // Also after an unlock committed autosaved work (Decision 191): the lists drawn before the lock still show the old rows.
+  for (const name of ['arkly-data-restored', 'arkly-drafts-committed']) {
+    window.addEventListener(name, () => {
+      renderMainTimeline().catch(() => {});
+      if (privateSessionKey) renderVault();
+    });
+  }
     window.addEventListener('arkly-reminders-changed', () => {
       renderMainTimeline().catch(() => {}); renderFolderCounts().catch(() => {});
       if (privateSessionKey) buildVaultIndex(db, privateSessionKey).then(() => renderVault()).catch(() => {}); // Vault rows show the status
