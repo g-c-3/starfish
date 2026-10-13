@@ -9,15 +9,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (headings and latest entries). Source read: `package.json`, `native-setup.md` §6, the OCR call sites in `app.js`, `move.js`, `vault.js`, `intents.js`.
 - Phase 5 OCR was the next open item. Both routes were compared (ML Kit native plugin; `tesseract.js` bundled locally). The owner dropped OCR from the app.
 - Docs: DECISIONS (192), ROADMAP (Phases 3, 5, 8 and the not-doing line), ARCHITECTURE (principles, entry types, Vault envelope, edit actions, label suggestion, batch add, search ranking, file list, status), `android-notes/native-setup.md` (§6 now a stub).
-- No code changed. Unchanged on purpose: the `body_text` and `ocrText` fields; stale comment in `captureFile` and unused `suggestLabel()` (Decision 192).
+- OCR step: no code changed. Unchanged on purpose: the `body_text` and `ocrText` fields; stale comment in `captureFile` and unused `suggestLabel()` (Decision 192).
 
-Decisions made: 192.
+- Bug report: the Vault Trash showed no files and the app stopped. Cause, fix and risk in Decision 193. `src/js/db.js`: `listTrash` names its columns for the Vault; `restoreFromTrash` reads the whole row only for a reminder. DP69 added.
 
-Verified: nothing run; docs only. Not verified: CI.
+Decisions made: 192, 193.
+
+Verified: a Node check of the two `listTrash` queries on a stub (Vault names its columns, Home and the default keep `*`); syntax check of `db.js`. Not verified: `vite build`, CI, any device (DP69). The cause is inferred from the code, not from a device log.
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: the owner picks among the open items.
+Next session start point: DP69 (Vault Trash) on device; if the crash remains, the device log is needed. Then the owner picks among the open items.
 
 **Session 110**
 

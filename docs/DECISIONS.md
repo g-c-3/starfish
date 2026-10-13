@@ -2332,3 +2332,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Kept as is: the `body_text` column, the Vault `ocrText` envelope field, the `o` field of `encrypted_meta` (Decision 156) and their carrying in Move (Decision 184). All hold empty values; removing them would rewrite confirmed code for no gain.
 - Stale in code, not changed: the comment in `captureFile` (`app.js`), `suggestLabel()` and its import. Cleanup is optional and not scheduled.
 - Risks: docs only; no code changed.
+
+**193. Vault Trash no longer loads file bytes (bug fix).**
+- Report: opening the Vault Trash showed no files, then the app stopped.
+- Cause (likely; no device log yet): `listTrash` ran `SELECT *`, so every trashed Vault file came across the bridge with its whole `encrypted_body` (the file as base64). Vault files have no `file_path`; their bytes are in that column. The same load that Decision 156 removed from the Vault index. `restoreFromTrash` also read the whole row to check for a reminder.
+- Fix: for the Vault, `listTrash` selects only `id, type, label, encrypted_label, extension, auto_category, created_at, deleted_at, is_private`, which is all the trash rows and `vaultRowLabel` use. Home keeps `SELECT *` (Home file bytes are on disk, not in the row). `restoreFromTrash` reads `type` first and the whole row only for a reminder.
+- Why correct: the trash list never needed the body; a Vault row's size no longer affects the list.
+- Risks: not run through CI or on a device (DP69). If the crash remains, the cause is elsewhere and needs the device log.
