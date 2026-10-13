@@ -17,6 +17,7 @@ Phase 19 stage 3 (Decision 189): Reminder, Location, Money autosave. Fresh sessi
 
 - Hardening of the stage 4 reschedule (Decision 190): `applyEditDraft` writes first, then schedules or cancels in its own step; a past time is cancelled, not scheduled; a failure clears the row and tells the person. DP67 gained the past-time and Vault reminder checks. Context was nearly full at this point.
 
+- DP68 confirmed on device: Phase 19 complete.
 - DP67 confirmed on device. Found: the lists showed the old data after the unlock until an entry was opened. Cause: the lists drawn before the lock were not redrawn after the commit. Fix (Decision 191): `arkly-drafts-committed` after Home and Vault commits, handled like `arkly-data-restored`. Text and Voice autosaves benefit as well.
 
 Decisions made: 189, 190, 191.
@@ -27,7 +28,7 @@ Verified (stage 4): 25 Node checks on `autosave.js` (9 new: edit complete and in
 
 Open: Autosave of Voice, Image, PDF and Files Edit details; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 OCR and noise toggle; Phase 17 Vault key count and app-password wrapper; light-theme tuning.
 
-Next session start point: DP68 on a device; Phase 19 closes when it passes. Then the owner picks among the open items.
+Next session start point: Phase 19 is complete; no device pass is open. The owner picks among the open items.
 
 ---
 
