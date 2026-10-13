@@ -3,7 +3,7 @@
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
-import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, deriveAesKey, encryptPrivateNote, decryptPrivateNote } from './crypto.js';
+import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, createVaultWrap, unwrapVault, wrapVmk, vmkToKey, vmkMatchesWrap, VAULT_WRAP_ITERATIONS, toBase64, fromBase64, encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
@@ -562,23 +562,21 @@ window.completeFirstRunSetup = async ({ appPassword = null, appPasswordHint = ''
   let passwordHash = null, passwordSalt = null, passwordIter = null;
   if (appPassword) ({ hash: passwordHash, salt: passwordSalt, iterations: passwordIter } = await hashPassword(appPassword));
 
-  let pinHash = null, pinSalt = null, pinIter = null;
-  if (vaultPin) ({ hash: pinHash, salt: pinSalt, iterations: pinIter } = await hashPassword(vaultPin));
+  const vaultWrap = vaultPin ? (await createVaultWrap(vaultPin)).wrap : null; // Decision 195: the PIN wraps a random Vault key
 
   await db.run(
     `INSERT INTO credentials (id, app_password_hash, app_password_salt, app_password_hint,
-      private_pin_hash, private_pin_salt, private_pin_hint, app_password_iter, private_pin_iter) VALUES (1,?,?,?,?,?,?,?,?)`,
-    [passwordHash, passwordSalt, appPasswordHint || null, pinHash, pinSalt, vaultPinHint || null, passwordIter, pinIter]
+      vault_wrap, private_pin_hint, app_password_iter) VALUES (1,?,?,?,?,?,?)`,
+    [passwordHash, passwordSalt, appPasswordHint || null, vaultWrap, vaultPinHint || null, passwordIter]
   );
   await onUnlocked();
 };
 
-// Upgrade a hash made with an older PBKDF2 count, right after that same secret was verified (Decision 172). The salt is kept:
-// the Vault key derives from the PIN salt, and backups carry it. The UPDATE only applies if the stored hash is still the one that
+// Upgrade a hash made with an older PBKDF2 count, right after that same secret was verified (Decision 172). The salt is kept.
+// Only the app-open password has a hash now; the Vault PIN wraps a key instead (Decision 195). The UPDATE only applies if the stored hash is still the one that
 // was verified, so a change made in between is never overwritten. A failure leaves the old hash valid; it retries at the next unlock.
 const CRED_COLS = {
   app: { hash: 'app_password_hash', iter: 'app_password_iter' },
-  pin: { hash: 'private_pin_hash', iter: 'private_pin_iter' },
 };
 async function upgradeCredentialHash(kind, secret, oldHash, salt, iterations) {
   if (!needsRehash(iterations)) return;
@@ -629,11 +627,11 @@ async function disableAppBiometric() {
 }
 
 async function enableVaultBiometric(currentPin) {
-  const row = (await db.query(`SELECT private_pin_hash, private_pin_salt, private_pin_iter FROM credentials WHERE id=1`)).values[0];
-  if (!row?.private_pin_hash) return { success: false, reason: 'no-pin-set' };
-  const ok = await verifyPassword(currentPin, row.private_pin_hash, row.private_pin_salt, row.private_pin_iter);
-  if (!ok) return { success: false, reason: 'wrong-pin' };
-  await enableBiometric('vault', currentPin);
+  const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+  if (!row?.vault_wrap) return { success: false, reason: 'no-pin-set' };
+  const u = await unwrapVault(currentPin, row.vault_wrap);
+  if (!u) return { success: false, reason: 'wrong-pin' };
+  await enableBiometric('vault', VMK_PREFIX + toBase64(u.vmk)); // the Vault key, not the PIN (Decision 195): a biometric unlock then runs no PBKDF2
   await db.run(`UPDATE credentials SET biometric_vault_enabled=1 WHERE id=1`);
   return { success: true };
 }
@@ -650,10 +648,15 @@ async function tryBiometricUnlockApp() {
   if (!password) return { success: false };
   return window.attemptUnlock(password);
 }
+const VMK_PREFIX = 'vmk1:';
 async function tryBiometricUnlockVault() {
-  const pin = await unlockWithBiometric('vault');
-  if (!pin) return { success: false };
-  return unlockVault(pin);
+  const secret = await unlockWithBiometric('vault');
+  if (!secret) return { success: false };
+  const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+  // A stored PIN (before Decision 195) or a key that no longer matches the wrapper is cleared; the PIN sheet follows.
+  const vmk = secret.startsWith(VMK_PREFIX) ? new Uint8Array(fromBase64(secret.slice(VMK_PREFIX.length))) : null;
+  if (!row?.vault_wrap || !vmk || !(await vmkMatchesWrap(vmk, row.vault_wrap))) { await disableVaultBiometric(); return { success: false }; }
+  return finishVaultUnlock(vmk);
 }
 window.getBiometricSettings = getBiometricSettings;
 window.enableAppBiometric = enableAppBiometric;
@@ -882,9 +885,13 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], descri
 // ---- Private Vault: its own PIN, its own unlock session, its own auto-lock timer — all
 // independent of the app-open password (three credentials stay independent, ARCHITECTURE §3) ----
 async function setupVaultPin(pin, hint = '') {
-  const { hash, salt, iterations } = await hashPassword(pin);
-  await db.run(`UPDATE credentials SET private_pin_hash=?, private_pin_salt=?, private_pin_hint=?, private_pin_iter=? WHERE id=1`, [hash, salt, hint, iterations]);
-  await disableVaultBiometric(); // stored secret (if any) was the old PIN — stale now, must re-enable explicitly
+  // A Vault entry from before Decision 195 is under a key this build cannot read: stop and change nothing.
+  const old = (await db.query(`SELECT COUNT(*) AS n FROM entries WHERE is_private=1`)).values[0];
+  if (old && old.n > 0) return { success: false, reason: 'old-format' };
+  const { wrap } = await createVaultWrap(pin);
+  await db.run(`UPDATE credentials SET vault_wrap=?, private_pin_hint=?, private_pin_hash=NULL, private_pin_salt=NULL, private_pin_iter=NULL WHERE id=1`, [wrap, hint]);
+  await disableVaultBiometric(); // stored secret (if any) belongs to the old key — stale now, must re-enable explicitly
+  return { success: true };
 }
 
 // Full Vault index build with a sticky notice while file records are being built (first unlock after the update, or after a restore).
@@ -898,12 +905,19 @@ async function buildVaultIndexWithNotice() {
 }
 
 async function unlockVault(pin) {
-  const row = await db.query(`SELECT private_pin_hash, private_pin_salt, private_pin_iter FROM credentials WHERE id=1`);
-  if (!row.values[0] || !row.values[0].private_pin_hash) return { setupNeeded: true };
-  const { private_pin_hash, private_pin_salt, private_pin_iter } = row.values[0];
-  const ok = await verifyPassword(pin, private_pin_hash, private_pin_salt, private_pin_iter);
-  if (!ok) return { success: false };
-  const { key } = await deriveAesKey(pin, private_pin_salt);
+  // The PIN unwraps the random Vault key: one PBKDF2, and a wrong PIN fails the unwrap (Decision 195).
+  const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+  if (!row?.vault_wrap) return { setupNeeded: true };
+  const u = await unwrapVault(pin, row.vault_wrap);
+  if (!u) return { success: false };
+  const res = await finishVaultUnlock(u.vmk);
+  if (u.iterations < VAULT_WRAP_ITERATIONS) { // a wrapper made at an older count is re-made after a correct unlock
+    try { await db.run(`UPDATE credentials SET vault_wrap=? WHERE id=1 AND vault_wrap=?`, [await wrapVmk(u.vmk, pin), row.vault_wrap]); } catch { /* stays at the old count */ }
+  }
+  return res;
+}
+async function finishVaultUnlock(vmk) {
+  const key = await vmkToKey(vmk);
   privateSessionKey = key;
   const vaultText = await commitNoteDrafts(key), vaultForms = await commitFormDrafts(key); // before the index build, so they are listed
   if (vaultForms.length) toast(formDraftToast(vaultForms, true));
@@ -912,7 +926,6 @@ async function unlockVault(pin) {
   if (vaultText || vaultForms.length) window.dispatchEvent(new Event('arkly-drafts-committed')); // after the index: the redraw reads it
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
-  await upgradeCredentialHash('pin', pin, private_pin_hash, private_pin_salt, private_pin_iter);
   return { success: true };
 }
 
@@ -1136,8 +1149,8 @@ async function unlockVaultInPlace(reason = 'Enter your Vault PIN.') {
   if (vaultUnlockBusy) return false;
   vaultUnlockBusy = true;
   try {
-    const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
-    if (!cred.values[0]?.private_pin_hash) { toast('Set up the Vault first, in the Vault tab.'); return false; }
+    const cred = await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`);
+    if (!cred.values[0]?.vault_wrap) { toast('Set up the Vault first, in the Vault tab.'); return false; }
     const bio = await getBiometricSettings();
     if (bio.vaultEnabled && bio.available) {
       const r = await tryBiometricUnlockVault().catch(() => ({ success: false }));
@@ -1157,8 +1170,8 @@ async function unlockVaultInPlace(reason = 'Enter your Vault PIN.') {
 
 // Moving into the Vault needs a Vault PIN to exist. A sheet (not a toast) says so and offers the Vault tab. Returns true when set-up is missing.
 async function vaultNeedsSetup(onOpen = null) {
-  const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
-  if (cred.values[0]?.private_pin_hash) return false;
+  const cred = await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`);
+  if (cred.values[0]?.vault_wrap) return false;
   const go = await askYesNo({ title: 'Set up the Vault first', text: 'Items can move into the Vault once it has a PIN.', yes: 'Open Vault', no: 'Close' });
   if (go) { if (onOpen) onOpen(); document.querySelector('button[data-nav="vault"]')?.click(); }
   return true;
@@ -2769,8 +2782,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Private Vault ----
   async function refreshVaultGateView({ prompt = true } = {}) {
-    const cred = await db.query(`SELECT private_pin_hash FROM credentials WHERE id=1`);
-    const needsSetup = !cred.values[0]?.private_pin_hash;
+    const cred = await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`);
+    const needsSetup = !cred.values[0]?.vault_wrap;
     const unlocked = !needsSetup && !!privateSessionKey;
     const locked = !needsSetup && !unlocked;
 
@@ -2827,7 +2840,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('vault-setup-pin-btn').addEventListener('click', async () => {
     if (!(await confirmStrength('pin', document.getElementById('vault-setup-pin-input').value))) return;
-    await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
+    const r = await setupVaultPin(document.getElementById('vault-setup-pin-input').value, document.getElementById('vault-setup-pin-hint-input').value);
+    if (!r.success) { toast('This Vault holds items from an earlier format. Nothing was changed.'); return; }
     await refreshVaultGateView();
   });
   document.getElementById('vault-unlock-btn').addEventListener('click', async () => {

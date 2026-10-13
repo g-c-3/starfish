@@ -136,7 +136,51 @@ async function decryptBackup(passphrase, backupFileObj) {
   return decryptBytes(key, cipher, iv); // throws if passphrase wrong (GCM auth tag fails)
 }
 
+// ---- Vault master key (VMK), wrapped by the PIN (Decision 195, stage L) ----
+// The VMK is random and stored only wrapped under a key derived from the PIN. A wrong PIN fails the AES-GCM unwrap, so nothing
+// is kept to compare a PIN against. `kcv` is a check value of the VMK (a hash of a random 256-bit key), used to reject a stale
+// copy held by biometric unlock without a PBKDF2.
+const VAULT_WRAP_ITERATIONS = 600000;
+const VMK_AAD = ENC.encode('arkly-vmk-1');
+async function vmkCheckValue(vmk) {
+  const tag = ENC.encode('arkly-kcv');
+  const buf = new Uint8Array(tag.length + vmk.length);
+  buf.set(tag); buf.set(vmk, tag.length);
+  return toBase64((await crypto.subtle.digest('SHA-256', buf)).slice(0, 8));
+}
+async function wrapKeyFromPin(pin, salt, iterations, usages) {
+  const km = await crypto.subtle.importKey('raw', ENC.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, usages);
+}
+async function wrapVmk(vmk, pin, iterations = VAULT_WRAP_ITERATIONS) {
+  const salt = randomBytes(16), iv = randomBytes(12);
+  const wk = await wrapKeyFromPin(pin, salt, iterations, ['encrypt']);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: VMK_AAD }, wk, vmk);
+  return JSON.stringify({ v: 1, salt: toBase64(salt), iter: iterations, iv: toBase64(iv), ct: toBase64(ct), kcv: await vmkCheckValue(vmk) });
+}
+async function createVaultWrap(pin) {
+  const vmk = randomBytes(32);
+  return { vmk, wrap: await wrapVmk(vmk, pin) };
+}
+// Resolves { vmk, iterations } for the right PIN, null for a wrong PIN or a wrapper that is not readable.
+async function unwrapVault(pin, wrapJson) {
+  try {
+    const w = JSON.parse(wrapJson);
+    if (w.v !== 1) return null;
+    const wk = await wrapKeyFromPin(pin, new Uint8Array(fromBase64(w.salt)), w.iter, ['decrypt']);
+    const vmk = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(fromBase64(w.iv)), additionalData: VMK_AAD }, wk, fromBase64(w.ct)));
+    return { vmk, iterations: w.iter };
+  } catch { return null; }
+}
+async function vmkMatchesWrap(vmk, wrapJson) {
+  try { return (await vmkCheckValue(vmk)) === JSON.parse(wrapJson).kcv; } catch { return false; }
+}
+function vmkToKey(vmk) {
+  return crypto.subtle.importKey('raw', vmk, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
 export {
+  VAULT_WRAP_ITERATIONS, wrapVmk, createVaultWrap, unwrapVault, vmkMatchesWrap, vmkToKey,
   hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, LEGACY_HASH_ITERATIONS, deriveAesKey,
   encryptBytes, decryptBytes,
   encryptPrivateNote, decryptPrivateNote,

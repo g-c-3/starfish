@@ -118,7 +118,7 @@ async function buildBackupPayload(db, categories) {
     entries: [],
     tags: [],
     settings: {},
-    privateVaultSalt: null // set below only if private_vault is included — one salt for every Private Vault entry on this device
+    privateVaultWrap: null // set below only if private_vault is included — the PIN-wrapped Vault key (Decision 195)
   };
 
   const entryCategoryNames = Object.keys(ENTRY_CATEGORIES).filter(wantAll);
@@ -143,8 +143,8 @@ async function buildBackupPayload(db, categories) {
   }
 
   if (wantAll('private_vault') && payload.entries.some((e) => e._category === 'private_vault')) {
-    const cred = (await db.query(`SELECT private_pin_salt FROM credentials WHERE id=1`)).values[0];
-    payload.privateVaultSalt = cred?.private_pin_salt || null; // needed to re-derive the source key on cross-PIN append
+    const cred = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+    payload.privateVaultWrap = cred?.vault_wrap || null; // the old PIN unwraps the source key on append
   }
 
   if (wantAll('tags')) {
@@ -220,10 +220,10 @@ async function planBackup(db, categories) {
 
 // Tags, settings and the Vault salt: the same three reads buildBackupPayload makes, small by nature.
 async function readBackupExtras(db, categories, hasVault) {
-  const extras = { tags: [], settings: {}, privateVaultSalt: null };
+  const extras = { tags: [], settings: {}, privateVaultWrap: null };
   if (categories.includes('private_vault') && hasVault) {
-    const cred = (await db.query(`SELECT private_pin_salt FROM credentials WHERE id=1`)).values[0];
-    extras.privateVaultSalt = cred?.private_pin_salt || null;
+    const cred = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+    extras.privateVaultWrap = cred?.vault_wrap || null;
   }
   if (categories.includes('tags')) extras.tags = (await db.query(`SELECT name FROM tags`)).values || [];
   if (categories.includes('app_settings')) {
@@ -502,7 +502,7 @@ function prepareRestoredFile(entry) {
 }
 
 // Insert one entry whose file (if any) is already written and whose file_path and file_key are set.
-async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultSalt, summary) {
+async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultWrap, summary) {
   let bodyText = entry.body_text;
   let encryptedBody = entry.encrypted_body;
   let encryptedDescription = entry.encrypted_description || null;
@@ -510,10 +510,12 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaul
   if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
     // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
     // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
-    // privateVaultSalt is the ONE salt for every Private Vault entry in the backup (a device has one PIN, one salt).
-    if (!privateVaultSalt) throw new Error('Backup has no privateVaultSalt — cannot decrypt its Private Vault entries');
-    const { decryptPrivateNote, encryptPrivateNote } = await import('./crypto.js');
-    const { key: sourceKey } = await deriveAesKey(opts.sourcePin, privateVaultSalt);
+    // privateVaultWrap is the ONE wrapped Vault key for every Private Vault entry in the backup (Decision 195).
+    if (!privateVaultWrap) throw new Error('This backup holds Vault items in an earlier format and cannot be restored.');
+    const { decryptPrivateNote, encryptPrivateNote, unwrapVault, vmkToKey } = await import('./crypto.js');
+    const unwrapped = await unwrapVault(opts.sourcePin, privateVaultWrap);
+    if (!unwrapped) throw new Error('The Vault PIN does not match this backup.');
+    const sourceKey = await vmkToKey(unwrapped.vmk);
     const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
     encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
     if (entry.encrypted_description) {
@@ -619,7 +621,7 @@ async function restoreBackup(db, opts) {
       entry.file_path = saved.path;
       entry.file_key = saved.fileKey;
     }
-    await insertRestoredEntry(db, entry, target.targetId, target.label, opts, payload.privateVaultSalt, summary);
+    await insertRestoredEntry(db, entry, target.targetId, target.label, opts, payload.privateVaultWrap, summary);
   }
 
   await restoreTagsAndSettings(db, payload, categories, summary);
@@ -701,7 +703,7 @@ async function restoreFormat2(db, opts) {
           entry.file_key = saved.fileKey;
         } catch (err) { await w.abort(); throw err; }
       }
-      await insertRestoredEntry(db, entry, target.targetId, target.label, opts, head.privateVaultSalt, summary);
+      await insertRestoredEntry(db, entry, target.targetId, target.label, opts, head.privateVaultWrap, summary);
     }
   } catch (err) {
     return { ok: false, reason: 'backup_damaged', detail: String(err?.message || err), summary };

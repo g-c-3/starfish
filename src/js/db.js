@@ -229,6 +229,8 @@ async function initDb(sqlite) {
   // PBKDF2 count each credential hash was made with (Decision 172). NULL = 210000, the count before it was stored.
   await ensureColumn(db, 'credentials', 'app_password_iter', 'INTEGER');
   await ensureColumn(db, 'credentials', 'private_pin_iter', 'INTEGER');
+  // The Vault master key wrapped under the PIN (Decision 195). Replaces private_pin_hash/salt/iter, which are no longer written.
+  await ensureColumn(db, 'credentials', 'vault_wrap', 'TEXT');
   await ensureColumn(db, 'credentials', 'biometric_app_enabled', 'INTEGER DEFAULT 0');
   await ensureColumn(db, 'credentials', 'biometric_vault_enabled', 'INTEGER DEFAULT 0');
   // Three independent lock triggers per lock (Decision 74), replacing "idle timer + always-on
