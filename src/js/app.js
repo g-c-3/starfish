@@ -1271,12 +1271,14 @@ async function commitNoteDrafts(vaultKey = null) {
 // while it is open: half a second after the last change, when the app is hidden, and when a lock closes it. Not written
 // until something differs from the first state. The next unlock (Home) or Vault unlock (Vault) commits the row through
 // resolveFormDraft: a complete form becomes its entry, an incomplete one an Autosave note. A reminder is not scheduled.
-// Rows: form_draft_<kind> (encrypted database) and vault_form_draft_<kind> (encrypted under the Vault key). Not in backups. ----
+// Rows: form_draft_<kind> (encrypted database) and vault_form_draft_<kind> (encrypted under the Vault key). Not in backups.
+// Edits of an existing entry (Decision 190) use form_edit_draft_<kind> and vault_form_edit_draft_<kind>, and carry the entry's id and name. ----
 const FORM_DRAFT_KEYS = { reminder: 'form_draft_reminder', location: 'form_draft_location', money: 'form_draft_money' };
+const formDraftKey = (kind, isVault, edit) => (isVault ? 'vault_' : '') + (edit ? FORM_DRAFT_KEYS[kind].replace('form_draft_', 'form_edit_draft_') : FORM_DRAFT_KEYS[kind]);
 const draftSources = new Set(); // flows with an open dialog; flushed on hide and on lock
 document.addEventListener('visibilitychange', () => { if (document.hidden) for (const s of draftSources) s.flush().catch(() => {}); });
-function formDraft(kind, isVault) {
-  const mkey = (isVault ? 'vault_' : '') + FORM_DRAFT_KEYS[kind];
+function formDraft(kind, isVault, entry = null) { // entry: { id, label } when the form edits an existing entry
+  const mkey = formDraftKey(kind, isVault, !!entry);
   const parts = {}, base = {}, live = new Map();
   let timer = null, wrote = false, marked = false;
   const dirty = () => marked || Object.keys(parts).some((n) => JSON.stringify(parts[n]) !== base[n]);
@@ -1300,7 +1302,7 @@ function formDraft(kind, isVault) {
       const k = privateSessionKey;
       if (isVault && !k) return;
       if (!dirty()) { if (wrote) { wrote = false; await metaSet(mkey, ''); } return; }
-      const payload = JSON.stringify({ v: 1, kind, parts });
+      const payload = JSON.stringify({ v: 1, kind, parts, entry });
       wrote = true;
       await metaSet(mkey, isVault ? await encryptPrivateNote(k, payload) : payload);
     },
@@ -1325,34 +1327,66 @@ function vaultFormDraftArgs(r) {
   if (r.type === 'money') return { ...a, money: r.details };
   return { ...a, text: r.text };
 }
-// Returns the kinds committed, e.g. ['reminder', 'note']. A row that cannot be committed stays for the next unlock.
+// An edit draft written onto its entry, as a normal Save would (a reminder is rescheduled). False when the entry is gone.
+async function applyEditDraft(r, entryId, isVault, key) {
+  const row = ((await db.query(`SELECT type, fire_at, repeat_rule, completed_at, snoozed_until FROM entries WHERE id = ? AND deleted_at IS NULL`, [entryId])).values || [])[0];
+  if (!row || row.type !== r.type) return false;
+  const fields = { description: r.description };
+  if (r.label) fields.label = r.label; // a cleared name keeps the entry's own
+  const opts = { privateSessionKey: key };
+  if (r.type === 'reminder') {
+    const sameMinute = Math.floor(r.fire_at / 60000) === Math.floor(row.fire_at / 60000); // the picker holds whole minutes
+    const at = sameMinute ? row.fire_at : r.fire_at;
+    const changed = at !== row.fire_at || (r.repeat_rule || null) !== (row.repeat_rule || null);
+    if (changed || isReminderActive(row)) {
+      fields.fire_at = at; fields.repeat_rule = r.repeat_rule;
+      if (changed) { fields.completed_at = null; fields.snoozed_until = null; }
+    }
+    opts.rescheduleReminder = scheduleReminder;
+  } else if (r.type === 'money') Object.assign(fields, isVault ? { money: r.details } : { money_json: Money.toJson(r.details) });
+  await editEntry(db, entryId, fields, opts);
+  await setEntryTags(entryId, r.tags);
+  return true;
+}
+// Returns what was committed: 'reminder' | 'location' | 'money' (new entry), 'note' (Autosave text), 'edit' (written onto its entry).
+// A row that cannot be committed stays for the next unlock.
 async function commitFormDrafts(vaultKey = null) {
   const done = [];
   const scopes = [{ isVault: false, key: null }];
   if (vaultKey) scopes.push({ isVault: true, key: vaultKey });
   for (const { isVault, key } of scopes) {
-    for (const kind of Object.keys(FORM_DRAFT_KEYS)) {
-      const mkey = (isVault ? 'vault_' : '') + FORM_DRAFT_KEYS[kind];
-      try {
-        let raw = await metaGet(mkey, '');
-        if (!raw) continue;
-        if (isVault) {
-          try { raw = await decryptPrivateNote(key, raw); } catch { await metaSet(mkey, ''); continue; } // made under another PIN: unreadable
-        }
-        const draft = parseFormDraft(raw);
-        const r = draft ? resolveFormDraft(kind, draft.parts, { fallbackName: autosaveName() }) : null;
-        if (!r) { await metaSet(mkey, ''); continue; }
-        if (isVault) await saveVaultEntry(db, key, vaultFormDraftArgs(r));
-        else await insertFormDraft(r);
-        await metaSet(mkey, '');
-        done.push(r.type);
-      } catch { /* left in place, retried at the next unlock */ }
+    for (const edit of [false, true]) {
+      for (const kind of Object.keys(FORM_DRAFT_KEYS)) {
+        const mkey = formDraftKey(kind, isVault, edit);
+        try {
+          let raw = await metaGet(mkey, '');
+          if (!raw) continue;
+          if (isVault) {
+            try { raw = await decryptPrivateNote(key, raw); } catch { await metaSet(mkey, ''); continue; } // made under another PIN: unreadable
+          }
+          const draft = parseFormDraft(raw);
+          const entry = draft && edit ? draft.entry : null;
+          if (!draft || (edit && !(entry && entry.id))) { await metaSet(mkey, ''); continue; }
+          const opts = edit ? { edit: true, fallbackName: '', noteName: autosaveName(), entryLabel: entry.label } : { fallbackName: autosaveName() };
+          let r = resolveFormDraft(kind, draft.parts, opts);
+          if (r && edit && r.type !== 'note') {
+            if (await applyEditDraft(r, entry.id, isVault, key)) { await metaSet(mkey, ''); done.push('edit'); continue; }
+            r = resolveFormDraft(kind, draft.parts, { ...opts, forceNote: true }); // the entry is gone: keep the work as an Autosave note
+          }
+          if (!r) { await metaSet(mkey, ''); continue; }
+          if (isVault) await saveVaultEntry(db, key, vaultFormDraftArgs(r));
+          else await insertFormDraft(r);
+          await metaSet(mkey, '');
+          done.push(r.type);
+        } catch { /* left in place, retried at the next unlock */ }
+      }
     }
   }
   return done;
 }
 function formDraftToast(kinds, vault) {
   const where = vault ? 'Unsaved Vault work' : 'Unsaved work';
+  if (kinds.every((k) => k === 'edit')) return `${where} was saved to its entry`;
   return kinds.includes('reminder') ? `${where} was saved as Autosave. A reminder in it is not scheduled.` : `${where} was saved as Autosave`;
 }
 async function metaGet(key, fallback = null) {
@@ -4166,11 +4200,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const tags = item.tags || await getEntryTags(item.id);
     const isReminder = item.type === 'reminder'; // Home and Vault
-    const d = await openSaveDialog({
-      heading: isReminder ? 'Edit reminder' : 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault,
-      reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule } : null
-    });
-    if (!d) return;
+    const draft = isReminder || item.type === 'location' ? formDraft(item.type, isVault, { id: item.id, label: item.label }) : null; // Decision 190
+    let d;
+    try {
+      d = await openSaveDialog({
+        heading: isReminder ? 'Edit reminder' : 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault,
+        reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule } : null, draft
+      });
+    } finally { if (draft) draft.end(); }
+    if (!d) { if (draft && !draft.locked) await draft.clear(); return; }
     const fields = { label: d.name, description: d.description };
 
     if (item.type === 'expense' && !isVault) {
@@ -4193,6 +4231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
       await window.Arkly.editEntry(item.id, fields, opts);
       await setEntryTags(item.id, d.tags);
+      if (draft) await draft.clear(); // saved: the draft is no longer needed
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // list/search read this in-memory index
       toast(isReminder && fields.fire_at && !fields.repeat_rule && fields.fire_at > Date.now() ? reminderSetText(fields.fire_at) : 'Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
@@ -4364,18 +4403,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const autoName = item.label === Money.summary(old);
     let details = old, d = null;
     const mark = overlayAbortCount;
-    while (!d) {
-      details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks });
-      if (!details) return;
-      const next = Money.summary(details);
-      d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', isVault, discardLabel: 'Back to amount' });
-      if (!d && overlayAbortCount !== mark) return; // locked meanwhile
-    }
+    const draft = formDraft('money', isVault, { id: item.id, label: item.label }); // Decision 190
+    try {
+      while (!d) {
+        details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks, draft });
+        if (!details) break;
+        const next = Money.summary(details);
+        d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', isVault, discardLabel: 'Back to amount', draft });
+        if (!d && overlayAbortCount !== mark) break; // locked meanwhile
+      }
+    } finally { draft.end(); }
+    if (!d) { if (!draft.locked) await draft.clear(); return; }
     try {
       await window.Arkly.editEntry(item.id, isVault
         ? { label: d.name, description: d.description, money: details }
         : { label: d.name, description: d.description, money_json: Money.toJson(details) }, {});
       await setEntryTags(item.id, d.tags);
+      await draft.clear(); // saved: the draft is no longer needed
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]); // lists, totals and search read this index
       toast('Saved');
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
