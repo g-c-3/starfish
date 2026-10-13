@@ -20,7 +20,9 @@ OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (hea
 
 - Stage L of Decision 195 built (Decision 196): the PIN wraps a random Vault key; unlock is one PBKDF2; biometric holds the key. Files `crypto.js`, `db.js`, `app.js`, `backup.js`. DP71 added.
 
-Decisions made: 192, 193, 194, 195, 196.
+- Bug report: Vault set-up stuck on the earlier-format toast. Cause, fix and risk in Decision 197. `src/js/app.js`.
+
+Decisions made: 192, 193, 194, 195, 196, 197.
 
 Verified: a Node check of the two `listTrash` queries on a stub; 14 Node checks on the Vault key wrapper; `vite build` passes. Not verified: CI, any device (DP69, DP70, DP71). The cause is inferred from the code, not from a device log.
 

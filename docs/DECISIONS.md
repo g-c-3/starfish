@@ -2375,3 +2375,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not in this stage: binding each encrypted field to its entry id and field name (moved to N, where entry writes are reworked); a PIN-change screen (none exists, so `wrapVmk` is only used for the upgrade); files on disk, the index blob and thumbnails (M, N); backup format rules beyond the above (O).
 - Checks: 14 Node checks on the wrapper (right and wrong PIN, empty PIN, tampered and unreadable wrapper, unknown version, check value, round trip under the unwrapped key, key not extractable, new wrap each time, re-wrap); `vite build` passes. One unwrap took 95 ms on a desktop; not measured on a phone.
 - Risks: not run through CI or on a device (DP71). Credentials and backup paths changed together; Vault backup and restore are untested on a device.
+
+**197. Vault set-up asks before erasing old rows (bug fix).**
+- Report: Vault set-up showed "This Vault holds items from an earlier format. Nothing was changed." and never completed.
+- Cause: Decision 196 stops set-up when any Vault row exists. Trashed Vault items from earlier testing were still stored, and the new key cannot open them. The message gave no way forward.
+- Fix: `setupVaultPin` returns the row count; set-up then asks "Erase old Vault items?", stating the count, that Vault Trash is included, and that erasing is permanent. On Erase and continue it cancels each old reminder, deletes each row through `permanentlyDeleteEntry`, deletes the Vault drafts in `meta` (`vault_%draft%`, which the new key cannot open), then creates the new Vault. Cancel changes nothing.
+- Why correct: nothing is deleted without the person confirming the consequence; the rows could never be read by the new key.
+- Checks: the draft-cleanup SQL run on SQLite (removes `vault_note_draft`, `vault_edit_draft`, `vault_form_draft_*`; keeps `note_draft` and `vault_autolock`); `vite build` passes. Not run through CI or on a device (DP71).
