@@ -32,6 +32,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
+import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
@@ -42,6 +43,8 @@ const CATEGORY_LABELS = {
   reminders: 'Reminders', locations: 'Locations', money: 'Money', files: 'Files', expenses: 'Expenses', tags: 'Tags', app_settings: 'App Settings'
 };
 const VAULT_TYPE_LABELS = { note: 'Text', voice: 'Voice', image: 'Image', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
+
+initPasswordEyes(); // eye control on every password field (Decision 200)
 
 let db;
 let privateSessionKey = null; // set only after vault PIN unlock, cleared on vault lock/background
@@ -75,8 +78,9 @@ const NAV_SCREENS = { 'main-screen': 'home', 'vault-screen': 'vault' }; // which
 // Typed credentials never outlive the screen that took them (Decision 94). Called when either lock engages and
 // right after a successful unlock.
 function clearSecretInputs(ids = null) {
-  const els = ids ? ids.map((id) => document.getElementById(id)) : document.querySelectorAll('input[type="password"]');
+  const els = ids ? ids.map((id) => document.getElementById(id)) : document.querySelectorAll('input[type="password"], input[data-pw]');
   els.forEach((el) => { if (el) el.value = ''; });
+  hidePasswords(ids ? els : null); // a revealed field goes back to hidden with its text
 }
 // When the app last came to the foreground (module load counts: a cold start from a notification button). Used to tell
 // a launch caused by a notification button from the person already using the app (Decision 100).
@@ -1769,7 +1773,7 @@ function askText({ title = '', text = '', placeholder = '', initial = '', passwo
     document.getElementById('text-text').textContent = text;
     document.getElementById('text-ok-btn').textContent = ok;
     document.getElementById('text-cancel-btn').textContent = cancel;
-    input.type = password ? 'password' : 'text';
+    setPasswordField(input, password);
     input.inputMode = decimal ? 'decimal' : 'text';
     input.placeholder = placeholder;
     input.value = initial;
@@ -1777,6 +1781,7 @@ function askText({ title = '', text = '', placeholder = '', initial = '', passwo
       if (!activeText) return;
       activeText = null;
       input.value = '';
+      hidePasswords([input]);
       dlg.classList.add('hidden');
       updateBackButtonState();
       resolve(v);
