@@ -915,6 +915,13 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - A gate on the in-app action, not a key. The archive is still encrypted under the backup passkey only. No credential is changed, stored or recovered.
 - Not gated: restore, safety backup, automatic backup, extract to device storage. Typed attempts have no counter or delay.
 
+## Card grids and File explorer (Decisions 206, 207)
+- Home (`#capture-bar`) and Vault (`#vault-capture-bar`): nine cards, three per row, icon above label. The first eight open folders through `data-type` and `data-vault-type`. The ninth, File explorer, carries `data-tool` and `data-vault-tool`, so counts, folders, the New chooser, search and Move never see it.
+- Both explorer cards open the same overlay, `#explorer-screen` (`src/js/explorer.js`), tracked as `activeExplorer { finish, back, isVault }`: Back steps up a folder, then to the storage list, then closes; an app lock closes it from either card, a Vault lock closes the one opened from the Vault; closing drops the listing.
+- It lists the phone's own storage and nothing else: no encryption, no copy, no database table. Folder listing: the filesystem plugin on a percent-encoded `file://` path. Native side (`window.ArklyExplorer`, written into `MainActivity` by `scripts/patch-explorer.js` in CI): All files access check and request, and the mounted volumes with free space and a USB flag.
+- Access: `MANAGE_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` from `patch-manifest.js`; granted once on an Android settings screen. The screen sets the picker flag (Decision 73) before leaving for that screen or another app, so the lock on background does not fire for that trip.
+- Planned: built-in viewers (E1b), manage and a per-storage trash (E2), office viewers (E3).
+
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
 - Revealing switches the input to `type=text`; a wrapped input is found by `input[data-pw]`. `clearSecretInputs` covers both types.

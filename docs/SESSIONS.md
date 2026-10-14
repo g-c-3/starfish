@@ -4,6 +4,40 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 119**
+
+File explorer stage E1a (Decision 207), after the owner approved the four open points of Decision 206. Source read: overlay and back handling, lock handling and the picker flag in `app.js`, `fileopen.js`, `patch-screenlock.js`, `patch-manifest.js`, the workflow, `native-setup.md`.
+- `src/js/explorer.js` (new): the screen and its helpers.
+- `scripts/patch-explorer.js` (new): native bridge written and registered by CI.
+- `scripts/patch-manifest.js`: `MANAGE_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`.
+- `.github/workflows/build-android.yml`: patch step after `patch-screenlock.js`.
+- `src/index.html`, `src/css/style.css`, `src/js/app.js`: explorer screen, styles, open and close wiring for both cards, Back, lock and overlay handling.
+- Docs: ROADMAP (Phase 22, DP78, DP79), DECISIONS (207), ARCHITECTURE (File explorer), native-setup (section 16).
+
+Decisions made: 207.
+
+Verified: 31 Node checks on the screen; the CI patches against a stub Android tree, twice; the Java parses; `vite build` passes. Not verified: CI (the Java is not compiled here), any device (DP69 to DP79).
+
+Open: DP69 to DP79 on device; Phase 22 E1b viewers, E2 manage and trash, E3 office viewers; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: a CI run to confirm the Java compiles, then DP79 on device, then Phase 22 E1b.
+
+**Session 118**
+
+File explorer card, stage E0 (Decision 206). Source read: card markup and wiring in `index.html` and `app.js`, card CSS, `package.json`, `native-setup.md` (permissions, CI patching), `fileopen.js`.
+- `src/index.html`: `i-explorer` symbol; ninth card in the Home and Vault grids.
+- `src/css/style.css`: three-column grids, icon-above-label cards, slate tone.
+- `src/js/app.js`: tap handler for the new card.
+- Docs: ROADMAP (Phase 22, DP78), DECISIONS (206).
+
+Decisions made: 206.
+
+Verified: `vite build` passes; earlier suites unaffected. Not verified: CI, any device (DP69 to DP78); the grid on a narrow phone.
+
+Open: owner approval for Phase 22 E1 to E4 and the four decisions in Decision 206; DP69 to DP78 on device; Phase 17 stages M to O; Phase 21 P4; Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: Phase 22 E1 once the decisions are approved; otherwise DP69 to DP78 on device, then Phase 17 stage M.
+
 **Session 117**
 
 Bug fix (Decision 205): no fingerprint offered after a lock and reopen. Source read: `app.js` (`registerBackgroundLock`, `handleLockTrigger`, `tryBiometricUnlockApp`, the start-up prompt); the screenshot showed the lock screen without a fingerprint button.
