@@ -508,6 +508,25 @@
   </div>
 
   <!-- Entry viewer shell (Decision 92): reminder detail now; location, voice, image, PDF reuse it. -->
+  <div id="explorer-screen" class="hidden" role="dialog" aria-modal="true" aria-label="File explorer">
+    <header class="editor-bar">
+      <button id="explorer-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <span id="explorer-title">File explorer</span>
+      <button id="explorer-hidden-btn" class="icon-btn hidden" aria-label="Show hidden files" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button>
+      <button id="explorer-refresh-btn" class="icon-btn" aria-label="Refresh"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+    </header>
+    <nav id="explorer-crumbs" class="explorer-crumbs hidden" aria-label="Path"></nav>
+    <div id="explorer-tools" class="explorer-tools hidden">
+      <input id="explorer-filter" type="search" placeholder="Filter this folder by name" autocomplete="off" spellcheck="false" />
+      <div class="explorer-sort">
+        <button data-sort="name" data-label="Name">Name</button>
+        <button data-sort="date" data-label="Date">Date</button>
+        <button data-sort="size" data-label="Size">Size</button>
+      </div>
+    </div>
+    <div id="explorer-body"></div>
+  </div>
+
   <div id="viewer-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Entry details">
     <header class="editor-bar">
       <button id="viewer-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
