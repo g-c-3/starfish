@@ -43,7 +43,7 @@ const CATEGORY_LABELS = {
   notes: 'Notes', private_vault: 'Private Vault', voice: 'Voice', images: 'Images', pdfs: 'PDFs',
   reminders: 'Reminders', locations: 'Locations', money: 'Money', files: 'Files', expenses: 'Expenses', tags: 'Tags', app_settings: 'App Settings'
 };
-const VAULT_TYPE_LABELS = { note: 'Text', voice: 'Voice', image: 'Image', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
+const VAULT_TYPE_LABELS = { note: 'Notes', voice: 'Voice', image: 'Image', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
 
 initPasswordEyes(); // eye control on every password field (Decision 200)
 
@@ -908,7 +908,7 @@ async function onUnlocked() {
   showScreen('main-screen');
   const homeText = await commitNoteDrafts(), homeForms = await commitFormDrafts();
   if (homeForms.length) toast(formDraftToast(homeForms, false));
-  else if (homeText) toast('Unsaved text was saved as Autosave');
+  else if (homeText) toast('Unsaved note was saved as Autosave');
   if (homeText || homeForms.length) window.dispatchEvent(new Event('arkly-drafts-committed'));
   if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
@@ -1165,7 +1165,7 @@ async function finishVaultUnlock(vmk) {
   privateSessionKey = key;
   const vaultText = await commitNoteDrafts(key), vaultForms = await commitFormDrafts(key); // before the index build, so they are listed
   if (vaultForms.length) toast(formDraftToast(vaultForms, true));
-  else if (vaultText) toast('Unsaved Vault text was saved as Autosave');
+  else if (vaultText) toast('Unsaved Vault note was saved as Autosave');
   await buildVaultIndexWithNotice(); // in-memory only — see vault.js
   if (vaultText || vaultForms.length) window.dispatchEvent(new Event('arkly-drafts-committed')); // after the index: the redraw reads it
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
@@ -2297,7 +2297,7 @@ function openTextEditor({ title = 'New note', text = '', isVault = false, persis
     // Unsaved changes: one Back asks Yes/No (replaces the earlier tap-twice-within-3-seconds rule).
     const requestBack = async () => {
       if (!dirty) { finish(null); return; }
-      const yes = await askYesNo({ title: 'Discard changes?', text: 'Your text has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
+      const yes = await askYesNo({ title: 'Discard changes?', text: 'Your note has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
       if (yes && activeEditor) { if (clear) await Promise.resolve(clear()).catch(() => {}); finish(null, true); }
     };
     ta.oninput = () => {
