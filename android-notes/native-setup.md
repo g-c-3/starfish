@@ -319,3 +319,14 @@ Reminder notifications carry `extra: { entryId, repeating }` (Decision 108). A r
 occurrence ids (`hashIdToInt(entryId)`, then `entryId:r1` to `entryId:r29`, Decision 107); on Done the receiver cancels all
 of them for a one-off and only the snooze id when `repeating` is true. `MAX_OCCURRENCES` (30) is the same constant as in
 `notifications.js`.
+
+## 16. File explorer bridge (Decisions 206, 207)
+Powers the File explorer card (Home and Vault): browsing the phone's internal and removable storage.
+
+**Permission.** `MANAGE_EXTERNAL_STORAGE` (All files access, Android 11+) and `WRITE_EXTERNAL_STORAGE` (earlier) are in `REQUIRED_PERMISSIONS` of `scripts/patch-manifest.js`. On Android 11+ the person grants All files access once on a system screen that the app opens; on earlier versions the two storage permissions are asked at runtime. Sideload only: a Play Store release would need a permission declaration.
+
+**Native side, no plugin.** Same route as section 14: `scripts/patch-explorer.js` writes `ArklyExplorerBridge.java` next to `MainActivity.java` and registers it in `onCreate()` with `addJavascriptInterface(..., "ArklyExplorer")`. Methods: `hasAllFilesAccess()`, `requestAllFilesAccess()`, `volumes()` (JSON: path, name, primary, removable, usb, total, free). The CI step runs right after `patch-screenlock.js`, which guarantees an `onCreate()`. Idempotent.
+
+**Volumes.** Android 11+: `StorageManager.getStorageVolumes()`, mounted volumes only. Earlier: the app's external directories. A USB drive over OTG is listed when Android mounts it as a volume; the USB flag is a guess from the volume's description.
+
+**Not confirmed on a real device or in CI.** The Java is parsed in a scratch check, not compiled. First CI run: confirm it compiles. First device run (DP79): the settings screen, the volume list with a USB drive, and opening a file from a USB drive in another app.
