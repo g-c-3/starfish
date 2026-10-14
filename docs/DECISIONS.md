@@ -2488,3 +2488,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Plan: E1b built-in viewers; E2 manage and trash; E3 office viewers. Each device-tested before the next.
 - Checks: 31 Node checks on the screen and its helpers against a stub filesystem (listing, sorting, filtering, hidden toggle, breadcrumbs, Back, volumes, USB name with a percent sign, drive removed, open file, lock closes and clears); the manifest and MainActivity patches run twice on a stub Android tree (idempotent) and both Java files parse; `vite build` passes.
 - Risks: not run through CI or on a device (DP79). The Java is not compiled here, only parsed, so a symbol error would show first in CI. Opening a file on a USB drive in another app goes through the app's file provider, which may not cover removable volumes; the built-in viewers (E1b) read the file directly and avoid this. Whether Android lists a USB drive through the storage manager on every phone is unverified. Quick-access folders are tried when tapped; a missing one shows the folder error.
+
+**208. Card order and the Notes label (Home and Vault).** Requested by the owner.
+- Order, both grids: Voice, Notes, Image / Location, Reminder, PDF / Money, File explorer, Files.
+- The Text card is labelled Notes, and its folder heading follows (`FOLDER_TITLES`). Item default names, type chips and the New chooser keep "Text": they name the kind of item, not the folder.
+- Display only: types, folder opening, counts and Move are unchanged.
+- Checks: `vite build` passes; card order and labels read back from the markup for both grids. Not device-tested (DP78).
+
+**209. Text renamed to Notes everywhere (supersedes the Text exceptions of Decision 208).** Requested by the owner.
+- User-facing, the note type is now Notes: card label, folder heading, New chooser card, type chips on rows, default item names (for example "Notes 14/10/2026"), the editor's accessibility label, the Autosave toasts ("Unsaved note was saved as Autosave", "Unsaved Vault note was saved as Autosave") and the editor's discard dialog ("Your note has not been saved."). One label map (`VAULT_TYPE_LABELS`) drives the headings, chips and default names; `FOLDER_TITLES` is removed.
+- Unchanged: the stored type value `note`, the database and backup category keys (already labelled Notes), the PDF mark tool "Text", and generic uses of "text" for typed content. Items already saved keep the names they were given.
+- Checks: `vite build` passes; no `>Text<` label left in the markup. Not device-tested (DP78).

@@ -4,6 +4,30 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 121**
+
+Text renamed to Notes everywhere (Decision 209). `src/js/app.js`: label map, Autosave toasts, discard dialog; `FOLDER_TITLES` removed. `src/index.html`: New chooser card and the editor's accessibility label. Docs: ROADMAP (DP78), DECISIONS (209).
+
+Decisions made: 209.
+
+Verified: `vite build` passes. Not verified: CI, any device (DP69 to DP79).
+
+Open: as Session 119.
+
+Next session start point: as Session 119.
+
+**Session 120**
+
+Card order and the Notes label (Decision 208). `src/index.html`: both card grids reordered, Text card labelled Notes. `src/js/app.js`: `FOLDER_TITLES` for the two folder headings. Docs: ROADMAP (DP78), DECISIONS (208).
+
+Decisions made: 208.
+
+Verified: `vite build` passes; order and labels read back from both grids. Not verified: CI, any device (DP69 to DP79).
+
+Open: as Session 119.
+
+Next session start point: as Session 119.
+
 **Session 119**
 
 File explorer stage E1a (Decision 207), after the owner approved the four open points of Decision 206. Source read: overlay and back handling, lock handling and the picker flag in `app.js`, `fileopen.js`, `patch-screenlock.js`, `patch-manifest.js`, the workflow, `native-setup.md`.
