@@ -902,6 +902,12 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Selection: the Select files bar moves the selected items one at a time through the same two functions; per-item failures are reported, not fatal (Decision 185).
 - Backup format unchanged.
 
+## Changing secrets (Decision 201)
+- Settings, App lock: Set, Change, Remove password. Vault Settings: Change Vault PIN. The Vault PIN is first set in the Vault tab and cannot be removed.
+- A change or removal needs the current secret, or one biometric prompt when that unlock is on. A new secret is typed twice, then the weak-secret advisory, then an optional hint.
+- App password: updates the hash row; clears the biometric copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the biometric copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the biometric copy is cleared. Older backups keep the PIN they were made with.
+- The backup passkey is not involved.
+
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
 - Revealing switches the input to `type=text`; a wrapped input is found by `input[data-pw]`. `clearSecretInputs` covers both types.

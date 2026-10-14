@@ -2417,3 +2417,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Autocapitalize, autocorrect and spellcheck are switched off on wrapped fields.
 - Checks: 18 Node checks on a DOM stub (wrap once, lock input untouched, show and hide, icon and label, selector still finds a revealed field, hide all and hide a list, field added later, shared field on, off and reused, hidden on background); `vite build` passes.
 - Risks: not run through CI or on a device (DP73). Layout of each field is unverified on a phone. A keyboard may still offer the revealed text as a suggestion.
+
+**201. Set, change and remove secrets from Settings (Phase 21 P2).** Carries out P2 of Decision 199.
+- App lock tile: Set password (when none), Change password and Remove password (when set). Vault Settings: Change Vault PIN. The Vault PIN is first set in the Vault tab, unchanged. The Vault PIN cannot be removed: it wraps the Vault key.
+- A change or removal needs the current secret first: one biometric prompt when that unlock is on, otherwise the typed secret. A wrong secret is refused. Setting a password when none exists needs no check.
+- New secret: typed twice, weak-secret advisory (Decision 170), optional hint. Cancel or mismatch at any step changes nothing.
+- App password: `setAppPassword` and `removeAppPassword` as before. Both clear the stored biometric copy (Decision 50). Remove asks Remove or Keep with the consequence stated. The idle timer and the Lock button follow the new state.
+- Vault PIN: the Vault key comes from the current PIN or from the biometric copy, is wrapped under the new PIN, and replaces `vault_wrap` only if it still equals the one read. No item is re-encrypted. The biometric copy is cleared. A backup made earlier still needs the PIN it was made with (Decision 196).
+- The three credentials stay independent. The backup passkey is not touched. Nothing is stored beyond the existing hash, wrapper and hints.
+- Checks: 31 Node checks on the real crypto with a stub database and sheets (set, mismatch, empty, cancel at each step, weak refused and accepted, wrong and right current secret, biometric path and its fallback, remove and keep, Vault PIN change keeps the same key, old PIN fails, update guard, no Vault); `vite build` passes.
+- Risks: not run through CI or on a device (DP74). The biometric prompt inside a change is untested natively. A failure inside any flow shows "That did not work. Nothing was changed."

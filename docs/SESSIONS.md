@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 113**
+
+Phase 21 P2 (Decision 201): set, change and remove secrets from Settings. Docs read: Credentials section of ARCHITECTURE; source read: `app.js` (credential functions, biometric, Vault unlock, askText), `crypto.js` (wrapper), `index.html`.
+- `src/js/app.js`: `confirmAppSecret`, `askNewSecret`, `runSetAppPassword`, `runChangeAppPassword`, `runRemoveAppPassword`, `runChangeVaultPin`, `refreshAppPasswordRows`; button wiring in the Settings setup.
+- `src/index.html`: Password block in the App lock tile; Vault PIN block in Vault Settings.
+- Docs: ROADMAP (P2, DP74), DECISIONS (201), ARCHITECTURE (Credentials: changing secrets).
+
+Decisions made: 201.
+
+Verified: 31 Node checks; `vite build` passes. Not verified: CI, any device (DP69 to DP74); the biometric prompt inside a change.
+
+Open: DP69 to DP74 on device; Phase 17 stages M to O; Phase 21 P3 and P4 (P4 needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP74 on device, then on approval Phase 21 P3 or stage M of Decision 195.
+
 **Session 112**
 
 Phase 21 P1 (Decision 200): show/hide control on password fields. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 195 to 199 only. Source read: `app.js` (`clearSecretInputs`, `askText`, PDF password prompt), `index.html`, `style.css`.
