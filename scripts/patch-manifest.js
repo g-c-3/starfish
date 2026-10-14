@@ -33,6 +33,9 @@ const REQUIRED_PERMISSIONS = [
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.READ_EXTERNAL_STORAGE',
+  // File explorer (Decision 207): All files access on Android 11+, the legacy pair below it. The person grants it once in Android's settings.
+  'android.permission.MANAGE_EXTERNAL_STORAGE',
+  'android.permission.WRITE_EXTERNAL_STORAGE',
   'android.permission.INTERNET',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
