@@ -481,6 +481,7 @@ async function registerBackgroundLock() {
       // Back in front on the Vault screen while it is locked: show the gate and offer biometric, as the Vault tab does.
       // The app lock screen hides the Vault screen, so this never races it (Decision 59).
       if (!privateSessionKey && !document.getElementById('vault-screen')?.classList.contains('hidden')) window.refreshVaultGateView?.();
+      if (!document.getElementById('lock-screen')?.classList.contains('hidden')) offerLockBiometric(); // Decision 205
       return;
     } // only act on going TO background, not returning from it
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
@@ -857,10 +858,31 @@ async function disableVaultBiometric() {
 // Reuse the exact same verify paths as manual entry (attemptUnlock / unlockVault) rather than a
 // second copy of "what counts as correct" — biometric only ever supplies the same input a typed
 // entry would have.
+// The fingerprint screen is its own Activity, so opening and closing it pauses and resumes this one. lockBioBusy and the short
+// cooldown keep that resume from offering the prompt again (Decision 205).
+let lockBioBusy = false, lockBioCooldownUntil = 0;
 async function tryBiometricUnlockApp() {
-  const password = await unlockWithBiometric('app');
-  if (!password) return { success: false };
-  return window.attemptUnlock(password);
+  lockBioBusy = true;
+  try {
+    const password = await unlockWithBiometric('app');
+    if (!password) return { success: false };
+    return await window.attemptUnlock(password);
+  } finally {
+    lockBioBusy = false;
+    lockBioCooldownUntil = Date.now() + 2000;
+  }
+}
+// Back in front with the app lock screen showing (screen turned on, or returning from another app): offer the fingerprint again.
+// At start-up the same offer is made once from the load handler.
+async function offerLockBiometric() {
+  if (lockBioBusy || Date.now() < lockBioCooldownUntil) return;
+  await syncLockBiometric(); // also fixes the button
+  if (!window.biometricUnlockAvailable) return;
+  setTimeout(() => { // a short delay for Android's window focus, as at start-up
+    if (lockBioBusy || Date.now() < lockBioCooldownUntil) return;
+    if (document.getElementById('lock-screen')?.classList.contains('hidden')) return;
+    window.tryBiometricUnlockApp().catch(() => {});
+  }, 300);
 }
 const VMK_PREFIX = 'vmk1:';
 async function tryBiometricUnlockVault() {
