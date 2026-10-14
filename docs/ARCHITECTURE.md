@@ -908,6 +908,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - App password: updates the hash row; clears the fingerprint copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the fingerprint copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the fingerprint copy is cleared. Older backups keep the PIN they were made with.
 - The backup passkey is not involved.
 - The lock screen fingerprint button is re-derived (`syncLockBiometric`) after every enable and disable, so a cleared copy never leaves a button (Decision 203).
+- Returning to the front with the lock screen showing re-derives the button and opens the fingerprint prompt (`offerLockBiometric`); a busy flag and a short cooldown stop the prompt's own pause and resume from reopening it (Decision 205).
 
 ## Backup access gate (Decisions 202, 204)
 - Before Back up now and Back up to Drive: one window with App lock password if one is set and Vault PIN if the Vault is set up and included, one Submit; or the fingerprint button, when offered, which covers both. Then the backup passkey as before.

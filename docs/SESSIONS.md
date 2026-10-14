@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 117**
+
+Bug fix (Decision 205): no fingerprint offered after a lock and reopen. Source read: `app.js` (`registerBackgroundLock`, `handleLockTrigger`, `tryBiometricUnlockApp`, the start-up prompt); the screenshot showed the lock screen without a fingerprint button.
+- `src/js/app.js`: `offerLockBiometric`; resume handler calls it when the lock screen is showing; `tryBiometricUnlockApp` holds a busy flag and a cooldown.
+- Docs: ROADMAP (DP77), DECISIONS (205), ARCHITECTURE (note under Changing secrets).
+
+Decisions made: 205.
+
+Verified: 8 new Node checks and the earlier suites; `vite build` passes. Not verified: CI, any device (DP69 to DP77); the cooldown length.
+
+Open: DP69 to DP77 on device; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP77 on device, then Phase 17 stage M on approval.
+
 **Session 116**
 
 Redesign of the secret windows (Decision 204), requested by the owner: fingerprint as a choice, and one window per change or gate. Source read: `app.js` (secret management, `askText`, `dismissOverlays`, `backAction`), `index.html`, `style.css`.
