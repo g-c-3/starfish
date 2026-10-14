@@ -815,3 +815,32 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .rep-item span { min-width: 0; overflow-wrap: anywhere; }
 .rep-item .rep-del { width: 32px; height: 32px; flex: none; margin: 0; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; background: var(--surface-2); color: var(--danger); }
 .money-summary .ms-year-input { margin: 0 0 8px; padding: 10px 12px; font-size: 15px; }
+
+/* ---- File explorer (Decisions 206, 207) ---- */
+#explorer-screen {
+  position: fixed; inset: 0; z-index: 9; display: flex; flex-direction: column;
+  background: var(--bg); padding-top: env(safe-area-inset-top, 0px);
+}
+#explorer-title { flex: 1; min-width: 0; font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-crumbs { display: flex; align-items: center; gap: 2px; padding: 8px 12px; overflow-x: auto; white-space: nowrap; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.explorer-crumbs::-webkit-scrollbar { display: none; }
+.explorer-crumbs .crumb { width: auto; margin: 0; padding: 6px 8px; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; box-shadow: none; flex: none; }
+.explorer-crumbs .crumb.current { color: var(--fg); }
+.explorer-crumbs .crumb-sep { color: var(--muted); flex: none; }
+.explorer-tools { padding: 8px 12px 4px; }
+.explorer-tools #explorer-filter { margin: 0 0 8px; }
+.explorer-sort { display: flex; gap: 8px; }
+.explorer-sort button { width: auto; margin: 0; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--muted); border: 1px solid var(--border); box-shadow: none; }
+.explorer-sort button.active { color: var(--fg); border-color: var(--brand); }
+#explorer-body { flex: 1; overflow-y: auto; padding: 8px 12px calc(88px + env(safe-area-inset-bottom, 0px)); }
+.explorer-list { display: flex; flex-direction: column; }
+.explorer-row { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0; padding: 10px 6px; border-radius: 14px; text-align: left; background: transparent; color: var(--fg); box-shadow: none; border: none; }
+.explorer-row:active { background: var(--surface-2); }
+.explorer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.explorer-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-section { margin: 16px 6px 4px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.explorer-note { padding: 28px 10px; text-align: center; color: var(--muted); }
+.explorer-note p { margin: 0 0 14px; line-height: 1.5; }
+.explorer-note button { width: auto; padding: 11px 22px; }
+
