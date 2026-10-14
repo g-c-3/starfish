@@ -4223,6 +4223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
+  // File explorer card, Home and Vault (Decision 206): placed; browsing arrives in the next stages.
+  document.querySelectorAll('button[data-tool="explorer"], button[data-vault-tool="explorer"]').forEach((btn) => btn.addEventListener('click', () => toast('File explorer is not built yet.')));
   // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
   // Also after an unlock committed autosaved work (Decision 191): the lists drawn before the lock still show the old rows.
   for (const name of ['arkly-data-restored', 'arkly-drafts-committed']) {
