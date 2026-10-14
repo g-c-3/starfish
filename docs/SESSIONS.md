@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 116**
+
+Redesign of the secret windows (Decision 204), requested by the owner: fingerprint as a choice, and one window per change or gate. Source read: `app.js` (secret management, `askText`, `dismissOverlays`, `backAction`), `index.html`, `style.css`.
+- `src/js/app.js`: `openSecretForm`; set, change and remove password, change Vault PIN and `confirmBackupAccess` rebuilt on it; the old step-by-step helpers removed.
+- `src/index.html`: `secret-dialog`.
+- `src/css/style.css`: `#secret-dialog` (below the yes/no dialog), `.secret-field`, status line.
+- Docs: ROADMAP (DP74, DP75 rewritten), DECISIONS (204), ARCHITECTURE (Changing secrets, Backup access gate).
+
+Decisions made: 204.
+
+Verified: 38 + 14 + 5 Node checks; `vite build` passes. Not verified: CI, any device (DP69 to DP76); window layout; the fingerprint prompt.
+
+Open: DP69 to DP76 on device; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP76 on device, then Phase 17 stage M on approval.
+
 **Session 115**
 
 Bug fix (Decision 203): Home fingerprint failing while the typed password works. Source read: `app.js` (lock screen, biometric enable and disable, `attemptUnlock`), `biometric.js`, the biometric plugin's Android source (credentials are stored per name).

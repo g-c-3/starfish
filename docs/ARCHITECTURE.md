@@ -902,17 +902,17 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Selection: the Select files bar moves the selected items one at a time through the same two functions; per-item failures are reported, not fatal (Decision 185).
 - Backup format unchanged.
 
-## Backup access gate (Decision 202)
-- Before Back up now and Back up to Drive: the app password if set, the Vault PIN if the Vault is set up and included, or one biometric prompt that covers both. Then the backup passkey as before.
-- A gate on the in-app action, not a key. The archive is still encrypted under the backup passkey only. No credential is changed, stored or recovered.
-- Not gated: restore, safety backup, automatic backup, extract to device storage. Typed attempts have no counter or delay.
-
-## Changing secrets (Decision 201)
+## Changing secrets (Decisions 201, 204)
 - Settings, App lock: Set, Change, Remove password. Vault Settings: Change Vault PIN. The Vault PIN is first set in the Vault tab and cannot be removed.
-- A change or removal needs the current secret, or one biometric prompt when that unlock is on. A new secret is typed twice, then the weak-secret advisory, then an optional hint.
-- App password: updates the hash row; clears the biometric copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the biometric copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the biometric copy is cleared. Older backups keep the PIN they were made with.
+- Each action is one window (`openSecretForm`): Current secret (not for Set), New, Repeat new, Hint (optional), Submit. Errors show in the window. Fingerprint is a button the person taps, offered only when that unlock is on; it hides the current field and never runs by itself. Back and every lock close the window and clear it.
+- App password: updates the hash row; clears the fingerprint copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the fingerprint copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the fingerprint copy is cleared. Older backups keep the PIN they were made with.
 - The backup passkey is not involved.
 - The lock screen fingerprint button is re-derived (`syncLockBiometric`) after every enable and disable, so a cleared copy never leaves a button (Decision 203).
+
+## Backup access gate (Decisions 202, 204)
+- Before Back up now and Back up to Drive: one window with App lock password if one is set and Vault PIN if the Vault is set up and included, one Submit; or the fingerprint button, when offered, which covers both. Then the backup passkey as before.
+- A gate on the in-app action, not a key. The archive is still encrypted under the backup passkey only. No credential is changed, stored or recovered.
+- Not gated: restore, safety backup, automatic backup, extract to device storage. Typed attempts have no counter or delay.
 
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
