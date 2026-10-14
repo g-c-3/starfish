@@ -520,6 +520,16 @@ function beginPickerLaunch() {
 
 // ---- Auth gate — app-open password is optional ("quick access"); Vault PIN is separate and unaffected ----
 async function showLockScreen() {
+  // Reads the stored credentials on every attempt (Decision 198): a lock after the password or its biometric changed in Settings
+  // reuses this function without re-running showLockScreen(), and values captured at start-up would reject the new password.
+  window.attemptUnlock = async (password) => {
+    const c = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`)).values?.[0];
+    if (!c?.app_password_hash) { await onUnlocked(); return { success: true }; } // the password was removed while the lock screen was pending
+    const ok = await verifyPassword(password, c.app_password_hash, c.app_password_salt, c.app_password_iter);
+    if (ok) { await onUnlocked(); await upgradeCredentialHash('app', password, c.app_password_hash, c.app_password_salt, c.app_password_iter); return { success: true }; }
+    return { success: false };
+  };
+
   const row = await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`);
 
   if (!row.values || row.values.length === 0) {
@@ -535,15 +545,6 @@ async function showLockScreen() {
   }
 
   showScreen('lock-screen');
-  // Reads the stored credentials on every attempt (Decision 198): a lock after the password or its biometric changed in Settings
-  // reuses this function without re-running showLockScreen(), and values captured at start-up would reject the new password.
-  window.attemptUnlock = async (password) => {
-    const c = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`)).values?.[0];
-    if (!c?.app_password_hash) { await onUnlocked(); return { success: true }; } // the password was removed while the lock screen was pending
-    const ok = await verifyPassword(password, c.app_password_hash, c.app_password_salt, c.app_password_iter);
-    if (ok) { await onUnlocked(); await upgradeCredentialHash('app', password, c.app_password_hash, c.app_password_salt, c.app_password_iter); return { success: true }; }
-    return { success: false };
-  };
 
   // Biometric alternative — only offered if enabled for this lock AND actually available right
   // now (checked fresh every time the lock screen shows, not cached: enrollment/hardware state
@@ -559,8 +560,14 @@ async function showLockScreen() {
   // async setup (populating settings from the database, etc.), racing two chains of SQLite calls
   // against each other. Firing only after that setup has fully finished removes the race
   // entirely, which matters more here than the exact delay length.
-  const bioRow = (await db.query(`SELECT biometric_app_enabled FROM credentials WHERE id=1`)).values[0];
-  window.biometricUnlockAvailable = !!bioRow?.biometric_app_enabled && await isBiometricAvailable();
+  await syncLockBiometric();
+}
+// The lock screen's fingerprint button follows the stored state (Decision 203): re-read whenever the password or its biometric
+// changes, not once at start-up, so a disabled or removed copy never leaves a button that can only fail.
+async function syncLockBiometric() {
+  const r = (await db.query(`SELECT app_password_hash, biometric_app_enabled FROM credentials WHERE id=1`)).values?.[0];
+  window.biometricUnlockAvailable = !!r?.app_password_hash && !!r?.biometric_app_enabled && await isBiometricAvailable();
+  document.getElementById('biometric-unlock-btn')?.classList.toggle('hidden', !window.biometricUnlockAvailable);
 }
 
 // appPassword/vaultPin: either or both may be null/empty — the app-open password is optional from
@@ -771,11 +778,13 @@ async function enableAppBiometric(currentPassword) {
   if (!ok) return { success: false, reason: 'wrong-password' };
   await enableBiometric('app', currentPassword); // shows the biometric prompt itself, throws on cancel/failure
   await db.run(`UPDATE credentials SET biometric_app_enabled=1 WHERE id=1`);
+  await syncLockBiometric();
   return { success: true };
 }
 async function disableAppBiometric() {
   await disableBiometric('app');
   await db.run(`UPDATE credentials SET biometric_app_enabled=0 WHERE id=1`);
+  await syncLockBiometric();
 }
 
 async function enableVaultBiometric(currentPin) {
