@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 112**
+
+Phase 21 P1 (Decision 200): show/hide control on password fields. Fresh session; Tier 1 docs read, Tier 2 read for Decisions 195 to 199 only. Source read: `app.js` (`clearSecretInputs`, `askText`, PDF password prompt), `index.html`, `style.css`.
+- Finding: the update check for the private repo is already built and confirmed (Decision 164, DP45).
+- `src/js/passeye.js` (new): `initPasswordEyes`, `attachEye`, `hidePasswords`, `setPasswordField`.
+- `src/js/app.js`: import and start call; `clearSecretInputs` selects `input[data-pw]` and hides revealed fields; `askText` uses `setPasswordField`; the sheet hides the field on close.
+- `src/index.html`: `i-eye` symbol; `data-no-eye` on the lock screen input.
+- `src/css/style.css`: `.pw-field`, `.pw-eye`, `.pw-off`.
+- Docs: ROADMAP (Phase 21, P1, DP73), DECISIONS (200), ARCHITECTURE (Password show/hide).
+
+Decisions made: 200.
+
+Verified: 18 Node checks on `passeye.js`; `vite build` passes. Not verified: CI, any device (DP73). The layout of the wrapped fields is DOM and CSS and has no Node check.
+
+Open: DP69 to DP73 on device; Phase 17 stages M to O; Phase 21 P2 to P4 (P4 needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP73 on device, then on approval Phase 21 P2 or stage M of Decision 195.
+
 **Session 111**
 
 OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (headings and latest entries). Source read: `package.json`, `native-setup.md` §6, the OCR call sites in `app.js`, `move.js`, `vault.js`, `intents.js`.

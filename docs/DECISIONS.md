@@ -2407,3 +2407,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
   - Phone storage and Google Drive use the same saved passkey and the same check.
 - Open: approval of the stored automatic-backup passkey; whether it is chosen by the person (proposed) or generated and shown once.
 - Risks: touches Credentials and Backup and Restore. Each stage is checked against those sections first and device-tested before the next.
+
+**200. Show/hide control on password fields (Phase 21 P1).** Carries out P1 of Decision 199.
+- `src/js/passeye.js`: each `input[type=password]` is wrapped once in `.pw-field` with an eye button after it. Fields added later are wrapped by a `MutationObserver`. The input's margins move to the wrapper so the button centres on the input.
+- Excluded: the lock screen input (`data-no-eye`), as planned. Included: set-up, change and confirm fields, backup and restore passkeys, the update token, the PDF password prompt, and the shared single-field text sheet when it asks for a secret (`setPasswordField`).
+- A revealed field is hidden again by `clearSecretInputs` (lock and unlock), when the text sheet closes, and when the app leaves the foreground.
+- Revealing sets `type` to `text`, so `clearSecretInputs` now also selects `input[data-pw]`. Without that a revealed field would keep its text after a lock (Decision 94).
+- Pure display. No credential, hash, key, storage or backup code changed. The button keeps focus where it was, so the keyboard stays up.
+- Autocapitalize, autocorrect and spellcheck are switched off on wrapped fields.
+- Checks: 18 Node checks on a DOM stub (wrap once, lock input untouched, show and hide, icon and label, selector still finds a revealed field, hide all and hide a list, field added later, shared field on, off and reused, hidden on background); `vite build` passes.
+- Risks: not run through CI or on a device (DP73). Layout of each field is unverified on a phone. A keyboard may still offer the revealed text as a suggestion.

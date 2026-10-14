@@ -901,3 +901,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Files: Home to Vault reads the file whole into the encrypted body; Vault to Home writes it through the per-file store. No size cap (Decision 184); copy first, compare, then delete, so running out of memory leaves the original.
 - Selection: the Select files bar moves the selected items one at a time through the same two functions; per-item failures are reported, not fatal (Decision 185).
 - Backup format unchanged.
+
+## Password show/hide (Decision 200)
+- `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
+- Revealing switches the input to `type=text`; a wrapped input is found by `input[data-pw]`. `clearSecretInputs` covers both types.
+- Hidden again on lock, unlock, text sheet close and when the app leaves the foreground.
+- The shared text sheet calls `setPasswordField(input, isPassword)`; the eye shows only while it asks for a secret.
+- Display only: no credential, key or backup path is touched.
