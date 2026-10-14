@@ -2382,3 +2382,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: `setupVaultPin` returns the row count; set-up then asks "Erase old Vault items?", stating the count, that Vault Trash is included, and that erasing is permanent. On Erase and continue it cancels each old reminder, deletes each row through `permanentlyDeleteEntry`, deletes the Vault drafts in `meta` (`vault_%draft%`, which the new key cannot open), then creates the new Vault. Cancel changes nothing.
 - Why correct: nothing is deleted without the person confirming the consequence; the rows could never be read by the new key.
 - Checks: the draft-cleanup SQL run on SQLite (removes `vault_note_draft`, `vault_edit_draft`, `vault_form_draft_*`; keeps `note_draft` and `vault_autolock`); `vite build` passes. Not run through CI or on a device (DP71).
+
+**198. The lock screen reads the stored credentials on every attempt (bug fix).**
+- Report: after the app locked, neither the correct password nor a successful biometric opened Home. A cold start with the password worked.
+- Cause (likely; not reproduced): `attemptUnlock` verified against the hash, salt and count captured when `showLockScreen()` ran at start-up. An auto-lock or background lock only shows the lock screen and reuses that function, so a password or biometric changed since start-up was checked against the old hash. A biometric unlock hands the new password to the same function and failed the same way.
+- Fix: `attemptUnlock` selects the three values from `credentials` on each attempt. If the password was removed meanwhile it unlocks. Hash upgrade (Decision 172) now works from the same fresh values.
+- Why correct: one source of truth, the stored row; cold start and later locks verify the same way.
+- Risks: not run through CI or on a device (DP72). If it still fails with no password change since start-up, the cause is elsewhere and the screen state at that moment is needed.
