@@ -57,6 +57,11 @@ jobs:
       - name: Patch MainActivity.java (screen-off receiver for app/vault lock)
         run: node scripts/patch-screenlock.js
 
+      # Decisions 206, 207 — the File explorer's All files access check and storage volume list (window.ArklyExplorer).
+      # Needs the onCreate() that patch-screenlock.js guarantees, so it runs right after it.
+      - name: Patch MainActivity.java (File explorer bridge)
+        run: node scripts/patch-explorer.js
+
       # Decision 102 — Snooze/Done from the notification without launching the app. Patches the plugin source in
       # node_modules and writes the receiver into android/, so it runs after both exist and before Gradle compiles.
       - name: Patch reminder notification actions (native receiver)
