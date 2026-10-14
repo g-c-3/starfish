@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 114**
+
+Phase 21 P3 (Decision 202): backup access gate. Docs read: Backup & Restore and Credentials sections of ARCHITECTURE, Decision 199. Source read: `app.js` (`handleBackupNow`, `handleDriveBackupNow`, secret management), `backup.js` (category keys).
+- `src/js/app.js`: `confirmBackupAccess`; called from `handleBackupNow` and `handleDriveBackupNow`.
+- No other source file changed. `src/index.html` and `src/js/passeye.js` are unchanged since Sessions 112 and 113.
+- Docs: ROADMAP (P3, DP75), DECISIONS (202), ARCHITECTURE (Backup access gate).
+
+Decisions made: 202.
+
+Verified: 45 Node checks; `vite build` passes. Not verified: CI, any device (DP69 to DP75); the biometric prompt.
+
+Open: DP69 to DP75 on device; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP75 on device, then Phase 17 stage M on approval; Phase 21 P4 waits for the passkey decision.
+
 **Session 113**
 
 Phase 21 P2 (Decision 201): set, change and remove secrets from Settings. Docs read: Credentials section of ARCHITECTURE; source read: `app.js` (credential functions, biometric, Vault unlock, askText), `crypto.js` (wrapper), `index.html`.

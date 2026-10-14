@@ -220,3 +220,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-14 | Session 111 (Phase 21 plan) | Decision 199 | Password management and backup authorization planned as Phase 21; docs only; nothing built |
 | 2026-10-14 | Session 112 (Password eye) | Decision 200 | Phase 21 P1 built: show/hide control on password fields; DP73 added; 18 Node checks; vite build passes; not run through CI or on a device |
 | 2026-10-14 | Session 113 (Secret management) | Decision 201 | Phase 21 P2 built: set, change and remove the app password; change the Vault PIN; DP74 added; 31 Node checks; vite build passes; not run through CI or on a device |
+| 2026-10-14 | Session 114 (Backup gate) | Decision 202 | Phase 21 P3 built: app password or Vault PIN, or one biometric, before a manual backup; DP75 added; 45 Node checks; vite build passes; not run through CI or on a device |

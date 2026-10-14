@@ -2427,3 +2427,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The three credentials stay independent. The backup passkey is not touched. Nothing is stored beyond the existing hash, wrapper and hints.
 - Checks: 31 Node checks on the real crypto with a stub database and sheets (set, mismatch, empty, cancel at each step, weak refused and accepted, wrong and right current secret, biometric path and its fallback, remove and keep, Vault PIN change keeps the same key, old PIN fails, update guard, no Vault); `vite build` passes.
 - Risks: not run through CI or on a device (DP74). The biometric prompt inside a change is untested natively. A failure inside any flow shows "That did not work. Nothing was changed."
+
+**202. Manual backup authorization (Phase 21 P3).** Carries out P3 of Decision 199.
+- `confirmBackupAccess(categories)` runs before Back up now (Settings) and Back up to Drive, after the passkey and category checks and before the weak-passkey advisory and any storage work. A refusal stops the backup with a status line.
+- Asked: the app password if one is set; the Vault PIN if the Vault is set up and the Private Vault category is included. Neither applies: no prompt.
+- One biometric prompt replaces the typed entries: the app copy when a password is set and its unlock is on, otherwise the Vault copy when the Vault is needed and its unlock is on. A verified prompt covers both gates (as planned in Decision 199); the two typed entries stay separate. Cancel or a failed prompt falls back to typing.
+- A gate on the in-app action, not a key: the archive stays encrypted under the backup passkey, asked as before (Decision 159). Nothing is stored, changed or recovered; the three credentials stay independent.
+- Not gated: restore, the safety backup before an overwrite restore, the automatic backup (P4), extract to device storage.
+- Limits: it does not protect data from anyone who copies the phone's storage; that is the database and file encryption. Typed attempts have no counter or delay; the lock screen has none either.
+- Checks: 45 Node checks (31 from Decision 201 plus the gate: nothing set, app password right, wrong and cancelled, Vault excluded, not set up, Vault PIN right and wrong, both typed, one biometric covers both, bad biometric falls back, Vault biometric alone, biometric cancelled); `vite build` passes.
+- Risks: not run through CI or on a device (DP75). The biometric prompt is untested natively.
