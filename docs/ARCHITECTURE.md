@@ -912,6 +912,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - A change or removal needs the current secret, or one biometric prompt when that unlock is on. A new secret is typed twice, then the weak-secret advisory, then an optional hint.
 - App password: updates the hash row; clears the biometric copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the biometric copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the biometric copy is cleared. Older backups keep the PIN they were made with.
 - The backup passkey is not involved.
+- The lock screen fingerprint button is re-derived (`syncLockBiometric`) after every enable and disable, so a cleared copy never leaves a button (Decision 203).
 
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.

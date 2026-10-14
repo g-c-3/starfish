@@ -2437,3 +2437,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Limits: it does not protect data from anyone who copies the phone's storage; that is the database and file encryption. Typed attempts have no counter or delay; the lock screen has none either.
 - Checks: 45 Node checks (31 from Decision 201 plus the gate: nothing set, app password right, wrong and cancelled, Vault excluded, not set up, Vault PIN right and wrong, both typed, one biometric covers both, bad biometric falls back, Vault biometric alone, biometric cancelled); `vite build` passes.
 - Risks: not run through CI or on a device (DP75). The biometric prompt is untested natively.
+
+**203. Lock-screen fingerprint button follows stored state (bug fix).** Reported: Home fingerprint fails while the typed password works; Vault fingerprint works.
+- Cause: `biometricUnlockAvailable` and the lock screen button were set once at start-up. Changing or removing the app password, or turning its fingerprint off, in the same session clears the stored copy (Decision 50) but left the button; a tap read a copy that no longer existed and showed the failure line. The Vault has no such button, so it was unaffected. Inferred from the code; not reproduced on a device.
+- Fix: `syncLockBiometric` re-reads the password, the fingerprint flag and the sensor, then sets the flag and the button. It runs at start-up and after every enable and disable; set, change and remove password reach it through disable.
+- Second defect, same area: `attemptUnlock` was defined only after the quick-access and first-run returns in `showLockScreen`, so a password set in Settings during a quick-access session left the lock screen with no unlock function until restart. It is now defined first.
+- Why correct: the button state is derived from the same stored values the unlock path reads, at the moment they change.
+- Plaintext and wrapper paths are unchanged. The plugin stores each secret under its own name, so the same password for Home and Vault cannot collide.
+- Checks: 5 Node checks (off at start, shown after enabling, hidden after disabling, no password, sensor unavailable); the 45 earlier checks still pass; `vite build` passes.
+- Risks: not run through CI or on a device (DP76).

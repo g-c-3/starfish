@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 115**
+
+Bug fix (Decision 203): Home fingerprint failing while the typed password works. Source read: `app.js` (lock screen, biometric enable and disable, `attemptUnlock`), `biometric.js`, the biometric plugin's Android source (credentials are stored per name).
+- `src/js/app.js`: `syncLockBiometric`; called at start-up and after enable and disable; `attemptUnlock` moved ahead of the early returns in `showLockScreen`.
+- Docs: ROADMAP (DP76), DECISIONS (203), ARCHITECTURE (note under Changing secrets).
+
+Decisions made: 203.
+
+Verified: 5 new Node checks and the 45 earlier ones; `vite build` passes. Not verified: CI, any device (DP69 to DP76). The cause is inferred from the code and not reproduced.
+
+Open: DP69 to DP76 on device; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP69 to DP76 on device, then Phase 17 stage M on approval.
+
 **Session 114**
 
 Phase 21 P3 (Decision 202): backup access gate. Docs read: Backup & Restore and Credentials sections of ARCHITECTURE, Decision 199. Source read: `app.js` (`handleBackupNow`, `handleDriveBackupNow`, secret management), `backup.js` (category keys).
