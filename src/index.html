@@ -180,6 +180,12 @@
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><span class="tile-label">App lock</span></summary>
         <p class="mode-description">Only applies if an app-open password is set — quick access has nothing to lock back to.</p>
 
+        <h4>Password</h4>
+        <p id="app-password-status" class="mode-description"></p>
+        <button id="app-password-set-btn" class="secondary-btn hidden">Set password</button>
+        <button id="app-password-change-btn" class="secondary-btn hidden">Change password</button>
+        <button id="app-password-remove-btn" class="secondary-btn hidden">Remove password</button>
+
         <label class="switch-row"><input type="checkbox" id="app-lock-idle-toggle" checked /> Lock after inactivity</label>
         <label>
           <select id="app-auto-lock-select">
@@ -357,6 +363,10 @@
               <button id="vault-biometric-confirm-btn">Confirm</button>
             </div>
           </div>
+
+          <h4>Vault PIN</h4>
+          <p class="mode-description">Changing the PIN re-wraps the Vault key only; no item is re-encrypted. A backup made earlier still needs the PIN it was made with. The PIN cannot be removed.</p>
+          <button id="vault-pin-change-btn" class="secondary-btn">Change Vault PIN</button>
 
           <h4>Auto-lock</h4>
           <label class="switch-row"><input type="checkbox" id="vault-lock-idle-toggle" checked /> Lock after inactivity</label>
