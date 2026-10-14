@@ -531,9 +531,13 @@ async function showLockScreen() {
   }
 
   showScreen('lock-screen');
+  // Reads the stored credentials on every attempt (Decision 198): a lock after the password or its biometric changed in Settings
+  // reuses this function without re-running showLockScreen(), and values captured at start-up would reject the new password.
   window.attemptUnlock = async (password) => {
-    const ok = await verifyPassword(password, app_password_hash, app_password_salt, app_password_iter);
-    if (ok) { await onUnlocked(); await upgradeCredentialHash('app', password, app_password_hash, app_password_salt, app_password_iter); return { success: true }; }
+    const c = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter FROM credentials WHERE id=1`)).values?.[0];
+    if (!c?.app_password_hash) { await onUnlocked(); return { success: true }; } // the password was removed while the lock screen was pending
+    const ok = await verifyPassword(password, c.app_password_hash, c.app_password_salt, c.app_password_iter);
+    if (ok) { await onUnlocked(); await upgradeCredentialHash('app', password, c.app_password_hash, c.app_password_salt, c.app_password_iter); return { success: true }; }
     return { success: false };
   };
 
