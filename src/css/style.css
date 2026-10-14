@@ -474,6 +474,19 @@ input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 }
 .form-card h3 { margin: 0 0 4px; font-size: 17px; }
 .form-card input, .form-card button { margin-top: 8px; margin-bottom: 0; }
+
+/* Show/hide control on password fields (Decision 200). The wrapper takes the input's margins (set inline). */
+.pw-field { position: relative; display: block; width: 100%; }
+.pw-field > input { padding-right: 50px; }
+.pw-field > button.pw-eye {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  width: 40px; height: 40px; margin: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; box-shadow: none; color: var(--muted); border-radius: 12px;
+}
+.pw-field.pw-off > button.pw-eye { display: none; }
+.pw-field.pw-off > input { padding-right: 16px; }
+.pdf-pw .pw-field { max-width: 320px; }
 .form-card .mode-description { margin-bottom: 4px; }
 #password-hint { margin-top: 12px; text-align: center; font-size: 13px; color: var(--muted); }
 #password-hint:empty { display: none; }
