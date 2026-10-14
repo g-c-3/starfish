@@ -560,6 +560,10 @@ textarea { resize: none; line-height: 1.5; display: block; }
 #coords-verify { margin-bottom: 12px; }
 #text-dialog { z-index: 12; }
 #yesno-dialog { z-index: 12; } /* above the Save dialog (11), which it confirms over */
+#secret-dialog { z-index: 11; } /* below the yes/no dialog (12) that carries the weak-secret advisory over it */
+.secret-field { margin-top: 10px; }
+.secret-field > span { display: block; font-size: 0.85em; opacity: 0.8; margin-bottom: 4px; }
+#secret-status:empty { display: none; }
 #save-dialog .modal-box {
   max-width: 560px; max-height: 92vh; overflow-y: auto; border-radius: 28px 28px 0 0;
   padding: 22px 18px calc(18px + env(safe-area-inset-bottom, 0px));
