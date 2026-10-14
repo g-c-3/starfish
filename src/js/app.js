@@ -33,6 +33,7 @@ import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
+import { openExplorer } from './explorer.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
@@ -355,6 +356,7 @@ function backAction() {
   if (activeSaveDialog) return () => activeSaveDialog.requestLeave();
   const modal = openModalDismiss();
   if (modal) return modal;
+  if (activeExplorer) return () => activeExplorer.back();
   if (activeEditor) return () => activeEditor.requestBack();
   if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
   if (searchOpen) return () => closeSearchScreen();
@@ -2100,6 +2102,7 @@ function openSecretForm({ title, text = '', fields, ok = 'Submit', bioLabel = nu
   });
 }
 let activeEditor = null;     // { finish, requestBack, isVault }
+let activeExplorer = null;   // { finish, back, isVault } — File explorer screen (Decisions 206, 207)
 let activeViewer = null;     // { finish, back, isVault } — entry viewer shell (Decision 92); back honours the viewer's guard
 let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
 
@@ -2117,6 +2120,7 @@ function dismissOverlays(vaultOnly = false) {
   if (hadAny) overlayAbortCount++;
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
   if (activeEditor && (!vaultOnly || activeEditor.isVault)) activeEditor.finish(null);
+  if (activeExplorer && (!vaultOnly || activeExplorer.isVault)) activeExplorer.finish(); // the listing is dropped with the screen
   if (activeViewer && (!vaultOnly || activeViewer.isVault)) activeViewer.finish();
 }
 
@@ -3275,7 +3279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // above it (CSS: body.overlay-open) and Back dismisses it (Decision 104). Class changes cover every open/close path,
   // including a lock's forced close.
   const syncOverlayChrome = () => {
-    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), .modal-overlay:not(.hidden)');
+    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), #explorer-screen:not(.hidden), .modal-overlay:not(.hidden)');
     document.body.classList.toggle('overlay-open', open);
     updateBackButtonState();
   };
@@ -4223,8 +4227,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
-  // File explorer card, Home and Vault (Decision 206): placed; browsing arrives in the next stages.
-  document.querySelectorAll('button[data-tool="explorer"], button[data-vault-tool="explorer"]').forEach((btn) => btn.addEventListener('click', () => toast('File explorer is not built yet.')));
+  // File explorer card, Home and Vault (Decisions 206, 207): the same screen from both; the Vault one closes with a Vault lock.
+  const openFileExplorer = (isVault) => {
+    if (activeExplorer) return;
+    activeExplorer = openExplorer({ isVault, toast, leaving: beginPickerLaunch, onClose: () => { activeExplorer = null; updateBackButtonState(); } });
+    updateBackButtonState();
+  };
+  document.querySelector('button[data-tool="explorer"]')?.addEventListener('click', () => openFileExplorer(false));
+  document.querySelector('button[data-vault-tool="explorer"]')?.addEventListener('click', () => openFileExplorer(true));
   // A notification Snooze/Done changed a reminder while the app was already open: redraw the list (Decision 99).
   // Also after an unlock committed autosaved work (Decision 191): the lists drawn before the lock still show the old rows.
   for (const name of ['arkly-data-restored', 'arkly-drafts-committed']) {
