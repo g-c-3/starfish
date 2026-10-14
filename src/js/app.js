@@ -606,6 +606,118 @@ async function removeAppPassword() {
   await disableAppBiometric(); // nothing left to unlock biometrically
 }
 
+// ---- Set, change and remove secrets from Settings (Decision 201). The three credentials stay independent: the app-open
+// password and the Vault PIN are changed separately, and neither touches the backup passkey. A change or removal first
+// needs the current secret, or one biometric check when that is on. ----
+async function confirmAppSecret(title) {
+  const row = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter, biometric_app_enabled FROM credentials WHERE id=1`)).values[0];
+  if (!row?.app_password_hash) return { ok: true, hadBiometric: false };
+  if (row.biometric_app_enabled && await isBiometricAvailable()) {
+    let stored = null;
+    try { stored = await unlockWithBiometric('app'); } catch { /* cancelled or failed: the typed password follows */ }
+    if (stored && await verifyPassword(stored, row.app_password_hash, row.app_password_salt, row.app_password_iter)) return { ok: true, hadBiometric: true };
+  }
+  const typed = await askText({ title, text: 'Enter your current password.', password: true, ok: 'Continue' });
+  if (typed === null) return { ok: false };
+  if (!typed || !(await verifyPassword(typed, row.app_password_hash, row.app_password_salt, row.app_password_iter))) { toast('Wrong password.'); return { ok: false }; }
+  return { ok: true, hadBiometric: !!row.biometric_app_enabled };
+}
+
+// New secret, typed twice, with the weak-secret advisory (Decision 170) and an optional hint. Null on cancel or mismatch.
+async function askNewSecret({ kind, label, isVault = false, currentHint = '' }) {
+  const first = await askText({ title: `New ${label}`, password: true, ok: 'Next', isVault });
+  if (first === null) return null;
+  if (!first) { toast('Nothing entered.'); return null; }
+  const again = await askText({ title: `Confirm ${label}`, password: true, ok: 'Save', isVault });
+  if (again === null) return null;
+  if (first !== again) { toast('The two entries do not match.'); return null; }
+  if (!(await confirmStrength(kind, first))) return null;
+  const hint = await askText({ title: 'Hint (optional)', text: 'Shown at the lock screen. Do not let it give the answer away.', initial: currentHint || '', ok: 'Done', isVault });
+  if (hint === null) return null;
+  return { value: first, hint: hint.trim() };
+}
+
+async function refreshAppPasswordRows() {
+  const status = document.getElementById('app-password-status');
+  if (!status) return;
+  const row = (await db.query(`SELECT app_password_hash FROM credentials WHERE id=1`)).values[0];
+  const has = !!row?.app_password_hash;
+  status.textContent = has ? 'A password is set.' : 'No password: the app opens without one.';
+  document.getElementById('app-password-set-btn').classList.toggle('hidden', has);
+  document.getElementById('app-password-change-btn').classList.toggle('hidden', !has);
+  document.getElementById('app-password-remove-btn').classList.toggle('hidden', !has);
+  const bio = document.getElementById('app-biometric-toggle');
+  if (bio) bio.checked = (await getBiometricSettings()).appEnabled;
+}
+async function afterAppPasswordChange() {
+  await armAppAutoLock(); // arms with a password, does nothing without one
+  await updateLockButtonDisabledState(false);
+  await refreshAppPasswordRows();
+}
+
+async function runSetAppPassword() {
+  const n = await askNewSecret({ kind: 'password', label: 'password' });
+  if (!n) return;
+  await setAppPassword(n.value, n.hint);
+  await afterAppPasswordChange();
+  toast('Password set.');
+}
+async function runChangeAppPassword() {
+  const auth = await confirmAppSecret('Change password');
+  if (!auth.ok) return;
+  const cur = (await db.query(`SELECT app_password_hint FROM credentials WHERE id=1`)).values[0];
+  const n = await askNewSecret({ kind: 'password', label: 'password', currentHint: cur?.app_password_hint });
+  if (!n) return;
+  await setAppPassword(n.value, n.hint); // also turns biometric unlock off (Decision 50)
+  await afterAppPasswordChange();
+  toast(auth.hadBiometric ? 'Password changed. Fingerprint unlock is off; turn it on again.' : 'Password changed.');
+}
+async function runRemoveAppPassword() {
+  const auth = await confirmAppSecret('Remove password');
+  if (!auth.ok) return;
+  const yes = await askYesNo({ title: 'Remove the password?', text: 'The app will open without a password. The Vault PIN is not affected.', yes: 'Remove', no: 'Keep' });
+  if (!yes) return;
+  await removeAppPassword();
+  disarmAppAutoLock();
+  await afterAppPasswordChange();
+  toast('Password removed.');
+}
+
+// The PIN only wraps the Vault key, so a change re-wraps that key and re-encrypts no item (Decision 195). The key comes from the
+// current PIN or from the biometric copy, which holds it. The PIN cannot be removed.
+async function runChangeVaultPin() {
+  const row = (await db.query(`SELECT vault_wrap, private_pin_hint, biometric_vault_enabled FROM credentials WHERE id=1`)).values[0];
+  if (!row?.vault_wrap) { toast('Set up the Vault first.'); return; }
+  const hadBiometric = !!row.biometric_vault_enabled;
+  let vmk = null;
+  if (row.biometric_vault_enabled && await isBiometricAvailable()) {
+    try {
+      const stored = await unlockWithBiometric('vault');
+      if (stored && stored.startsWith(VMK_PREFIX)) {
+        const k = new Uint8Array(fromBase64(stored.slice(VMK_PREFIX.length)));
+        if (await vmkMatchesWrap(k, row.vault_wrap)) vmk = k;
+      }
+    } catch { /* cancelled or failed: the typed PIN follows */ }
+  }
+  if (!vmk) {
+    const pin = await askText({ title: 'Change Vault PIN', text: 'Enter your current Vault PIN.', password: true, ok: 'Continue', isVault: true });
+    if (pin === null) return;
+    const u = pin ? await unwrapVault(pin, row.vault_wrap) : null;
+    if (!u) { toast('Wrong PIN.'); return; }
+    vmk = u.vmk;
+  }
+  const n = await askNewSecret({ kind: 'pin', label: 'Vault PIN', isVault: true, currentHint: row.private_pin_hint });
+  if (!n) return;
+  const wrap = await wrapVmk(vmk, n.value);
+  await db.run(`UPDATE credentials SET vault_wrap=?, private_pin_hint=? WHERE id=1 AND vault_wrap=?`, [wrap, n.hint, row.vault_wrap]);
+  const saved = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
+  if (saved?.vault_wrap !== wrap) { toast('The PIN was not changed. Try again.'); return; }
+  await disableVaultBiometric(); // the stored copy is cleared on any change (Decision 50)
+  if (window.refreshVaultGateView) await window.refreshVaultGateView();
+  toast(hadBiometric ? 'Vault PIN changed. Fingerprint unlock is off; turn it on again.' : 'Vault PIN changed.');
+}
+// ---- end of secret management ----
+
 // ---- Biometric unlock (optional, alternative to typing the app-open password or Vault PIN —
 // off by default, toggled independently per lock. See biometric.js for the plugin wrapper and
 // its security notes, and ARCHITECTURE §3/§3b — this never becomes a fourth credential: it only
@@ -2704,6 +2816,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       else toast('Wrong password.');
     });
   }
+  const guarded = (fn) => async () => { try { await fn(); } catch (e) { console.warn('secret change failed', e); toast('That did not work. Nothing was changed.'); } };
+  document.getElementById('app-password-set-btn')?.addEventListener('click', guarded(runSetAppPassword));
+  document.getElementById('app-password-change-btn')?.addEventListener('click', guarded(runChangeAppPassword));
+  document.getElementById('app-password-remove-btn')?.addEventListener('click', guarded(runRemoveAppPassword));
+  document.getElementById('vault-pin-change-btn')?.addEventListener('click', guarded(runChangeVaultPin));
+  refreshAppPasswordRows();
   const vaultBioConfirm = document.getElementById('vault-biometric-confirm');
   const vaultBioToggleEl = document.getElementById('vault-biometric-toggle');
   if (vaultBioToggleEl) {
