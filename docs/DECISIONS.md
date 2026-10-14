@@ -2389,3 +2389,21 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: `attemptUnlock` selects the three values from `credentials` on each attempt. If the password was removed meanwhile it unlocks. Hash upgrade (Decision 172) now works from the same fresh values.
 - Why correct: one source of truth, the stored row; cold start and later locks verify the same way.
 - Risks: not run through CI or on a device (DP72). If it still fails with no password change since start-up, the cause is elsewhere and the screen state at that moment is needed.
+
+**199. Password management and backup authorization (Phase 21): plan, nothing built.** Requested by the owner: set, show, change and remove passwords; password-gated backups; a saved passkey for automatic backups.
+- Show/hide (P1): an eye control on every password input (set-up, change, backup and restore passkey, confirm). The lock screen keeps its input as is.
+- Set, change, remove (P2):
+  - Either secret can be set later in Settings if it was skipped. Home means the app-open password; the Vault has its own PIN. They stay independent (Decision 144).
+  - Change or remove needs the current secret or a biometric check first. Changing the app password re-hashes it. Changing the Vault PIN re-wraps the Vault key (Decision 195): with the current PIN it unwraps first; with biometric the key is already held, so the old PIN is not needed.
+  - Only the app-open password can be removed (quick access). The Vault PIN cannot: it is what wraps the Vault key.
+  - A change clears that secret's stored biometric copy, as in Decision 50; biometric is turned on again afterwards.
+- Backup authorization (P3):
+  - Before a manual backup the app asks for the app password if one is set, and the Vault PIN if the Vault is included, or one biometric check instead of both. Password entries are separate for Home and Vault; one biometric covers both.
+  - This is a gate on the in-app action, not a key: the archive stays encrypted under the backup passkey (Decision 159), asked for as now. The three credentials stay independent; the gate verifies and recovers nothing.
+  - It stops someone using the open app to export. It does not protect data from anyone who copies the phone's storage; that is the database and file encryption (Decisions 158, 161, 195).
+- Automatic backup (P4):
+  - An unattended run cannot ask for anything, so the check applies when automatic backup is turned on and whenever its schedule, target or passkey changes.
+  - A saved passkey for automatic runs conflicts with the rule that the backup passkey is never stored (ARCHITECTURE section 3, Decisions 25 to 29, 171). Proposed: kept only in Keystore-backed storage, never in the database, a backup or the cloud; the person chooses it once and needs it to restore anywhere else. Not built until the owner approves the change to that rule.
+  - Phone storage and Google Drive use the same saved passkey and the same check.
+- Open: approval of the stored automatic-backup passkey; whether it is chosen by the person (proposed) or generated and shown once.
+- Risks: touches Credentials and Backup and Restore. Each stage is checked against those sections first and device-tested before the next.

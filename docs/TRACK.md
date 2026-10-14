@@ -217,3 +217,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-13 | Session 111 (Vault key) | Decision 196 | Stage L built: PIN wraps a random Vault key, one PBKDF2 at unlock, biometric holds the key, backup carries the wrapper; DP71 added; Node checks and vite build only |
 | 2026-10-14 | Session 111 (Vault set-up) | Decision 197 | Vault set-up offers to erase old-format rows after confirmation; DP71 step 1 updated; not run through CI or on a device |
 | 2026-10-14 | Session 111 (App lock) | Decision 198 | Lock screen verifies against the stored credentials on every attempt; DP72 added; not run through CI or on a device |
+| 2026-10-14 | Session 111 (Phase 21 plan) | Decision 199 | Password management and backup authorization planned as Phase 21; docs only; nothing built |

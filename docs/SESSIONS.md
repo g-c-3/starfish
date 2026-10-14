@@ -24,13 +24,15 @@ OCR dropped (Decision 192). Fresh session; Tier 1 docs read, Tier 2 skimmed (hea
 
 - Bug report: after a lock, the correct app password and biometric did not open Home. Cause, fix and risk in Decision 198. `src/js/app.js`. DP72 added.
 
-Decisions made: 192, 193, 194, 195, 196, 197, 198.
+- Owner request: show-password, set/change/remove passwords, password-gated backup, saved passkey for automatic backup. Planned as Phase 21 (Decision 199), nothing built. The saved passkey conflicts with the never-stored rule and needs approval.
+
+Decisions made: 192, 193, 194, 195, 196, 197, 198, 199.
 
 Verified: a Node check of the two `listTrash` queries on a stub; 14 Node checks on the Vault key wrapper; `vite build` passes. Not verified: CI, any device (DP69, DP70, DP71). The cause is inferred from the code, not from a device log.
 
 Open: Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; Phase 17 Vault key count and app-password wrapper; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP69 and DP70 on device, DP71, then stage M of Decision 195 on approval; if the crash remains, the device log is needed. Then the owner picks among the open items.
+Next session start point: DP69 and DP70 on device, DP69 to DP72, then on approval stage M of Decision 195 or P1 of Decision 199; if the crash remains, the device log is needed. Then the owner picks among the open items.
 
 **Session 110**
 
