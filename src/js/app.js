@@ -613,35 +613,39 @@ async function removeAppPassword() {
   await disableAppBiometric(); // nothing left to unlock biometrically
 }
 
-// ---- Set, change and remove secrets from Settings (Decision 201). The three credentials stay independent: the app-open
-// password and the Vault PIN are changed separately, and neither touches the backup passkey. A change or removal first
-// needs the current secret, or one biometric check when that is on. ----
-async function confirmAppSecret(title) {
-  const row = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter, biometric_app_enabled FROM credentials WHERE id=1`)).values[0];
-  if (!row?.app_password_hash) return { ok: true, hadBiometric: false };
-  if (row.biometric_app_enabled && await isBiometricAvailable()) {
-    let stored = null;
-    try { stored = await unlockWithBiometric('app'); } catch { /* cancelled or failed: the typed password follows */ }
-    if (stored && await verifyPassword(stored, row.app_password_hash, row.app_password_salt, row.app_password_iter)) return { ok: true, hadBiometric: true };
-  }
-  const typed = await askText({ title, text: 'Enter your current password.', password: true, ok: 'Continue' });
-  if (typed === null) return { ok: false };
-  if (!typed || !(await verifyPassword(typed, row.app_password_hash, row.app_password_salt, row.app_password_iter))) { toast('Wrong password.'); return { ok: false }; }
-  return { ok: true, hadBiometric: !!row.biometric_app_enabled };
+// ---- Set, change and remove secrets from Settings, and the backup gate (Decisions 201, 202, 204). The three credentials stay
+// independent: the app-open password and the Vault PIN are changed separately, and neither touches the backup passkey. Each flow
+// is one window: the current secret, with fingerprint as a choice the person makes, then the new secret typed twice and an
+// optional hint. Fingerprint never runs unless it is tapped. ----
+async function readStoredSecret(kind) {
+  try { return await unlockWithBiometric(kind); } catch { return null; } // cancelled or failed: the typed entry stays available
 }
-
-// New secret, typed twice, with the weak-secret advisory (Decision 170) and an optional hint. Null on cancel or mismatch.
-async function askNewSecret({ kind, label, isVault = false, currentHint = '' }) {
-  const first = await askText({ title: `New ${label}`, password: true, ok: 'Next', isVault });
-  if (first === null) return null;
-  if (!first) { toast('Nothing entered.'); return null; }
-  const again = await askText({ title: `Confirm ${label}`, password: true, ok: 'Save', isVault });
-  if (again === null) return null;
-  if (first !== again) { toast('The two entries do not match.'); return null; }
-  if (!(await confirmStrength(kind, first))) return null;
-  const hint = await askText({ title: 'Hint (optional)', text: 'Shown at the lock screen. Do not let it give the answer away.', initial: currentHint || '', ok: 'Done', isVault });
-  if (hint === null) return null;
-  return { value: first, hint: hint.trim() };
+async function appCredRow() {
+  return (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter, app_password_hint, biometric_app_enabled FROM credentials WHERE id=1`)).values?.[0] || {};
+}
+async function appPasswordMatches(typed, row) {
+  return !!typed && !!row.app_password_hash && await verifyPassword(typed, row.app_password_hash, row.app_password_salt, row.app_password_iter);
+}
+async function vmkFromStored(stored, wrap) {
+  if (!stored || !stored.startsWith(VMK_PREFIX)) return null;
+  try {
+    const k = new Uint8Array(fromBase64(stored.slice(VMK_PREFIX.length)));
+    return (await vmkMatchesWrap(k, wrap)) ? k : null;
+  } catch { return null; }
+}
+function newSecretFields(label, hint = '') {
+  return [
+    { key: 'next', label: `New ${label}` },
+    { key: 'again', label: `Repeat new ${label}` },
+    { key: 'hint', label: 'Hint (optional)', password: false, initial: hint || '' },
+  ];
+}
+// null = fine; a string is shown in the window; false keeps the window open without a message (the weak-secret advisory was declined).
+async function checkNewSecret(kind, label, v) {
+  if (!v.next) return `Enter a new ${label}.`;
+  if (v.next !== v.again) return 'The two entries do not match.';
+  if (!(await confirmStrength(kind, v.next))) return false;
+  return null;
 }
 
 async function refreshAppPasswordRows() {
@@ -662,98 +666,147 @@ async function afterAppPasswordChange() {
   await refreshAppPasswordRows();
 }
 
+
 async function runSetAppPassword() {
-  const n = await askNewSecret({ kind: 'password', label: 'password' });
-  if (!n) return;
-  await setAppPassword(n.value, n.hint);
+  const done = await openSecretForm({
+    title: 'Set password', text: 'The app will ask for it every time it opens.',
+    fields: newSecretFields('password'),
+    onSubmit: async (v) => {
+      const bad = await checkNewSecret('password', 'password', v);
+      if (bad !== null) return bad;
+      await setAppPassword(v.next, v.hint.trim());
+      return null;
+    },
+  });
+  if (!done) return;
   await afterAppPasswordChange();
   toast('Password set.');
 }
+
+// Current-password check shared by change and remove: typed, or the fingerprint when the person taps it.
+async function appCurrentGate() {
+  const row = await appCredRow();
+  const bio = !!row.biometric_app_enabled && await isBiometricAvailable();
+  const gate = {
+    row, hadBiometric: !!row.biometric_app_enabled, verified: false,
+    bioLabel: bio ? 'Use fingerprint instead' : null,
+    onBio: bio ? async () => {
+      if (await appPasswordMatches(await readStoredSecret('app'), row)) { gate.verified = true; return null; }
+      return 'Fingerprint not confirmed. Type your password instead.';
+    } : null,
+    check: async (typed) => (gate.verified || await appPasswordMatches(typed, row)) ? null : 'Wrong current password.',
+  };
+  return gate;
+}
 async function runChangeAppPassword() {
-  const auth = await confirmAppSecret('Change password');
-  if (!auth.ok) return;
-  const cur = (await db.query(`SELECT app_password_hint FROM credentials WHERE id=1`)).values[0];
-  const n = await askNewSecret({ kind: 'password', label: 'password', currentHint: cur?.app_password_hint });
-  if (!n) return;
-  await setAppPassword(n.value, n.hint); // also turns biometric unlock off (Decision 50)
+  const g = await appCurrentGate();
+  if (!g.row.app_password_hash) return;
+  const done = await openSecretForm({
+    title: 'Change password', text: 'Enter your current password, or use your fingerprint.',
+    fields: [{ key: 'current', label: 'Current password', group: 'current' }, ...newSecretFields('password', g.row.app_password_hint)],
+    bioLabel: g.bioLabel, onBio: g.onBio,
+    onSubmit: async (v) => {
+      const wrong = await g.check(v.current);
+      if (wrong) return wrong;
+      const bad = await checkNewSecret('password', 'password', v);
+      if (bad !== null) return bad;
+      await setAppPassword(v.next, v.hint.trim()); // also turns fingerprint unlock off (Decision 50)
+      return null;
+    },
+  });
+  if (!done) return;
   await afterAppPasswordChange();
-  toast(auth.hadBiometric ? 'Password changed. Fingerprint unlock is off; turn it on again.' : 'Password changed.');
+  toast(g.hadBiometric ? 'Password changed. Fingerprint unlock is off; turn it on again.' : 'Password changed.');
 }
 async function runRemoveAppPassword() {
-  const auth = await confirmAppSecret('Remove password');
-  if (!auth.ok) return;
-  const yes = await askYesNo({ title: 'Remove the password?', text: 'The app will open without a password. The Vault PIN is not affected.', yes: 'Remove', no: 'Keep' });
-  if (!yes) return;
-  await removeAppPassword();
+  const g = await appCurrentGate();
+  if (!g.row.app_password_hash) return;
+  const done = await openSecretForm({
+    title: 'Remove password', text: 'The app will open without a password. The Vault PIN is not affected. Enter your current password, or use your fingerprint.',
+    fields: [{ key: 'current', label: 'Current password', group: 'current' }],
+    ok: 'Remove password', bioLabel: g.bioLabel, onBio: g.onBio,
+    onSubmit: async (v) => {
+      const wrong = await g.check(v.current);
+      if (wrong) return wrong;
+      await removeAppPassword();
+      return null;
+    },
+  });
+  if (!done) return;
   disarmAppAutoLock();
   await afterAppPasswordChange();
   toast('Password removed.');
 }
 
 // The PIN only wraps the Vault key, so a change re-wraps that key and re-encrypts no item (Decision 195). The key comes from the
-// current PIN or from the biometric copy, which holds it. The PIN cannot be removed.
+// current PIN or from the fingerprint copy, which holds it. The PIN cannot be removed.
 async function runChangeVaultPin() {
-  const row = (await db.query(`SELECT vault_wrap, private_pin_hint, biometric_vault_enabled FROM credentials WHERE id=1`)).values[0];
+  const row = (await db.query(`SELECT vault_wrap, private_pin_hint, biometric_vault_enabled FROM credentials WHERE id=1`)).values?.[0];
   if (!row?.vault_wrap) { toast('Set up the Vault first.'); return; }
   const hadBiometric = !!row.biometric_vault_enabled;
+  const bio = hadBiometric && await isBiometricAvailable();
   let vmk = null;
-  if (row.biometric_vault_enabled && await isBiometricAvailable()) {
-    try {
-      const stored = await unlockWithBiometric('vault');
-      if (stored && stored.startsWith(VMK_PREFIX)) {
-        const k = new Uint8Array(fromBase64(stored.slice(VMK_PREFIX.length)));
-        if (await vmkMatchesWrap(k, row.vault_wrap)) vmk = k;
+  const done = await openSecretForm({
+    title: 'Change Vault PIN', text: 'Enter your current Vault PIN, or use your fingerprint.', isVault: true,
+    fields: [{ key: 'current', label: 'Current Vault PIN', group: 'current' }, ...newSecretFields('Vault PIN', row.private_pin_hint)],
+    bioLabel: bio ? 'Use fingerprint instead' : null,
+    onBio: bio ? async () => {
+      vmk = await vmkFromStored(await readStoredSecret('vault'), row.vault_wrap);
+      return vmk ? null : 'Fingerprint not confirmed. Type your PIN instead.';
+    } : null,
+    onSubmit: async (v) => {
+      if (!vmk) {
+        const u = v.current ? await unwrapVault(v.current, row.vault_wrap) : null;
+        if (!u) return 'Wrong current PIN.';
+        vmk = u.vmk;
       }
-    } catch { /* cancelled or failed: the typed PIN follows */ }
-  }
-  if (!vmk) {
-    const pin = await askText({ title: 'Change Vault PIN', text: 'Enter your current Vault PIN.', password: true, ok: 'Continue', isVault: true });
-    if (pin === null) return;
-    const u = pin ? await unwrapVault(pin, row.vault_wrap) : null;
-    if (!u) { toast('Wrong PIN.'); return; }
-    vmk = u.vmk;
-  }
-  const n = await askNewSecret({ kind: 'pin', label: 'Vault PIN', isVault: true, currentHint: row.private_pin_hint });
-  if (!n) return;
-  const wrap = await wrapVmk(vmk, n.value);
-  await db.run(`UPDATE credentials SET vault_wrap=?, private_pin_hint=? WHERE id=1 AND vault_wrap=?`, [wrap, n.hint, row.vault_wrap]);
-  const saved = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
-  if (saved?.vault_wrap !== wrap) { toast('The PIN was not changed. Try again.'); return; }
-  await disableVaultBiometric(); // the stored copy is cleared on any change (Decision 50)
+      const bad = await checkNewSecret('pin', 'Vault PIN', v);
+      if (bad !== null) return bad;
+      const wrap = await wrapVmk(vmk, v.next);
+      await db.run(`UPDATE credentials SET vault_wrap=?, private_pin_hint=? WHERE id=1 AND vault_wrap=?`, [wrap, v.hint.trim(), row.vault_wrap]);
+      const saved = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values?.[0];
+      if (saved?.vault_wrap !== wrap) return 'The PIN was not changed. Try again.';
+      await disableVaultBiometric(); // the stored copy is cleared on any change (Decision 50)
+      return null;
+    },
+  });
+  if (!done) return;
   if (window.refreshVaultGateView) await window.refreshVaultGateView();
   toast(hadBiometric ? 'Vault PIN changed. Fingerprint unlock is off; turn it on again.' : 'Vault PIN changed.');
 }
 
-// Gate before a manual backup (Decision 202): the app password if one is set, the Vault PIN if the Vault is included and set up,
-// or one biometric check that covers both. It stops use of the open app to export. It is not a key: the archive stays
-// encrypted under the backup passkey, and nothing here changes or recovers any credential.
+// Gate before a manual backup (Decision 202): one window with the app lock password if one is set and the Vault PIN if the Vault
+// is included and set up, one Submit, and fingerprint as a choice that covers both. It stops use of the open app to export. It is
+// not a key: the archive stays encrypted under the backup passkey, and nothing here changes or recovers any credential.
 async function confirmBackupAccess(categories) {
-  const row = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter, biometric_app_enabled, vault_wrap, biometric_vault_enabled FROM credentials WHERE id=1`)).values[0] || {};
+  const row = { ...(await appCredRow()), ...((await db.query(`SELECT vault_wrap, biometric_vault_enabled FROM credentials WHERE id=1`)).values?.[0] || {}) };
   const needApp = !!row.app_password_hash;
   const needVault = !!row.vault_wrap && categories.includes('private_vault');
   if (!needApp && !needVault) return true;
-  if (await isBiometricAvailable()) {
-    try {
-      if (needApp && row.biometric_app_enabled) {
-        const stored = await unlockWithBiometric('app');
-        if (stored && await verifyPassword(stored, row.app_password_hash, row.app_password_salt, row.app_password_iter)) return true;
-      } else if (needVault && row.biometric_vault_enabled) {
-        const stored = await unlockWithBiometric('vault');
-        if (stored && stored.startsWith(VMK_PREFIX) && await vmkMatchesWrap(new Uint8Array(fromBase64(stored.slice(VMK_PREFIX.length))), row.vault_wrap)) return true;
-      }
-    } catch { /* cancelled or failed: the typed entries follow */ }
-  }
-  if (needApp) {
-    const typed = await askText({ title: 'Back up', text: 'Enter your app password.', password: true, ok: 'Continue' });
-    if (typed === null) return false;
-    if (!typed || !(await verifyPassword(typed, row.app_password_hash, row.app_password_salt, row.app_password_iter))) { toast('Wrong password.'); return false; }
-  }
-  if (needVault) {
-    const pin = await askText({ title: 'Back up', text: 'The Vault is included. Enter your Vault PIN.', password: true, ok: 'Continue' });
-    if (pin === null) return false;
-    if (!pin || !(await unwrapVault(pin, row.vault_wrap))) { toast('Wrong PIN.'); return false; }
-  }
-  return true;
+  const bioKind = needApp && row.biometric_app_enabled ? 'app' : (needVault && row.biometric_vault_enabled ? 'vault' : null);
+  const bio = !!bioKind && await isBiometricAvailable();
+  let passed = false;
+  const fields = [];
+  if (needApp) fields.push({ key: 'app', label: 'App lock password', group: 'current' });
+  if (needVault) fields.push({ key: 'vault', label: 'Vault PIN', group: 'current' });
+  return openSecretForm({
+    title: 'Confirm it is you', text: `Enter ${needApp && needVault ? 'both' : needApp ? 'your app lock password' : 'your Vault PIN'} to back up, or use your fingerprint.`,
+    fields, ok: 'Submit', bioLabel: bio ? 'Use fingerprint instead' : null,
+    onBio: bio ? async () => {
+      const stored = await readStoredSecret(bioKind);
+      const good = bioKind === 'app' ? await appPasswordMatches(stored, row) : !!(await vmkFromStored(stored, row.vault_wrap));
+      if (!good) return 'Fingerprint not confirmed. Type your entries instead.';
+      passed = true;
+      return true; // one fingerprint covers both: the window closes
+    } : null,
+    onSubmit: async (v) => {
+      if (passed) return null;
+      const errs = [];
+      if (needApp && !(await appPasswordMatches(v.app, row))) errs.push('Wrong app lock password.');
+      if (needVault && !(v.vault && await unwrapVault(v.vault, row.vault_wrap))) errs.push('Wrong Vault PIN.');
+      return errs.length ? errs.join(' ') : null;
+    },
+  });
 }
 // ---- end of secret management ----
 
@@ -1947,6 +2000,81 @@ function askText({ title = '', text = '', placeholder = '', initial = '', passwo
     dlg.classList.remove('hidden');
     updateBackButtonState();
     setTimeout(() => input.focus(), 50);
+  });
+}
+// One window for a secret change or a gate (Decision 204): labelled fields, an optional "use fingerprint instead" choice, one Submit.
+// onSubmit(values) -> null done | string shown in the window | false stay open silently. onBio() -> null confirmed, continue |
+// true confirmed, finish | string shown. After a confirmed fingerprint the fields in group "current" are hidden. Resolves true when
+// finished, false on cancel, Back or a lock. Shares the text sheet's slot, so Back and every lock close it.
+function openSecretForm({ title, text = '', fields, ok = 'Submit', bioLabel = null, onBio = null, onSubmit, isVault = false }) {
+  if (activeText) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const $ = (id) => document.getElementById(id);
+    const dlg = $('secret-dialog'), fieldsEl = $('secret-fields'), status = $('secret-status');
+    const okBtn = $('secret-ok-btn'), bioBtn = $('secret-bio-btn');
+    $('secret-title').textContent = title;
+    $('secret-text').textContent = text;
+    okBtn.textContent = ok;
+    okBtn.disabled = false; bioBtn.disabled = false; // the buttons are shared; a window never opens with the last one's busy state
+    const say = (msg, isError) => { status.textContent = msg || ''; status.classList.toggle('warning-text', !!isError); };
+    say('');
+    fieldsEl.innerHTML = '';
+    const inputs = [];
+    for (const f of fields) {
+      const row = document.createElement('div');
+      row.className = 'secret-field';
+      row.dataset.group = f.group || '';
+      const cap = document.createElement('span');
+      cap.textContent = f.label;
+      const input = document.createElement('input');
+      input.type = f.password === false ? 'text' : 'password';
+      input.autocomplete = 'off';
+      input.value = f.initial || '';
+      input.setAttribute('aria-label', f.label);
+      row.append(cap, input);
+      fieldsEl.appendChild(row);
+      inputs.push({ key: f.key, input, row });
+    }
+    bioBtn.textContent = bioLabel || 'Use fingerprint instead';
+    bioBtn.classList.toggle('hidden', !(bioLabel && onBio));
+    let busy = false;
+    const finish = (v) => {
+      if (!activeText) return;
+      activeText = null;
+      fieldsEl.innerHTML = ''; // the typed values go with the inputs
+      say('');
+      dlg.classList.add('hidden');
+      updateBackButtonState();
+      resolve(v);
+    };
+    const run = async (fn) => {
+      if (busy) return;
+      busy = true; okBtn.disabled = true; bioBtn.disabled = true; say('');
+      try { await fn(); } catch (e) { console.warn('secret form failed', e); say('That did not work. Nothing was changed.', true); }
+      busy = false; okBtn.disabled = false; bioBtn.disabled = false;
+    };
+    const submit = () => run(async () => {
+      const values = {};
+      for (const { key, input } of inputs) values[key] = input.value;
+      const r = await onSubmit(values);
+      if (r === null) finish(true);
+      else if (typeof r === 'string') say(r, true);
+    });
+    okBtn.onclick = submit;
+    bioBtn.onclick = () => run(async () => {
+      const r = await onBio();
+      if (r === true) { finish(true); return; }
+      if (typeof r === 'string') { say(r, true); return; }
+      for (const { row } of inputs) if (row.dataset.group === 'current') row.classList.add('hidden');
+      bioBtn.classList.add('hidden');
+      say('Fingerprint confirmed.');
+    });
+    $('secret-cancel-btn').onclick = () => finish(false);
+    inputs.forEach(({ input }, i) => { input.onkeydown = (e) => { if (e.key === 'Enter') { if (i === inputs.length - 1) submit(); else inputs[i + 1].input.focus(); } }; });
+    activeText = { finish: (v) => finish(v ? true : false), isVault };
+    dlg.classList.remove('hidden');
+    updateBackButtonState();
+    setTimeout(() => { const first = inputs.find(({ row }) => !row.classList.contains('hidden')); if (first) first.input.focus(); }, 50);
   });
 }
 let activeEditor = null;     // { finish, requestBack, isVault }
