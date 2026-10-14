@@ -716,6 +716,38 @@ async function runChangeVaultPin() {
   if (window.refreshVaultGateView) await window.refreshVaultGateView();
   toast(hadBiometric ? 'Vault PIN changed. Fingerprint unlock is off; turn it on again.' : 'Vault PIN changed.');
 }
+
+// Gate before a manual backup (Decision 202): the app password if one is set, the Vault PIN if the Vault is included and set up,
+// or one biometric check that covers both. It stops use of the open app to export. It is not a key: the archive stays
+// encrypted under the backup passkey, and nothing here changes or recovers any credential.
+async function confirmBackupAccess(categories) {
+  const row = (await db.query(`SELECT app_password_hash, app_password_salt, app_password_iter, biometric_app_enabled, vault_wrap, biometric_vault_enabled FROM credentials WHERE id=1`)).values[0] || {};
+  const needApp = !!row.app_password_hash;
+  const needVault = !!row.vault_wrap && categories.includes('private_vault');
+  if (!needApp && !needVault) return true;
+  if (await isBiometricAvailable()) {
+    try {
+      if (needApp && row.biometric_app_enabled) {
+        const stored = await unlockWithBiometric('app');
+        if (stored && await verifyPassword(stored, row.app_password_hash, row.app_password_salt, row.app_password_iter)) return true;
+      } else if (needVault && row.biometric_vault_enabled) {
+        const stored = await unlockWithBiometric('vault');
+        if (stored && stored.startsWith(VMK_PREFIX) && await vmkMatchesWrap(new Uint8Array(fromBase64(stored.slice(VMK_PREFIX.length))), row.vault_wrap)) return true;
+      }
+    } catch { /* cancelled or failed: the typed entries follow */ }
+  }
+  if (needApp) {
+    const typed = await askText({ title: 'Back up', text: 'Enter your app password.', password: true, ok: 'Continue' });
+    if (typed === null) return false;
+    if (!typed || !(await verifyPassword(typed, row.app_password_hash, row.app_password_salt, row.app_password_iter))) { toast('Wrong password.'); return false; }
+  }
+  if (needVault) {
+    const pin = await askText({ title: 'Back up', text: 'The Vault is included. Enter your Vault PIN.', password: true, ok: 'Continue' });
+    if (pin === null) return false;
+    if (!pin || !(await unwrapVault(pin, row.vault_wrap))) { toast('Wrong PIN.'); return false; }
+  }
+  return true;
+}
 // ---- end of secret management ----
 
 // ---- Biometric unlock (optional, alternative to typing the app-open password or Vault PIN —
@@ -1589,6 +1621,7 @@ async function handleBackupNow() {
   const categories = getCheckedCategories('backup');
   if (!passphrase) { statusEl.textContent = 'Enter a backup passkey first.'; return; }
   if (categories.length === 0) { statusEl.textContent = 'Select at least one category.'; return; }
+  if (!(await confirmBackupAccess(categories))) { statusEl.textContent = 'Backup not started: access not confirmed.'; return; }
   if (!(await confirmStrength('passkey', passphrase))) return;
 
   statusEl.textContent = 'Checking storage…';
@@ -2494,6 +2527,7 @@ async function handleDriveRestore(fileId, accessToken) {
 
 async function handleDriveBackupNow() {
   const statusEl = document.getElementById('drive-backup-status');
+  if (!(await confirmBackupAccess(ALL_CATEGORIES))) { statusEl.textContent = 'Upload not started: access not confirmed.'; return; }
   const passphrase = await askText({ title: 'Backup passkey', text: 'Never stored. Needed for this upload only.', password: true, ok: 'Back up' });
   if (!passphrase || !(await confirmStrength('passkey', passphrase))) return;
   statusEl.textContent = 'Checking Drive storage…';
