@@ -13,13 +13,26 @@ File explorer stage E1b, built-in viewers (Decision 211), started ahead of the d
 - `src/js/app.js`: the explorer is given the app's dialogs, image zoom and auto-lock timer.
 - Docs: ROADMAP (E1b, DP81), DECISIONS (211), ARCHITECTURE (File explorer).
 
-Decisions made: 211.
+Device pass: DP69 to DP81 confirmed on a device, including DP74, DP79 and DP81.
 
-Verified: 36 Node checks on the viewers and dispatch; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), any device (DP69 to DP81), whether the local file route serves a USB drive.
+Phase 17 stage M, Vault files on disk (Decision 212), approved by the owner:
+- `src/js/filestore.js`, `src/js/files.js`: key wrapping under any key, the Vault-key store, re-wrap for Move, raw write for restore.
+- `src/js/vault.js`: file entries written to disk, read back, meta v2, edit of file content.
+- `src/js/move.js`: Move re-wraps the key and writes no bytes, with rollback.
+- `src/js/fileactions.js`: edit of a Vault file's content.
+- `src/js/backup.js`: Vault files in format 1 and 2, restore with re-wrap on Append.
+- `src/js/db.js`: schema comments only.
+- Bug found by the checks and fixed: a read with the wrong Vault key rewrote the file's meta; meta is now only made when missing.
 
-Open: DP69 to DP81 on device; Phase 22 E2 manage and trash, E3 office viewers; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Owner note recorded as Decision 213: the explorer's trash (E2) is not encrypted and is shared by the Home and Vault cards.
 
-Next session start point: CI run for the explorer's Java, DP79 to DP81 on device, then Phase 22 E2.
+Decisions made: 211, 212, 213.
+
+Verified: 36 Node checks on the viewers and dispatch; 28 Node checks on Vault files and Move against a real SQLite schema; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), Vault backup and restore of files in Node, any device for stage M (DP82).
+
+Open: DP82 on device; Phase 17 stages N and O; Phase 22 E2 manage and shared trash, E3 office viewers; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run for the stage M and explorer changes, DP82 on device, then Phase 17 N (needs approval) or Phase 22 E2.
 
 **Session 122**
 

@@ -199,6 +199,12 @@ category (was a notes-only `private_notes` category before this pivot) — see b
 per-item size shown, selectable individually or as a whole category, with bulk Share/Download/Download for
 append/Delete (Edit stays per-item — bulk-editing arbitrary fields across mixed types has no coherent meaning).
 
+### Vault files on disk (Decision 212)
+- Voice, image, PDF and file entries in the Vault are stored as `files/<random name>`, no extension, in the Home format (Decision 161). The per-file key is wrapped (AES-GCM, the path as additional data) under the Vault key, not the master key, and kept in `entries.file_key`. `file_path` is set, `encrypted_body` is NULL, size and OCR text sit in `encrypted_meta` (`{ v: 2, s, o }`, encrypted under the Vault key).
+- Move between Home and Vault writes no bytes: the key is unwrapped under one key and wrapped under the other, the new row points at the same file, and the old row gives the file up before it is deleted.
+- Delete, Trash purge and the orphan sweep treat Vault and Home files alike. A Vault row from before this decision keeps its bytes in `encrypted_body` and is still read.
+- Backup: a Vault file travels as its stored bytes with its wrapped key; the archive's wrapped Vault key (Decision 196) opens it. Restore writes the bytes as they are; Append with the source PIN re-wraps the key under this device's key and gives the file a new path; Overwrite keeps both.
+
 ## 3c. Encryption at rest (Decision 144; A, B, C built and confirmed; D, E built, not device-tested)
 
 Goal: nothing readable by reading the database file or the files on disk, and still fast. Key derivation stays PBKDF2 with AES-GCM on Web Crypto; no external crypto library.
@@ -922,7 +928,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - It lists the phone's own storage and nothing else: no encryption, no copy, no database table. Folder listing: the filesystem plugin on a percent-encoded `file://` path. Native side (`window.ArklyExplorer`, written into `MainActivity` by `scripts/patch-explorer.js` in CI): All files access check and request, and the mounted volumes with free space and a USB flag.
 - Access: `MANAGE_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` from `patch-manifest.js`; granted once on an Android settings screen. The screen sets the picker flag (Decision 73) before leaving for that screen or another app, so the lock on background does not fire for that trip.
 - Viewers (Decision 211): `#explorer-viewer`, a layer inside the screen, driven by `src/js/explorer-view.js`. Text view and edit (Save writes the same file), image, PDF (reading tools only), audio and video. Files are read in place: images and media through the local file route, text through the filesystem plugin, PDFs fetched whole. No copy, no database row, no draft. `activeExplorer.back()` hands Back to the viewer first; `finish()` destroys it, so a lock closes both.
-- Planned: manage and a per-storage trash (E2), office viewers (E3).
+- Planned: manage and one shared, unencrypted trash (E2, Decision 213), office viewers (E3).
 
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
