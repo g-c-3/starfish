@@ -4231,7 +4231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // File explorer card, Home and Vault (Decisions 206, 207): the same screen from both; the Vault one closes with a Vault lock.
   const openFileExplorer = (isVault) => {
     if (activeExplorer) return;
-    activeExplorer = openExplorer({ isVault, toast, leaving: beginPickerLaunch, onClose: () => { activeExplorer = null; updateBackButtonState(); } });
+    activeExplorer = openExplorer({ isVault, toast, leaving: beginPickerLaunch, ui: { askYesNo, askText, attachZoomPan, onActivity: () => (isVault ? armVaultAutoLock() : armAppAutoLock()) }, onClose: () => { activeExplorer = null; updateBackButtonState(); } });
     updateBackButtonState();
   };
   document.querySelector('button[data-tool="explorer"]')?.addEventListener('click', () => openFileExplorer(false));

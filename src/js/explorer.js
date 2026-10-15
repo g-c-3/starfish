@@ -1,9 +1,10 @@
-// explorer.js — the File explorer screen (Decisions 206, 207). Browses the phone's own storage, internal and removable
+// explorer.js — the File explorer screen (Decisions 206, 207, 211). Browses the phone's own storage, internal and removable
 // (SD card, USB drive), like a file manager. Nothing here is encrypted or copied anywhere: it lists and opens what is on the
 // phone. Needs "All files access", granted once in Android's own settings (native bridge: scripts/patch-explorer.js).
 
 import { Filesystem } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
+import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 
 const KIND_EXT = {
   text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics'],
@@ -90,12 +91,13 @@ const bridge = () => (typeof window !== 'undefined' ? window.ArklyExplorer : nul
 
 // leaving() runs just before the screen hands over to another app or to Android's settings, so the app's lock-on-background
 // does not fire for that one pause (the same flag the file pickers set, Decision 73).
-export function openExplorer({ isVault = false, toast = () => {}, onClose = () => {}, leaving = () => {} } = {}) {
+// ui carries the app's own dialogs, image zoom and auto-lock timer for the built-in viewers (explorer-view.js).
+export function openExplorer({ isVault = false, toast = () => {}, onClose = () => {}, leaving = () => {}, ui = {} } = {}) {
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
   const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0 };
-  let closed = false;
+  let closed = false, viewer = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const icon = (id) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); const u = document.createElementNS('http://www.w3.org/2000/svg', 'use'); u.setAttribute('href', '#' + id); s.appendChild(u); return s; };
@@ -191,13 +193,19 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     crumbsEl.scrollLeft = crumbsEl.scrollWidth;
   }
 
-  function renderList() {
-    if (st.view !== 'folder') return;
+  // What the list shows now: hidden-file toggle, name filter and sort applied.
+  function shownItems() {
     let items = st.entries;
     if (!st.hidden) items = items.filter((e) => !e.name.startsWith('.'));
     const q = st.filter.trim().toLowerCase();
     if (q) items = items.filter((e) => e.name.toLowerCase().includes(q));
-    items = sortEntries(items, st.sort);
+    return sortEntries(items, st.sort);
+  }
+
+  function renderList() {
+    if (st.view !== 'folder') return;
+    const q = st.filter.trim().toLowerCase();
+    const items = shownItems();
     document.querySelectorAll('#explorer-tools [data-sort]').forEach((b) => {
       const on = b.dataset.sort === st.sort.key;
       b.classList.toggle('active', on);
@@ -224,7 +232,19 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     body.appendChild(list);
   }
 
-  async function openFile(e) {
+  // Text, image, PDF, audio and video open in the built-in viewer; anything else goes to another app (Decision 211).
+  function openFile(e) {
+    const kind = kindOf(e.name);
+    if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) return openExternal(e);
+    const siblings = kind === 'image' ? shownItems().filter((x) => !x.isDir && kindOf(x.name) === 'image') : [];
+    viewer = openFileViewer(e, {
+      kind, siblings, toUri: toFileUri, ui, toast, isVault, external: openExternal,
+      onClose: ({ changed }) => { viewer = null; if (changed && !closed && st.view === 'folder') showFolder(st.cwd); }
+    });
+    return undefined;
+  }
+
+  async function openExternal(e) {
     try {
       leaving();
       await FileOpener.open({ filePath: toFileUri(e.path), contentType: mimeOf(e.name), openWithDefault: true });
@@ -237,6 +257,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function finish() {
     if (closed) return;
     closed = true;
+    if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
     document.removeEventListener('visibilitychange', onVisible);
     screen.classList.add('hidden');
     body.replaceChildren(); crumbsEl.replaceChildren(); filterEl.value = '';
@@ -244,6 +265,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     onClose();
   }
   function back() {
+    if (viewer) { viewer.back(); return; }
     if (st.view === 'folder') {
       if (st.filter) { st.filter = ''; filterEl.value = ''; renderList(); return; }
       if (st.cwd === st.volume.path) showRoots(); else showFolder(parentOf(st.cwd));
