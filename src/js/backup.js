@@ -11,10 +11,11 @@
 //   then an end record with the counts. Memory grows with one chunk, not the total.
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { initFiles, withKey, readBase64 as readStoredBase64, readBytes as readStoredBytes, fileSize, saveBase64, beginFile, removeFile } from './files.js';
+import { initFiles, withKey, readBase64 as readStoredBase64, readBytes as readStoredBytes, fileSize, saveBase64, beginFile, removeFile, beginRawFile, writeRawBase64 } from './files.js';
+import { rewrapFileKey, newFilePath } from './filestore.js';
 import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
-import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
+import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, toBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 
 const SCHEMA_VERSION = 1;
@@ -128,9 +129,14 @@ async function buildBackupPayload(db, categories) {
       const cat = entryCategoryNames.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;
       const out = { ...row, _category: cat };
-      delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
-      delete out.file_key; // a device key wrap; never in a backup (Decision 161)
-      if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
+      if (!row.is_private) { // a Vault file keeps its wrapped key and meta: they are all that opens it (Decision 212)
+        delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
+        delete out.file_key; // a device key wrap; never in a backup (Decision 161)
+      }
+      if (row.is_private && row.file_path) { // Vault file: the stored (encrypted) bytes travel as they are, under the Vault key's wrap (Decision 212)
+        const blob = await readFileBlob(row);
+        if (blob) { out.fileData = toBase64(new Uint8Array(await blob.arrayBuffer())); out.rawFile = 1; }
+      } else if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
         out.fileData = await readFileBase64(row); // raw bytes travel with the entry, decrypted; the backup passkey is their only key
       }
       const tagRows = (await db.query(
@@ -175,7 +181,7 @@ async function estimateBackupSize(db, categories) {
 // Decision 154 route); an encrypted file is decrypted in memory, one file at a time. null when the file is missing.
 async function readFileBlob(entryRow) {
   const row = await withKey(entryRow);
-  if (row.file_key) {
+  if (row.file_key && !row.is_private) { // a Vault file is read as it is stored: its key is not available here
     try { return new Blob([await readStoredBytes(row)]); } catch { return null; }
   }
   try {
@@ -208,7 +214,7 @@ async function planBackup(db, categories) {
     for (const row of rows) {
       const cat = names.find((c) => ENTRY_CATEGORIES[c](row));
       if (!cat) continue;
-      const fileSize = (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) ? await statSize(row) : 0;
+      const fileSize = ((FILE_BEARING_CATEGORIES.has(cat) || row.is_private) && row.file_path) ? await statSize(row) : 0;
       const size = 600 + (row.rb || 0) + fileSize;
       items.push({ id: row.id, cat });
       sizeByCategory[cat] = (sizeByCategory[cat] || 0) + size;
@@ -286,8 +292,10 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
       const row = ((await db.query(`SELECT * FROM entries WHERE id=?`, [it.id])).values || [])[0];
       if (!row) continue; // removed since the plan was made
       const out = { ...row, _category: it.cat };
-      delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
-      delete out.file_key; // a device key wrap; never in a backup (Decision 161)
+      if (!row.is_private) { // a Vault file keeps its wrapped key and meta: they are all that opens it (Decision 212)
+        delete out.encrypted_meta; // derived cache, rebuilt on unlock (Decision 156); not part of the backup format
+        delete out.file_key; // a device key wrap; never in a backup (Decision 161)
+      }
       const tagRows = (await db.query(
         `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`, [row.id]
       )).values || [];
@@ -300,7 +308,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
         out.encrypted_body = null; // travels as its own lines
       }
       let blob = null;
-      if (FILE_BEARING_CATEGORIES.has(it.cat) && row.file_path) {
+      if ((FILE_BEARING_CATEGORIES.has(it.cat) || row.is_private) && row.file_path) {
         blob = await readFileBlob(row);
         if (!blob) skippedFiles += 1;
       }
@@ -497,14 +505,31 @@ async function wipeCategories(db, categories, onStep) {
 // A restored file is written for this device, so file_key starts empty and is set when the file is saved.
 // The type stays in entries.extension; a backup that only carried it in the old file name gives it back.
 function prepareRestoredFile(entry) {
-  entry.file_key = null;
+  if (!entry.is_private) entry.file_key = null; // a Vault file keeps its wrapped key (Decision 212)
   if (!entry.extension && /\.[A-Za-z0-9]+$/.test(entry.file_path || '')) entry.extension = entry.file_path.split('.').pop();
+}
+
+// Where a Vault file is written on restore and the key wrapped for it (Decision 212). Same Vault key (overwrite, or no source PIN):
+// the path and wrapped key stay. Another key (append with the source PIN): a new path, the file key unwrapped with the source
+// key and wrapped under this device's key; the file's bytes are not touched.
+async function vaultFileTarget(entry, opts, privateVaultWrap) {
+  if (!(opts.sourcePin && opts.currentPrivateKey)) return { path: entry.file_path, fileKey: entry.file_key };
+  if (!privateVaultWrap) throw new Error('This backup holds Vault items in an earlier format and cannot be restored.');
+  if (!opts._vaultSourceKey) {
+    const { unwrapVault, vmkToKey } = await import('./crypto.js');
+    const unwrapped = await unwrapVault(opts.sourcePin, privateVaultWrap);
+    if (!unwrapped) throw new Error('The Vault PIN does not match this backup.');
+    opts._vaultSourceKey = await vmkToKey(unwrapped.vmk);
+  }
+  const path = newFilePath();
+  return { path, fileKey: await rewrapFileKey(entry.file_key, entry.file_path, path, opts._vaultSourceKey, opts.currentPrivateKey) };
 }
 
 // Insert one entry whose file (if any) is already written and whose file_path and file_key are set.
 async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultWrap, summary) {
   let bodyText = entry.body_text;
   let encryptedBody = entry.encrypted_body;
+  let encryptedMeta = entry.encrypted_meta || null; // set for a Vault file only: size and OCR text
   let encryptedDescription = entry.encrypted_description || null;
   let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
   if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
@@ -516,8 +541,10 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaul
     const unwrapped = await unwrapVault(opts.sourcePin, privateVaultWrap);
     if (!unwrapped) throw new Error('The Vault PIN does not match this backup.');
     const sourceKey = await vmkToKey(unwrapped.vmk);
-    const plain = await decryptPrivateNote(sourceKey, entry.encrypted_body);
-    encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, plain);
+    if (entry.encrypted_body) { // a file on disk has none (Decision 212)
+      encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_body));
+    }
+    if (entry.encrypted_meta) encryptedMeta = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_meta));
     if (entry.encrypted_description) {
       encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
     }
@@ -533,12 +560,12 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaul
   await db.run(
     `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, file_key, extension,
       auto_category, noise_reduction, latitude, longitude, amount, expense_category, replied,
-      fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      fire_at, repeat_rule, snoozed_until, notified, completed_at, description, encrypted_description, encrypted_label, money_json, encrypted_meta, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [targetId, entry.type, label, bodyText, entry.is_private || 0, encryptedBody, entry.file_path, entry.file_key || null,
      entry.extension, entry.auto_category, entry.noise_reduction, entry.latitude, entry.longitude,
      entry.amount, entry.expense_category, entry.replied ?? 1, entry.fire_at, entry.repeat_rule,
-     entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null,
+     entry.snoozed_until, entry.notified || 0, entry.completed_at || null, entry.description || null, encryptedDescription, encryptedLabel, entry.money_json || null, encryptedMeta,
      entry.created_at || Date.now(), Date.now()]
   );
   // Same rule as insertEntry() in db.js: private/vault entries are excluded from entries_fts
@@ -616,7 +643,12 @@ async function restoreBackup(db, opts) {
     const target = await planEntryTarget(db, entry, mode, summary);
     if (!target) continue;
     prepareRestoredFile(entry);
-    if (entry.fileData) {
+    if (entry.fileData && entry.is_private && entry.rawFile) { // Vault file: written as stored (Decision 212)
+      const t = await vaultFileTarget(entry, opts, payload.privateVaultWrap);
+      await writeRawBase64(t.path, entry.fileData);
+      entry.file_path = t.path;
+      entry.file_key = t.fileKey;
+    } else if (entry.fileData) {
       const saved = await saveBase64(entry.fileData);
       entry.file_path = saved.path;
       entry.file_key = saved.fileKey;
@@ -694,7 +726,16 @@ async function restoreFormat2(db, opts) {
         entry.encrypted_body = body;
       }
       prepareRestoredFile(entry);
-      if (rec.hasFile) {
+      if (rec.hasFile && entry.is_private) { // Vault file: written as stored, its key re-wrapped when the Vault key differs (Decision 212)
+        const t = await vaultFileTarget(entry, opts, head.privateVaultWrap);
+        const w = await beginRawFile(t.path);
+        try {
+          for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());
+          await w.finish();
+          entry.file_path = t.path;
+          entry.file_key = t.fileKey;
+        } catch (err) { await w.abort(); throw err; }
+      } else if (rec.hasFile) {
         const w = await beginFile(); // encrypted for this device as it streams in
         try {
           for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());

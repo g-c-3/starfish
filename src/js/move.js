@@ -1,13 +1,15 @@
 // move.js — Move between Home and Vault (Decision 181). Steps 1 to 3: Text, Location, Money, Reminder, Voice, Image, PDF, Files.
 // A file is read whole into memory on the way (no size cap, Decision 184): a crash there leaves the original in place.
 // A Reminder's schedule columns move with it; its notification is cancelled and scheduled again by the caller (app.js).
+// A file with its own key (Decision 212) is not copied: the copy points at the same file with the key re-wrapped for the other side,
+// and the original gives the file up before it is deleted. Plain files from before per-file encryption still go through memory.
 // Order: write the copy, read it back and compare, then delete the original permanently.
 // Any failure removes the copy and leaves the original as it was.
 
 import { insertEntry, permanentlyDeleteEntry } from './db.js';
-import { saveVaultEntry, loadVaultEntryContent } from './vault.js';
+import { saveVaultEntry, loadVaultEntryContent, vaultRowLabel } from './vault.js';
 import { decryptPrivateNote, toBase64, fromBase64 } from './crypto.js';
-import { initFiles, readBytes, saveBase64, removeFile } from './files.js';
+import { initFiles, readBytes, saveBase64, removeFile, rewrapForVault, rewrapForHome, keysMatch } from './files.js';
 import * as Money from './money.js';
 
 export const MOVE_TYPES = ['note', 'location', 'money', 'reminder', 'voice', 'image', 'pdf', 'file'];
@@ -58,9 +60,26 @@ function homeContent(row) {
   return { money };
 }
 
-async function removeCopy(db, id, undoLabel = null) {
+const detach = (db, id) => db.run(`UPDATE entries SET file_path=NULL, file_key=NULL WHERE id=?`, [id]);
+
+// The copy owns the file from here on; the original is detached first so deleting it keeps the file.
+async function handOver(db, row) {
+  await detach(db, row.id);
+  try { await permanentlyDeleteEntry(db, row.id); } catch (err) {
+    try { await db.run(`UPDATE entries SET file_path=?, file_key=? WHERE id=?`, [row.file_path, row.file_key, row.id]); } catch { /* the copy is removed by the caller */ }
+    throw err;
+  }
+}
+
+async function removeCopy(db, id, undoLabel = null, sharedFile = false) {
+  if (sharedFile) { try { await detach(db, id); } catch { /* ignore */ } } // the file belongs to the original again
   try { await permanentlyDeleteEntry(db, id); } catch { /* nothing more to do */ }
   if (undoLabel) { try { await dropLabelHistory(db, undoLabel.type, undoLabel.label); } catch { /* ignore */ } }
+}
+
+async function vaultCopyRow(db, key, id) {
+  const r = first(await db.query(`SELECT * FROM entries WHERE id=? AND is_private=1`, [id]));
+  return r ? { ...r, label: await vaultRowLabel(key, r) } : null;
 }
 
 // Home entry id -> Vault entry id. Needs the Vault key.
@@ -73,12 +92,19 @@ export async function moveToVault(db, key, id) {
   const content = homeContent(row);
   const isFile = FILE_TYPES.includes(row.type);
   let file = {};
+  let shared = false; // the copy points at the original's file
   if (isFile) {
     if (!row.file_path) throw new Error('This entry has no file.');
     initFiles(db);
-    let bytes;
-    try { bytes = await readBytes(row); } catch (err) { throw new Error(`Its file could not be read (${String(err?.message || err).replace(/\.$/, '')}).`); }
-    file = { fileData: toBase64(bytes), ocrText: OCR_TYPES.includes(row.type) ? (row.body_text || '') : '' };
+    const ocrText = OCR_TYPES.includes(row.type) ? (row.body_text || '') : '';
+    if (row.file_key) {
+      try { file = { storedFile: { path: row.file_path, fileKey: await rewrapForVault(key, row) }, ocrText }; shared = true; }
+      catch (err) { throw new Error(`Its file could not be read (${String(err?.message || err).replace(/\.$/, '')}).`); }
+    } else {
+      let bytes;
+      try { bytes = await readBytes(row); } catch (err) { throw new Error(`Its file could not be read (${String(err?.message || err).replace(/\.$/, '')}).`); }
+      file = { fileData: toBase64(bytes), ocrText };
+    }
   }
   let copyId = null;
   try {
@@ -87,11 +113,14 @@ export async function moveToVault(db, key, id) {
     await db.run(`UPDATE entries SET created_at=?, updated_at=?, completed_at=?, snoozed_until=? WHERE id=?`,
       [row.created_at, row.updated_at, nul(row.completed_at), nul(row.snoozed_until), copyId]);
 
-    const back = await loadVaultEntryContent(db, key, copyId);
+    const back = shared
+      ? { row: await vaultCopyRow(db, key, copyId), content: {} }
+      : await loadVaultEntryContent(db, key, copyId);
     const wantDescription = row.description || '';
     const gotDescription = back.row.encrypted_description ? await decryptPrivateNote(key, back.row.encrypted_description) : '';
     let sameContent;
     if (row.type === 'note' || row.type === 'reminder') sameContent = back.content.text === content.text;
+    else if (isFile && shared) sameContent = back.row.file_path === row.file_path && await keysMatch(key, row.file_path, back.row.file_key, row.file_key);
     else if (isFile) sameContent = back.content.fileData === file.fileData && (!OCR_TYPES.includes(row.type) || (back.content.ocrText || '') === file.ocrText);
     else if (row.type === 'location') sameContent = !!back.content.location && back.content.location.latitude === content.location.latitude && back.content.location.longitude === content.location.longitude;
     else {
@@ -103,9 +132,9 @@ export async function moveToVault(db, key, id) {
       || back.row.created_at !== row.created_at || !same(await tagNames(db, copyId), tags.slice(0, 2))) {
       throw new Error('The copy did not match.');
     }
-    await permanentlyDeleteEntry(db, id);
+    if (shared) await handOver(db, row); else await permanentlyDeleteEntry(db, id);
   } catch (err) {
-    if (copyId) await removeCopy(db, copyId);
+    if (copyId) await removeCopy(db, copyId, null, shared);
     throw err;
   }
   try { await dropLabelHistory(db, row.type, row.label); } catch { /* suggestion list only */ }
@@ -115,7 +144,7 @@ export async function moveToVault(db, key, id) {
 // Vault entry id -> Home entry id. Needs the Vault key.
 export async function moveToHome(db, key, id) {
   if (!key) throw new Error('Vault locked');
-  const { row, content } = await loadVaultEntryContent(db, key, id);
+  let { row, content } = await loadVaultEntryContent(db, key, id, { withFile: false });
   if (row.deleted_at) throw new Error('Entry not found');
   if (!canMove(row.type)) throw new Error('This type cannot be moved yet.');
   const label = row.encrypted_label ? await decryptPrivateNote(key, row.encrypted_label) : row.label; // throws when unreadable: nothing is moved
@@ -138,7 +167,9 @@ export async function moveToHome(db, key, id) {
   }
 
   const isFile = FILE_TYPES.includes(row.type);
-  if (isFile && !content.fileData) throw new Error('This entry has no readable file.');
+  const shared = isFile && !!row.file_path && !!row.file_key; // on disk (Decision 212): the file is not read
+  if (isFile && !shared) content = (await loadVaultEntryContent(db, key, id)).content; // an item from before that decision holds its bytes in the row
+  if (isFile && !shared && !content.fileData) throw new Error('This entry has no readable file.');
   if (isFile) initFiles(db);
   fields.extension = row.extension || null;
   fields.auto_category = row.auto_category || null;
@@ -148,7 +179,10 @@ export async function moveToHome(db, key, id) {
   let inserted = false;
   let saved = null;
   try {
-    if (isFile) {
+    if (shared) {
+      fields.file_path = row.file_path;
+      fields.file_key = await rewrapForHome(key, row);
+    } else if (isFile) {
       saved = await saveBase64(content.fileData);
       fields.file_path = saved.path;
       fields.file_key = saved.fileKey;
@@ -161,14 +195,15 @@ export async function moveToHome(db, key, id) {
 
     const back = first(await db.query(`SELECT * FROM entries WHERE id=? AND is_private=0`, [copyId]));
     let sameFields = !!back && Object.keys(fields).every((k) => nul(back[k]) === nul(fields[k]));
-    if (sameFields && isFile) sameFields = sameBytes(await readBytes(back), new Uint8Array(fromBase64(content.fileData)));
+    if (sameFields && shared) sameFields = await keysMatch(key, row.file_path, row.file_key, back.file_key);
+    else if (sameFields && isFile) sameFields = sameBytes(await readBytes(back), new Uint8Array(fromBase64(content.fileData)));
     if (!sameFields || !sameSchedule(back, row) || back.label !== label || (back.description || '') !== description
       || back.created_at !== row.created_at || !same(await tagNames(db, copyId), tags)) {
       throw new Error('The copy did not match.');
     }
-    await permanentlyDeleteEntry(db, id);
+    if (shared) await handOver(db, row); else await permanentlyDeleteEntry(db, id);
   } catch (err) {
-    if (inserted) await removeCopy(db, copyId, { type: row.type, label });
+    if (inserted) await removeCopy(db, copyId, { type: row.type, label }, shared);
     else if (saved) { try { await removeFile({ file_path: saved.path }); } catch { /* nothing written */ } }
     throw err;
   }

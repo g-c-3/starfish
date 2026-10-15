@@ -40,10 +40,10 @@ CREATE TABLE IF NOT EXISTS entries (
                                       --   note: plaintext is the note text itself (unchanged from pre-vault format)
                                       --   voice/file: plaintext is JSON {fileData} (base64)
                                       --   image/pdf: plaintext is JSON {fileData, ocrText} (base64 + OCR text, both encrypted together)
-  file_path TEXT,                    -- voice/image/pdf/file WHEN is_private=0 only. Vault entries keep this NULL —
-                                      -- their bytes live inside encrypted_body instead, so nothing sits on disk unencrypted.
+  file_path TEXT,                    -- voice/image/pdf/file: files/<random name>, encrypted (Home Decision 161, Vault Decision 212).
+                                      -- A Vault row from before Decision 212 has NULL here and its bytes inside encrypted_body.
   extension TEXT,                    -- generic files
-  file_key TEXT,                     -- Home files only (Decision 161): per-file key wrapped under the master key; NULL = plain file from before per-file encryption
+  file_key TEXT,                     -- per-file key: wrapped under the master key (Home, Decision 161) or the Vault key (Vault, Decision 212); NULL on Home = plain file from before per-file encryption
   auto_category TEXT,                -- generic files: Documents/Audio/Archives/Other
   noise_reduction INTEGER,           -- voice only
   latitude REAL,

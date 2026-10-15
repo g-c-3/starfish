@@ -1,14 +1,17 @@
-// files.js — binds filestore.js to the device (Decision 162). Home file bytes only; Vault files stay inside encrypted_body.
+// files.js — binds filestore.js to the device (Decision 162). Home files are wrapped under the master key; Vault files
+// (Decision 212) use the same format with their keys wrapped under the Vault key, which the caller passes in.
 // Every Home file read, write, size and removal goes through here. Rows with file_key null are plain files from before
 // per-file encryption and are read as they are until the migration.
 // Capacitor is imported lazily, so the module loads in Node with injected IO.
 
-import { createFileStore, loadMasterKey } from './filestore.js';
+import { createFileStore, loadMasterKey, rewrapFileKey, sameWrappedKey, newFilePath } from './filestore.js';
 import { toBase64, fromBase64 } from './crypto.js';
 
 let boundDb = null;
 let store = null;
 let io = null;
+let homeKey = null; // () => Promise<CryptoKey>, the master key
+let chunk;
 
 // Device IO: base64 through the Filesystem plugin; reads go through the app's own file URL (Decision 154).
 function deviceIo() {
@@ -58,11 +61,9 @@ function initFiles(db, options = {}) {
   const get = async (key) => ((await db.query(`SELECT value FROM meta WHERE key = ?`, [key])).values || [])[0]?.value ?? null;
   const set = (key, value) => db.run(`INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)`, [key, value]);
   let master = null;
-  store = createFileStore({
-    io,
-    getMasterKey: () => (master ||= loadMasterKey({ get, set })),
-    chunkSize: options.chunkSize
-  });
+  chunk = options.chunkSize;
+  homeKey = () => (master ||= loadMasterKey({ get, set }));
+  store = createFileStore({ io, getMasterKey: homeKey, chunkSize: chunk });
 }
 
 function need() {
@@ -93,6 +94,28 @@ async function removeFile(row) {
   if (!row?.file_path) return;
   try { await io.remove(row.file_path); } catch { /* already gone */ }
 }
+
+// ---- Vault files (Decision 212): same on-disk format, file key wrapped under the Vault key (a CryptoKey) ----
+const vaultStore = (vmk) => { need(); return createFileStore({ io, getMasterKey: async () => vmk, chunkSize: chunk }); };
+const saveVaultBase64 = (vmk, b64) => vaultStore(vmk).write(new Uint8Array(fromBase64(b64)));
+const readVaultBytes = (vmk, row) => vaultStore(vmk).read(row);
+const readVaultBase64 = async (vmk, row) => toBase64(await readVaultBytes(vmk, row));
+async function vaultFileSize(vmk, row) { return vaultStore(vmk).size(row); } // throws when the file is missing
+
+// Move: the file stays where it is; only its key is wrapped again, for the other key. Both need the file's path.
+async function rewrapForVault(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, await homeKey(), vmk); }
+async function rewrapForHome(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, vmk, await homeKey()); }
+// True when the Vault wrapper and the Home wrapper hold the same file key for this path.
+async function keysMatch(vmk, path, vaultWrapped, homeWrapped) { need(); return sameWrappedKey(vaultWrapped, path, vmk, homeWrapped, path, await homeKey()); }
+
+// Backup restore of a Vault file: the stored (already encrypted) bytes are written as they are.
+// -> { path, append(bytes), finish(), abort() }; the path is the given one or a new one.
+async function beginRawFile(path = newFilePath()) {
+  need();
+  await io.write(path, new Uint8Array(0));
+  return { path, append: (bytes) => io.append(path, bytes), finish: async () => ({ path }), abort: async () => { try { await io.remove(path); } catch { /* nothing written */ } } };
+}
+async function writeRawBase64(path, b64) { need(); await io.write(path, new Uint8Array(fromBase64(b64))); }
 
 // ---- One-time migration of plain Home files (Phase 17 F, Decision 163) ----
 const MIGRATED_META = 'files_migrated';
@@ -145,4 +168,7 @@ async function migratePlainFiles({ onProgress } = {}) {
   return out;
 }
 
-export { migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile };
+export {
+  migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile,
+  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath
+};

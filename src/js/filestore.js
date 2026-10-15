@@ -51,26 +51,38 @@ async function loadMasterKey({ get, set }) {
   return importFileKey(new Uint8Array(fromBase64(b64)));
 }
 
+// A file key is wrapped under a CryptoKey with the file's path as additional data. Home files use the master key,
+// Vault files the Vault key (Decision 212); Move re-wraps the key and leaves the file as it is.
+async function wrapKeyWith(masterKey, fileKeyRaw, path) {
+  const iv = rand(WRAP_IV);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: utf8(path) }, masterKey, fileKeyRaw));
+  const out = new Uint8Array(WRAP_IV + ct.length);
+  out.set(iv, 0);
+  out.set(ct, WRAP_IV);
+  return toBase64(out);
+}
+async function unwrapKeyWith(masterKey, wrapped, path) {
+  const bytes = new Uint8Array(fromBase64(wrapped));
+  return new Uint8Array(await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bytes.subarray(0, WRAP_IV), additionalData: utf8(path) }, masterKey, bytes.subarray(WRAP_IV)));
+}
+// Same file key, wrapped for another key and path. Throws when `from` is not the key that wrapped it.
+async function rewrapFileKey(wrapped, fromPath, toPath, fromKey, toKey) {
+  return wrapKeyWith(toKey, await unwrapKeyWith(fromKey, wrapped, fromPath), toPath);
+}
+async function sameWrappedKey(wrappedA, pathA, keyA, wrappedB, pathB, keyB) {
+  const a = await unwrapKeyWith(keyA, wrappedA, pathA), b = await unwrapKeyWith(keyB, wrappedB, pathB);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+const newFilePath = () => `${FILES_DIR}/${hex(rand(16))}`;
+
 function createFileStore({ io, getMasterKey, chunkSize = DEFAULT_CHUNK }) {
-  async function wrap(fileKeyRaw, path) {
-    const iv = rand(WRAP_IV);
-    const ct = new Uint8Array(await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv, additionalData: utf8(path) }, await getMasterKey(), fileKeyRaw));
-    const out = new Uint8Array(WRAP_IV + ct.length);
-    out.set(iv, 0);
-    out.set(ct, WRAP_IV);
-    return toBase64(out);
-  }
-  async function unwrap(wrapped, path) {
-    const bytes = new Uint8Array(fromBase64(wrapped));
-    return new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: bytes.subarray(0, WRAP_IV), additionalData: utf8(path) },
-      await getMasterKey(), bytes.subarray(WRAP_IV)));
-  }
+  const wrap = async (fileKeyRaw, path) => wrapKeyWith(await getMasterKey(), fileKeyRaw, path);
+  const unwrap = async (wrapped, path) => unwrapKeyWith(await getMasterKey(), wrapped, path);
 
   // Streaming writer. append() any sizes; finish() writes the last chunk and returns { path, fileKey }.
   async function begin() {
-    const path = `${FILES_DIR}/${hex(rand(16))}`;
+    const path = newFilePath();
     const keyRaw = rand(32);
     const key = await importFileKey(keyRaw);
     const prefix = rand(8);
@@ -164,4 +176,4 @@ function createFileStore({ io, getMasterKey, chunkSize = DEFAULT_CHUNK }) {
   return { begin, write, read, size, plainSize, isEncrypted: (row) => !!row.file_key };
 }
 
-export { createFileStore, loadMasterKey, FILES_DIR, MASTER_META_KEY, DEFAULT_CHUNK };
+export { createFileStore, loadMasterKey, rewrapFileKey, sameWrappedKey, newFilePath, FILES_DIR, MASTER_META_KEY, DEFAULT_CHUNK };

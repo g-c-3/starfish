@@ -7,7 +7,7 @@ import { Share } from '@capacitor/share';
 import {
   ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES
 } from './backup.js';
-import { loadVaultEntryContent, saveVaultEntry, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
+import { loadVaultEntryContent, saveVaultEntry, updateVaultFileContent, base64ToBlobUrl, buildVaultPlaintext } from './vault.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 import * as Money from './money.js';
 import { initFiles, readBase64, fileSize } from './files.js';
@@ -212,12 +212,16 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
 
   if (row.is_private && contentFieldsChanged) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
-    const { content: existing } = await loadVaultEntryContent(db, privateSessionKey, entryId);
-    const merged = { ...existing, ...fields }; // partial edits (e.g. just a corrected OCR text) keep the rest
-    const plaintext = buildVaultPlaintext(row.type, merged);
-    const { encryptPrivateNote } = await import('./crypto.js');
-    const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
-    await db.run(`UPDATE entries SET encrypted_body=?, encrypted_meta=NULL, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]); // meta is derived from the body (Decision 156)
+    if (row.file_path) { // a file on disk (Decision 212): the stored file is replaced, or only the OCR text in the meta
+      await updateVaultFileContent(db, privateSessionKey, entryId, { fileData: fields.fileData, ocrText: fields.ocrText });
+    } else {
+      const { content: existing } = await loadVaultEntryContent(db, privateSessionKey, entryId);
+      const merged = { ...existing, ...fields }; // partial edits (e.g. just a corrected OCR text) keep the rest
+      const plaintext = buildVaultPlaintext(row.type, merged);
+      const { encryptPrivateNote } = await import('./crypto.js');
+      const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
+      await db.run(`UPDATE entries SET encrypted_body=?, encrypted_meta=NULL, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]); // meta is derived from the body (Decision 156)
+    }
   }
 
   const updates = { updated_at: Date.now() };

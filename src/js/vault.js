@@ -11,6 +11,7 @@
 import { insertEntry, VAULT_PLACEHOLDER_LABEL } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import * as Money from './money.js';
+import { initFiles, saveVaultBase64, readVaultBase64, vaultFileSize, removeFile } from './files.js';
 
 const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // mirrors the Home capture cards, in card order
 
@@ -52,25 +53,40 @@ function parseVaultPlaintext(type, plaintext) {
 }
 
 // ---------------------------------------------------------------------------
-// Save — file_path always NULL for vault entries; bytes live only inside encrypted_body.
+// Save — text types keep their content in encrypted_body. File types (voice, image, pdf, file) keep it on disk in the Home
+// format, the file key wrapped under the Vault key (Decision 212): file_path and file_key set, encrypted_body NULL, size and
+// OCR text in encrypted_meta. Rows from before that decision keep their bytes in encrypted_body and are still read.
 // ---------------------------------------------------------------------------
 async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], description = '', extension = null, autoCategory = null, fireAt = null, repeatRule = null, ...content }) {
   if (!VAULT_TYPES.includes(type)) throw new Error(`Type not supported in Private Vault: ${type}`);
-  const plaintext = buildVaultPlaintext(type, content);
-  const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
+  const onDisk = VAULT_FILE_TYPES.includes(type);
+  let file = null; // { path, fileKey }
+  if (onDisk) {
+    initFiles(db);
+    if (content.storedFile) file = content.storedFile; // a Home file whose key Move has re-wrapped: no bytes written
+    else if (content.fileData) file = await saveVaultBase64(privateSessionKey, content.fileData);
+    else throw new Error('This entry has no file.');
+  }
+  const encryptedBody = onDisk ? null : await encryptPrivateNote(privateSessionKey, buildVaultPlaintext(type, content));
   const id = crypto.randomUUID();
 
   // insertEntry() already skips entries_fts/label_history for is_private=1 (db.js) — that's the
   // point: a vault item's existence/label must never surface in ordinary, no-PIN search or
   // autocomplete. Vault's own search/autocomplete comes from the in-memory index below instead.
+  try {
   await insertEntry(db, {
     id, type, label: VAULT_PLACEHOLDER_LABEL, body_text: null, is_private: 1, encrypted_body: encryptedBody,
     encrypted_label: await encryptPrivateNote(privateSessionKey, label), // Decision 145: the label is encrypted like the body
-    file_path: null, extension, auto_category: autoCategory,
+    file_path: file ? file.path : null, file_key: file ? file.fileKey : null, extension, auto_category: autoCategory,
     fire_at: fireAt, repeat_rule: repeatRule, // reminders: schedule columns are plaintext, the notification needs them while locked (Decision 140)
     // Description is encrypted like the body: label is the only plaintext a Vault row carries.
     encrypted_description: description ? await encryptPrivateNote(privateSessionKey, description) : null
   });
+  if (file) await writeFileMeta(db, privateSessionKey, id, { file_path: file.path, file_key: file.fileKey }, content.ocrText || '');
+  } catch (err) {
+    if (file && !content.storedFile) await removeFile({ file_path: file.path }); // nothing points at it
+    throw err;
+  }
 
   for (const tagName of tags.slice(0, 2)) { // MAX_TAGS (Decision 90)
     await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
@@ -104,11 +120,34 @@ async function migrateVaultLabels(db, privateSessionKey) {
 // ---------------------------------------------------------------------------
 // Load — decrypt on demand, never cache decrypted content beyond the in-memory index below.
 // ---------------------------------------------------------------------------
-async function loadVaultEntryContent(db, privateSessionKey, entryId) {
+async function loadVaultEntryContent(db, privateSessionKey, entryId, { withFile = true } = {}) {
   const row = (await db.query(`SELECT * FROM entries WHERE id=? AND is_private=1`, [entryId])).values[0];
   if (!row) throw new Error('Vault entry not found');
+  if (row.file_path && VAULT_FILE_TYPES.includes(row.type)) { // on disk (Decision 212); withFile false skips reading the bytes
+    initFiles(db);
+    const meta = await fileEntryMeta(db, privateSessionKey, { ...row, body_len: 0 });
+    const fileData = withFile ? await readVaultBase64(privateSessionKey, row) : null;
+    return { row: { ...row, label: await vaultRowLabel(privateSessionKey, row) }, content: { fileData, ocrText: (meta && meta.o) || '' } };
+  }
   const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
   return { row: { ...row, label: await vaultRowLabel(privateSessionKey, row) }, content: parseVaultPlaintext(row.type, plaintext) };
+}
+
+// Edit of a file entry's content (Decision 212): a new file replaces the stored one (the old file is removed after the row
+// points at the new one); OCR text alone only rewrites the meta.
+async function updateVaultFileContent(db, privateSessionKey, entryId, { fileData, ocrText }) {
+  initFiles(db);
+  const row = (await db.query(`SELECT * FROM entries WHERE id=? AND is_private=1`, [entryId])).values[0];
+  if (!row) throw new Error('Vault entry not found');
+  const meta = await fileEntryMeta(db, privateSessionKey, row);
+  const ocr = ocrText !== undefined ? ocrText : (meta && meta.o) || '';
+  if (fileData === undefined) { await writeFileMeta(db, privateSessionKey, entryId, row, ocr); await db.run(`UPDATE entries SET updated_at=? WHERE id=?`, [Date.now(), entryId]); return; }
+  const saved = await saveVaultBase64(privateSessionKey, fileData);
+  try {
+    await db.run(`UPDATE entries SET file_path=?, file_key=?, updated_at=? WHERE id=?`, [saved.path, saved.fileKey, Date.now(), entryId]);
+    await writeFileMeta(db, privateSessionKey, entryId, { file_path: saved.path, file_key: saved.fileKey }, ocr);
+  } catch (err) { await removeFile({ file_path: saved.path }); throw err; }
+  await removeFile(row);
 }
 
 // Caller must URL.revokeObjectURL() the result when done — this Blob only ever exists in memory.
@@ -141,14 +180,28 @@ const VAULT_FILE_TYPES = ['voice', 'image', 'pdf', 'file']; // the types whose b
 
 // Index rows leave the file bytes out: file types return NULL for encrypted_body plus its length, so the bridge never
 // carries a file just to list it. Small types (text, money, location, reminder) still return their body.
-const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, encrypted_label, encrypted_description, extension, created_at,
+const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, file_path, file_key, encrypted_label, encrypted_description, extension, created_at,
   fire_at, repeat_rule, completed_at, snoozed_until, is_private, deleted_at, encrypted_meta, LENGTH(encrypted_body) AS body_len,
   CASE WHEN type IN ('voice','image','pdf','file') THEN NULL ELSE encrypted_body END AS encrypted_body
   FROM entries`;
 
 // Size and OCR text of a file entry without decrypting the file. Valid only while it decrypts under the current key and
 // its recorded body length still matches; otherwise it is rebuilt from the body and written back. Never throws.
+// A file on disk (Decision 212) keeps { v: 2, s: size, o: OCR text } in encrypted_meta; a missing or unreadable one is rebuilt
+// with the size and no OCR text.
+async function writeFileMeta(db, key, id, row, ocrText) {
+  const meta = { v: 2, s: await vaultFileSize(key, row), o: ocrText || '' };
+  await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(key, JSON.stringify(meta)), id]);
+  return meta;
+}
 async function fileEntryMeta(db, privateSessionKey, row) {
+  if (row.file_path) {
+    if (row.encrypted_meta) { // never rewritten when it fails to open: it holds the OCR text and a wrong key must not replace it
+      try { const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta)); if (m && m.v === 2) return m; } catch { /* unreadable */ }
+      return null;
+    }
+    try { initFiles(db); return await writeFileMeta(db, privateSessionKey, row.id, row, ''); } catch { return null; } // no meta yet: made now; missing file: listed, no size
+  }
   if (row.encrypted_meta) {
     try {
       const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta));
@@ -294,6 +347,6 @@ function vaultLabelSuggestions(type, partial) {
 
 export {
   VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
-  saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl,
+  saveVaultEntry, loadVaultEntryContent, updateVaultFileContent, base64ToBlobUrl,
   buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions
 };
