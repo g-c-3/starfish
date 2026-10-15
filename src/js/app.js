@@ -30,7 +30,7 @@ import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
-import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric } from './biometric.js';
+import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, biometricPromptBusy } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { openExplorer } from './explorer.js';
@@ -486,6 +486,7 @@ async function registerBackgroundLock() {
       if (!document.getElementById('lock-screen')?.classList.contains('hidden')) offerLockBiometric(); // Decision 205
       return;
     } // only act on going TO background, not returning from it
+    if (biometricPromptBusy()) return; // the fingerprint screen's own pause, never a real backgrounding (Decision 210)
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
   });

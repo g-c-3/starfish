@@ -26,6 +26,18 @@ import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 const SERVER_APP = 'dumpzone.app-password';
 const SERVER_VAULT = 'dumpzone.vault-pin';
 
+// The system fingerprint screen is its own Activity, so showing it pauses this one and the app reports "went to background".
+// The app's lock-on-background must ignore that pause: it would lock the app, or the Vault, right after a successful unlock.
+// The pause event can also reach the page late, after the prompt has closed, hence the short grace period (Decision 210).
+let promptsOpen = 0;
+let quietUntil = 0;
+const PROMPT_GRACE_MS = 1500;
+const biometricPromptBusy = () => promptsOpen > 0 || Date.now() < quietUntil;
+async function withPrompt(fn) {
+  promptsOpen++;
+  try { return await fn(); } finally { promptsOpen--; quietUntil = Date.now() + PROMPT_GRACE_MS; }
+}
+
 function serverFor(kind) {
   if (kind !== 'app' && kind !== 'vault') throw new Error(`biometric: unknown kind "${kind}"`);
   return kind === 'app' ? SERVER_APP : SERVER_VAULT;
@@ -46,11 +58,13 @@ async function isBiometricAvailable() {
 // credentials itself, only stores/retrieves whatever it's given.
 async function enableBiometric(kind, secret) {
   const server = serverFor(kind);
-  await NativeBiometric.verifyIdentity({
-    title: 'Confirm biometric unlock',
-    description: kind === 'app' ? 'Use this to unlock Arkly' : 'Use this to unlock your Vault',
+  await withPrompt(async () => {
+    await NativeBiometric.verifyIdentity({
+      title: 'Confirm biometric unlock',
+      description: kind === 'app' ? 'Use this to unlock Arkly' : 'Use this to unlock your Vault',
+    });
+    await NativeBiometric.setCredentials({ username: kind, password: secret, server });
   });
-  await NativeBiometric.setCredentials({ username: kind, password: secret, server });
 }
 
 async function disableBiometric(kind) {
@@ -67,14 +81,16 @@ async function disableBiometric(kind) {
 async function unlockWithBiometric(kind) {
   const server = serverFor(kind);
   try {
-    await NativeBiometric.verifyIdentity({
-      title: kind === 'app' ? 'Unlock Arkly' : 'Unlock Vault',
+    return await withPrompt(async () => {
+      await NativeBiometric.verifyIdentity({
+        title: kind === 'app' ? 'Unlock Arkly' : 'Unlock Vault',
+      });
+      const { password } = await NativeBiometric.getCredentials({ server });
+      return password;
     });
-    const { password } = await NativeBiometric.getCredentials({ server });
-    return password;
   } catch {
     return null;
   }
 }
 
-export { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric };
+export { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, biometricPromptBusy };
