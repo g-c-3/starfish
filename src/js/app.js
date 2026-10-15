@@ -30,7 +30,7 @@ import { Preferences } from '@capacitor/preferences';
 import { Geolocation } from '@capacitor/geolocation';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { VoiceRecorder } from 'cap-voice-rec';
-import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, biometricPromptBusy } from './biometric.js';
+import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { openExplorer } from './explorer.js';
@@ -91,7 +91,7 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 
 function showScreen(id, { tab } = {}) {
   exitSelection();
-  if (id === 'lock-screen') { dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
+  if (id === 'lock-screen') { currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
   if (id === 'lock-screen') closeTrash();
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
@@ -347,7 +347,11 @@ function exitSelection() {
   updateBackButtonState();
 }
 
+// The app lock screen is on view. Nothing may navigate away from it except a successful unlock (Decision 215).
+const appLockShowing = () => !document.getElementById('lock-screen')?.classList.contains('hidden');
+
 function backAction() {
+  if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
   if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
@@ -366,7 +370,7 @@ function backAction() {
     if (openVaultFolderType) return closeVaultFolder;
     return null;
   }
-  if (currentLocation === 'settings') return async () => { if (await leaveIfClean(SETTINGS_PENDING)) showScreen('main-screen', { tab: 'home' }); };
+  if (currentLocation === 'settings') return async () => { if (await leaveIfClean(SETTINGS_PENDING) && !appLockShowing()) showScreen('main-screen', { tab: 'home' }); };
   if (trashOpen) return closeTrash;
   if (openFolderType) return closeFolder;
   return null;
@@ -482,7 +486,7 @@ async function registerBackgroundLock() {
       lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); purgeOpenCopies();
       // Back in front on the Vault screen while it is locked: show the gate and offer biometric, as the Vault tab does.
       // The app lock screen hides the Vault screen, so this never races it (Decision 59).
-      if (!privateSessionKey && !document.getElementById('vault-screen')?.classList.contains('hidden')) window.refreshVaultGateView?.();
+      if (!privateSessionKey && !document.getElementById('vault-screen')?.classList.contains('hidden')) window.refreshVaultGateView?.({ prompt: vaultBioMayPrompt() });
       if (!document.getElementById('lock-screen')?.classList.contains('hidden')) offerLockBiometric(); // Decision 205
       return;
     } // only act on going TO background, not returning from it
@@ -867,10 +871,15 @@ let lockBioBusy = false, lockBioCooldownUntil = 0;
 async function tryBiometricUnlockApp() {
   lockBioBusy = true;
   try {
-    const password = await unlockWithBiometric('app');
-    if (!password) return { success: false };
-    return await window.attemptUnlock(password);
-  } finally {
+    const got = await unlockWithBiometricEx('app');
+    if (!got.secret) {
+      if (got.reason === 'unreadable') { await disableAppBiometric(); return { success: false, reason: 'reset' }; }
+      return { success: false, reason: 'declined' };
+    }
+    const r = await window.attemptUnlock(got.secret);
+    if (!r.success) { await disableAppBiometric(); return { success: false, reason: 'reset' }; } // the stored copy no longer matches the password
+    return r;
+  } catch { return { success: false, reason: 'error' }; } finally {
     lockBioBusy = false;
     lockBioCooldownUntil = Date.now() + 2000;
   }
@@ -888,14 +897,29 @@ async function offerLockBiometric() {
   }, 300);
 }
 const VMK_PREFIX = 'vmk1:';
-async function tryBiometricUnlockVault() {
-  const secret = await unlockWithBiometric('vault');
-  if (!secret) return { success: false };
+// One Vault fingerprint attempt at a time (Decision 215). The fingerprint screen pauses and resumes the page; the resume used to
+// start a second prompt over the first, which failed the first one. A caller that arrives while one runs gets that attempt's
+// result; a prompt is not started on its own for 2 s after one closed.
+const vaultBioGate = singleFlight(() => runVaultBiometric(), () => ({ success: false, reason: 'error' }));
+const vaultBioMayPrompt = () => vaultBioGate.idle() && !biometricPromptBusy();
+function vaultBioFailMessage(r) {
+  if (r?.reason === 'reset') return 'Fingerprint unlock was reset. Enter your Vault PIN, then turn it on again in Vault settings.';
+  if (r?.reason === 'error') return 'The Vault could not be opened. Enter your Vault PIN.';
+  return 'Fingerprint not confirmed. Enter your Vault PIN.';
+}
+const tryBiometricUnlockVault = () => vaultBioGate.start();
+async function runVaultBiometric() {
+  const got = await unlockWithBiometricEx('vault');
+  if (!got.secret) {
+    if (got.reason === 'unreadable') { await disableVaultBiometric(); return { success: false, reason: 'reset' }; } // accepted fingerprint, nothing stored
+    return { success: false, reason: 'declined' };
+  }
   const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
   // A stored PIN (before Decision 195) or a key that no longer matches the wrapper is cleared; the PIN sheet follows.
-  const vmk = secret.startsWith(VMK_PREFIX) ? new Uint8Array(fromBase64(secret.slice(VMK_PREFIX.length))) : null;
-  if (!row?.vault_wrap || !vmk || !(await vmkMatchesWrap(vmk, row.vault_wrap))) { await disableVaultBiometric(); return { success: false }; }
-  return finishVaultUnlock(vmk);
+  const vmk = got.secret.startsWith(VMK_PREFIX) ? new Uint8Array(fromBase64(got.secret.slice(VMK_PREFIX.length))) : null;
+  if (!row?.vault_wrap || !vmk || !(await vmkMatchesWrap(vmk, row.vault_wrap))) { await disableVaultBiometric(); return { success: false, reason: 'reset' }; }
+  try { return await finishVaultUnlock(vmk); }
+  catch { lockVault(); return { success: false, reason: 'error' }; } // never leave a half-opened Vault: key set, index empty
 }
 window.getBiometricSettings = getBiometricSettings;
 window.enableAppBiometric = enableAppBiometric;
@@ -2709,30 +2733,9 @@ async function handleDriveBackupNow() {
   }
 }
 
-// The update token (Decision 164): one value in the encrypted database's meta table. Not in APP_SETTINGS_KEYS, so no
-// backup carries it. Read only on the update taps below.
-const UPDATE_TOKEN_KEY = 'update_token';
-async function getUpdateToken() {
-  const r = await db.query(`SELECT value FROM meta WHERE key = ?`, [UPDATE_TOKEN_KEY]);
-  return (r.values || [])[0]?.value || null;
-}
-
-async function renderUpdateTokenStatus() {
-  document.getElementById('update-token-status').textContent = (await getUpdateToken()) ? 'Token saved on this phone.' : 'No token saved.';
-}
-
-async function handleSaveUpdateToken() {
-  const input = document.getElementById('update-token-input');
-  const value = input.value.trim();
-  if (!value) return;
-  await db.run(`INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)`, [UPDATE_TOKEN_KEY, value]);
-  input.value = '';
-  await renderUpdateTokenStatus();
-}
-
-async function handleClearUpdateToken() {
-  await db.run(`DELETE FROM meta WHERE key = ?`, [UPDATE_TOKEN_KEY]);
-  await renderUpdateTokenStatus();
+// Earlier builds kept a GitHub token here (Decision 164). The repo is public (Decision 214); any saved copy is deleted at start-up.
+async function removeLegacyUpdateToken() {
+  try { await db.run(`DELETE FROM meta WHERE key = ?`, ['update_token']); } catch { /* nothing to remove */ }
 }
 
 // Manual only (Decision 72) — runs when "Check for updates" is tapped in Settings, never on app
@@ -2755,7 +2758,7 @@ async function handleCheckForUpdateClick() {
     return;
   }
 
-  const result = await checkForUpdate({ currentVersion, token: await getUpdateToken() });
+  const result = await checkForUpdate({ currentVersion });
   if (result.status === 'up_to_date') {
     statusEl.textContent = `You're up to date — ${result.version}.`;
   } else if (result.status === 'update_available') {
@@ -2764,8 +2767,7 @@ async function handleCheckForUpdateClick() {
     downloadBtn.disabled = false;
   } else {
     const messages = {
-      no_token: 'Save the GitHub access token above first.',
-      token_rejected: 'GitHub refused the token. It may be expired or revoked — save a new one.',
+      rate_limited: 'GitHub is limiting requests from this connection. Try again in an hour.',
       no_apk: 'The latest release has no APK attached.',
       offline: 'Offline — connect and try again.',
       network_error: 'Could not reach GitHub — try again later.',
@@ -2908,8 +2910,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // the download properly. @capacitor/browser is no longer used anywhere else in this codebase;
   // dropped from package.json.
   document.getElementById('check-update-btn').addEventListener('click', handleCheckForUpdateClick);
-  // The download is native with the token (Decision 164) — a browser hand-off cannot send it, so Decision 77's
-  // window.location.assign() no longer applies to a private repo.
+  // The download is native (Decisions 164, 214): straight into the installer, no browser hand-off.
   document.getElementById('update-download-btn').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     const assetUrl = btn.dataset.url;
@@ -2918,16 +2919,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     btn.disabled = true;
     statusEl.textContent = 'Downloading…';
     try {
-      await downloadAndInstallUpdate({ assetUrl, token: await getUpdateToken() });
+      await downloadAndInstallUpdate({ assetUrl });
       statusEl.textContent = 'Downloaded. Follow the installer prompt.';
     } catch (err) {
       statusEl.textContent = err.message;
     }
     btn.disabled = false;
   });
-  document.getElementById('update-token-save-btn').addEventListener('click', handleSaveUpdateToken);
-  document.getElementById('update-token-clear-btn').addEventListener('click', handleClearUpdateToken);
-  renderUpdateTokenStatus();
+  removeLegacyUpdateToken();
 
   // Backup & Restore (local) wiring
   renderCategoryCheckboxes('backup-categories', 'backup');
@@ -2983,7 +2982,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     bioUnlockBtn.addEventListener('click', async () => {
       lockStatus.textContent = '';
       const result = await window.tryBiometricUnlockApp();
-      if (!result.success) lockStatus.textContent = 'Biometric unlock failed — enter your password.';
+      if (!result.success) lockStatus.textContent = result.reason === 'reset' ? 'Fingerprint unlock was reset. Enter your password, then turn it on again in Settings.' : 'Fingerprint not confirmed. Enter your password.';
     });
   }
 
@@ -3153,10 +3152,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Default to biometric when it's enabled — same as the app-open lock screen. Guarded so it
     // only fires once per fresh "locked" state, not on every re-render while still locked (e.g.
     // re-visiting the Vault tab after cancelling once shouldn't re-prompt every single time).
-    if (prompt && locked && settings.vaultEnabled && settings.available && !vaultBioAutoPrompted) {
+    if (prompt && locked && settings.vaultEnabled && settings.available && !vaultBioAutoPrompted && vaultBioMayPrompt()) {
       vaultBioAutoPrompted = true;
       const result = await window.tryBiometricUnlockVault();
       if (result.success) await refreshVaultGateView();
+      else if (result.reason === 'reset') { toast(vaultBioFailMessage(result)); await refreshVaultGateView({ prompt: false }); }
     }
   }
   // Exposed the same way window.attemptUnlock/tryBiometricUnlockVault already are — goBack()
@@ -3190,7 +3190,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-biometric-unlock-btn')?.addEventListener('click', async () => {
     const result = await window.tryBiometricUnlockVault();
     if (result.success) { await refreshVaultGateView(); renderVault(); }
-    else toast('Biometric unlock failed — enter your Vault PIN.');
+    else {
+      toast(vaultBioFailMessage(result));
+      if (result.reason === 'reset') await refreshVaultGateView({ prompt: false }); // the button goes away with the setting
+    }
   });
   // vault-lock-btn removed (Decision 65) — replaced by the universal #lock-toggle-btn, wired
   // further down near the power button, which does exactly what this used to: lockVault() then

@@ -76,21 +76,43 @@ async function disableBiometric(kind) {
   }
 }
 
-// Resolves with the stored secret on success, null on cancel/failure/not-enrolled — never
-// throws, so callers can always fall back to manual entry without their own try/catch.
-async function unlockWithBiometric(kind) {
+// Never throws, so callers can always fall back to manual entry without their own try/catch. Resolves
+//   { secret }                   the stored value, after the fingerprint was accepted
+//   { reason: 'declined' }       cancelled, not recognised, locked out or not enrolled: nothing is wrong with the stored copy
+//   { reason: 'unreadable' }     the fingerprint was accepted but the stored copy could not be read: it is gone or broken and
+//                                the caller clears the setting, so the button never offers a fingerprint that cannot work
+async function unlockWithBiometricEx(kind) {
   const server = serverFor(kind);
-  try {
-    return await withPrompt(async () => {
-      await NativeBiometric.verifyIdentity({
-        title: kind === 'app' ? 'Unlock Arkly' : 'Unlock Vault',
-      });
+  return withPrompt(async () => {
+    try {
+      await NativeBiometric.verifyIdentity({ title: kind === 'app' ? 'Unlock Arkly' : 'Unlock Vault' });
+    } catch {
+      return { reason: 'declined' };
+    }
+    try {
       const { password } = await NativeBiometric.getCredentials({ server });
-      return password;
-    });
-  } catch {
-    return null;
-  }
+      return password ? { secret: password } : { reason: 'unreadable' };
+    } catch {
+      return { reason: 'unreadable' };
+    }
+  });
+}
+async function unlockWithBiometric(kind) {
+  return (await unlockWithBiometricEx(kind)).secret ?? null;
 }
 
-export { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, biometricPromptBusy };
+// One attempt at a time (Decision 215): a caller that arrives while one runs gets that attempt's result, and `idle()` is false
+// until `cooldownMs` after it ends, so a resume or a re-render cannot start a prompt of its own over the one that just closed.
+function singleFlight(run, onError, cooldownMs = 2000) {
+  let flight = null, quietUntil = 0;
+  return {
+    start() {
+      if (flight) return flight;
+      flight = (async () => run())().catch(onError).finally(() => { flight = null; quietUntil = Date.now() + cooldownMs; });
+      return flight;
+    },
+    idle: () => !flight && Date.now() >= quietUntil
+  };
+}
+
+export { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight };

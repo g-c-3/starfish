@@ -1,6 +1,6 @@
-// update-install.js — downloads the update APK from the private repo and hands it to the system installer (Decision 164).
-// A browser cannot send the token, so the download is native: Filesystem.downloadFile follows GitHub's redirect to the
-// signed asset URL without the page's CORS rules. The token goes with the asset request to api.github.com only.
+// update-install.js — downloads the update APK from the public repo's release and hands it to the system installer (Decisions 164, 214).
+// The download is native: Filesystem.downloadFile follows GitHub's redirect to the asset without the page's CORS rules.
+// No token and no header: the release is public.
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
@@ -13,9 +13,8 @@ async function purgeUpdateDownload() {
   catch { /* nothing to remove */ }
 }
 
-// assetUrl: the asset's API url from checkForUpdate. Throws an Error with a plain message.
-async function downloadAndInstallUpdate({ assetUrl, token }) {
-  if (!token) throw new Error('Add a GitHub access token first.');
+// assetUrl: the asset's browser_download_url from checkForUpdate. Throws an Error with a plain message.
+async function downloadAndInstallUpdate({ assetUrl }) {
   await purgeUpdateDownload();
   const path = `${DIR}/arkly-update.apk`;
   // downloadFile opens the target directly and ignores `recursive` (plugin 6.0.4), so the folder must exist first.
@@ -23,8 +22,7 @@ async function downloadAndInstallUpdate({ assetUrl, token }) {
   catch { /* already there */ }
   try {
     await Filesystem.downloadFile({
-      url: assetUrl, path, directory: Directory.Cache,
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' }
+      url: assetUrl, path, directory: Directory.Cache
     });
   } catch (err) {
     throw new Error(`Download failed: ${err?.message || err}`);
