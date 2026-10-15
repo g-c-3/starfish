@@ -241,13 +241,9 @@
 
       <details id="update-check-settings" data-tone="violet">
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></span><span class="tile-label">Updates</span></summary>
-        <p class="mode-description">Checks this project's private GitHub Releases — only when you
-          tap the button below, never automatically. Needs the read-only access token, saved on this
-          phone only and never part of a backup. It is sent to api.github.com only.</p>
-        <input id="update-token-input" type="password" autocomplete="off" placeholder="GitHub access token" />
-        <button id="update-token-save-btn" class="secondary-btn">Save token</button>
-        <button id="update-token-clear-btn" class="secondary-btn">Remove token</button>
-        <div id="update-token-status" class="status-line"></div>
+        <p class="mode-description">Checks this project's public GitHub Releases — only when you
+          tap the button below, never automatically. Nothing is sent but the request itself, to
+          api.github.com. No account or token.</p>
         <button id="check-update-btn" class="secondary-btn">Check for updates</button>
         <div id="update-check-status" class="status-line"></div>
         <button id="update-download-btn" class="secondary-btn" disabled>Download update</button>
