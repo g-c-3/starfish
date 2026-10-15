@@ -89,7 +89,11 @@ let lastResumeAt = Date.now();
 const NOTIFICATION_LAUNCH_WINDOW_MS = 6000;
 const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vault-biometric-confirm-pin'];
 
+// An app lock that came while the Vault was on view returns to the Vault gate after the unlock, not to Home (Decision 216).
+// The Vault stays locked: the gate asks for its own PIN or fingerprint.
+let returnToVaultAfterUnlock = false;
 function showScreen(id, { tab } = {}) {
+  if (id === 'lock-screen' && !appLockShowing()) returnToVaultAfterUnlock = !document.getElementById('vault-screen')?.classList.contains('hidden');
   exitSelection();
   if (id === 'lock-screen') { currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
@@ -873,8 +877,7 @@ async function tryBiometricUnlockApp() {
   try {
     const got = await unlockWithBiometricEx('app');
     if (!got.secret) {
-      if (got.reason === 'unreadable') { await disableAppBiometric(); return { success: false, reason: 'reset' }; }
-      return { success: false, reason: 'declined' };
+      return { success: false, reason: got.reason === 'unreadable' ? 'unreadable' : 'declined' }; // may be transient: the setting stays
     }
     const r = await window.attemptUnlock(got.secret);
     if (!r.success) { await disableAppBiometric(); return { success: false, reason: 'reset' }; } // the stored copy no longer matches the password
@@ -904,6 +907,7 @@ const vaultBioGate = singleFlight(() => runVaultBiometric(), () => ({ success: f
 const vaultBioMayPrompt = () => vaultBioGate.idle() && !biometricPromptBusy();
 function vaultBioFailMessage(r) {
   if (r?.reason === 'reset') return 'Fingerprint unlock was reset. Enter your Vault PIN, then turn it on again in Vault settings.';
+  if (r?.reason === 'unreadable') return 'The saved fingerprint key could not be read. Enter your Vault PIN. If this repeats, turn fingerprint unlock off and on again in Vault settings.';
   if (r?.reason === 'error') return 'The Vault could not be opened. Enter your Vault PIN.';
   return 'Fingerprint not confirmed. Enter your Vault PIN.';
 }
@@ -911,8 +915,7 @@ const tryBiometricUnlockVault = () => vaultBioGate.start();
 async function runVaultBiometric() {
   const got = await unlockWithBiometricEx('vault');
   if (!got.secret) {
-    if (got.reason === 'unreadable') { await disableVaultBiometric(); return { success: false, reason: 'reset' }; } // accepted fingerprint, nothing stored
-    return { success: false, reason: 'declined' };
+    return { success: false, reason: got.reason === 'unreadable' ? 'unreadable' : 'declined' }; // unreadable may be transient (phone still locked): the setting stays
   }
   const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
   // A stored PIN (before Decision 195) or a key that no longer matches the wrapper is cleared; the PIN sheet follows.
@@ -930,7 +933,11 @@ window.tryBiometricUnlockApp = tryBiometricUnlockApp;
 window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 
 async function onUnlocked() {
-  showScreen('main-screen');
+  if (returnToVaultAfterUnlock) {
+    returnToVaultAfterUnlock = false;
+    showScreen('vault-screen');
+    window.refreshVaultGateView?.(); // not awaited: the unlock below must not wait for the Vault prompt
+  } else showScreen('main-screen');
   const homeText = await commitNoteDrafts(), homeForms = await commitFormDrafts();
   if (homeForms.length) toast(formDraftToast(homeForms, false));
   else if (homeText) toast('Unsaved note was saved as Autosave');
@@ -2982,7 +2989,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     bioUnlockBtn.addEventListener('click', async () => {
       lockStatus.textContent = '';
       const result = await window.tryBiometricUnlockApp();
-      if (!result.success) lockStatus.textContent = result.reason === 'reset' ? 'Fingerprint unlock was reset. Enter your password, then turn it on again in Settings.' : 'Fingerprint not confirmed. Enter your password.';
+      if (!result.success) lockStatus.textContent = result.reason === 'reset' ? 'Fingerprint unlock was reset. Enter your password, then turn it on again in Settings.'
+        : result.reason === 'unreadable' ? 'The saved fingerprint key could not be read. Enter your password. If this repeats, turn fingerprint unlock off and on again in Settings.'
+        : 'Fingerprint not confirmed. Enter your password.';
     });
   }
 
