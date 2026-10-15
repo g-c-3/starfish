@@ -2535,3 +2535,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - One trash, one list, the same from both cards. Deleted files are not encrypted or re-written. A delete stays a rename on the same storage, so the trash folder still sits on each storage; the screen lists them together.
 - The Vault card's trash view is no more private than the Home card's, matching the unencrypted access of Decision 207.
 - Restore, empty and the 30-day purge are unchanged.
+
+**214. Update check on the public repo.** The repo is public; supersedes the token parts of Decision 164. Owner decision.
+- `checkForUpdate` sends one unauthenticated GET to `api.github.com` on the Check for updates tap, with no `Authorization` header. The download uses the release asset's `browser_download_url`, natively, with no header.
+- The token controls (field, Save token, Remove token, status line) are gone from Settings > Updates. No token is read or sent anywhere. A token saved by an earlier build is deleted from `meta` at start-up.
+- A 403 or 429 reads as the unauthenticated rate limit (60 requests an hour per address). The previous "no token" and "token rejected" results no longer exist.
+- Network calls unchanged: the ad unit and this tap-only check (plus its tap-only download).
+
+**215. Lock screen Back and fingerprint unlock fixes.** Owner reports: the Vault fingerprint still failed; Back from the app lock screen reached Home without a password.
+- Back: `showScreen('lock-screen')` left the recorded location at Settings or Vault, so `backAction()` returned that location's action and Settings Back went to Home. Now `backAction()` returns nothing while the lock screen is showing, the lock screen resets the location, and the Settings action re-checks. The Android Back button then minimises the app.
+- Vault fingerprint: the page resume after the fingerprint screen called the gate refresh, which could start a second prompt over the first. One attempt now runs at a time (`singleFlight`): callers during an attempt share its result and no prompt starts on its own for 2 s after one ends. A failure inside the unlock no longer leaves a half-opened Vault: the Vault is locked again.
+- Reasons: the plugin read returns declined, unreadable or a secret. Unreadable (fingerprint accepted, stored copy gone) and a copy that no longer matches the wrapper or password clear the setting, so the button is not offered again. Messages: not confirmed; reset (turn it on again); could not open. The app-open lock uses the same outcomes.
+- Cause for the Vault failure is not confirmed. A second prompt on resume fits the symptom and is removed; a plugin storage fault is not ruled out, and the reset message now names that case.
+- Checks: 12 Node checks on the plugin read outcomes and `singleFlight`; `vite build` passes. The Back fix and the resume path are not exercised in Node.

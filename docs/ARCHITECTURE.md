@@ -14,7 +14,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
   reminders, expenses, or local backup/restore.
 - The only network calls this app will ever make are the ad SDK (deferred — see below), only if
   the person explicitly opts in, Google Drive backup (§4b), and two actions the person starts with a
-  tap: Check for updates (private repo; carries a saved read-only token, Decision 164) and Verify link (short map link, Decision 117). None is reachable from, or
+  tap: Check for updates (public repo, no token, Decision 214) and Verify link (short map link, Decision 117). None is reachable from, or
   required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
@@ -843,10 +843,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `pdfviewer.js`: `drawText` adds the layer after each canvas draw; `search` fills `hits` and `hitsByPage`; `applyHits` marks spans when a layer is drawn; the page text cache is cleared by `clearSearch` and `destroy`. `getOutline` resolves named and direct destinations to page numbers. `attachThumbnails` draws and releases thumbnails with an `IntersectionObserver` rooted in the panel body.
 - `pdftools.js`: mounted by `openPdf` after the document opens; `closeTop()` backs the viewer's `guard`; `destroy()` runs from `onClose`, which also covers a Vault lock.
 
-## Update check, private repo (Decision 164)
-- Tap only. `GET api.github.com/repos/<repo>/releases` with `Authorization: Bearer <token>`; newest release by CI run number.
-- Token: `meta.update_token`, entered in Settings > Updates, never in a backup, the repo, the workflow, the docs or the APK.
-- Download: the asset's API `url` with the token and `Accept: application/octet-stream`, natively into `cache/update/`, then the system installer. Needs `REQUEST_INSTALL_PACKAGES`.
+## Update check, public repo (Decisions 164, 214)
+- Tap only. One unauthenticated `GET api.github.com/repos/<repo>/releases`; newest release by CI run number. No token, no stored credential. A 403 or 429 reads as the hourly limit (60 per address).
+- Download: the asset's `browser_download_url`, natively into `cache/update/` with no header, then the system installer. Needs `REQUEST_INSTALL_PACKAGES`.
+- A token saved by an earlier build (`meta.update_token`) is deleted at start-up.
 
 ## Name and identifiers (Decision 165)
 - The app is Arkly. Pre-rename identifiers kept: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
@@ -916,6 +916,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Every fingerprint prompt is wrapped by `biometric.js`, which reports `biometricPromptBusy()` while one is open and for 1.5 seconds after; the background-lock handler ignores a pause in that window, because the prompt is its own Activity (Decision 210).
 - The lock screen fingerprint button is re-derived (`syncLockBiometric`) after every enable and disable, so a cleared copy never leaves a button (Decision 203).
 - Returning to the front with the lock screen showing re-derives the button and opens the fingerprint prompt (`offerLockBiometric`); a busy flag and a short cooldown stop the prompt's own pause and resume from reopening it (Decision 205).
+- Lock screen and Back (Decision 215): Back does nothing while the lock screen is showing (the Android Back button then sends the app to the background), and showing the lock screen resets the recorded location. Before, a Back from the lock screen ran the Settings or Vault back action and reached Home without a password.
+- Vault fingerprint (Decision 215): one attempt at a time, shared by the button, the Vault tab, the resume handler and the move sheet (`singleFlight`, 2 s quiet period after it ends). The plugin read has three outcomes: declined (cancelled or not recognised; setting kept), unreadable (fingerprint accepted but the stored copy cannot be read; the setting is cleared) and a stored copy that no longer matches the wrapper (cleared). Each shows its own message. The app-open lock follows the same rules.
 
 ## Backup access gate (Decisions 202, 204)
 - Before Back up now and Back up to Drive: one window with App lock password if one is set and Vault PIN if the Vault is set up and included, one Submit; or the fingerprint button, when offered, which covers both. Then the backup passkey as before.
