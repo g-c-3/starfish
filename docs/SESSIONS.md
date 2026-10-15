@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 123**
+
+File explorer stage E1b, built-in viewers (Decision 211), started ahead of the device pass on DP79 at the owner's choice. Source read: `explorer.js`, the entry viewers and editor in `app.js`, `pdfviewer.js`, `pdftools.js`, the explorer markup and styles.
+- `src/js/explorer-view.js` (new): text view and edit, image, PDF, audio and video.
+- `src/js/explorer.js`: dispatch to the viewers, `shownItems()`, Back and finish hand-over, external open kept as the fallback.
+- `src/index.html`, `src/css/style.css`: viewer layer and styles.
+- `src/js/app.js`: the explorer is given the app's dialogs, image zoom and auto-lock timer.
+- Docs: ROADMAP (E1b, DP81), DECISIONS (211), ARCHITECTURE (File explorer).
+
+Decisions made: 211.
+
+Verified: 36 Node checks on the viewers and dispatch; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), any device (DP69 to DP81), whether the local file route serves a USB drive.
+
+Open: DP69 to DP81 on device; Phase 22 E2 manage and trash, E3 office viewers; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run for the explorer's Java, DP79 to DP81 on device, then Phase 22 E2.
+
 **Session 122**
 
 Bug fix (Decision 210): fingerprint reads successfully but the app or the Vault does not open. Source read: `biometric.js`, the background-lock handler, `tryBiometricUnlockApp`, `tryBiometricUnlockVault`, the picker flag.

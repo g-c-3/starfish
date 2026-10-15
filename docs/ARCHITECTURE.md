@@ -921,7 +921,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Both explorer cards open the same overlay, `#explorer-screen` (`src/js/explorer.js`), tracked as `activeExplorer { finish, back, isVault }`: Back steps up a folder, then to the storage list, then closes; an app lock closes it from either card, a Vault lock closes the one opened from the Vault; closing drops the listing.
 - It lists the phone's own storage and nothing else: no encryption, no copy, no database table. Folder listing: the filesystem plugin on a percent-encoded `file://` path. Native side (`window.ArklyExplorer`, written into `MainActivity` by `scripts/patch-explorer.js` in CI): All files access check and request, and the mounted volumes with free space and a USB flag.
 - Access: `MANAGE_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` from `patch-manifest.js`; granted once on an Android settings screen. The screen sets the picker flag (Decision 73) before leaving for that screen or another app, so the lock on background does not fire for that trip.
-- Planned: built-in viewers (E1b), manage and a per-storage trash (E2), office viewers (E3).
+- Viewers (Decision 211): `#explorer-viewer`, a layer inside the screen, driven by `src/js/explorer-view.js`. Text view and edit (Save writes the same file), image, PDF (reading tools only), audio and video. Files are read in place: images and media through the local file route, text through the filesystem plugin, PDFs fetched whole. No copy, no database row, no draft. `activeExplorer.back()` hands Back to the viewer first; `finish()` destroys it, so a lock closes both.
+- Planned: manage and a per-storage trash (E2), office viewers (E3).
 
 ## Password show/hide (Decision 200)
 - `src/js/passeye.js` wraps every `input[type=password]` in `.pw-field` with an eye button; `initPasswordEyes()` runs at start and observes later additions. The lock screen input carries `data-no-eye`.
