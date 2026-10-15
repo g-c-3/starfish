@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 122**
+
+Bug fix (Decision 210): fingerprint reads successfully but the app or the Vault does not open. Source read: `biometric.js`, the background-lock handler, `tryBiometricUnlockApp`, `tryBiometricUnlockVault`, the picker flag.
+- `src/js/biometric.js`: prompts counted, `biometricPromptBusy()` exported.
+- `src/js/app.js`: the background handler ignores the fingerprint screen's pause.
+- Docs: ROADMAP (DP80), DECISIONS (210), ARCHITECTURE (note).
+
+Decisions made: 210.
+
+Verified: 14 new Node checks and the earlier suites; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), any device (DP69 to DP80). Cause inferred, not reproduced.
+
+Open: DP69 to DP80 on device; Phase 22 E1b viewers, E2 manage and trash, E3 office viewers; Phase 17 stages M to O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run to confirm the explorer's Java compiles, DP79 and DP80 on device, then Phase 22 E1b.
+
 **Session 121**
 
 Text renamed to Notes everywhere (Decision 209). `src/js/app.js`: label map, Autosave toasts, discard dialog; `FOLDER_TITLES` removed. `src/index.html`: New chooser card and the editor's accessibility label. Docs: ROADMAP (DP78), DECISIONS (209).

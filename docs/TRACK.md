@@ -228,3 +228,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-14 | Session 119 (File explorer browse) | Decision 207 | Phase 22 E1a: browse phone storage incl. USB, native All files access bridge via CI, Vault card opens the same screen; DP79 added; 31 Node checks; patches tested on a stub tree; not run through CI or on a device |
 | 2026-10-14 | Session 120 (Card order) | Decision 208 | Home and Vault cards reordered; Text card labelled Notes; vite build passes; not run through CI or on a device |
 | 2026-10-14 | Session 121 (Notes rename) | Decision 209 | Text renamed to Notes in every user-facing label; vite build passes; not run through CI or on a device |
+| 2026-10-14 | Session 122 (Fingerprint entry fix) | Decision 210 | Fingerprint screen's own pause no longer locks the app or Vault; DP80 added; 14 Node checks; vite build passes; not run through CI or on a device |

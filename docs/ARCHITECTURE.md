@@ -907,6 +907,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Each action is one window (`openSecretForm`): Current secret (not for Set), New, Repeat new, Hint (optional), Submit. Errors show in the window. Fingerprint is a button the person taps, offered only when that unlock is on; it hides the current field and never runs by itself. Back and every lock close the window and clear it.
 - App password: updates the hash row; clears the fingerprint copy; the idle timer and Lock button follow. Vault PIN: the Vault key is unwrapped (current PIN) or read from the fingerprint copy, re-wrapped under the new PIN; `vault_wrap` is replaced only if unchanged since it was read; no item is re-encrypted; the fingerprint copy is cleared. Older backups keep the PIN they were made with.
 - The backup passkey is not involved.
+- Every fingerprint prompt is wrapped by `biometric.js`, which reports `biometricPromptBusy()` while one is open and for 1.5 seconds after; the background-lock handler ignores a pause in that window, because the prompt is its own Activity (Decision 210).
 - The lock screen fingerprint button is re-derived (`syncLockBiometric`) after every enable and disable, so a cleared copy never leaves a button (Decision 203).
 - Returning to the front with the lock screen showing re-derives the button and opens the fingerprint prompt (`offerLockBiometric`); a busy flag and a short cooldown stop the prompt's own pause and resume from reopening it (Decision 205).
 
