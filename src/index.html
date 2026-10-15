@@ -525,6 +525,16 @@
       </div>
     </div>
     <div id="explorer-body"></div>
+    <div id="explorer-viewer" class="hidden">
+      <header class="editor-bar">
+        <button id="ev-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+        <span id="ev-title"></span>
+        <span id="ev-count" class="img-count"></span>
+        <button id="ev-save-btn" class="editor-save hidden" disabled>Save</button>
+        <button id="ev-open-btn" class="icon-btn" aria-label="Open with app" title="Open with app"><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg></button>
+      </header>
+      <div id="ev-body"></div>
+    </div>
   </div>
 
   <div id="viewer-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Entry details">
