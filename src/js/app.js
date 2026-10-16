@@ -98,6 +98,7 @@ function showScreen(id, { tab } = {}) {
     if (privateSessionKey) lockVault(); // an app lock by any route also locks the Vault; it asks for its own PIN after the unlock (Decision 217)
   }
   exitSelection();
+  if (id === 'main-screen' && tab !== 'settings') refreshHome();
   if (id === 'lock-screen') { currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
   if (id === 'lock-screen') closeTrash();
@@ -179,6 +180,7 @@ function closeFolder() {
 }
 
 // ---- Home overlays (Decision 146): Trash is a folder-like view; Search is a full-screen layer that grows out of its tile. ----
+let refreshHome = () => {}; // set once Home exists: counts, totals and the open folder, redrawn on every arrival at Home (Decision 218)
 let trashOpen = false;
 function closeTrash() {
   if (!trashOpen) return;
@@ -3239,7 +3241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       closeVaultFolder(); showScreen('vault-screen'); await refreshVaultGateView();
     }
     else {
-      if (tab === 'home') closeFolder(); // tapping Home always lands on the card grid, not an open folder (Decision 81)
+      if (tab === 'home') { closeTrash(); closeFolder(); } // tapping Home always lands on the card grid, not an open folder or the Trash (Decisions 81, 218)
       showScreen('main-screen', { tab });
     }
   }));
@@ -4178,6 +4180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  refreshHome = () => { renderMainTimeline().catch(() => {}); };
   async function renderMainTimeline() {
     await renderFolderCounts();
     await loadCurrencySymbol();
