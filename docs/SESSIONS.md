@@ -29,11 +29,12 @@ Fixes reported after stage M (Decisions 214, 215):
 - `src/js/biometric.js`: `unlockWithBiometricEx` (declined, unreadable, secret) and `singleFlight`.
 - `src/js/update-check.js`, `src/js/update-install.js`, `src/index.html`: unauthenticated check and download, token controls removed; an earlier saved token is deleted at start-up.
 - Later report: the Decision 215 reset on an unreadable stored copy cleared the fingerprint setting when the phone was still locked; reverted to a message only (Decision 216). An app lock from the Vault now returns to the Vault gate after the unlock (Decision 216).
+- Root cause of the fingerprint failures found in the plugin source: `deleteCredentials` clears every saved credential (Decision 217). Not calling it again; off is a marker overwrite. An app lock now also locks the Vault.
 - Cause of the Back bypass found and fixed (leftover location). Cause of the Vault fingerprint failure not confirmed; a second prompt on resume fits and is removed.
 
 Owner note recorded as Decision 213: the explorer's trash (E2) is not encrypted and is shared by the Home and Vault cards.
 
-Decisions made: 211, 212, 213, 214, 215, 216.
+Decisions made: 211, 212, 213, 214, 215, 216, 217.
 
 Verified: 36 Node checks on the viewers and dispatch; 28 Node checks on Vault files and Move against a real SQLite schema; 12 Node checks on the fingerprint read and `singleFlight`; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), Vault backup and restore of files in Node, any device for stage M (DP82).
 
