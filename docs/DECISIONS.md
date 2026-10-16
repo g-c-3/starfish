@@ -2562,3 +2562,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A phone that already lost a copy under the old delete needs the fingerprint turned on again once, for the app and for the Vault; the first failed attempt clears the stale setting.
 - Cause 2: the app lock from the Home lock button, the idle timer and the other routes locked only the app; the Vault stayed unlocked and opened after the unlock. Any app lock now also locks the Vault, whatever the Vault's own lock settings. After the unlock the Vault asks for its own PIN or fingerprint (Decision 216 returns to the Vault gate when the lock came from the Vault).
 - Checks: 16 Node checks (read outcomes and retry, off marker, each fingerprint kept when the other is turned off or on, `deleteCredentials` never used, `singleFlight`); `vite build` passes. The app lock change is not exercised in Node or on a device (DP83).
+
+**218. Home opens clean and redraws on every arrival.** Found in DP82: after Moves and deletes in the Vault, tapping Home showed the Trash view under the card grid and the card counts were stale; a lock and unlock, or entering a folder, cleared it.
+- Cause 1: the Home tab button closed an open folder but not the Home Trash, so the Trash opened earlier stayed visible and the card grid was shown over it. Now it closes both and lands on the card grid.
+- Cause 2: nothing redrew Home when it came back in front, so the counts reflected the last Home action, not the Moves and deletes done in the Vault meanwhile. Every arrival at Home (tab, Back, unlock) now redraws the counts, totals and the open folder.
+- Checks: `vite build` passes; not exercised in Node or on a device (DP83 item 9).

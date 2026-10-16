@@ -30,17 +30,18 @@ Fixes reported after stage M (Decisions 214, 215):
 - `src/js/update-check.js`, `src/js/update-install.js`, `src/index.html`: unauthenticated check and download, token controls removed; an earlier saved token is deleted at start-up.
 - Later report: the Decision 215 reset on an unreadable stored copy cleared the fingerprint setting when the phone was still locked; reverted to a message only (Decision 216). An app lock from the Vault now returns to the Vault gate after the unlock (Decision 216).
 - Root cause of the fingerprint failures found in the plugin source: `deleteCredentials` clears every saved credential (Decision 217). Not calling it again; off is a marker overwrite. An app lock now also locks the Vault.
+- DP82 passed on device with one fault: Home showed the Trash view and stale counts after Vault Moves; fixed (Decision 218).
 - Cause of the Back bypass found and fixed (leftover location). Cause of the Vault fingerprint failure not confirmed; a second prompt on resume fits and is removed.
 
 Owner note recorded as Decision 213: the explorer's trash (E2) is not encrypted and is shared by the Home and Vault cards.
 
-Decisions made: 211, 212, 213, 214, 215, 216, 217.
+Decisions made: 211, 212, 213, 214, 215, 216, 217, 218.
 
 Verified: 36 Node checks on the viewers and dispatch; 28 Node checks on Vault files and Move against a real SQLite schema; 12 Node checks on the fingerprint read and `singleFlight`; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), Vault backup and restore of files in Node, any device for stage M (DP82).
 
-Open: DP82 and DP83 on device; Phase 17 stages N and O; Phase 22 E2 manage and shared trash, E3 office viewers; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: DP83 on device; Phase 17 stages N and O; Phase 22 E2 manage and shared trash, E3 office viewers; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: CI run for the stage M and explorer changes, DP82 and DP83 on device, then Phase 17 N (needs approval) or Phase 22 E2.
+Next session start point: CI run for the stage M and explorer changes, DP83 on device, then Phase 17 N (needs approval) or Phase 22 E2.
 
 **Session 122**
 
