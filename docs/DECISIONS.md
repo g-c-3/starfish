@@ -2567,3 +2567,17 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause 1: the Home tab button closed an open folder but not the Home Trash, so the Trash opened earlier stayed visible and the card grid was shown over it. Now it closes both and lands on the card grid.
 - Cause 2: nothing redrew Home when it came back in front, so the counts reflected the last Home action, not the Moves and deletes done in the Vault meanwhile. Every arrival at Home (tab, Back, unlock) now redraws the counts, totals and the open folder.
 - Checks: `vite build` passes; not exercised in Node or on a device (DP83 item 9).
+
+**219. File explorer manage, first part (Phase 22, stage E2a).** E2 is built in two parts; this is the first.
+- Built: long-press multi-select, new folder, rename, properties, delete to the shared trash (Decision 213), trash view with restore, delete for good and empty, 30-day purge. Copy, move and share are E2b.
+- Logic in `src/js/explorer-manage.js`, pure over an injected filesystem; `explorer.js` supplies the plugin adapter. No native change, no new permission, no network call.
+- Names: trimmed; no `/`, `\` or NUL; not `.` or `..`; at most 255 bytes. A clash is any other entry whose name matches ignoring case, because storage may or may not tell the cases apart. Clash: refused, nothing overwritten.
+- Case-only rename goes through a temporary name, then the final one; a failure on the second step puts the original name back. Reason: the plugin's rename may remove an existing destination first, which for a case-only change on case-insensitive storage is the file itself. Plugin behaviour recalled, not verified on a device.
+- Trash: `.arkly-trash` at each storage root. Delete is a rename on the same storage. Each item is a random 12-hex id with a `<id>.json` record (name, original path, folder flag, size, deleted time) written first and removed if the rename fails; `.nomedia` keeps trashed pictures and music out of other apps. The record holds the original path in plain text, in line with Decision 213.
+- Restore: original place, made again if missing; a taken name gets ` (1)`, ` (2)`. A record pointing into the trash folder or off its storage restores to the storage root. A record whose item is gone is removed; an unreadable one is left alone.
+- Purge: items older than 30 days are removed once per open of the screen, after access is confirmed, in the background. Delete for good and Empty trash ask first and say it cannot be undone. Delete to the trash asks first and states the 30 days and that the trash is not encrypted.
+- The trash folder and anything inside it cannot be deleted or renamed from the explorer; it shows only with the hidden-file toggle on. A storage root cannot be deleted.
+- A batch continues past a failed item and reports done and failed counts.
+- Filter text and the hidden toggle clear the selection, so an action never reaches an item that is not shown.
+- Checks: 51 Node checks on `explorer-manage.js` against an in-memory filesystem (names, free names, clashes, case-only rename, trash, restore, tampered records, purge, expiry, batch failure, properties); 31 DOM checks on the screen against the real `index.html` and a stub plugin; `vite build` passes. Not run through CI or on a device (DP84).
+- Risks: plugin `rename`, `rmdir`, `mkdir` and `stat` behaviour on real storage, USB drives and exFAT names is unverified. A rename inside a very large folder, and Properties on one, are untimed.

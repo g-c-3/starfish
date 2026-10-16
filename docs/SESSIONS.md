@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 124**
+
+File explorer stage E2a, manage (Decision 219), first of two parts of E2. Source read: `explorer.js`, `explorer-view.js`, `patch-explorer.js`, the explorer markup and styles, `askYesNo` and `askText` in `app.js`.
+- `src/js/explorer-manage.js` (new): name rules, new folder, rename, shared trash, properties; pure logic over an injected filesystem.
+- `src/js/explorer.js`: long-press selection and selection header, new folder, rename, delete to trash, trash view (restore, delete for good, empty), properties view, 30-day purge once per open, plugin adapter.
+- `src/index.html`, `src/css/style.css`: three icons, New folder and Trash buttons, selection header, selected rows, trash banner and properties styles.
+- Docs: ROADMAP (E2a, E2b, DP84), DECISIONS (219), ARCHITECTURE (File explorer).
+
+Decisions made: 219.
+
+Verified: 51 Node checks on `explorer-manage.js`; 31 DOM checks on the screen against the real `index.html`; `vite build` passes. Not verified: CI (the explorer's Java is still uncompiled), any device (DP83, DP84), the plugin's rename and rmdir on real storage and USB drives. Release status not checked: the GitHub API rate limit was hit.
+
+Open: DP83 and DP84 on device; Phase 22 E2b copy, move, share and E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run for stage M, the explorer and E2a; DP83 and DP84 on device; then Phase 22 E2b.
+
 **Session 123**
 
 File explorer stage E1b, built-in viewers (Decision 211), started ahead of the device pass on DP79 at the owner's choice. Source read: `explorer.js`, the entry viewers and editor in `app.js`, `pdfviewer.js`, `pdftools.js`, the explorer markup and styles.
