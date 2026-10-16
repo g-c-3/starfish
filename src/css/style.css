@@ -843,6 +843,22 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .explorer-note { padding: 28px 10px; text-align: center; color: var(--muted); }
 .explorer-note p { margin: 0 0 14px; line-height: 1.5; }
 .explorer-note button { width: auto; padding: 11px 22px; }
+/* Manage (Decisions 213, 219): selection header, selected rows, trash and properties views. */
+#explorer-selbar { gap: 2px; padding: 8px; background: var(--surface); }
+#explorer-selbar .icon-btn.warning-text { color: var(--danger); }
+#explorer-selbar .icon-btn:disabled { opacity: 0.35; }
+#explorer-sel-count { flex: 1; min-width: 0; padding: 0 6px; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.explorer-row { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#explorer-screen.selecting .explorer-row { padding-right: 44px; }
+#explorer-screen.selecting .explorer-row::after { content: ""; position: absolute; top: 50%; right: 12px; width: 22px; height: 22px; margin-top: -11px; box-sizing: border-box; border: 2px solid var(--muted); border-radius: 50%; color: #fff; font-size: 13px; font-weight: 800; line-height: 18px; text-align: center; }
+.explorer-row.is-selected { background: var(--brand-tint); outline: 2px solid var(--brand); outline-offset: -2px; }
+#explorer-screen.selecting .explorer-row.is-selected::after { content: "\2713"; background: var(--brand); border-color: var(--brand); }
+.explorer-banner { margin: 4px 6px 8px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: 13px; line-height: 1.45; }
+.explorer-banner button { width: auto; margin: 8px 0 0; padding: 8px 16px; }
+.explorer-props { display: flex; flex-direction: column; padding: 4px 6px; }
+.explorer-props .prop { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.explorer-props .prop-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.explorer-props .prop-value { font-size: 15px; word-break: break-word; }
 /* Built-in viewers (Decision 211): a layer over the listing, inside the explorer screen. */
 #explorer-viewer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); }
 #ev-title { flex: 1; min-width: 0; font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
