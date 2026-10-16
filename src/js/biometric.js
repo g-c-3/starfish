@@ -67,12 +67,16 @@ async function enableBiometric(kind, secret) {
   });
 }
 
+// The plugin's deleteCredentials clears every saved credential, not only the one named: turning the app fingerprint off or
+// on wiped the Vault's, and the reverse (Decision 217). It is never called. The copy is overwritten with an unusable marker
+// instead, and the setting in the database is what says whether the fingerprint is on.
+const OFF_MARKER = 'off';
 async function disableBiometric(kind) {
   const server = serverFor(kind);
   try {
-    await NativeBiometric.deleteCredentials({ server });
+    await NativeBiometric.setCredentials({ username: OFF_MARKER, password: OFF_MARKER, server });
   } catch {
-    // Nothing was stored — disabling an already-disabled lock is a no-op, not an error.
+    // Nothing stored or the store is unavailable — disabling an already-disabled lock is a no-op, not an error.
   }
 }
 
@@ -81,7 +85,7 @@ async function disableBiometric(kind) {
 //   { reason: 'declined' }       cancelled, not recognised, locked out or not enrolled: nothing is wrong with the stored copy
 //   { reason: 'unreadable' }     the fingerprint was accepted but the stored copy could not be read: it is gone or broken and
 //                                the caller clears the setting, so the button never offers a fingerprint that cannot work
-async function unlockWithBiometricEx(kind) {
+async function unlockWithBiometricEx(kind, retryMs = 600) {
   const server = serverFor(kind);
   return withPrompt(async () => {
     try {
@@ -89,12 +93,15 @@ async function unlockWithBiometricEx(kind) {
     } catch {
       return { reason: 'declined' };
     }
-    try {
-      const { password } = await NativeBiometric.getCredentials({ server });
-      return password ? { secret: password } : { reason: 'unreadable' };
-    } catch {
-      return { reason: 'unreadable' };
+    for (let attempt = 0; attempt < 2; attempt++) { // one retry: the key can be unavailable for a moment after the screen comes on
+      try {
+        const { password } = await NativeBiometric.getCredentials({ server });
+        return password && password !== OFF_MARKER ? { secret: password } : { reason: 'unreadable' };
+      } catch {
+        if (attempt === 0) await new Promise((r) => setTimeout(r, retryMs));
+      }
     }
+    return { reason: 'unreadable' };
   });
 }
 async function unlockWithBiometric(kind) {

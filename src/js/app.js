@@ -93,7 +93,10 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 // The Vault stays locked: the gate asks for its own PIN or fingerprint.
 let returnToVaultAfterUnlock = false;
 function showScreen(id, { tab } = {}) {
-  if (id === 'lock-screen' && !appLockShowing()) returnToVaultAfterUnlock = !document.getElementById('vault-screen')?.classList.contains('hidden');
+  if (id === 'lock-screen' && !appLockShowing()) {
+    returnToVaultAfterUnlock = !document.getElementById('vault-screen')?.classList.contains('hidden');
+    if (privateSessionKey) lockVault(); // an app lock by any route also locks the Vault; it asks for its own PIN after the unlock (Decision 217)
+  }
   exitSelection();
   if (id === 'lock-screen') { currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
@@ -877,7 +880,8 @@ async function tryBiometricUnlockApp() {
   try {
     const got = await unlockWithBiometricEx('app');
     if (!got.secret) {
-      return { success: false, reason: got.reason === 'unreadable' ? 'unreadable' : 'declined' }; // may be transient: the setting stays
+      if (got.reason === 'unreadable') { await disableAppBiometric(); return { success: false, reason: 'reset' }; }
+      return { success: false, reason: 'declined' };
     }
     const r = await window.attemptUnlock(got.secret);
     if (!r.success) { await disableAppBiometric(); return { success: false, reason: 'reset' }; } // the stored copy no longer matches the password
@@ -915,7 +919,8 @@ const tryBiometricUnlockVault = () => vaultBioGate.start();
 async function runVaultBiometric() {
   const got = await unlockWithBiometricEx('vault');
   if (!got.secret) {
-    return { success: false, reason: got.reason === 'unreadable' ? 'unreadable' : 'declined' }; // unreadable may be transient (phone still locked): the setting stays
+    if (got.reason === 'unreadable') { await disableVaultBiometric(); return { success: false, reason: 'reset' }; } // accepted fingerprint, nothing usable stored (after a retry)
+    return { success: false, reason: 'declined' };
   }
   const row = (await db.query(`SELECT vault_wrap FROM credentials WHERE id=1`)).values[0];
   // A stored PIN (before Decision 195) or a key that no longer matches the wrapper is cleared; the PIN sheet follows.
