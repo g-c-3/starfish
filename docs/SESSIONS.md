@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 126**
+
+Owner confirmed DP83 and DP85 on device. Request: an archive opens like a folder on tap, with no Extract or Open with app question (Decision 221). Source read: `explorer.js`, `explorer-view.js`, `explorer-archive.js`, `patch-archive.js`.
+- `scripts/java/ArklyArchiveBridge.java`: entry listing (`openArchive`, `browseStatus`, `children`, `closeArchive`), one entry or selected entries (`startEntry`, `startSelected`), `clearCache`; takes the activity.
+- `scripts/patch-archive.js`: registers the bridge with the activity.
+- `src/js/explorer-archive.js`: browse polling, folder lists, entry and selection extract.
+- `src/js/explorer.js`: archive view (breadcrumbs, folders, filter, sort, selection with Extract only, Extract all), files opened from the cache, password kept in memory while open, cache cleared on leaving.
+- `src/js/explorer-view.js`: `readOnly` option; the text viewer does not offer saving for a copy taken from an archive.
+- `src/index.html`: Extract all header button.
+- `android-notes/native-setup.md`, ROADMAP (E2c, DP86), DECISIONS (221), ARCHITECTURE.
+
+Decisions made: 221.
+
+Verified: 39 Java checks against stubs; 40 DOM checks on browsing; 31 earlier DOM checks; patch script twice on a stub tree; `vite build` passes. Not verified: the real libraries, CI, any device (DP86).
+
+Open: CI run; DP86 on device; Phase 22 E2b copy, move, share and E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run; DP86 on device; then Phase 22 E2b.
+
 **Session 125**
 
 Owner confirmed E2a on device (DP84). Request: native extraction of zip, 7z, rar and other compressed files (Decision 220, E2c). Source read: `explorer.js`, `patch-explorer.js`, the workflow, `native-setup.md`.
