@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 129**
+
+Owner report: everything in copy and move worked; two requests: a way to cancel in the destination picker, and files shown in it so a same-name item is visible (Decision 224).
+- `src/js/explorer.js`: Cancel button in the picker banner and on the storage list; files listed after folders (greyed, not tappable); same-name items marked with the name the new one would get; banner counts them.
+- `src/css/style.css`: info rows, conflict rows, tag.
+- Docs: ROADMAP (DP87 extended), DECISIONS (224), ARCHITECTURE, TRACK.
+
+Decisions made: 224.
+
+Verified: 46 DOM checks on the picker; earlier DOM suites pass; `vite build` passes. Not verified: on a device (DP87).
+
+Open: DP87 and DP88 on device; Phase 22 E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP87 and DP88 confirmation, then Phase 22 E3.
+
 **Session 128**
 
 Bug report from the device: Delete in a folder answered "0 moved to trash, 4 could not be moved". Earlier in the session an explorer with an old `index.html` would not open: cause, the repo had the new `explorer.js` but not the new `index.html`; fix, replace `src/index.html` (done by the owner).
