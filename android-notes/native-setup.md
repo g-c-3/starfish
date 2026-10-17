@@ -330,3 +330,11 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 **Volumes.** Android 11+: `StorageManager.getStorageVolumes()`, mounted volumes only. Earlier: the app's external directories. A USB drive over OTG is listed when Android mounts it as a volume; the USB flag is a guess from the volume's description.
 
 **Not confirmed on a real device or in CI.** The Java is parsed in a scratch check, not compiled. First CI run: confirm it compiles. First device run (DP79): the settings screen, the volume list with a USB drive, and opening a file from a USB drive in another app.
+
+## 17. Archive extraction (Decision 220)
+
+`scripts/patch-archive.js` copies `scripts/java/ArklyArchiveBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(..., "ArklyArchive")`, right after the explorer bridge. Methods: `start(path, password)`, `status(id)`, `cancel(id)`, `release(id)`. The CI step runs after `patch-explorer.js`. Idempotent.
+
+**Gradle.** Added to `android/app/build.gradle` (marker `// arkly-archive`): `org.apache.commons:commons-compress:1.26.2`, `org.tukaani:xz:1.9`, `net.lingala.zip4j:zip4j:2.11.5`, `com.github.junrar:junrar:7.5.5`, and `packagingOptions` excludes for `META-INF/LICENSE*`, `NOTICE*`, `DEPENDENCIES`, `INDEX.LIST`. Gradle downloads them in CI; the installed app makes no network call. No new permission.
+
+**Not confirmed in CI or on a device.** The Java was compiled in a scratch check against stubs of the libraries, not the real ones. First CI run: confirm the libraries resolve and the Java compiles; if packaging fails on a duplicate file, add that path to the excludes. First device run (DP85): each format, passwords, cancel, free-space stop. 7z and tar need Android 8 or later at run time.
