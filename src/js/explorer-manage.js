@@ -137,11 +137,11 @@ export async function purgeItem(fs, item) {
   await fs.deleteFile(item.record).catch(() => {});
 }
 
-// Runs fn over each item; one failure does not stop the rest. Returns { done, failed }.
+// Runs fn over each item; one failure does not stop the rest. Returns { done, failed, error } (error: the first reason).
 async function each(items, fn) {
-  let done = 0, failed = 0;
-  for (const it of items) { try { await fn(it); done++; } catch { failed++; } }
-  return { done, failed };
+  let done = 0, failed = 0, error = '';
+  for (const it of items) { try { await fn(it); done++; } catch (e) { failed++; if (!error) error = e?.message || ''; } }
+  return { done, failed, error };
 }
 export const purgeItems = (fs, items) => each(items, (it) => purgeItem(fs, it));
 export const restoreItems = (fs, items) => each(items, (it) => restoreItem(fs, it));

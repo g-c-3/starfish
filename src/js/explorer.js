@@ -97,7 +97,13 @@ const bridge = () => (typeof window !== 'undefined' ? window.ArklyExplorer : nul
 const fsApi = {
   stat: async (p) => { const r = await Filesystem.stat({ path: toFileUri(p) }); return { isDir: r.type === 'directory', size: r.size || 0, mtime: r.mtime || 0 }; },
   readdir: async (p) => ((await Filesystem.readdir({ path: toFileUri(p) })).files || []).map((f) => ({ name: f.name, isDir: f.type === 'directory', size: f.size || 0, mtime: f.mtime || 0 })),
-  mkdir: (p, recursive = false) => Filesystem.mkdir({ path: toFileUri(p), recursive }),
+  // The plugin rejects "Directory exists" even with recursive set; for a recursive call an existing folder is success.
+  mkdir: async (p, recursive = false) => {
+    try { await Filesystem.mkdir({ path: toFileUri(p), recursive }); } catch (err) {
+      if (recursive) { try { if ((await fsApi.stat(p)).isDir) return; } catch { /* not there: the original error stands */ } }
+      throw err;
+    }
+  },
   rename: (a, b) => Filesystem.rename({ from: toFileUri(a), to: toFileUri(b) }),
   deleteFile: (p) => Filesystem.deleteFile({ path: toFileUri(p) }),
   rmdir: (p) => Filesystem.rmdir({ path: toFileUri(p), recursive: true }),
@@ -106,6 +112,8 @@ const fsApi = {
 };
 const sizeText = (n) => `${formatSize(n)}${n >= 1024 ? ` (${n.toLocaleString()} bytes)` : ''}`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// The first reason a batch gave, for the toast: ": <reason>" or nothing.
+const why = (r) => (r.error ? `: ${String(r.error).replace(/\.$/, '')}` : '');
 function errText(err) {
   if (err?.code === 'name' || err?.code === 'exists' || err?.code === 'protected') return err.message;
   return err?.message ? `Failed: ${err.message}` : 'Failed.';
@@ -355,7 +363,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!yes) return;
     const r = await manage.trashEntries(fsApi, items, volume);
     st.sel.clear();
-    toast(r.failed ? `${r.done} moved to trash, ${r.failed} could not be moved.` : `${r.done} moved to trash.`);
+    toast(r.failed ? `${r.done} moved to trash, ${r.failed} could not be moved${why(r)}.` : `${r.done} moved to trash.`);
     await afterChange(cwd);
   }
   async function showProps(e) {
@@ -439,7 +447,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!items.length) return;
     const r = await manage.restoreItems(fsApi, items);
     st.sel.clear();
-    toast(r.failed ? `${r.done} restored, ${r.failed} could not be restored.` : `${plural(r.done, 'item')} restored.`);
+    toast(r.failed ? `${r.done} restored, ${r.failed} could not be restored${why(r)}.` : `${plural(r.done, 'item')} restored.`);
     await showTrash();
   }
   async function actDeleteForever() {
@@ -449,7 +457,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!yes) return;
     const r = await manage.purgeItems(fsApi, items);
     st.sel.clear();
-    toast(r.failed ? `${r.done} deleted, ${r.failed} could not be deleted.` : `${plural(r.done, 'item')} deleted.`);
+    toast(r.failed ? `${r.done} deleted, ${r.failed} could not be deleted${why(r)}.` : `${plural(r.done, 'item')} deleted.`);
     await showTrash();
   }
   async function actEmpty() {
@@ -459,7 +467,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!yes) return;
     const r = await manage.purgeItems(fsApi, st.trash);
     st.sel.clear();
-    toast(r.failed ? `${r.done} deleted, ${r.failed} could not be deleted.` : 'Trash emptied.');
+    toast(r.failed ? `${r.done} deleted, ${r.failed} could not be deleted${why(r)}.` : 'Trash emptied.');
     await showTrash();
   }
 
