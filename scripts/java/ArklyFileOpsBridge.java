@@ -14,9 +14,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Copy and move for the File explorer (patch-fileops.js, Decision 222). Reachable from the app's own page only, as
+// Copy and move for the File explorer (patch-fileops.js, Decisions 222, 225). Reachable from the app's own page only, as
 // window.ArklyFileOps. One job at a time on a background thread, polled with status(); streamed, with progress and cancel.
-// Nothing is ever overwritten: a taken name gets " (1)", " (2)", ... A move on the same storage is a rename; across storages it is
+// By default nothing is overwritten: a taken name gets " (1)", " (2)", ... With policy "replace" a file replaces a file of the same
+// name, but only once the new one is complete beside it; a folder is never replaced. A move on the same storage is a rename; across storages it is
 // a copy, and each original is removed only after its copy is complete. Links are skipped, never followed or created.
 public class ArklyFileOpsBridge {
     private static final int BUF = 65536;
@@ -31,10 +32,23 @@ public class ArklyFileOpsBridge {
     private final Map<String, Job> jobs = new ConcurrentHashMap<String, Job>();
     private final AtomicInteger seq = new AtomicInteger();
 
-    // op: "copy" or "move". pathsCsv: URL-encoded absolute paths, comma separated. Returns a job id, or "" when the arguments are
-    // unusable or another job is still running.
+    // op: "copy" or "move". pathsCsv: URL-encoded absolute paths, comma separated. A taken name gets a number. Returns a job id, or ""
+    // when the arguments are unusable or another job is still running.
     @JavascriptInterface
     public String start(String op, String destDir, String pathsCsv) {
+        return launch(op, destDir, pathsCsv, false);
+    }
+
+    // As start(), with a policy for a name that is already taken: "rename" (a number) or "replace" (a file replaces a file).
+    @JavascriptInterface
+    public String startWith(String op, String destDir, String pathsCsv, String policy) {
+        if (!"rename".equals(policy) && !"replace".equals(policy)) {
+            return "";
+        }
+        return launch(op, destDir, pathsCsv, "replace".equals(policy));
+    }
+
+    private String launch(String op, String destDir, String pathsCsv, boolean replace) {
         try {
             boolean move = "move".equals(op);
             if (!move && !"copy".equals(op)) {
@@ -60,7 +74,7 @@ public class ArklyFileOpsBridge {
                 }
             }
             String id = "o" + seq.incrementAndGet();
-            Job job = new Job(move, dest, sources);
+            Job job = new Job(move, dest, sources, replace);
             jobs.put(id, job);
             Thread t = new Thread(job, "arkly-fileops");
             t.setPriority(Thread.NORM_PRIORITY - 1);
@@ -156,6 +170,24 @@ public class ArklyFileOpsBridge {
         return c.startsWith(a);
     }
 
+    // The entry of a folder with this name, exact case first, then ignoring case; null when there is none.
+    static File findIn(File dir, String name) {
+        String[] names = dir.list();
+        if (names == null) {
+            return null;
+        }
+        File loose = null;
+        for (String n : names) {
+            if (n.equals(name)) {
+                return new File(dir, n);
+            }
+            if (loose == null && n.equalsIgnoreCase(name)) {
+                loose = new File(dir, n);
+            }
+        }
+        return loose;
+    }
+
     static void deleteTree(File f) {
         try {
             if (f.isDirectory() && !isLink(f)) {
@@ -191,6 +223,7 @@ public class ArklyFileOpsBridge {
         private final boolean move;
         private final File dest;
         private final List<File> sources;
+        private final boolean replace;
         volatile String state = "running";
         volatile String code = "";
         volatile String message = "";
@@ -205,8 +238,9 @@ public class ArklyFileOpsBridge {
         private int fileCount = 0;
         private final long startFree;
 
-        Job(boolean move, File dest, List<File> sources) {
+        Job(boolean move, File dest, List<File> sources, boolean replace) {
             this.move = move;
+            this.replace = replace;
             this.dest = dest;
             this.sources = sources;
             this.startFree = dest.getUsableSpace();
@@ -295,6 +329,13 @@ public class ArklyFileOpsBridge {
             if (move && src.getParentFile() != null && src.getParentFile().getCanonicalFile().equals(dest.getCanonicalFile())) {
                 return; // already there
             }
+            if (replace) {
+                File existing = findIn(dest, src.getName());
+                if (existing != null) {
+                    replaceOne(src, existing);
+                    return;
+                }
+            }
             File target = uniqueIn(dest, src.getName(), src.isDirectory());
             if (move && !noRename && src.renameTo(target)) {
                 return;
@@ -314,6 +355,57 @@ public class ArklyFileOpsBridge {
                 }
             }
             if (move) {
+                deleteTree(src);
+                if (src.exists()) {
+                    failed++;
+                    if (message.length() == 0) {
+                        message = "\"" + src.getName() + "\" was copied, but the original could not be removed.";
+                    }
+                }
+            }
+        }
+
+        // A file replaces a file. The new one is made whole beside it first; only then is the old one removed, so a failure or a cancel
+        // leaves the old file as it was. Never a folder, on either side.
+        private void replaceOne(File src, File existing) throws IOException {
+            if (src.isDirectory() || existing.isDirectory()) {
+                throw new Fail("kind", "\"" + src.getName() + "\": only a file can replace a file.");
+            }
+            if (src.getCanonicalFile().equals(existing.getCanonicalFile())) {
+                throw new Fail("same", "\"" + src.getName() + "\" is already this file.");
+            }
+            File target = new File(dest, src.getName());
+            File temp = new File(dest, ".arkly-tmp-" + System.nanoTime());
+            boolean moved = false;
+            if (move && !noRename && src.renameTo(temp)) {
+                moved = true;
+            } else {
+                if (move) {
+                    bytesTotal += src.length();
+                    needSpace(bytes + src.length());
+                }
+                boolean ok = false;
+                try {
+                    copyTree(src, temp);
+                    ok = true;
+                } finally {
+                    if (!ok) {
+                        temp.delete();
+                    }
+                }
+            }
+            if (!existing.delete()) {
+                if (moved) {
+                    temp.renameTo(src);
+                } else {
+                    temp.delete();
+                }
+                throw new Fail("io", "\"" + existing.getName() + "\" could not be replaced.");
+            }
+            if (!temp.renameTo(target)) {
+                throw new Fail("io", "\"" + src.getName() + "\" could not be put in place; the new file is saved as " + temp.getName() + ".");
+            }
+            if (move && !moved) {
                 deleteTree(src);
                 if (src.exists()) {
                     failed++;
