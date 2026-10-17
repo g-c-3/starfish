@@ -6,6 +6,7 @@ import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 import * as manage from './explorer-manage.js';
+import { isArchive, startExtract, needsPassword, errorText } from './explorer-archive.js';
 
 const KIND_EXT = {
   text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics'],
@@ -14,7 +15,7 @@ const KIND_EXT = {
   audio: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'amr', 'mid', 'midi'],
   video: ['mp4', 'webm', 'mkv', '3gp', 'mov', 'avi', 'm4v'],
   docx: ['docx'], xlsx: ['xlsx'], pptx: ['pptx'],
-  archive: ['zip', 'gz', 'tar', '7z', 'rar'],
+  archive: ['zip', 'gz', 'tar', '7z', 'rar', 'tgz', 'tbz', 'tbz2', 'txz', 'bz2', 'xz', 'cbz', 'cbr', 'jar'],
 };
 const MIME = {
   txt: 'text/plain', md: 'text/plain', csv: 'text/csv', json: 'application/json', xml: 'text/xml', html: 'text/html', rtf: 'application/rtf', pdf: 'application/pdf',
@@ -116,7 +117,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
   const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null };
-  let closed = false, viewer = null, purged = false;
+  let closed = false, viewer = null, purged = false, job = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const icon = (id) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); const u = document.createElementNS('http://www.w3.org/2000/svg', 'use'); u.setAttribute('href', '#' + id); s.appendChild(u); return s; };
@@ -145,6 +146,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     $('explorer-sel-count').textContent = `${n} selected`;
     for (const id of ['explorer-sel-rename', 'explorer-sel-info']) { $(id).classList.toggle('hidden', trash); $(id).disabled = n !== 1; }
     $('explorer-sel-restore').classList.toggle('hidden', !trash);
+    const one = n === 1 && !trash ? selectedEntries()[0] : null;
+    $('explorer-sel-extract').classList.toggle('hidden', !(one && !one.isDir && isArchive(one.name)));
     const del = $('explorer-sel-delete');
     del.setAttribute('aria-label', trash ? 'Delete forever' : 'Delete'); del.title = trash ? 'Delete forever' : 'Delete';
   }
@@ -440,8 +443,53 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     await showTrash();
   }
 
+  // ---- Extract (Decision 220): into a new folder beside the archive, never over existing files ----
+  async function askExtract(e) {
+    const r = await ui.askYesNo?.({
+      title: `Extract "${e.name}"?`,
+      text: 'The files go into a new folder next to the archive. Nothing that exists is overwritten.',
+      yes: 'Extract', no: 'Open with app', explicitNo: true,
+    });
+    if (r === true) await actExtract(e); else if (r === 'no') await openExternal(e);
+  }
+  async function actExtract(e, password = '') {
+    const api = typeof window !== 'undefined' ? window.ArklyArchive : null;
+    if (!api) { toast('Extracting works in the Android app.'); return; }
+    if (job) return;
+    const cwd = st.cwd;
+    st.view = 'extract'; st.gen++;
+    chrome({ title: 'Extracting', folder: false });
+    body.replaceChildren();
+    const box = el('div', 'explorer-note');
+    box.appendChild(el('p', '', `Extracting "${e.name}"…`));
+    const line = el('p', 'explorer-meta', 'Starting…');
+    box.appendChild(line);
+    const cancel = el('button', '', 'Cancel');
+    cancel.addEventListener('click', () => job?.cancel());
+    box.appendChild(cancel);
+    body.appendChild(box);
+    job = startExtract(api, e.path, { password, onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.files, 'file')} · ${formatSize(p.bytes)}${p.current ? ` · ${p.current}` : ''}`; } });
+    const res = await job.done;
+    job = null;
+    if (closed) return;
+    if (res.state === 'done') {
+      const name = res.dest ? res.dest.split('/').pop() : '';
+      toast(res.files ? `Extracted ${plural(res.files, 'file')} to "${name}".${res.skipped ? ` ${plural(res.skipped, 'unsafe entry').replace('entrys', 'entries')} skipped.` : ''}` : 'The archive is empty.');
+    } else if (res.state === 'cancelled') {
+      toast('Extraction cancelled. Nothing was kept.');
+    } else if (needsPassword(res)) {
+      const pw = await ui.askText?.({ title: 'Password needed', text: errorText(res, !!password), placeholder: 'Password', password: true, ok: 'Extract', isVault });
+      if (pw) { await actExtract(e, pw); return; }
+    } else {
+      toast(errorText(res, !!password));
+    }
+    if (!closed && st.view === 'extract') await showFolder(cwd);
+  }
+  function actExtractSel() { const [e] = selectedEntries(); if (selectedEntries().length === 1 && e && isArchive(e.name)) { st.sel.clear(); syncSelUi(); actExtract(e); } }
+
   // Text, image, PDF, audio and video open in the built-in viewer; anything else goes to another app (Decision 211).
   function openFile(e) {
+    if (isArchive(e.name)) { askExtract(e); return undefined; }
     const kind = kindOf(e.name);
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) return openExternal(e);
     const siblings = kind === 'image' ? shownItems().filter((x) => !x.isDir && kindOf(x.name) === 'image') : [];
@@ -465,6 +513,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function finish() {
     if (closed) return;
     closed = true;
+    if (job) job.cancel(); // the native side removes what it wrote
     if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
     document.removeEventListener('visibilitychange', onVisible);
     screen.classList.add('hidden');
@@ -475,6 +524,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function back() {
     if (viewer) { viewer.back(); return; }
     if (selecting()) { clearSel(); return; }
+    if (st.view === 'extract') { job?.cancel(); return; }
     if (st.view === 'props') { returnToFolder(); return; }
     if (st.view === 'trash') { if (st.from) showFolder(st.from.cwd); else showRoots(); return; }
     if (st.view === 'folder') {
@@ -489,7 +539,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   }
 
   $('explorer-back-btn').onclick = back;
-  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
+  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props' || st.view === 'extract') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
   $('explorer-hidden-btn').onclick = () => {
     st.hidden = !st.hidden;
     clearSel();
@@ -512,6 +562,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   $('explorer-sel-rename').onclick = actRename;
   $('explorer-sel-info').onclick = actInfo;
   $('explorer-sel-restore').onclick = actRestore;
+  $('explorer-sel-extract').onclick = actExtractSel;
   $('explorer-sel-delete').onclick = () => (st.view === 'trash' ? actDeleteForever() : actDelete());
   document.addEventListener('visibilitychange', onVisible);
 
