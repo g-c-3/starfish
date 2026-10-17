@@ -869,8 +869,9 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .explorer-row.is-info { opacity: 0.7; cursor: default; }
 .explorer-row.is-conflict { opacity: 1; background: var(--brand-tint); outline: 2px solid var(--brand); outline-offset: -2px; }
 /* Name clashes (Decision 225). */
-.explorer-row.resolve-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left; padding: 12px 14px; }
-.explorer-row.resolve-row .banner-actions { margin-top: 6px; }
+.explorer-row.resolve-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; height: auto; margin: 0 6px 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); text-align: left; }
+/* The same button row as the banner above the list: side by side, wrapping if the screen is narrow. */
+.explorer-row.resolve-row .banner-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .explorer-row.resolve-row .banner-actions button, .explorer-banner .banner-actions button { width: auto; margin: 0; padding: 8px 14px; }
 .danger-btn { background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 12px; font-weight: 700; }
 .danger-btn:disabled { opacity: 0.4; }
