@@ -510,6 +510,14 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     body.replaceChildren();
     const list = el('div', 'explorer-list');
     if (dir === null) {
+      const top = el('div', 'explorer-banner');
+      top.appendChild(el('div', '', `Choose where to ${pick.op === 'copy' ? 'copy' : 'move'} ${plural(pick.sources.length, 'item')}.`));
+      const topActions = el('div', 'banner-actions');
+      const topCancel = el('button', 'secondary-btn', 'Cancel');
+      topCancel.addEventListener('click', cancelPick);
+      topActions.appendChild(topCancel);
+      top.appendChild(topActions);
+      body.appendChild(top);
       for (const v of st.volumes) {
         const row = el('button', 'explorer-row');
         row.appendChild(rowIcon(v.name, true));
@@ -524,7 +532,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     }
     const problem = destProblem(pick.op, dir, pick.sources);
     const banner = el('div', 'explorer-banner');
-    banner.appendChild(el('div', '', problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder. Nothing is overwritten: a taken name gets a number.`));
+    const note = el('div', '', problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder. Nothing is replaced: a name already used here gets a number.`);
+    banner.appendChild(note);
     const actions = el('div', 'banner-actions');
     const go = el('button', '', `${verb} here`);
     go.disabled = !!problem;
@@ -536,24 +545,64 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       try { await manage.makeFolder(fsApi, dir, raw); toast('Folder created.'); } catch (err) { toast(errText(err)); }
       if (st.view === 'pick' && st.pick === pick && pick.dir === dir) await showPick(dir);
     });
-    actions.appendChild(go); actions.appendChild(mk);
+    const cancel = el('button', 'secondary-btn', 'Cancel');
+    cancel.addEventListener('click', cancelPick);
+    actions.appendChild(go); actions.appendChild(mk); actions.appendChild(cancel);
     banner.appendChild(actions);
     body.appendChild(banner);
     let entries = [];
     try { entries = await fsApi.readdir(dir); } catch { entries = []; }
     if (gen !== st.gen || closed) return;
-    const folders = entries.filter((e) => e.isDir && !e.name.startsWith('.')).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-    if (!folders.length) list.appendChild(el('div', 'explorer-meta', 'No folders here.'));
+    // Folders first, then files. Files are shown for reference only: they show what already exists here. A name that matches an
+    // item being copied or moved is marked, with the name the new one would get.
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    const taken = new Set(entries.map((e) => e.name.toLowerCase()));
+    const incoming = new Map(pick.sources.map((x) => [x.name.toLowerCase(), x]));
+    const shown = entries.filter((e) => e.name !== '.arkly-trash' && (!e.name.startsWith('.') || incoming.has(e.name.toLowerCase())));
+    const folders = shown.filter((e) => e.isDir).sort(byName);
+    const files = shown.filter((e) => !e.isDir).sort(byName);
+    let clashes = 0;
+    const markClash = (row, text, e) => {
+      const src = incoming.get(e.name.toLowerCase());
+      if (!src || (pick.op === 'move' && problem)) return;
+      clashes++;
+      row.classList.add('is-conflict');
+      text.appendChild(el('span', 'explorer-tag', `Same name here — the new one is saved as "${numbered(src.name, src.isDir, taken)}"`));
+    };
+    if (!shown.length) list.appendChild(el('div', 'explorer-meta', 'This folder is empty.'));
     for (const f of folders) {
       const row = el('button', 'explorer-row');
       row.appendChild(rowIcon(f.name, true));
       const text = el('span', 'explorer-text');
       text.appendChild(el('span', 'explorer-name', f.name));
+      markClash(row, text, f);
       row.appendChild(text);
       row.addEventListener('click', () => showPick(`${dir === '/' ? '' : dir}/${f.name}`));
       list.appendChild(row);
     }
+    for (const f of files) {
+      const row = el('div', 'explorer-row is-info');
+      row.appendChild(rowIcon(f.name, false));
+      const text = el('span', 'explorer-text');
+      text.appendChild(el('span', 'explorer-name', f.name));
+      text.appendChild(el('span', 'explorer-meta', [formatSize(f.size), f.mtime ? formatDate(f.mtime) : ''].filter(Boolean).join(' · ')));
+      markClash(row, text, f);
+      row.appendChild(text);
+      list.appendChild(row);
+    }
+    if (clashes) note.textContent = `${problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder.`} ${plural(clashes, 'item')} already ${clashes === 1 ? 'has' : 'have'} the same name here: nothing is replaced, the new ${clashes === 1 ? 'one gets' : 'ones get'} a number.`;
     body.appendChild(list);
+  }
+  function cancelPick() { st.pick = null; returnToFolder(); }
+  // The name a copy would get if `name` is taken: name (1).ext, skipping every name in `taken` (lower case); adds it to `taken`.
+  function numbered(name, isDir, taken) {
+    const dot = name.lastIndexOf('.');
+    const stem = !isDir && dot > 0 ? name.slice(0, dot) : name;
+    const ext = !isDir && dot > 0 ? name.slice(dot) : '';
+    let n = 1, c = `${stem} (${n})${ext}`;
+    while (taken.has(c.toLowerCase())) { n++; c = `${stem} (${n})${ext}`; }
+    taken.add(c.toLowerCase());
+    return c;
   }
   function pickBack() {
     const pick = st.pick;
