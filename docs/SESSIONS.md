@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 128**
+
+Bug report from the device: Delete in a folder answered "0 moved to trash, 4 could not be moved". Earlier in the session an explorer with an old `index.html` would not open: cause, the repo had the new `explorer.js` but not the new `index.html`; fix, replace `src/index.html` (done by the owner).
+- Bug, cause: the plugin's `mkdir` rejects an existing folder even with `recursive`, and the trash and restore code call it every time; so only the first delete into a fresh trash worked (all DP84 tried). Fix: the adapter in `src/js/explorer.js` treats a recursive `mkdir` on an existing folder as success. Why correct: the plugin source (6.0.4) was read; the test stub now behaves the same; the new check reproduces the device message on the earlier code and passes on the fix.
+- `src/js/explorer-manage.js`: batch results carry the first error reason; `explorer.js` shows it in the toast.
+- Docs: DECISIONS (223), ROADMAP (DP88), SESSIONS, TRACK, ARCHITECTURE.
+
+Decisions made: 223.
+
+Verified: DOM suites 31, 40, 35 and the new 5 pass; the new one fails on the earlier code; `vite build` passes. Not verified: on a device (DP88), CI of the copy and move Java (DP87 not yet run).
+
+Open: DP87 and DP88 on device; Phase 22 E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP88 and DP87 on device, then Phase 22 E3.
+
 **Session 127**
 
 Owner confirmed DP86 on device (archives open like folders), so E2c is confirmed. Next approved item: Phase 22 E2b, copy, move and share (Decision 222). Source read: `explorer.js`, `package.json`, `fileactions.js` (share usage), the workflow.
