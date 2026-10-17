@@ -4,6 +4,28 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 125**
+
+Owner confirmed E2a on device (DP84). Request: native extraction of zip, 7z, rar and other compressed files (Decision 220, E2c). Source read: `explorer.js`, `patch-explorer.js`, the workflow, `native-setup.md`.
+- `scripts/java/ArklyArchiveBridge.java` (new): the extraction job, status, cancel.
+- `scripts/patch-archive.js` (new): copies and registers the bridge, adds the libraries and packaging excludes to `build.gradle`.
+- `.github/workflows/build-android.yml`: patch step after the explorer bridge.
+- `src/js/explorer-archive.js` (new): archive names, job polling, messages.
+- `src/js/explorer.js`: ask on tap, progress view with Cancel, password prompt, Extract in the selection header, cancel on Back and on close.
+- `src/index.html`: Extract icon and button.
+- `android-notes/native-setup.md`: section 17.
+- Docs: ROADMAP (E2c, DP84, DP85), DECISIONS (220), ARCHITECTURE (File explorer).
+
+Bug fixed (found while editing `index.html`): cause, `index.html` already had an `i-restore` symbol and Session 124 added a second with the same id, so the first in the file won and the Trash restore icon elsewhere changed; fix, the added symbol is removed and the explorer uses the existing one; why correct, ids are unique again (checked).
+
+Decisions made: 220.
+
+Verified: 20 Java checks (compiled against stubs of Android and the four libraries); 41 DOM checks on the extract flow, 31 earlier; the patch script run twice on a stub tree; `vite build` passes. Not verified: the real libraries compile and behave as recalled, CI, any device (DP83, DP85).
+
+Open: DP83 and DP85 on device; Phase 22 E2b copy, move, share and E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run (the extraction libraries and the explorer's Java are the first compile risk); DP83 and DP85 on device; then Phase 22 E2b.
+
 **Session 124**
 
 File explorer stage E2a, manage (Decision 219), first of two parts of E2. Source read: `explorer.js`, `explorer-view.js`, `patch-explorer.js`, the explorer markup and styles, `askYesNo` and `askText` in `app.js`.
