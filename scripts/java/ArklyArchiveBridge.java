@@ -1,5 +1,6 @@
 package __PACKAGE__;
 
+import android.app.Activity;
 import android.webkit.JavascriptInterface;
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -8,7 +9,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URLDecoder;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,8 +27,10 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream;
 
-// Archive extraction bridge (patch-archive.js, Decision 220). Reachable from the app's own page only, as window.ArklyArchive.
-// Extracts one archive into a new folder beside it, on a background thread; the page polls status(). Nothing leaves the phone.
+// Archive bridge (patch-archive.js, Decisions 220, 221). Reachable from the app's own page only, as window.ArklyArchive.
+// Opening: openArchive() scans the archive's entry list once; children() answers one folder at a time. Extracting: a job on a
+// background thread, polled with status(); all, some entries, or one entry into the app's cache for the viewers. Nothing leaves
+// the phone.
 // Formats: zip (zip4j: password, AES), 7z (password), rar and cbr (junrar, RAR 4 and earlier; password), tar, tar.gz, tar.bz2,
 // tar.xz, and single gz, bz2, xz files.
 public class ArklyArchiveBridge {
@@ -32,11 +40,60 @@ public class ArklyArchiveBridge {
     private static final int MAX_ENTRIES = 200000;
 
     private final Map<String, Job> jobs = new ConcurrentHashMap<String, Job>();
+    private final Map<String, Browse> browses = new ConcurrentHashMap<String, Browse>();
     private final AtomicInteger seq = new AtomicInteger();
+    private final File cacheRoot; // single entries opened from inside an archive; emptied at start, on clearCache() and when the screen closes
 
-    // Starts an extraction; returns the job id, or "" when the file is missing or another job is still running.
+    public ArklyArchiveBridge(Activity activity) {
+        this(new File(activity.getCacheDir(), "arkly-archive"));
+    }
+
+    ArklyArchiveBridge(File cacheRoot) {
+        this.cacheRoot = cacheRoot;
+        deleteTree(cacheRoot);
+    }
+
+    // Extracts everything into a new folder beside the archive. Returns the job id, or "" when the file is missing or another
+    // job is still running.
     @JavascriptInterface
     public String start(String archivePath, String password) {
+        return launch(archivePath, password, null, null);
+    }
+
+    // Extracts only the listed entries (a folder entry brings what is inside it). entriesCsv: URL-encoded paths, comma separated.
+    @JavascriptInterface
+    public String startSelected(String archivePath, String password, String entriesCsv) {
+        try {
+            Set<String> filter = new HashSet<String>();
+            for (String part : (entriesCsv == null ? "" : entriesCsv).split(",")) {
+                String n = normalize(URLDecoder.decode(part, "UTF-8"));
+                if (n.length() > 0) {
+                    filter.add(n);
+                }
+            }
+            if (filter.isEmpty()) {
+                return "";
+            }
+            return launch(archivePath, password, null, filter);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    // Extracts one entry into the app's cache, for the viewers. status(id).dest is the folder it was written under; the file is
+    // dest + "/" + entryPath.
+    @JavascriptInterface
+    public String startEntry(String archivePath, String password, String entryPath) {
+        String n = normalize(entryPath == null ? "" : entryPath);
+        if (n.length() == 0) {
+            return "";
+        }
+        Set<String> filter = new HashSet<String>();
+        filter.add(n);
+        return launch(archivePath, password, new File(cacheRoot, "e" + seq.incrementAndGet()), filter);
+    }
+
+    private String launch(String archivePath, String password, File destOverride, Set<String> filter) {
         try {
             File archive = new File(archivePath);
             if (!archive.isFile()) {
@@ -48,7 +105,7 @@ public class ArklyArchiveBridge {
                 }
             }
             String id = "j" + seq.incrementAndGet();
-            Job job = new Job(archive, password == null ? "" : password);
+            Job job = new Job(archive, password == null ? "" : password, destOverride, filter);
             jobs.put(id, job);
             Thread t = new Thread(job, "arkly-extract");
             t.setPriority(Thread.NORM_PRIORITY - 1);
@@ -57,6 +114,61 @@ public class ArklyArchiveBridge {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    // ---- browsing ----
+
+    // Reads the archive's entry list in the background. Returns a browse id, or "" when the file is missing.
+    @JavascriptInterface
+    public String openArchive(String archivePath, String password) {
+        try {
+            File archive = new File(archivePath);
+            if (!archive.isFile()) {
+                return "";
+            }
+            String id = "b" + seq.incrementAndGet();
+            Browse b = new Browse(archive, password == null ? "" : password);
+            browses.put(id, b);
+            Thread t = new Thread(b, "arkly-browse");
+            t.setPriority(Thread.NORM_PRIORITY - 1);
+            t.start();
+            return id;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    @JavascriptInterface
+    public String browseStatus(String id) {
+        Browse b = id == null ? null : browses.get(id);
+        if (b == null) {
+            return "{\"state\":\"error\",\"code\":\"gone\",\"message\":\"The archive is no longer open.\",\"count\":0}";
+        }
+        return "{\"state\":\"" + b.state + "\",\"code\":\"" + esc(b.code) + "\",\"message\":\"" + esc(b.message) + "\",\"count\":" + b.count + "}";
+    }
+
+    // The entries directly inside one folder of an open archive ("" is the top), as a JSON array of {n: name, d: folder, s: size}.
+    @JavascriptInterface
+    public String children(String id, String prefix) {
+        Browse b = id == null ? null : browses.get(id);
+        if (b == null || !"ready".equals(b.state)) {
+            return "[]";
+        }
+        return b.children(normalize(prefix == null ? "" : prefix));
+    }
+
+    @JavascriptInterface
+    public void closeArchive(String id) {
+        Browse b = id == null ? null : browses.remove(id);
+        if (b != null) {
+            b.cancelled = true;
+        }
+    }
+
+    // Removes the copies opened from inside archives.
+    @JavascriptInterface
+    public void clearCache() {
+        deleteTree(cacheRoot);
     }
 
     @JavascriptInterface
@@ -132,12 +244,100 @@ public class ArklyArchiveBridge {
             if (c == '"' || c == '\\') {
                 b.append('\\').append(c);
             } else if (c < 0x20) {
-                b.append(' ');
+                b.append(String.format("\\u%04x", (int) c));
             } else {
                 b.append(c);
             }
         }
         return b.toString();
+    }
+
+    // An entry path as kept in lists and filters: forward slashes, no leading or trailing slash.
+    static String normalize(String name) {
+        String n = name.replace('\\', '/');
+        while (n.startsWith("/")) {
+            n = n.substring(1);
+        }
+        while (n.endsWith("/")) {
+            n = n.substring(0, n.length() - 1);
+        }
+        return n;
+    }
+
+    static boolean unsafe(String normalized) {
+        for (String seg : normalized.split("/")) {
+            if (seg.equals("..")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The decoder in front of a tar or a single compressed file.
+    static InputStream decoder(int fmt, File archive) throws IOException {
+        InputStream raw = new BufferedInputStream(new FileInputStream(archive), BUF);
+        switch (fmt) {
+            case TAR_GZ:
+            case GZ:
+                return new GZIPInputStream(raw, BUF);
+            case TAR_BZ2:
+            case BZ2:
+                return new BZip2CompressorInputStream(raw);
+            case TAR_XZ:
+            case XZ:
+                return new XZCompressorInputStream(raw);
+            default:
+                return raw;
+        }
+    }
+
+    // A failure turned into what the page needs: a code, a message, or "cancelled".
+    static class Failure {
+        String code = "";
+        String message = "";
+        boolean cancelled = false;
+    }
+
+    static Failure describe(Throwable e, String password, String archiveName) {
+        Failure out = new Failure();
+        Fail fail = null;
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof Cancel) {
+                out.cancelled = true;
+            } else if (t instanceof Fail && fail == null) {
+                fail = (Fail) t;
+            }
+        }
+        if (out.cancelled) {
+            return out;
+        }
+        if (fail != null) {
+            out.code = fail.code;
+            out.message = fail.getMessage();
+            return out;
+        }
+        if (e instanceof OutOfMemoryError) {
+            out.code = "io";
+            out.message = "Not enough memory to read this archive.";
+            return out;
+        }
+        String cls = e.getClass().getName();
+        String msg = e.getMessage() == null ? "" : e.getMessage();
+        int fmt = formatOf(archiveName.toLowerCase(Locale.ROOT));
+        if (cls.contains("V5")) {
+            out.code = "rar5";
+            out.message = "This RAR archive uses the newer RAR 5 format, which is not supported.";
+        } else if (cls.contains("PasswordRequired") || msg.toLowerCase(Locale.ROOT).contains("password")) {
+            out.code = "password";
+            out.message = "A password is needed.";
+        } else if (password.length() > 0 && (fmt == SEVENZ || fmt == RAR)) {
+            out.code = "password";
+            out.message = "Wrong password or damaged archive.";
+        } else {
+            out.code = "io";
+            out.message = msg.length() == 0 ? "The archive could not be read." : msg;
+        }
+        return out;
     }
 
     static void deleteTree(File f) {
@@ -172,6 +372,7 @@ public class ArklyArchiveBridge {
         private final File archive;
         private final String password;
         private final File dest;
+        private final Set<String> filter; // null: everything
         private final long startFree;
         volatile String state = "running";
         volatile String code = "";
@@ -185,12 +386,31 @@ public class ArklyArchiveBridge {
         private boolean created = false;
         private String destRoot = null;
 
-        Job(File archive, String password) {
+        Job(File archive, String password, File destOverride, Set<String> filter) {
             this.archive = archive;
             this.password = password;
+            this.filter = filter;
             File parent = archive.getParentFile();
-            this.dest = uniqueDir(parent, baseName(archive.getName()));
-            this.startFree = parent.getUsableSpace();
+            this.dest = destOverride != null ? destOverride : uniqueDir(parent, baseName(archive.getName()));
+            File space = this.dest.getParentFile();
+            while (space != null && !space.exists()) {
+                space = space.getParentFile();
+            }
+            this.startFree = (space != null ? space : parent).getUsableSpace();
+        }
+
+        // Whether an entry is part of this run: always, or when it is one of the chosen paths or inside a chosen folder.
+        private boolean wanted(String entryName) {
+            if (filter == null) {
+                return true;
+            }
+            String n = normalize(entryName);
+            for (String f : filter) {
+                if (n.equals(f) || n.startsWith(f + "/")) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         String json() {
@@ -209,13 +429,8 @@ public class ArklyArchiveBridge {
                     case ZIP: doZip(); break;
                     case SEVENZ: do7z(); break;
                     case RAR: doRar(); break;
-                    case TAR: doTar(new BufferedInputStream(new FileInputStream(archive), BUF)); break;
-                    case TAR_GZ: doTar(new GZIPInputStream(new BufferedInputStream(new FileInputStream(archive), BUF), BUF)); break;
-                    case TAR_BZ2: doTar(new BZip2CompressorInputStream(new BufferedInputStream(new FileInputStream(archive), BUF))); break;
-                    case TAR_XZ: doTar(new XZCompressorInputStream(new BufferedInputStream(new FileInputStream(archive), BUF))); break;
-                    case GZ: doSingle(new GZIPInputStream(new BufferedInputStream(new FileInputStream(archive), BUF), BUF)); break;
-                    case BZ2: doSingle(new BZip2CompressorInputStream(new BufferedInputStream(new FileInputStream(archive), BUF))); break;
-                    default: doSingle(new XZCompressorInputStream(new BufferedInputStream(new FileInputStream(archive), BUF))); break;
+                    case TAR: case TAR_GZ: case TAR_BZ2: case TAR_XZ: doTar(decoder(fmt, archive)); break;
+                    default: doSingle(decoder(fmt, archive)); break;
                 }
                 current = "";
                 state = "done";
@@ -226,46 +441,16 @@ public class ArklyArchiveBridge {
 
         // Maps any failure to a state and code, and removes what was written: a failed or cancelled run keeps nothing.
         private void fail(Throwable e) {
-            Fail fail = null;
-            boolean canceled = false;
-            for (Throwable t = e; t != null; t = t.getCause()) {
-                if (t instanceof Cancel) {
-                    canceled = true;
-                } else if (t instanceof Fail && fail == null) {
-                    fail = (Fail) t;
-                }
-            }
+            Failure f = describe(e, password, archive.getName());
             if (created) {
                 deleteTree(dest);
             }
-            if (canceled) {
+            if (f.cancelled) {
                 state = "cancelled";
                 return;
             }
-            if (fail != null) {
-                code = fail.code;
-                message = fail.getMessage();
-            } else if (e instanceof OutOfMemoryError) {
-                code = "io";
-                message = "Not enough memory to extract this archive.";
-            } else {
-                String cls = e.getClass().getName();
-                String msg = e.getMessage() == null ? "" : e.getMessage();
-                String low = msg.toLowerCase(Locale.ROOT);
-                if (cls.contains("V5")) {
-                    code = "rar5";
-                    message = "This RAR archive uses the newer RAR 5 format, which is not supported.";
-                } else if (cls.contains("PasswordRequired") || low.contains("password")) {
-                    code = "password";
-                    message = "A password is needed.";
-                } else if (password.length() > 0 && (formatOf(archive.getName().toLowerCase(Locale.ROOT)) == SEVENZ || formatOf(archive.getName().toLowerCase(Locale.ROOT)) == RAR)) {
-                    code = "password";
-                    message = "Wrong password or damaged archive.";
-                } else {
-                    code = "io";
-                    message = msg.length() == 0 ? "The archive could not be read." : msg;
-                }
-            }
+            code = f.code;
+            message = f.message;
             state = "error";
         }
 
@@ -284,18 +469,13 @@ public class ArklyArchiveBridge {
 
         // The file for an entry name, or null for an unsafe one (absolute, "..", or resolving outside the new folder).
         File target(String entryName) throws IOException {
-            String n = entryName.replace('\\', '/');
-            while (n.startsWith("/")) {
-                n = n.substring(1);
-            }
+            String n = normalize(entryName);
             if (n.length() == 0) {
                 return null;
             }
-            for (String seg : n.split("/")) {
-                if (seg.equals("..")) {
-                    skipped++;
-                    return null;
-                }
+            if (unsafe(n)) {
+                skipped++;
+                return null;
             }
             ensureDest();
             File f = new File(dest, n);
@@ -388,6 +568,9 @@ public class ArklyArchiveBridge {
                     throw new Cancel();
                 }
                 String name = h.getFileName();
+                if (!wanted(name)) {
+                    continue;
+                }
                 if (h.isDirectory()) {
                     dir(name);
                     continue;
@@ -412,6 +595,9 @@ public class ArklyArchiveBridge {
                 while ((e = sz.getNextEntry()) != null) {
                     if (cancelled) {
                         throw new Cancel();
+                    }
+                    if (!wanted(e.getName())) {
+                        continue;
                     }
                     if (e.isDirectory()) {
                         dir(e.getName());
@@ -446,6 +632,9 @@ public class ArklyArchiveBridge {
                         throw new Cancel();
                     }
                     String name = h.getFileName();
+                    if (!wanted(name)) {
+                        continue;
+                    }
                     if (h.isDirectory()) {
                         dir(name);
                         continue;
@@ -477,6 +666,9 @@ public class ArklyArchiveBridge {
                     if (cancelled) {
                         throw new Cancel();
                     }
+                    if (!wanted(e.getName())) {
+                        continue;
+                    }
                     if (e.isDirectory()) {
                         dir(e.getName());
                         continue;
@@ -504,6 +696,158 @@ public class ArklyArchiveBridge {
             } finally {
                 in.close();
             }
+        }
+    }
+
+    // ---- the entry list of an open archive ----
+
+    static class Entry {
+        final String name;
+        final boolean dir;
+        final long size;
+
+        Entry(String name, boolean dir, long size) {
+            this.name = name;
+            this.dir = dir;
+            this.size = size;
+        }
+    }
+
+    static class Browse implements Runnable {
+        private final File archive;
+        private final String password;
+        private final ArrayList<Entry> entries = new ArrayList<Entry>();
+        volatile String state = "running";
+        volatile String code = "";
+        volatile String message = "";
+        volatile int count = 0;
+        volatile boolean cancelled = false;
+
+        Browse(File archive, String password) {
+            this.archive = archive;
+            this.password = password;
+        }
+
+        @Override
+        public void run() {
+            try {
+                scan();
+                state = "ready";
+            } catch (Throwable e) {
+                Failure f = describe(e, password, archive.getName());
+                if (f.cancelled || cancelled) {
+                    state = "cancelled";
+                } else {
+                    code = f.code;
+                    message = f.message;
+                    state = "error";
+                }
+            }
+        }
+
+        private void add(String raw, boolean dir, long size) throws IOException {
+            if (cancelled) {
+                throw new Cancel();
+            }
+            String n = normalize(raw);
+            if (n.length() == 0 || unsafe(n)) { // a name that could not be extracted is not listed either
+                return;
+            }
+            if (entries.size() >= MAX_ENTRIES) {
+                throw new Fail("entries", "The archive holds too many files to open.");
+            }
+            entries.add(new Entry(n, dir, size));
+            count = entries.size();
+        }
+
+        private void scan() throws Exception {
+            int fmt = formatOf(archive.getName().toLowerCase(Locale.ROOT));
+            switch (fmt) {
+                case ZIP: {
+                    net.lingala.zip4j.ZipFile zf = new net.lingala.zip4j.ZipFile(archive);
+                    for (net.lingala.zip4j.model.FileHeader h : zf.getFileHeaders()) {
+                        add(h.getFileName(), h.isDirectory(), h.getUncompressedSize());
+                    }
+                    break;
+                }
+                case SEVENZ: {
+                    SevenZFile sz = password.length() == 0 ? new SevenZFile(archive) : new SevenZFile(archive, password.toCharArray());
+                    try {
+                        for (SevenZArchiveEntry e : sz.getEntries()) {
+                            add(e.getName(), e.isDirectory(), e.getSize());
+                        }
+                    } finally {
+                        sz.close();
+                    }
+                    break;
+                }
+                case RAR: {
+                    com.github.junrar.Archive a = password.length() == 0 ? new com.github.junrar.Archive(archive) : new com.github.junrar.Archive(archive, password);
+                    try {
+                        com.github.junrar.rarfile.FileHeader h;
+                        while ((h = a.nextFileHeader()) != null) {
+                            add(h.getFileName(), h.isDirectory(), h.getFullUnpackSize());
+                        }
+                    } finally {
+                        a.close();
+                    }
+                    break;
+                }
+                case TAR: case TAR_GZ: case TAR_BZ2: case TAR_XZ: {
+                    TarArchiveInputStream tin = new TarArchiveInputStream(decoder(fmt, archive));
+                    try {
+                        TarArchiveEntry e;
+                        while ((e = tin.getNextTarEntry()) != null) {
+                            if (!e.isSymbolicLink() && !e.isLink()) {
+                                add(e.getName(), e.isDirectory(), e.getSize());
+                            }
+                        }
+                    } finally {
+                        tin.close();
+                    }
+                    break;
+                }
+                case GZ: case BZ2: case XZ:
+                    decoder(fmt, archive).close(); // fails early for a damaged file
+                    add(baseName(archive.getName()), false, 0);
+                    break;
+                default:
+                    throw new Fail("format", "This archive type is not supported.");
+            }
+        }
+
+        // One folder's contents: files, folders written in the archive, and folders only implied by deeper paths.
+        String children(String prefix) {
+            String head = prefix.length() == 0 ? "" : prefix + "/";
+            LinkedHashMap<String, Entry> out = new LinkedHashMap<String, Entry>();
+            for (Entry e : entries) {
+                if (!e.name.startsWith(head) || e.name.length() == head.length()) {
+                    continue;
+                }
+                String rest = e.name.substring(head.length());
+                int slash = rest.indexOf('/');
+                if (slash < 0) {
+                    Entry old = out.get(rest);
+                    if (old == null || e.dir) {
+                        out.put(rest, new Entry(rest, e.dir, e.size));
+                    }
+                } else {
+                    String folder = rest.substring(0, slash);
+                    if (!out.containsKey(folder)) {
+                        out.put(folder, new Entry(folder, true, 0));
+                    }
+                }
+            }
+            StringBuilder b = new StringBuilder("[");
+            boolean first = true;
+            for (Entry e : out.values()) {
+                if (!first) {
+                    b.append(',');
+                }
+                first = false;
+                b.append("{\"n\":\"").append(esc(e.name)).append("\",\"d\":").append(e.dir ? "true" : "false").append(",\"s\":").append(e.size < 0 ? 0 : e.size).append('}');
+            }
+            return b.append(']').toString();
         }
     }
 }
