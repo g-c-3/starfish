@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Adds native archive extraction to the File explorer (Decision 220): window.ArklyArchive, a WebView JavaScript interface
+// Adds native archive extraction to the File explorer (Decisions 220, 221): window.ArklyArchive, a WebView JavaScript interface
 // like patch-explorer.js. android/ is never committed, so CI writes it here.
 //
 // 1. Copies scripts/java/ArklyArchiveBridge.java next to MainActivity.java (package filled in) and registers it in onCreate().
@@ -39,7 +39,7 @@ const bridgePath = path.join(path.dirname(mainPath), 'ArklyArchiveBridge.java');
 fs.writeFileSync(bridgePath, fs.readFileSync(TEMPLATE, 'utf8').replace('__PACKAGE__', pkg), 'utf8');
 
 if (!main.includes('ArklyArchive')) {
-  const LINE = '        getBridge().getWebView().addJavascriptInterface(new ArklyArchiveBridge(), "ArklyArchive");\n';
+  const LINE = '        getBridge().getWebView().addJavascriptInterface(new ArklyArchiveBridge(this), "ArklyArchive");\n';
   const re = /(public void onCreate\(Bundle savedInstanceState\)\s*\{\s*\n\s*super\.onCreate\(savedInstanceState\);\n)/;
   if (!re.test(main)) die('MainActivity.onCreate() not found — run patch-screenlock.js first. Aborting.');
   main = main.replace(re, `$1${LINE}`);
