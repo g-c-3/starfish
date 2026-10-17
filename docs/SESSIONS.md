@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 127**
+
+Owner confirmed DP86 on device (archives open like folders), so E2c is confirmed. Next approved item: Phase 22 E2b, copy, move and share (Decision 222). Source read: `explorer.js`, `package.json`, `fileactions.js` (share usage), the workflow.
+- `scripts/java/ArklyFileOpsBridge.java` (new): copy and move job, status, cancel.
+- `scripts/patch-fileops.js` (new): copies and registers the bridge.
+- `.github/workflows/build-android.yml`: patch step after the archive step.
+- `src/js/explorer-ops.js` (new): job polling, destination check, result text.
+- `src/js/explorer.js`: Copy, Move and Share in the selection row, destination picker, progress and cancel, share through the existing plugin.
+- `src/index.html`, `src/css/style.css`: copy icon, second selection row, picker banner styles.
+- Docs: ROADMAP (E2c confirmed, E2b, DP87), DECISIONS (222), ARCHITECTURE, `native-setup.md` section 18.
+
+Decisions made: 222.
+
+Verified: 26 Java checks on a real temporary filesystem; 35 DOM checks on the picker, progress, cancel and share; the earlier DOM suites (31, 40) still pass; patch script twice on a stub tree; `vite build` passes. Not verified: CI, any device (DP87), sharing from a USB drive.
+
+Open: CI run; DP87 on device; Phase 22 E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: CI run; DP87 on device; then Phase 22 E3 (office viewers), or another item you choose.
+
 **Session 126**
 
 Owner confirmed DP83 and DP85 on device. Request: an archive opens like a folder on tap, with no Extract or Open with app question (Decision 221). Source read: `explorer.js`, `explorer-view.js`, `explorer-archive.js`, `patch-archive.js`.
