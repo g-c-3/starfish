@@ -62,6 +62,11 @@ jobs:
       - name: Patch MainActivity.java (File explorer bridge)
         run: node scripts/patch-explorer.js
 
+      # Decision 220 — archive extraction for the File explorer (window.ArklyArchive): copies scripts/java/ArklyArchiveBridge.java,
+      # registers it in onCreate() (after the explorer bridge) and adds the extraction libraries to android/app/build.gradle.
+      - name: Patch MainActivity.java and Gradle (archive extraction)
+        run: node scripts/patch-archive.js
+
       # Decision 102 — Snooze/Done from the notification without launching the app. Patches the plugin source in
       # node_modules and writes the receiver into android/, so it runs after both exist and before Gradle compiles.
       - name: Patch reminder notification actions (native receiver)
