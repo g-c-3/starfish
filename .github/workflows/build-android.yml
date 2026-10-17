@@ -67,6 +67,11 @@ jobs:
       - name: Patch MainActivity.java and Gradle (archive extraction)
         run: node scripts/patch-archive.js
 
+      # Decision 222 — copy and move for the File explorer (window.ArklyFileOps): copies scripts/java/ArklyFileOpsBridge.java and
+      # registers it in onCreate(). No Gradle change.
+      - name: Patch MainActivity.java (copy and move)
+        run: node scripts/patch-fileops.js
+
       # Decision 102 — Snooze/Done from the notification without launching the app. Patches the plugin source in
       # node_modules and writes the receiver into android/, so it runs after both exist and before Gradle compiles.
       - name: Patch reminder notification actions (native receiver)
