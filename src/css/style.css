@@ -866,6 +866,9 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .explorer-banner .banner-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .explorer-banner .banner-actions button { margin: 0; }
 .explorer-banner button:disabled { opacity: 0.4; }
+.explorer-row.is-info { opacity: 0.7; cursor: default; }
+.explorer-row.is-conflict { opacity: 1; background: var(--brand-tint); outline: 2px solid var(--brand); outline-offset: -2px; }
+.explorer-tag { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--brand); line-height: 1.35; }
 /* Built-in viewers (Decision 211): a layer over the listing, inside the explorer screen. */
 #explorer-viewer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); }
 #ev-title { flex: 1; min-width: 0; font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
