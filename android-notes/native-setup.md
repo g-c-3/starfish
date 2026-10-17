@@ -331,9 +331,9 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 
 **Not confirmed on a real device or in CI.** The Java is parsed in a scratch check, not compiled. First CI run: confirm it compiles. First device run (DP79): the settings screen, the volume list with a USB drive, and opening a file from a USB drive in another app.
 
-## 17. Archive extraction (Decision 220)
+## 17. Archive extraction and browsing (Decisions 220, 221)
 
-`scripts/patch-archive.js` copies `scripts/java/ArklyArchiveBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(..., "ArklyArchive")`, right after the explorer bridge. Methods: `start(path, password)`, `status(id)`, `cancel(id)`, `release(id)`. The CI step runs after `patch-explorer.js`. Idempotent.
+`scripts/patch-archive.js` copies `scripts/java/ArklyArchiveBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(..., "ArklyArchive")`, right after the explorer bridge. Registered with the activity (`new ArklyArchiveBridge(this)`): the cache folder is `getCacheDir()/arkly-archive`. Methods: `start`, `startSelected`, `startEntry`, `status`, `cancel`, `release` (extraction); `openArchive`, `browseStatus`, `children`, `closeArchive` (browsing); `clearCache`. The CI step runs after `patch-explorer.js`. Idempotent.
 
 **Gradle.** Added to `android/app/build.gradle` (marker `// arkly-archive`): `org.apache.commons:commons-compress:1.26.2`, `org.tukaani:xz:1.9`, `net.lingala.zip4j:zip4j:2.11.5`, `com.github.junrar:junrar:7.5.5`, and `packagingOptions` excludes for `META-INF/LICENSE*`, `NOTICE*`, `DEPENDENCIES`, `INDEX.LIST`. Gradle downloads them in CI; the installed app makes no network call. No new permission.
 
