@@ -859,6 +859,13 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .explorer-props .prop { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .explorer-props .prop-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .explorer-props .prop-value { font-size: 15px; word-break: break-word; }
+/* Copy, move and share (Decision 222): the second selection row and the destination picker. */
+.explorer-selbar2 { display: flex; gap: 6px; padding: 4px 8px 8px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.explorer-selbar2 button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--fg); font-size: 14px; font-weight: 600; }
+.explorer-selbar2 button:disabled { opacity: 0.4; }
+.explorer-banner .banner-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.explorer-banner .banner-actions button { margin: 0; }
+.explorer-banner button:disabled { opacity: 0.4; }
 /* Built-in viewers (Decision 211): a layer over the listing, inside the explorer screen. */
 #explorer-viewer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); }
 #ev-title { flex: 1; min-width: 0; font-weight: 650; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
