@@ -3,9 +3,11 @@
 // phone. Needs "All files access", granted once in Android's own settings (native bridge: scripts/patch-explorer.js).
 
 import { Filesystem, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 import * as manage from './explorer-manage.js';
+import { startOps, destProblem, resultText } from './explorer-ops.js';
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText } from './explorer-archive.js';
 
 const KIND_EXT = {
@@ -116,7 +118,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
-  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null };
+  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null };
   let closed = false, viewer = null, purged = false, job = null, browse = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -143,12 +145,14 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     screen.classList.toggle('selecting', on);
     $('explorer-selbar').classList.toggle('hidden', !on);
     $('explorer-head').classList.toggle('hidden', on);
+    $('explorer-selbar2').classList.toggle('hidden', !(on && st.view === 'folder'));
     if (!on) return;
     const n = st.sel.size, trash = st.view === 'trash', arc = st.view === 'archive';
     $('explorer-sel-count').textContent = `${n} selected`;
     for (const id of ['explorer-sel-rename', 'explorer-sel-info']) { $(id).classList.toggle('hidden', trash || arc); $(id).disabled = n !== 1; }
     $('explorer-sel-restore').classList.toggle('hidden', !trash);
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
+    $('explorer-sel-share').disabled = arc || trash || selectedEntries().some((e) => e.isDir); // only files can be shared
     const one = n === 1 && !trash && !arc ? selectedEntries()[0] : null;
     $('explorer-sel-extract').classList.toggle('hidden', !(arc || (one && !one.isDir && isArchive(one.name))));
     const del = $('explorer-sel-delete');
@@ -459,6 +463,131 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     await showTrash();
   }
 
+  // ---- Copy, move and share (Decision 222) ----
+  const volumeOf = (path) => st.volumes.filter((v) => path === v.path || path.startsWith(`${v.path}/`)).sort((a, b) => b.path.length - a.path.length)[0] || null;
+
+  function startPick(op) {
+    const items = selectedEntries();
+    if (!items.length) return;
+    st.pick = { op, sources: items.map((e) => ({ path: e.path, name: e.name, isDir: e.isDir })), dir: null };
+    if (!st.volumes.length) st.volumes = readVolumes();
+    st.sel.clear(); syncSelUi();
+    showPick(st.cwd);
+  }
+
+  // The destination picker: folders only, from the current folder; the storages are the top.
+  async function showPick(dir) {
+    const pick = st.pick;
+    if (!pick) return;
+    const gen = ++st.gen;
+    st.view = 'pick'; pick.dir = dir;
+    const verb = pick.op === 'copy' ? 'Copy' : 'Move';
+    chrome({ title: `${verb} to…`, folder: false });
+    crumbsEl.classList.remove('hidden');
+    crumbsEl.replaceChildren();
+    const vol = dir ? volumeOf(dir) : null;
+    const crumb = (label, target, current) => {
+      if (crumbsEl.childNodes.length) crumbsEl.appendChild(el('span', 'crumb-sep', '›'));
+      const b = el('button', `crumb${current ? ' current' : ''}`, label);
+      b.addEventListener('click', () => showPick(target));
+      crumbsEl.appendChild(b);
+    };
+    crumb('Storage', null, dir === null);
+    if (vol) {
+      crumb(vol.name, vol.path, dir === vol.path);
+      const segs = dir.slice(vol.path.length).split('/').filter(Boolean);
+      segs.forEach((n, i) => crumb(n, `${vol.path}/${segs.slice(0, i + 1).join('/')}`, i === segs.length - 1));
+    }
+    crumbsEl.scrollLeft = crumbsEl.scrollWidth;
+    body.replaceChildren();
+    const list = el('div', 'explorer-list');
+    if (dir === null) {
+      for (const v of st.volumes) {
+        const row = el('button', 'explorer-row');
+        row.appendChild(rowIcon(v.name, true));
+        const text = el('span', 'explorer-text');
+        text.appendChild(el('span', 'explorer-name', v.name));
+        row.appendChild(text);
+        row.addEventListener('click', () => showPick(v.path));
+        list.appendChild(row);
+      }
+      body.appendChild(list);
+      return;
+    }
+    const problem = destProblem(pick.op, dir, pick.sources);
+    const banner = el('div', 'explorer-banner');
+    banner.appendChild(el('div', '', problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder. Nothing is overwritten: a taken name gets a number.`));
+    const actions = el('div', 'banner-actions');
+    const go = el('button', '', `${verb} here`);
+    go.disabled = !!problem;
+    go.addEventListener('click', () => runOps(dir));
+    const mk = el('button', 'secondary-btn', 'New folder');
+    mk.addEventListener('click', async () => {
+      const raw = await ui.askText?.({ title: 'New folder', placeholder: 'Folder name', ok: 'Create', isVault });
+      if (raw === null || raw === undefined) return;
+      try { await manage.makeFolder(fsApi, dir, raw); toast('Folder created.'); } catch (err) { toast(errText(err)); }
+      if (st.view === 'pick' && st.pick === pick && pick.dir === dir) await showPick(dir);
+    });
+    actions.appendChild(go); actions.appendChild(mk);
+    banner.appendChild(actions);
+    body.appendChild(banner);
+    let entries = [];
+    try { entries = await fsApi.readdir(dir); } catch { entries = []; }
+    if (gen !== st.gen || closed) return;
+    const folders = entries.filter((e) => e.isDir && !e.name.startsWith('.')).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    if (!folders.length) list.appendChild(el('div', 'explorer-meta', 'No folders here.'));
+    for (const f of folders) {
+      const row = el('button', 'explorer-row');
+      row.appendChild(rowIcon(f.name, true));
+      const text = el('span', 'explorer-text');
+      text.appendChild(el('span', 'explorer-name', f.name));
+      row.appendChild(text);
+      row.addEventListener('click', () => showPick(`${dir === '/' ? '' : dir}/${f.name}`));
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  }
+  function pickBack() {
+    const pick = st.pick;
+    const dir = pick?.dir;
+    if (!pick || dir === null || dir === undefined) { st.pick = null; returnToFolder(); return; }
+    const vol = volumeOf(dir);
+    if (!vol || dir === vol.path) showPick(null); else showPick(parentOf(dir));
+  }
+
+  async function runOps(dest) {
+    const api = typeof window !== 'undefined' ? window.ArklyFileOps : null;
+    if (!api) { toast('Copy and move work in the Android app.'); return; }
+    if (job) return;
+    const { op, sources } = st.pick, cwd = st.cwd;
+    st.pick = null;
+    const verb = op === 'copy' ? 'Copying' : 'Moving';
+    st.view = 'extract'; st.gen++; // Back cancels, as for an extraction
+    chrome({ title: verb, folder: false });
+    const line = panel(`${verb} ${plural(sources.length, 'item')}…`, 'Starting…', () => job?.cancel());
+    job = startOps(api, op, dest, sources.map((s) => s.path), {
+      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${p.items} of ${p.total} · ${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}${p.current ? ` · ${p.current}` : ''}`; },
+    });
+    const res = await job.done;
+    job = null;
+    if (closed) return;
+    toast(resultText(op, res));
+    if (st.view === 'extract') await showFolder(cwd);
+  }
+
+  async function actShare() {
+    const items = selectedEntries();
+    if (!items.length) return;
+    if (items.some((e) => e.isDir)) { toast('Folders cannot be shared. Select files only.'); return; }
+    if (items.length > 100) { toast('Select at most 100 files to share at once.'); return; }
+    ui.onActivity?.();
+    try {
+      await Share.share({ files: items.map((e) => toFileUri(e.path)), title: items.length === 1 ? items[0].name : plural(items.length, 'file') });
+    } catch (err) {
+      if (!/cancel|dismiss/i.test(err?.message || '')) toast(`Could not share: ${err?.message || 'this storage cannot be shared from.'}`);
+    }
+  }
+
   // ---- Archives (Decisions 220, 221): an archive opens like a folder; extracting writes a new folder beside it ----
   const archiveApi = () => (typeof window !== 'undefined' ? window.ArklyArchive : null);
   const panel = (title, lineText, onCancel) => {
@@ -618,6 +747,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (closed) return;
     closed = true;
     if (job) job.cancel(); // the native side removes what it wrote
+    st.pick = null;
     if (browse) browse.cancel();
     leaveArchive(); // closes the list and removes the copies taken out for viewing
     if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
@@ -632,6 +762,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (selecting()) { clearSel(); return; }
     if (st.view === 'extract') { job?.cancel(); return; }
     if (st.view === 'arcopen') { browse?.cancel(); return; }
+    if (st.view === 'pick') { pickBack(); return; }
     if (st.view === 'archive') { arcBack(); return; }
     if (st.view === 'props') { returnToFolder(); return; }
     if (st.view === 'trash') { if (st.from) showFolder(st.from.cwd); else showRoots(); return; }
@@ -647,7 +778,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   }
 
   $('explorer-back-btn').onclick = back;
-  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props' || st.view === 'extract' || st.view === 'archive' || st.view === 'arcopen') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
+  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props' || st.view === 'extract' || st.view === 'archive' || st.view === 'arcopen' || st.view === 'pick') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
   $('explorer-hidden-btn').onclick = () => {
     st.hidden = !st.hidden;
     clearSel();
@@ -671,6 +802,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   $('explorer-sel-info').onclick = actInfo;
   $('explorer-sel-restore').onclick = actRestore;
   $('explorer-sel-extract').onclick = actExtractSel;
+  $('explorer-sel-copy').onclick = () => startPick('copy');
+  $('explorer-sel-move').onclick = () => startPick('move');
+  $('explorer-sel-share').onclick = actShare;
   $('explorer-extract-btn').onclick = () => { if (st.arc) actExtract({ name: st.arc.name, path: st.arc.path }, st.arc.password); };
   $('explorer-sel-delete').onclick = () => (st.view === 'trash' ? actDeleteForever() : actDelete());
   document.addEventListener('visibilitychange', onVisible);
