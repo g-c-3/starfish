@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 130**
+
+Owner request after using the picker: when names clash, offer Replace, Skip or Rename per file with existing and new sizes, a list with the same three at the top for all, each item leaving the list when done (Decision 225). Source read: `explorer.js`, `explorer-ops.js`, `ArklyFileOpsBridge.java`.
+- `scripts/java/ArklyFileOpsBridge.java`: `startWith(op, dest, paths, policy)`; replace policy (temporary name, swap, never a folder).
+- `src/js/explorer-ops.js`: policy option, `findConflicts`, `canReplace`.
+- `src/js/explorer.js`: conflict detection on Copy here and Move here, the Name clashes view (per item and for all), one job per item, summary; picker wording.
+- `src/css/style.css`: clash rows, destructive button.
+- `android-notes/native-setup.md`, ROADMAP (DP89), DECISIONS (225), ARCHITECTURE, TRACK.
+
+Decisions made: 225.
+
+Verified: 37 Java checks; DOM suites 31, 40, 46, 5 and the new 28; `vite build` passes. Not verified: CI of the Java change, any device (DP87, DP88, DP89).
+
+Open: DP87, DP88 and DP89 on device; Phase 22 E3 office viewers; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP87 to DP89 confirmation, then Phase 22 E3.
+
 **Session 129**
 
 Owner report: everything in copy and move worked; two requests: a way to cancel in the destination picker, and files shown in it so a same-name item is visible (Decision 224).
