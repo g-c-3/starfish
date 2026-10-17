@@ -338,3 +338,9 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 **Gradle.** Added to `android/app/build.gradle` (marker `// arkly-archive`): `org.apache.commons:commons-compress:1.26.2`, `org.tukaani:xz:1.9`, `net.lingala.zip4j:zip4j:2.11.5`, `com.github.junrar:junrar:7.5.5`, and `packagingOptions` excludes for `META-INF/LICENSE*`, `NOTICE*`, `DEPENDENCIES`, `INDEX.LIST`. Gradle downloads them in CI; the installed app makes no network call. No new permission.
 
 **Not confirmed in CI or on a device.** The Java was compiled in a scratch check against stubs of the libraries, not the real ones. First CI run: confirm the libraries resolve and the Java compiles; if packaging fails on a duplicate file, add that path to the excludes. First device run (DP85): each format, passwords, cancel, free-space stop. 7z and tar need Android 8 or later at run time.
+
+## 18. Copy and move (Decision 222)
+
+`scripts/patch-fileops.js` copies `scripts/java/ArklyFileOpsBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(new ArklyFileOpsBridge(), "ArklyFileOps")`. Methods: `start(op, destDir, pathsCsv)`, `status(id)`, `cancel(id)`, `release(id)`. The CI step runs after `patch-archive.js`. No Gradle change, no new permission, no library. Idempotent.
+
+**Not confirmed in CI or on a device.** The Java was compiled and run only on a desktop JDK against a real temporary filesystem. First CI run: confirm it compiles in the Android build. First device run (DP87): both storages, a USB drive, cancel, free-space stop. Sharing relies on the share plugin's file-provider paths; storage outside them (a USB drive) may refuse.
