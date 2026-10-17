@@ -1,6 +1,6 @@
-// explorer-archive.js — extract an archive from the File explorer (Decision 220). The work is native (window.ArklyArchive,
-// scripts/java/ArklyArchiveBridge.java, written into the app by scripts/patch-archive.js); this file detects archive names,
-// polls the running job and words the outcomes. Nothing is sent anywhere.
+// explorer-archive.js — open and extract archives in the File explorer (Decisions 220, 221). The work is native
+// (window.ArklyArchive, scripts/java/ArklyArchiveBridge.java, written into the app by scripts/patch-archive.js); this file detects
+// archive names, polls the running job, reads folder lists and words the outcomes. Nothing is sent anywhere.
 
 const ENDINGS = ['.tar.gz', '.tar.bz2', '.tar.xz', '.tgz', '.tbz2', '.tbz', '.txz', '.tar', '.zip', '.cbz', '.jar', '.7z', '.rar', '.cbr', '.gz', '.bz2', '.xz'];
 
@@ -11,9 +11,15 @@ export function isArchive(name) {
 
 // Starts a job and polls it. Returns { cancel(), done } where done resolves with the final status:
 // { state: 'done' | 'error' | 'cancelled', code, message, files, skipped, bytes, dest }.
-export function startExtract(bridge, archivePath, { password = '', onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+// Everything by default; `entries` (paths inside the archive) extracts only those; `entry` (one path) extracts that one into the
+// app's cache for viewing, and the file is then dest + '/' + entry.
+export function startExtract(bridge, archivePath, { password = '', entries = null, entry = null, onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   let id = '';
-  try { id = bridge.start(archivePath, password); } catch { id = ''; }
+  try {
+    if (entry) id = bridge.startEntry(archivePath, password, entry);
+    else if (entries) id = bridge.startSelected(archivePath, password, entries.map((p) => encodeURIComponent(p)).join(','));
+    else id = bridge.start(archivePath, password);
+  } catch { id = ''; }
   if (!id) return { cancel() {}, done: Promise.resolve({ state: 'error', code: 'busy', message: 'Another extraction is still running, or the file is gone.' }) };
   const done = (async () => {
     for (;;) {
@@ -40,4 +46,32 @@ export function errorText(r, hadPassword = false) {
     case 'busy': return r.message;
     default: return `Could not extract: ${r?.message || 'the archive could not be read.'} Nothing was kept.`;
   }
+}
+
+// Reads an archive's entry list in the background. Returns { cancel(), done }; done resolves { state: 'ready' | 'error' | 'cancelled',
+// id, count, code, message }. An id is kept only for 'ready'; the caller closes it with bridge.closeArchive(id).
+export function openBrowse(bridge, archivePath, { password = '', onProgress = () => {}, pollMs = 250, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let id = '';
+  try { id = bridge.openArchive(archivePath, password); } catch { id = ''; }
+  if (!id) return { cancel() {}, done: Promise.resolve({ state: 'error', code: 'busy', message: 'The archive could not be opened.' }) };
+  let cancelled = false;
+  const done = (async () => {
+    for (;;) {
+      await wait(pollMs);
+      let s;
+      try { s = JSON.parse(bridge.browseStatus(id)); } catch { s = { state: 'error', code: 'io', message: 'The archive reader did not answer.' }; }
+      if (cancelled || s.state === 'cancelled') { try { bridge.closeArchive(id); } catch { /* already closed */ } return { state: 'cancelled' }; }
+      if (s.state === 'ready') return { ...s, id };
+      if (s.state !== 'running') { try { bridge.closeArchive(id); } catch { /* already closed */ } return s; }
+      onProgress(s);
+    }
+  })();
+  return { cancel() { cancelled = true; }, done };
+}
+
+// The entries directly inside one folder of an open archive: [{ name, isDir, size, mtime: 0, path }]. `prefix` is '' for the top.
+export function listFolder(bridge, id, prefix) {
+  let rows = [];
+  try { rows = JSON.parse(bridge.children(id, prefix) || '[]'); } catch { rows = []; }
+  return rows.map((r) => ({ name: r.n, isDir: !!r.d, size: Number(r.s) || 0, mtime: 0, path: prefix ? `${prefix}/${r.n}` : r.n }));
 }

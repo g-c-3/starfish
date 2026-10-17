@@ -26,7 +26,7 @@ const errText = (e) => (e && e.message ? `: ${e.message}` : '.');
 // ui { askYesNo, askText, attachZoomPan, onActivity }, toast, external(file), isVault, onClose({ changed }) }.
 // Returns { back, destroy }; back() asks before dropping unsaved text and closes an open PDF tool first.
 export function openFileViewer(file, ctx) {
-  const { siblings = [], toUri, ui, toast, external, isVault = false, onClose = () => {} } = ctx;
+  const { siblings = [], toUri, ui, toast, external, isVault = false, readOnly = false, onClose = () => {} } = ctx;
   const $ = (id) => document.getElementById(id);
   const root = $('explorer-viewer'), body = $('ev-body'), titleEl = $('ev-title'), countEl = $('ev-count');
   const saveBtn = $('ev-save-btn'), openBtn = $('ev-open-btn');
@@ -60,13 +60,15 @@ export function openFileViewer(file, ctx) {
     const wrap = el('div', 'ev-text-wrap');
     if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text. It is open for reading only, so saving cannot damage it.'));
     const ta = el('textarea', 'ev-text');
-    ta.value = text; ta.readOnly = info.lossy; ta.spellcheck = false;
+    const editable = !info.lossy && !readOnly; // readOnly: a copy taken out of an archive; saving would be lost
+    if (readOnly && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
+    ta.value = text; ta.readOnly = !editable; ta.spellcheck = false;
     ta.setAttribute('autocapitalize', 'off'); ta.setAttribute('autocomplete', 'off'); ta.setAttribute('aria-label', f.name);
     wrap.appendChild(ta); body.appendChild(wrap);
     let base = ta.value, saving = false;
-    const dirty = () => !info.lossy && ta.value !== base;
+    const dirty = () => editable && ta.value !== base;
     ta.addEventListener('input', () => { saveBtn.disabled = !dirty() || saving; ui.onActivity(); });
-    if (!info.lossy) {
+    if (editable) {
       saveBtn.classList.remove('hidden'); saveBtn.disabled = true;
       saveBtn.onclick = async () => {
         if (saving || !dirty()) return;
