@@ -341,6 +341,6 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 
 ## 18. Copy and move (Decision 222)
 
-`scripts/patch-fileops.js` copies `scripts/java/ArklyFileOpsBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(new ArklyFileOpsBridge(), "ArklyFileOps")`. Methods: `start(op, destDir, pathsCsv)`, `status(id)`, `cancel(id)`, `release(id)`. The CI step runs after `patch-archive.js`. No Gradle change, no new permission, no library. Idempotent.
+`scripts/patch-fileops.js` copies `scripts/java/ArklyFileOpsBridge.java` next to `MainActivity.java` (package filled in) and registers it in `onCreate()` with `addJavascriptInterface(new ArklyFileOpsBridge(), "ArklyFileOps")`. Methods: `start(op, destDir, pathsCsv)` (a taken name gets a number), `startWith(op, destDir, pathsCsv, policy)` (policy `rename` or `replace`; Decision 225), `status(id)`, `cancel(id)`, `release(id)`. The CI step runs after `patch-archive.js`. No Gradle change, no new permission, no library. Idempotent.
 
 **Not confirmed in CI or on a device.** The Java was compiled and run only on a desktop JDK against a real temporary filesystem. First CI run: confirm it compiles in the Android build. First device run (DP87): both storages, a USB drive, cancel, free-space stop. Sharing relies on the share plugin's file-provider paths; storage outside them (a USB drive) may refuse.
