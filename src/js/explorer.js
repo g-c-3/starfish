@@ -7,7 +7,7 @@ import { Share } from '@capacitor/share';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 import * as manage from './explorer-manage.js';
-import { startOps, destProblem, resultText } from './explorer-ops.js';
+import { startOps, destProblem, resultText, findConflicts, canReplace } from './explorer-ops.js';
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText } from './explorer-archive.js';
 
 const KIND_EXT = {
@@ -126,7 +126,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
-  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null };
+  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null, resolve: null };
   let closed = false, viewer = null, purged = false, job = null, browse = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -477,7 +477,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function startPick(op) {
     const items = selectedEntries();
     if (!items.length) return;
-    st.pick = { op, sources: items.map((e) => ({ path: e.path, name: e.name, isDir: e.isDir })), dir: null };
+    st.pick = { op, sources: items.map((e) => ({ path: e.path, name: e.name, isDir: e.isDir, size: e.size || 0, mtime: e.mtime || 0 })), dir: null };
     if (!st.volumes.length) st.volumes = readVolumes();
     st.sel.clear(); syncSelUi();
     showPick(st.cwd);
@@ -532,7 +532,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     }
     const problem = destProblem(pick.op, dir, pick.sources);
     const banner = el('div', 'explorer-banner');
-    const note = el('div', '', problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder. Nothing is replaced: a name already used here gets a number.`);
+    const note = el('div', '', problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder. Nothing is replaced unless you choose Replace.`);
     banner.appendChild(note);
     const actions = el('div', 'banner-actions');
     const go = el('button', '', `${verb} here`);
@@ -567,7 +567,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       if (!src || (pick.op === 'move' && problem)) return;
       clashes++;
       row.classList.add('is-conflict');
-      text.appendChild(el('span', 'explorer-tag', `Same name here — the new one is saved as "${numbered(src.name, src.isDir, taken)}"`));
+      text.appendChild(el('span', 'explorer-tag', 'Same name here — you choose what to do next'));
     };
     if (!shown.length) list.appendChild(el('div', 'explorer-meta', 'This folder is empty.'));
     for (const f of folders) {
@@ -590,7 +590,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       row.appendChild(text);
       list.appendChild(row);
     }
-    if (clashes) note.textContent = `${problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder.`} ${plural(clashes, 'item')} already ${clashes === 1 ? 'has' : 'have'} the same name here: nothing is replaced, the new ${clashes === 1 ? 'one gets' : 'ones get'} a number.`;
+    if (clashes) note.textContent = `${problem || `${verb} ${plural(pick.sources.length, 'item')} into this folder.`} ${plural(clashes, 'item')} already ${clashes === 1 ? 'has' : 'have'} the same name here. Next you choose Replace, Skip or Rename for each.`;
     body.appendChild(list);
   }
   function cancelPick() { st.pick = null; returnToFolder(); }
@@ -612,24 +612,151 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!vol || dir === vol.path) showPick(null); else showPick(parentOf(dir));
   }
 
+  const opsApi = () => (typeof window !== 'undefined' ? window.ArklyFileOps : null);
+
+  // Copy or move into `dest`. Items whose name is free go straight through; for the others the user chooses, item by item or for all
+  // of them, between Replace, Skip and Rename (Decision 225).
   async function runOps(dest) {
-    const api = typeof window !== 'undefined' ? window.ArklyFileOps : null;
+    const api = opsApi();
     if (!api) { toast('Copy and move work in the Android app.'); return; }
     if (job) return;
     const { op, sources } = st.pick, cwd = st.cwd;
+    let entries = [];
+    try { entries = await fsApi.readdir(dest); } catch { entries = []; }
     st.pick = null;
+    const { clashes, clean } = findConflicts(op, dest, sources, entries);
     const verb = op === 'copy' ? 'Copying' : 'Moving';
-    st.view = 'extract'; st.gen++; // Back cancels, as for an extraction
-    chrome({ title: verb, folder: false });
-    const line = panel(`${verb} ${plural(sources.length, 'item')}…`, 'Starting…', () => job?.cancel());
-    job = startOps(api, op, dest, sources.map((s) => s.path), {
-      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${p.items} of ${p.total} · ${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}${p.current ? ` · ${p.current}` : ''}`; },
-    });
-    const res = await job.done;
-    job = null;
-    if (closed) return;
-    toast(resultText(op, res));
-    if (st.view === 'extract') await showFolder(cwd);
+    if (!clashes.length || clean.length) {
+      st.view = 'extract'; st.gen++; // Back cancels, as for an extraction
+      chrome({ title: verb, folder: false });
+      const batch = clean.length ? clean : sources;
+      const line = panel(`${verb} ${plural(batch.length, 'item')}…`, 'Starting…', () => job?.cancel());
+      job = startOps(api, op, dest, batch.map((x) => x.path), {
+        onProgress: (p) => { ui.onActivity?.(); line.textContent = `${p.items} of ${p.total} · ${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}${p.current ? ` · ${p.current}` : ''}`; },
+      });
+      const res = await job.done;
+      job = null;
+      if (closed) return;
+      if (!clashes.length || res.state !== 'done') { toast(resultText(op, res)); if (st.view === 'extract') await showFolder(cwd); return; }
+      toast(resultText(op, res));
+    }
+    if (closed || !clashes.length) return;
+    st.resolve = { op, dest, cwd, busy: false, stop: false, names: new Set(entries.map((e) => e.name.toLowerCase())), tally: { replaced: 0, renamed: 0, skipped: 0 }, items: clashes.map((c) => ({ ...c, busy: false, error: '', lineEl: null })) };
+    showResolve();
+  }
+
+  // ---- Name clashes: Replace, Skip or Rename, per item or for all (Decision 225) ----
+  const descOf = (e) => (e.isDir ? 'Folder' : `${sizeText(e.size || 0)}${e.mtime ? ` · ${formatDate(e.mtime)}` : ''}`);
+  function showResolve() {
+    st.view = 'resolve'; st.gen++;
+    chrome({ title: 'Name clashes', folder: false });
+    renderResolve();
+  }
+  function renderResolve() {
+    const R = st.resolve;
+    if (!R || st.view !== 'resolve') return;
+    if (!R.items.length) { endResolve(); return; }
+    body.replaceChildren();
+    const n = R.items.length;
+    const folderName = R.dest.split('/').filter(Boolean).pop() || R.dest;
+    const banner = el('div', 'explorer-banner');
+    banner.appendChild(el('div', '', `${plural(n, 'item')} already ${n === 1 ? 'exists' : 'exist'} in "${folderName}". Choose what to do with each one, or with all of them. Replace deletes the existing file for good; a folder is never replaced.`));
+    const bulk = el('div', 'banner-actions');
+    const mkBtn = (label, cls, fn, disabled) => { const b = el('button', cls, label); b.disabled = !!disabled; b.addEventListener('click', fn); return b; };
+    const anyReplace = R.items.some((i) => canReplace(i.src, i.existing));
+    bulk.appendChild(mkBtn('Replace all', 'danger-btn', () => bulkResolve('replace'), R.busy || !anyReplace));
+    bulk.appendChild(mkBtn('Skip all', 'secondary-btn', () => bulkResolve('skip'), R.busy));
+    bulk.appendChild(mkBtn('Rename all', 'secondary-btn', () => bulkResolve('rename'), R.busy));
+    banner.appendChild(bulk);
+    body.appendChild(banner);
+    const list = el('div', 'explorer-list');
+    const preview = new Set(R.names);
+    for (const item of R.items) {
+      const row = el('div', 'explorer-row resolve-row');
+      row.appendChild(el('span', 'explorer-name', item.src.name));
+      row.appendChild(el('span', 'explorer-meta', `Existing: ${descOf(item.existing)}`));
+      row.appendChild(el('span', 'explorer-meta', `New: ${descOf(item.src)}`));
+      if (item.error) row.appendChild(el('span', 'explorer-tag error', item.error));
+      if (item.busy) {
+        item.lineEl = el('span', 'explorer-meta', 'Working…');
+        row.appendChild(item.lineEl);
+      } else {
+        const acts = el('div', 'banner-actions');
+        if (canReplace(item.src, item.existing)) acts.appendChild(mkBtn('Replace', 'danger-btn', () => resolveItem(item, 'replace'), R.busy));
+        acts.appendChild(mkBtn('Skip', 'secondary-btn', () => resolveItem(item, 'skip'), R.busy));
+        acts.appendChild(mkBtn('Rename', 'secondary-btn', () => resolveItem(item, 'rename'), R.busy));
+        row.appendChild(acts);
+        row.appendChild(el('span', 'explorer-meta', `Rename saves the new one as "${numbered(item.src.name, item.src.isDir, preview)}"`));
+      }
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  }
+  const dropItem = (item) => { const R = st.resolve; R.items = R.items.filter((i) => i !== item); };
+
+  async function resolveItem(item, action) {
+    const R = st.resolve;
+    if (!R || R.busy) return;
+    if (action === 'skip') { R.tally.skipped++; dropItem(item); renderResolve(); return; }
+    await runResolve([item], action);
+  }
+  async function bulkResolve(action) {
+    const R = st.resolve;
+    if (!R || R.busy) return;
+    if (action === 'skip') { R.tally.skipped += R.items.length; R.items = []; renderResolve(); return; }
+    const items = action === 'replace' ? R.items.filter((i) => canReplace(i.src, i.existing)) : [...R.items];
+    if (!items.length) return;
+    if (action === 'replace') {
+      const yes = await ui.askYesNo?.({
+        title: items.length === 1 ? 'Replace this file?' : `Replace ${items.length} files?`,
+        text: `${items.length === 1 ? 'The existing file is' : 'The existing files are'} deleted permanently and cannot be restored. A folder is never replaced.`,
+        yes: 'Replace', no: 'Cancel',
+      });
+      if (!yes || st.resolve !== R) return;
+    }
+    await runResolve(items, action);
+  }
+  // One native job per item, in order, so each leaves the list as soon as it is done.
+  async function runResolve(items, action) {
+    const R = st.resolve, api = opsApi();
+    if (!api) { toast('Copy and move work in the Android app.'); return; }
+    R.busy = true; R.stop = false;
+    for (const item of items) {
+      if (closed || st.resolve !== R || R.stop) break;
+      item.busy = true; item.error = '';
+      renderResolve();
+      job = startOps(api, R.op, R.dest, [item.src.path], {
+        policy: action === 'replace' ? 'replace' : 'rename',
+        onProgress: (p) => { ui.onActivity?.(); if (item.lineEl) item.lineEl.textContent = `${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}`; },
+      });
+      const res = await job.done;
+      job = null;
+      if (closed || st.resolve !== R) return;
+      item.busy = false;
+      if (res.state === 'done' && !res.failed) { R.tally[action === 'replace' ? 'replaced' : 'renamed']++; dropItem(item); }
+      else if (res.state === 'cancelled') R.stop = true;
+      else item.error = res.state === 'error' ? resultText(R.op, res) : (res.message || 'It could not be done.');
+    }
+    R.busy = false;
+    if (!closed && st.resolve === R) renderResolve();
+  }
+  function endResolve(left = 0) {
+    const R = st.resolve;
+    st.resolve = null;
+    if (!R) return;
+    const t = R.tally, parts = [];
+    if (t.replaced) parts.push(`${t.replaced} replaced`);
+    if (t.renamed) parts.push(`${t.renamed} renamed`);
+    if (t.skipped) parts.push(`${t.skipped} skipped`);
+    if (left) parts.push(`${left} left as they were`);
+    toast(parts.length ? `${parts.join(', ')}.` : 'Done.');
+    showFolder(R.cwd);
+  }
+  function resolveBack() {
+    const R = st.resolve;
+    if (!R) return;
+    if (R.busy) { R.stop = true; job?.cancel(); return; }
+    endResolve(R.items.length);
   }
 
   async function actShare() {
@@ -804,7 +931,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (closed) return;
     closed = true;
     if (job) job.cancel(); // the native side removes what it wrote
-    st.pick = null;
+    st.pick = null; st.resolve = null;
     if (browse) browse.cancel();
     leaveArchive(); // closes the list and removes the copies taken out for viewing
     if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
@@ -820,6 +947,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (st.view === 'extract') { job?.cancel(); return; }
     if (st.view === 'arcopen') { browse?.cancel(); return; }
     if (st.view === 'pick') { pickBack(); return; }
+    if (st.view === 'resolve') { resolveBack(); return; }
     if (st.view === 'archive') { arcBack(); return; }
     if (st.view === 'props') { returnToFolder(); return; }
     if (st.view === 'trash') { if (st.from) showFolder(st.from.cwd); else showRoots(); return; }
@@ -835,7 +963,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   }
 
   $('explorer-back-btn').onclick = back;
-  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props' || st.view === 'extract' || st.view === 'archive' || st.view === 'arcopen' || st.view === 'pick') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
+  $('explorer-refresh-btn').onclick = () => { if (st.view === 'folder') showFolder(st.cwd); else if (st.view === 'trash') showTrash(); else if (st.view === 'props' || st.view === 'extract' || st.view === 'archive' || st.view === 'arcopen' || st.view === 'pick' || st.view === 'resolve') return; else if (st.view === 'roots') showRoots(); else if (hasAccess()) showRoots(); };
   $('explorer-hidden-btn').onclick = () => {
     st.hidden = !st.hidden;
     clearSel();

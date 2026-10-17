@@ -5,11 +5,13 @@
 const parentOf = (p) => { const i = p.replace(/\/+$/, '').lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-// Starts a job and polls it. Returns { cancel(), done }; done resolves with the final status:
+// Starts a job and polls it. `policy` ('rename' | 'replace') says what to do with a name that is already taken; without it the
+// native default (a number) applies. Returns { cancel(), done }; done resolves with the final status:
 // { state: 'done' | 'error' | 'cancelled', code, message, items, total, failed, skipped, bytes, bytesTotal }.
-export function startOps(bridge, op, destDir, paths, { onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+export function startOps(bridge, op, destDir, paths, { policy = null, onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   let id = '';
-  try { id = bridge.start(op, destDir, paths.map((p) => encodeURIComponent(p)).join(',')); } catch { id = ''; }
+  const csv = paths.map((p) => encodeURIComponent(p)).join(',');
+  try { id = policy ? bridge.startWith(op, destDir, csv, policy) : bridge.start(op, destDir, csv); } catch { id = ''; }
   if (!id) return { cancel() {}, done: Promise.resolve({ state: 'error', code: 'busy', message: 'Another copy or move is still running, or the destination is not available.' }) };
   const done = (async () => {
     for (;;) {
@@ -43,3 +45,18 @@ export function resultText(op, r) {
   if (r.skipped) parts.push(`${plural(r.skipped, 'link')} skipped.`);
   return parts.join(' ');
 }
+
+// Which sources meet an entry of the same name (ignoring case) in the destination listing. `entries`: [{ name, isDir, size, mtime }].
+// A copy beside its own original is not a clash: it simply gets a number. Returns { clashes: [{ src, existing }], clean: [src] }.
+export function findConflicts(op, dest, sources, entries) {
+  const byName = new Map(entries.map((e) => [e.name.toLowerCase(), e]));
+  const clashes = [], clean = [];
+  for (const src of sources) {
+    const existing = byName.get(src.name.toLowerCase());
+    if (existing && !(op === 'copy' && parentOf(src.path) === dest)) clashes.push({ src, existing }); else clean.push(src);
+  }
+  return { clashes, clean };
+}
+
+// A file may replace a file; a folder is never replaced and never replaces anything.
+export const canReplace = (src, existing) => !src.isDir && !existing.isDir;
