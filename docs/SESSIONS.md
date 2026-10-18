@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 135**
+
+Owner confirmed the xlsx fixes (DP92). Next item: E3b stage 3, pptx (Decision 230). DP91 (docx and theme) was not confirmed as a whole; the docx look was reported close to the reference.
+- `src/js/office-read.js`: `readPptx` rewritten: slide size, theme and colour map, layout and master placeholder inheritance, text styles and bullets, backgrounds, shapes, pictures with crop, lines, groups, tables with a style fallback, notes.
+- `src/js/office-render.js`: slide canvas, shape outlines, text, pictures, tables, lines; Previous, Next, swipe, zoom; zoom helper reports the user's zoom level.
+- `src/css/style.css`: slide canvas and frame styles.
+- Docs: ROADMAP (DP92 confirmed, stage 3, DP93), DECISIONS (230), ARCHITECTURE, TRACK.
+- Not built: thumbnail strip, charts, animations, transitions, picture and pattern fills.
+
+Decisions made: 230.
+
+Verified: 107 reader, drawing and theme checks; 14 viewer checks; `vite build` passes. Not verified: CI, any device (DP91, DP93), decks from other programs.
+
+Open: DP91, DP93 on device; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP91 and DP93 confirmation, then an item you choose; E3b has no stage after 3.
+
 **Session 134**
 
 Owner screenshots of the xlsx viewer (DP92 in progress): the look is right; text longer than its cell could not be read past the cell or the table edge.
