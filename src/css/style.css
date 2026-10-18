@@ -952,15 +952,16 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 .eo-cbtext { flex: 1; max-height: 96px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .eo-cells td.eo-sel { outline: 2px solid var(--eo-accent); outline-offset: -2px; }
 .eo-xzoom { width: max-content; min-width: 100%; }
-/* pptx */
-.eo-slide-stage { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 8px; }
-.eo-slide { background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
-.eo-slide .eo-p { margin-bottom: 8px; }
-.eo-slide .eo-mark { margin-right: 8px; }
-.eo-slide-title { margin: 0 0 12px; font-size: 20px; line-height: 1.25; }
-.eo-note { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
-.eo-notes { margin: 12px 2px 0; font-size: 13.5px; color: var(--muted); white-space: pre-wrap; }
-.eo-notes-h { font-weight: 650; margin-bottom: 4px; }
+/* pptx: the slide keeps its own design in both themes; only the frame around it follows the theme */
+.eo-pscroll { padding-top: 8px; }
+.eo-canvas { position: relative; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.3); color: #000; font-family: Calibri, Carlito, Roboto, sans-serif; }
+.eo-it { position: absolute; }
+.eo-tx { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: visible; }
+.eo-ptable { border-collapse: collapse; table-layout: fixed; }
+.eo-ptable td { overflow: hidden; }
+.eo-notes-wrap { padding: 0 10px; }
+.eo-notes { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); font-size: 13.5px; color: var(--fg); white-space: pre-wrap; }
+.eo-notes-h { font-weight: 650; margin-bottom: 4px; color: var(--muted); }
 .eo-slidebar { flex: none; display: flex; gap: 10px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface-2); }
 .eo-nav { flex: 1; margin: 0; padding: 10px; border-radius: 12px; font-size: 15px; }
 .eo-nav:disabled { opacity: 0.45; }
