@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 134**
+
+Owner screenshots of the xlsx viewer (DP92 in progress): the look is right; text longer than its cell could not be read past the cell or the table edge.
+- `src/js/office-render.js`: columns found for overflowing text plus three spare; tap a cell to read all of it in a bar; spill logic shared between the column count and the drawing.
+- `src/css/style.css`: cell bar and selected cell.
+- Docs: ROADMAP (DP92 steps 8 and 9), DECISIONS (229), ARCHITECTURE, TRACK.
+- Cause of the report: the table had only the columns that hold data, so text running on past the last one was cut at the table edge; a neighbour with content clips text as in a spreadsheet, with no way to read the rest.
+
+Decisions made: 229.
+
+Verified: 95 reader and drawing checks; 14 viewer checks; `vite build` passes. Not verified: CI, any device (DP91, DP92).
+
+Open: DP91, DP92 on device; E3b stage 3 pptx; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP91 and DP92 confirmation, then E3b stage 3 (pptx).
+
 **Session 133**
 
 Owner shared screenshots comparing the viewers with a reference reader: docx in Page view is close to it; xlsx showed values only. Stage 2 of E3b: xlsx (Decision 228). DP91 not yet fully confirmed (the docx look only).

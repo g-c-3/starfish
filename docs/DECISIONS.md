@@ -2663,3 +2663,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Limits: first 5,000 rows, 200 columns, 100,000 cells, with a notice. Not drawn: conditional formatting, data bars, charts, pictures (a notice says so), comments, links, rich text inside a cell (shown plain), pattern fills other than solid, text rotation, shrink to fit, styles set on a whole row or column with no cells.
 - Checks: 85 checks of readers, drawing, both themes, number formats (20 format codes), freeze, merge, hidden rows and columns, widths and heights; 14 viewer checks; `vite build` passes; the office chunk is about 47 kB.
 - Risks: not run through CI or on a device (DP92). Column widths use 7 px per character plus 5, which can differ a little from the original. Large sheets near the limits may be slow.
+
+**229. Office viewer xlsx text beyond the cell (Phase 22, stage E3b, stage 2).** Owner report after DP92 screenshots: text longer than its cell could not be read past the cell or the table edge. Extends Decision 228.
+- Columns: the table gets the columns that overflowing text runs into, found before drawing, plus three spare empty columns, up to 200. Nothing is cut at the table edge.
+- Text stopped by a filled or styled neighbour is clipped, as in a spreadsheet; tapping any cell with content shows its cell name and all of its text in a bar under the tabs (up to about five lines, scrollable, text selectable), and outlines the cell. Tapping an empty cell or elsewhere closes the bar. Nothing is stored.
+- Checks: 95 reader and drawing checks (10 new: spare columns, spill span, neighbour stop, bar shown, hidden and cleared); 14 viewer checks; `vite build` passes.
+- Risks: not run on a device (DP92). The width a long text needs is estimated from its length and font size, so a spill can end a little short or long.
