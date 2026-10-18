@@ -936,13 +936,18 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 .eo-tabs { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
 .eo-tab { flex: none; width: auto; margin: 0; padding: 6px 14px; border-radius: 999px; font-size: 13.5px; background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); box-shadow: none; }
 .eo-tab.active { background: var(--eo-accent); color: var(--eo-accent-fg); border-color: transparent; }
-.eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); }
+.eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); touch-action: pan-x pan-y; }
 .eo-sheet { margin: 0; }
-.eo-cells { font-size: 13px; white-space: pre; color: var(--fg); }
-.eo-cells th { background: var(--surface-2); color: var(--muted); font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 1; }
-.eo-cells th.eo-row { position: sticky; left: 0; top: auto; z-index: 1; }
-.eo-cells th.eo-corner { left: 0; z-index: 2; }
-.eo-cells td.eo-num { text-align: right; }
+.eo-cells { --eo-grid: #d6d3e4; border-collapse: collapse; table-layout: fixed; font-family: Calibri, Carlito, Roboto, sans-serif; font-size: 14.67px; background: var(--surface); color: var(--fg); }
+.eo-host[data-theme="dark"] .eo-cells { --eo-grid: #34323f; }
+.eo-nogrid { --eo-grid: transparent !important; }
+.eo-cells td { border: 1px solid var(--eo-grid); padding: 0 3px; overflow: hidden; white-space: nowrap; vertical-align: bottom; line-height: 1.25; }
+.eo-cells td.eo-r { text-align: right; } .eo-cells td.eo-ctr { text-align: center; }
+.eo-cells th { border: 1px solid var(--eo-grid); background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 13px; text-align: center; position: sticky; top: 0; z-index: 1; height: 24px; padding: 0 4px; overflow: hidden; }
+.eo-cells th.eo-row { position: sticky; left: 0; top: auto; z-index: 1; width: 44px; }
+.eo-cells th.eo-corner { left: 0; z-index: 5; }
+.eo-cells td.eo-frz { position: sticky; background: var(--surface); }
+.eo-xzoom { width: max-content; min-width: 100%; }
 /* pptx */
 .eo-slide-stage { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 8px; }
 .eo-slide { background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
