@@ -439,37 +439,127 @@ export function readDocx(bytes) {
 }
 
 // ---- xlsx ----
-const BUILTIN_DATE = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47]);
-const BUILTIN_TIME = new Set([18, 19, 20, 21, 45, 46, 47]);
-const BUILTIN_PERCENT = new Set([9, 10]);
-function codeKind(code) {
-  const c = code.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '').replace(/\\./g, '').replace(/_./g, '');
-  if (/[dmyhs]/i.test(c)) return /[dy]/i.test(c) ? 'date' : 'time';
-  return /%/.test(c) ? 'percent' : 'plain';
-}
+const BUILTIN_FMT = { 0: 'General', 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 14: 'yyyy-mm-dd', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM', 19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 22: 'yyyy-mm-dd h:mm', 37: '#,##0 ;(#,##0)', 38: '#,##0 ;(#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;(#,##0.00)', 45: 'mm:ss', 46: 'h:mm:ss', 47: 'mm:ss.0', 49: '@' };
+const INDEXED = ['000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', '000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', '800000', '008000', '000080', '808000', '800080', '008080', 'C0C0C0', '808080', '9999FF', '993366', 'FFFFCC', 'CCFFFF', '660066', 'FF8080', '0066CC', 'CCCCFF', '000080', 'FF00FF', 'FFFF00', '00FFFF', '800080', '800000', '008080', '0000FF', '00CCFF', 'CCFFFF', 'CCFFCC', 'FFFF99', '99CCFF', 'FF99CC', 'CC99FF', 'FFCC99', '3366FF', '33CCCC', '99CC00', 'FFCC00', 'FF9900', 'FF6600', '666699', '969696', '003366', '339966', '003300', '333300', '993300', '993366', '333399', '333333'];
+const THEME_IDX = ['lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const two = (n) => String(n).padStart(2, '0');
+const general = (v) => String(parseFloat(v.toPrecision(15)));
 const colIndex = (ref) => {
   let n = 0;
   for (const ch of ref) { const k = ch.charCodeAt(0) - 64; if (k < 1 || k > 26) break; n = n * 26 + k; }
   return n - 1;
 };
 export const colName = (i) => { let s = ''; let x = i + 1; while (x > 0) { const r = (x - 1) % 26; s = String.fromCharCode(65 + r) + s; x = Math.floor((x - 1) / 26); } return s; };
-const two = (n) => String(n).padStart(2, '0');
-function serialText(v, kind, is1904) {
-  const ms = Math.round((v - (is1904 ? 24107 : 25569)) * 86400000);
-  const d = new Date(ms);
-  if (!Number.isFinite(d.getTime())) return String(v);
-  const date = `${d.getUTCFullYear()}-${two(d.getUTCMonth() + 1)}-${two(d.getUTCDate())}`;
-  const time = `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
-  if (kind === 'time') return time;
-  return v % 1 ? `${date} ${time}` : date;
+const cellRef = (ref) => { const m = /^([A-Za-z]+)(\d+)$/.exec(ref || ''); return m ? { c: colIndex(m[1].toUpperCase()), r: Number(m[2]) - 1 } : null; };
+
+function sections(code) {
+  const out = []; let cur = ''; let q = false; let br = false;
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === '\\') { cur += ch + (code[++i] || ''); continue; }
+    if (ch === '"') q = !q; else if (!q && ch === '[') br = true; else if (!q && ch === ']') br = false;
+    if (ch === ';' && !q && !br) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out;
 }
-function numberText(raw, kind, is1904) {
+// Literal text (quoted, escaped, currency) is moved out of the pattern so only placeholders and tokens remain.
+function mask(sec) {
+  const lits = [];
+  let s = sec.replace(/\[\$([^\]-]*)(?:-[^\]]*)?\]/g, (m, c) => { lits.push(c); return String.fromCharCode(0xe100 + lits.length - 1); });
+  s = s.replace(/\[[^\]]*\]/g, '');
+  s = s.replace(/"([^"]*)"|\\(.)|_(.)|\*(.)/g, (m, q, e, u) => { lits.push(q !== undefined ? q : e !== undefined ? e : u !== undefined ? ' ' : ''); return String.fromCharCode(0xe100 + lits.length - 1); });
+  return { s, lits };
+}
+const unmask = (s, lits) => s.replace(/[\ue100-\uf8ff]/g, (m) => lits[m.charCodeAt(0) - 0xe100]);
+const isDateCode = (s) => /[dmyhs]|AM\/PM|A\/P/i.test(s.replace(/[\ue100-\uf8ff]/g, ''));
+
+function fmtDate(v, s, lits, is1904) {
+  const d = new Date(Math.round((v - (is1904 ? 24107 : 25569)) * 86400) * 1000);
+  if (!Number.isFinite(d.getTime())) return null;
+  const ap = /AM\/PM|A\/P/i.test(s);
+  const toks = [...s.matchAll(/yyyy|yy|mmmm|mmm|mm|m|dddd|ddd|dd|d|hh|h|ss|s|AM\/PM|A\/P|\.0+/gi)];
+  const h24 = d.getUTCHours(); const h12 = h24 % 12 || 12;
+  let out = ''; let last = 0;
+  toks.forEach((m, k) => {
+    out += s.slice(last, m.index); last = m.index + m[0].length;
+    const t = m[0].toLowerCase();
+    const prev = toks[k - 1] && toks[k - 1][0].toLowerCase(); const next = toks[k + 1] && toks[k + 1][0].toLowerCase();
+    const minute = (t === 'm' || t === 'mm') && (prev === 'h' || prev === 'hh' || next === 's' || next === 'ss');
+    let x;
+    if (minute) x = t === 'mm' ? two(d.getUTCMinutes()) : String(d.getUTCMinutes());
+    else if (t === 'yyyy') x = String(d.getUTCFullYear()); else if (t === 'yy') x = two(d.getUTCFullYear() % 100);
+    else if (t === 'mmmm') x = MONTHS[d.getUTCMonth()]; else if (t === 'mmm') x = MONTHS[d.getUTCMonth()].slice(0, 3);
+    else if (t === 'mm') x = two(d.getUTCMonth() + 1); else if (t === 'm') x = String(d.getUTCMonth() + 1);
+    else if (t === 'dddd') x = DAYS[d.getUTCDay()]; else if (t === 'ddd') x = DAYS[d.getUTCDay()].slice(0, 3);
+    else if (t === 'dd') x = two(d.getUTCDate()); else if (t === 'd') x = String(d.getUTCDate());
+    else if (t === 'hh') x = two(ap ? h12 : h24); else if (t === 'h') x = String(ap ? h12 : h24);
+    else if (t === 'ss') x = two(d.getUTCSeconds()); else if (t === 's') x = String(d.getUTCSeconds());
+    else if (t === 'am/pm') x = h24 < 12 ? 'AM' : 'PM'; else if (t === 'a/p') x = h24 < 12 ? 'A' : 'P';
+    else x = '';
+    out += x;
+  });
+  return unmask(out + s.slice(last), lits);
+}
+function fmtNum(val, s, lits) {
+  const m = /[#0?][#0?,]*(?:\.[#0?]*)?(?:E[+-]0+)?|\.[#0?]+/.exec(s);
+  if (!m) return unmask(s, lits);
+  const pre = s.slice(0, m.index); let suf = s.slice(m.index + m[0].length);
+  const pct = (pre + suf).split('%').length - 1;
+  const sci = /E([+-])(0+)$/.exec(m[0]);
+  const body = sci ? m[0].slice(0, sci.index) : m[0];
+  const dot = body.indexOf('.');
+  let intPat = dot < 0 ? body : body.slice(0, dot);
+  const fracPat = dot < 0 ? '' : body.slice(dot + 1);
+  let scale = 0;
+  while (intPat.endsWith(',')) { intPat = intPat.slice(0, -1); scale++; } // trailing commas divide by 1000 each
+  while (suf.startsWith(',')) { suf = suf.slice(1); scale++; }
+  const thousands = intPat.includes(',');
+  const digits = intPat.replace(/,/g, '');
+  let x = val * 100 ** pct / 1000 ** scale;
+  const dec = fracPat.length;
+  let intStr; let fracStr; let exp = '';
+  if (sci) {
+    const e = x === 0 ? 0 : Math.floor(Math.log10(Math.abs(x)));
+    const mant = x / 10 ** e;
+    const [i, f = ''] = mant.toFixed(dec).split('.');
+    intStr = i; fracStr = f;
+    exp = `E${e < 0 ? '-' : sci[1] === '+' ? '+' : ''}${String(Math.abs(e)).padStart(sci[2].length, '0')}`;
+  } else {
+    [intStr, fracStr = ''] = x.toFixed(dec).split('.');
+  }
+  const minInt = (digits.match(/0/g) || []).length;
+  if (intStr.length < minInt) intStr = intStr.padStart(minInt, '0');
+  if (!minInt && intStr === '0') intStr = '';
+  if (thousands) intStr = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  let frac = '';
+  if (dec) {
+    // trailing optional placeholders (# and ?) drop trailing zeros
+    let keep = dec;
+    while (keep > 0 && fracPat[keep - 1] !== '0' && fracStr[keep - 1] === '0') keep--;
+    frac = keep ? `.${fracStr.slice(0, keep)}` : '';
+  }
+  return unmask(pre, lits) + intStr + frac + exp + unmask(suf, lits);
+}
+// Shows a stored number the way its format code asks (common codes only; anything else falls back to General).
+export function formatValue(raw, code, is1904) {
   const v = Number(raw);
   if (!Number.isFinite(v)) return raw;
-  if (kind === 'date' || kind === 'time') return serialText(v, kind, is1904);
-  if (kind === 'percent') return `${parseFloat((v * 100).toPrecision(12))}%`;
-  return String(parseFloat(v.toPrecision(15)));
+  if (!code || /^general$/i.test(code)) return general(v);
+  const secs = sections(code);
+  let idx = 0; const val = Math.abs(v);
+  if (secs.length >= 2 && v < 0) idx = 1; else if (secs.length >= 3 && v === 0) idx = 2;
+  const { s, lits } = mask(secs[idx]);
+  if (!s.trim()) return '';
+  if (s.trim() === '@' || /^\s*general\s*$/i.test(s)) return general(v);
+  if (isDateCode(s)) { const r = fmtDate(v, s, lits, is1904); return r === null ? general(v) : r; }
+  if (/[?#0]\/[?#0\d]/.test(s)) return general(v);
+  const out = fmtNum(val, s, lits);
+  return v < 0 && idx === 0 ? `-${out}` : out;
 }
+const isDateKind = (code) => !!code && !/^general$/i.test(code) && sections(code).some((x) => { const { s } = mask(x); return s.trim() !== '@' && isDateCode(s); });
 
 export function readXlsx(bytes) {
   const files = unpack(bytes, 'xl/', 'xl/workbook.xml');
@@ -487,17 +577,46 @@ export function readXlsx(bytes) {
     walk(si);
     sst.push(s);
   }
-  // cell format index -> kind
-  const custom = {};
+
+  // ---- theme colours and styles ----
+  const tc = {};
+  const th = xml(files, 'xl/theme/theme1.xml');
+  const cs = th && descendants(th, 'clrScheme')[0];
+  for (const c of cs ? cs.children : []) { const v = c.firstElementChild; if (v) tc[c.localName] = at(v, 'val') && v.localName === 'srgbClr' ? at(v, 'val') : at(v, 'lastClr'); }
+  const rgbArr = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  const hexOf = (a) => a.map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('').toUpperCase();
+  function colorX(n) {
+    if (!n) return null;
+    let hex = null;
+    const rgb = at(n, 'rgb'); const theme = at(n, 'theme'); const idx = at(n, 'indexed');
+    if (rgb && /^[0-9a-f]{8}$/i.test(rgb)) hex = rgb.slice(2).toUpperCase();
+    else if (theme !== null && tc[THEME_IDX[Number(theme)]]) hex = String(tc[THEME_IDX[Number(theme)]]).toUpperCase();
+    else if (idx !== null && INDEXED[Number(idx)]) hex = INDEXED[Number(idx)];
+    if (!hex || !/^[0-9A-F]{6}$/.test(hex)) return null;
+    const tint = Number(at(n, 'tint') || 0);
+    if (tint) hex = hexOf(rgbArr(hex).map((c) => (tint > 0 ? c * (1 - tint) + 255 * tint : c * (1 + tint))));
+    return hex;
+  }
   const st = xml(files, 'xl/styles.xml');
-  for (const f of kids(kid(st, 'numFmts'), 'numFmt')) custom[at(f, 'numFmtId')] = codeKind(at(f, 'formatCode') || '');
-  const xfKind = kids(kid(st, 'cellXfs'), 'xf').map((xf) => {
+  const custom = {};
+  for (const f of kids(kid(st, 'numFmts'), 'numFmt')) custom[at(f, 'numFmtId')] = at(f, 'formatCode') || '';
+  const fonts = kids(kid(st, 'fonts'), 'font').map((f) => ({
+    name: at(kid(f, 'name'), 'val') || 'Calibri', size: Number(at(kid(f, 'sz'), 'val') || 11), b: !!kid(f, 'b') && flag(kid(f, 'b')), i: !!kid(f, 'i') && flag(kid(f, 'i')),
+    u: !!kid(f, 'u') && at(kid(f, 'u'), 'val') !== 'none', s: !!kid(f, 'strike') && flag(kid(f, 'strike')), color: colorX(kid(f, 'color'))
+  }));
+  const fills = kids(kid(st, 'fills'), 'fill').map((f) => { const p = kid(f, 'patternFill'); return p && at(p, 'patternType') === 'solid' ? colorX(kid(p, 'fgColor')) : null; });
+  const bside = (b) => { const s = at(b, 'style'); return s ? { style: s, color: colorX(kid(b, 'color')) } : null; };
+  const borders = kids(kid(st, 'borders'), 'border').map((b) => ({ l: bside(kid(b, 'left') || kid(b, 'start')), r: bside(kid(b, 'right') || kid(b, 'end')), t: bside(kid(b, 'top')), b: bside(kid(b, 'bottom')) }));
+  const xfs = kids(kid(st, 'cellXfs'), 'xf').map((xf) => {
     const id = Number(at(xf, 'numFmtId') || 0);
-    if (custom[id]) return custom[id];
-    if (BUILTIN_TIME.has(id)) return 'time';
-    if (BUILTIN_DATE.has(id)) return 'date';
-    return BUILTIN_PERCENT.has(id) ? 'percent' : 'plain';
+    const code = custom[id] !== undefined ? custom[id] : BUILTIN_FMT[id] || 'General';
+    const al = kid(xf, 'alignment');
+    return {
+      code, date: isDateKind(code), font: fonts[Number(at(xf, 'fontId') || 0)] || fonts[0], fill: fills[Number(at(xf, 'fillId') || 0)] || null, border: borders[Number(at(xf, 'borderId') || 0)] || null,
+      h: at(al, 'horizontal') || 'general', v: at(al, 'vertical') || 'bottom', wrap: at(al, 'wrapText') === '1' || at(al, 'wrapText') === 'true', indent: Number(at(al, 'indent') || 0)
+    };
   });
+  if (!xfs.length) xfs.push({ code: 'General', date: false, font: fonts[0] || { name: 'Calibri', size: 11 }, fill: null, border: null, h: 'general', v: 'bottom', wrap: false, indent: 0 });
 
   const sheets = [];
   for (const s of kids(kid(wb, 'sheets'), 'sheet')) {
@@ -507,39 +626,65 @@ export function readXlsx(bytes) {
   }
   if (!sheets.length) throw new OfficeError('This workbook has no sheets to show.');
 
+  const colPx = (w) => Math.round(w * 7 + 5);
   function load(i) {
     const root = xml(files, sheets[i].path);
     if (!root) throw new OfficeError('This sheet could not be read.');
-    const rows = []; let ncols = 0; let truncated = false;
+    const fmtPr = kid(root, 'sheetFormatPr');
+    const defCol = colPx(Number(at(fmtPr, 'defaultColWidth') || at(fmtPr, 'baseColWidth') || 8.43));
+    const defRow = Math.round(Number(at(fmtPr, 'defaultRowHeight') || 15) * PX_PT);
+    const colW = {}; // index -> px (0 = hidden)
+    for (const c of kids(kid(root, 'cols'), 'col')) {
+      const w = at(c, 'hidden') === '1' ? 0 : colPx(Number(at(c, 'width') || 8.43));
+      for (let k = Number(at(c, 'min')) - 1; k < Math.min(Number(at(c, 'max')), SHEET_COL_MAX); k++) colW[k] = w;
+    }
+    const rowH = {}; const rows = []; let ncols = 0; let truncated = false; let cellCount = 0;
     let rowNo = 0;
     for (const row of kids(kid(root, 'sheetData'), 'row')) {
       rowNo = Number(at(row, 'r')) || rowNo + 1;
-      if (rowNo > SHEET_ROW_MAX) { truncated = true; break; }
+      if (rowNo > SHEET_ROW_MAX || cellCount > 100000) { truncated = true; break; }
+      if (at(row, 'hidden') === '1') rowH[rowNo - 1] = 0;
+      else if (at(row, 'ht') && at(row, 'customHeight') !== '0') rowH[rowNo - 1] = Math.round(Number(at(row, 'ht')) * PX_PT);
       const cells = []; let colNo = 0;
       for (const c of kids(row, 'c')) {
         const ref = at(c, 'r');
         colNo = ref ? colIndex(ref) : colNo;
         if (colNo >= SHEET_COL_MAX) { truncated = true; colNo++; continue; }
-        const t = at(c, 't');
+        const t = at(c, 't'); const sIdx = Number(at(c, 's') || 0);
+        const x = xfs[sIdx] || xfs[0];
         const v = kid(c, 'v');
-        let text = '';
-        if (t === 'inlineStr') text = descendants(kid(c, 'is') || c, 't').map((x) => x.textContent).join('');
+        let text = ''; let kind = 's';
+        if (t === 'inlineStr') text = descendants(kid(c, 'is') || c, 't').map((y) => y.textContent).join('');
         else if (v) {
           const raw = v.textContent;
           if (t === 's') text = sst[Number(raw)] ?? '';
-          else if (t === 'b') text = raw === '1' ? 'TRUE' : 'FALSE';
-          else if (t === 'str' || t === 'e') text = raw;
-          else text = numberText(raw, xfKind[Number(at(c, 's') || 0)] || 'plain', is1904);
+          else if (t === 'b') { text = raw === '1' ? 'TRUE' : 'FALSE'; kind = 'b'; }
+          else if (t === 'str') text = raw;
+          else if (t === 'e') { text = raw; kind = 'b'; }
+          else { text = formatValue(raw, x.code, is1904); kind = 'n'; }
         }
-        if (text !== '') { cells[colNo] = text; if (colNo + 1 > ncols) ncols = colNo + 1; }
+        if (text !== '' || sIdx) { cells[colNo] = { v: text, s: sIdx, k: kind }; cellCount++; if (text !== '' || x.fill || x.border) { if (colNo + 1 > ncols) ncols = colNo + 1; } }
         colNo++;
       }
       rows[rowNo - 1] = cells;
     }
-    for (let k = 0; k < rows.length; k++) rows[k] = Array.from(rows[k] || [], (x) => x ?? '');
-    return { rows, ncols, truncated };
+    for (let k = 0; k < rows.length; k++) rows[k] = Array.from(rows[k] || []);
+    const merges = [];
+    for (const m of kids(kid(root, 'mergeCells'), 'mergeCell')) {
+      const [a1, b1] = (at(m, 'ref') || '').split(':'); const a = cellRef(a1); const b = cellRef(b1 || a1);
+      if (a && b && b.r < SHEET_ROW_MAX && a.c < SHEET_COL_MAX) merges.push({ r: a.r, c: a.c, rs: b.r - a.r + 1, cs: Math.min(b.c, SHEET_COL_MAX - 1) - a.c + 1 });
+    }
+    const view = kid(kid(root, 'sheetViews'), 'sheetView');
+    const pane = kid(view, 'pane');
+    const frozen = pane && at(pane, 'state') && /frozen/.test(at(pane, 'state'));
+    return {
+      rows, ncols, truncated, colW, defCol, rowH, defRow, merges,
+      freeze: frozen ? { rows: Math.min(Number(at(pane, 'ySplit') || 0), 20), cols: Math.min(Number(at(pane, 'xSplit') || 0), 10) } : { rows: 0, cols: 0 },
+      grid: at(view, 'showGridLines') !== '0' && at(view, 'showGridLines') !== 'false',
+      hasDrawing: !!kid(root, 'drawing')
+    };
   }
-  return { kind: 'xlsx', names: sheets.map((s) => s.name), load };
+  return { kind: 'xlsx', names: sheets.map((s) => s.name), load, xfs };
 }
 
 // ---- pptx ----

@@ -53,7 +53,7 @@ function applyFill(e, hex) {
   return fi;
 }
 function stack(name) {
-  const n = name.replace(/["']/g, '');
+  const n = name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'sans-serif';
   const gen = /times|georgia|cambria|garamond|palatino|book antiqua|minion|century|serif(?!.*sans)/i.test(n) && !/sans/i.test(n) ? 'serif' : /courier|consolas|mono|menlo|lucida console/i.test(n) ? 'monospace' : 'sans-serif';
   const alias = { Calibri: 'Calibri, Carlito, Roboto', Cambria: 'Cambria, Caladea, "Noto Serif"', Arial: 'Arial, Roboto', 'Times New Roman': '"Times New Roman", "Noto Serif"', 'Courier New': '"Courier New", "Droid Sans Mono"' }[n];
   return `${alias || `"${n}"`}, ${gen}`;
@@ -211,46 +211,54 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     parent.appendChild(p);
   }
 }
-function mountDocx(model, host, u, ui, bars) {
-  const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
+// Zoom shared by docx and xlsx: CSS zoom on the content, two-finger pinch around the midpoint, 0.5 to 5 times.
+function setupZoom(scroll, zoomer, fit, ui) {
   let user = 1;
-  const pg = model.page;
-  const fit = () => (prefs.doc === 'page' && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
   const level = () => fit() * user;
-  const apply = () => {
-    const page = prefs.doc === 'page';
-    paper.classList.toggle('eo-pagemode', page); paper.classList.toggle('eo-reflow', !page);
-    paper.style.setProperty('--eo-indk', page ? '1' : '0.5');
-    zoomer.style.width = page ? `${pg.w}px` : '100%';
-    paper.style.padding = page ? `${pg.t}px ${pg.r}px ${pg.b}px ${pg.l}px` : '16px';
-    zoomer.style.zoom = String(level());
-  };
-  const zoomBy = (factor, cx = 0, cy = 0) => {
+  const apply = () => { zoomer.style.zoom = String(level()); };
+  const by = (factor, cx = 0, cy = 0) => {
     const z0 = level(); user = Math.max(0.5, Math.min(5, user * factor)); const z1 = level(); apply();
     if (z0 > 0) { scroll.scrollLeft = (scroll.scrollLeft + cx) * (z1 / z0) - cx; scroll.scrollTop = (scroll.scrollTop + cy) * (z1 / z0) - cy; }
   };
-  bars.extra = (bar) => {
-    const view = segment([['page', 'Page', 'Page view'], ['reflow', 'Reflow', 'Reflow view']], prefs.doc, (v) => { ui.onActivity(); prefs.doc = v; view.sync(v); user = 1; apply(); savePrefs(); });
-    const zin = el('button', 'eo-segbtn eo-zbtn', '+'); const zout = el('button', 'eo-segbtn eo-zbtn', '\u2212');
-    zin.type = zout.type = 'button'; zin.setAttribute('aria-label', 'Zoom in'); zout.setAttribute('aria-label', 'Zoom out');
-    zin.onclick = () => { ui.onActivity(); zoomBy(1.25); }; zout.onclick = () => { ui.onActivity(); zoomBy(0.8); };
-    const z = el('div', 'eo-seg'); z.append(zout, zin);
-    bar.append(view.wrap, z);
-    bars.viewSync = () => view.sync(prefs.doc);
-  };
-  // pinch with two fingers: zoom around the midpoint
   let pinch = null;
   const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   scroll.addEventListener('touchstart', (e) => { if (e.touches.length === 2) pinch = { d: dist(e.touches), last: 1 }; }, { passive: true });
   scroll.addEventListener('touchmove', (e) => {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault(); ui.onActivity();
-    const f = dist(e.touches) / pinch.d; const r = scroll.getBoundingClientRect();
-    zoomBy(f / pinch.last, (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top);
+    const f = dist(e.touches) / pinch.d; const rc = scroll.getBoundingClientRect();
+    by(f / pinch.last, (e.touches[0].clientX + e.touches[1].clientX) / 2 - rc.left, (e.touches[0].clientY + e.touches[1].clientY) / 2 - rc.top);
     pinch.last = f;
   }, { passive: false });
   scroll.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+  return { apply, by, reset() { user = 1; apply(); } };
+}
+function zoomButtons(ui, zoom) {
+  const zin = el('button', 'eo-segbtn eo-zbtn', '+'); const zout = el('button', 'eo-segbtn eo-zbtn', '\u2212');
+  zin.type = zout.type = 'button'; zin.setAttribute('aria-label', 'Zoom in'); zout.setAttribute('aria-label', 'Zoom out');
+  zin.onclick = () => { ui.onActivity(); zoom.by(1.25); }; zout.onclick = () => { ui.onActivity(); zoom.by(0.8); };
+  const z = el('div', 'eo-seg'); z.append(zout, zin);
+  return z;
+}
 
+function mountDocx(model, host, u, ui, bars) {
+  const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
+  const pg = model.page;
+  const fit = () => (prefs.doc === 'page' && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
+  const zoom = setupZoom(scroll, zoomer, fit, ui);
+  const apply = () => {
+    const page = prefs.doc === 'page';
+    paper.classList.toggle('eo-pagemode', page); paper.classList.toggle('eo-reflow', !page);
+    paper.style.setProperty('--eo-indk', page ? '1' : '0.5');
+    zoomer.style.width = page ? `${pg.w}px` : '100%';
+    paper.style.padding = page ? `${pg.t}px ${pg.r}px ${pg.b}px ${pg.l}px` : '16px';
+    zoom.apply();
+  };
+  bars.extra = (bar) => {
+    const view = segment([['page', 'Page', 'Page view'], ['reflow', 'Reflow', 'Reflow view']], prefs.doc, (v) => { ui.onActivity(); prefs.doc = v; view.sync(v); zoom.reset(); apply(); savePrefs(); });
+    bar.append(view.wrap, zoomButtons(ui, zoom));
+    bars.viewSync = () => view.sync(prefs.doc);
+  };
   if (model.truncated) paper.appendChild(el('div', 'ev-banner', `Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`));
   if (model.header.length) { const h = el('div', 'eo-hf'); docxBlocks(model.header, h, model.media, u); paper.appendChild(h); }
   docxBlocks(model.blocks, paper, model.media, u);
@@ -268,10 +276,39 @@ function mountDocx(model, host, u, ui, bars) {
   return { destroy() { if (ro) ro.disconnect(); } };
 }
 
-// ---- xlsx: a tab per sheet, a grid with column letters and row numbers ----
-function mountXlsx(model, host, ui) {
-  const tabs = el('div', 'eo-tabs'); const grid = el('div', 'eo-grid');
-  host.append(tabs, grid);
+// ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
+const HEAD_H = 24; const ROWNO_W = 44;
+const BORDER_W = { hair: 1, thin: 1, dotted: 1, dashed: 1, medium: 2, mediumDashed: 2, thick: 3, double: 3 };
+function cellCss(x, n) {
+  const f = x.font; const L = []; const D = [];
+  L.push(`font-family:${stack(f.name)}`, `font-size:${(f.size * 4 / 3).toFixed(2)}px`);
+  if (f.b) L.push('font-weight:700'); if (f.i) L.push('font-style:italic');
+  const deco = [f.u ? 'underline' : '', f.s ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) L.push(`text-decoration:${deco}`);
+  const kept = !!x.fill && !nearWhite(x.fill);
+  if (x.fill) { L.push(`background:#${x.fill}`); D.push(`background:${kept ? `#${x.fill}` : 'transparent'}`); }
+  if (f.color) { L.push(`color:#${f.color}`); D.push(`color:#${kept ? f.color : adaptText(f.color)}`); }
+  else if (x.fill) { const ink = lum(x.fill) > 0.5 ? '111111' : 'FFFFFF'; L.push(`color:#${ink}`); D.push(`color:${kept ? `#${ink}` : '#E8E6F2'}`); }
+  if (x.border) {
+    for (const [k, Side] of [['t', 'top'], ['b', 'bottom'], ['l', 'left'], ['r', 'right']]) {
+      const s = x.border[k]; if (!s) continue;
+      const dashed = /dash/i.test(s.style) ? 'dashed' : /dot/i.test(s.style) ? 'dotted' : s.style === 'double' ? 'double' : 'solid';
+      L.push(`border-${Side}:${BORDER_W[s.style] || 1}px ${dashed} #${s.color || '000000'}`);
+      D.push(`border-${Side}-color:#${s.color ? adaptText(s.color) : 'E8E6F2'}`);
+    }
+  }
+  if (x.h === 'left' || x.h === 'center' || x.h === 'right') L.push(`text-align:${x.h}`); else if (x.h === 'justify') L.push('text-align:justify');
+  if (x.v === 'top') L.push('vertical-align:top'); else if (x.v === 'center') L.push('vertical-align:middle');
+  if (x.wrap) L.push('white-space:pre-wrap', 'word-break:break-word');
+  if (x.indent && (x.h === 'left' || x.h === 'general')) L.push(`padding-left:${x.indent * 9 + 3}px`);
+  return `.xs${n}{${L.join(';')}}${D.length ? `.eo-host[data-theme="dark"] .xs${n}{${D.join(';')}}` : ''}`;
+}
+function mountXlsx(model, host, ui, bars) {
+  const tabs = el('div', 'eo-tabs'); const grid = el('div', 'eo-grid'); const zoomer = el('div', 'eo-xzoom');
+  const css = el('style');
+  grid.appendChild(zoomer);
+  host.append(tabs, grid, css);
+  const zoom = setupZoom(grid, zoomer, () => 1, ui);
+  bars.extra = (bar) => bar.appendChild(zoomButtons(ui, zoom));
   const buttons = model.names.map((name, i) => {
     const b = el('button', 'eo-tab', name); b.type = 'button';
     b.onclick = () => { ui.onActivity(); show(i); };
@@ -280,26 +317,70 @@ function mountXlsx(model, host, ui) {
   });
   function show(i) {
     buttons.forEach((b, k) => b.classList.toggle('active', k === i));
-    grid.replaceChildren();
+    zoomer.replaceChildren(); css.textContent = ''; grid.scrollTop = 0; grid.scrollLeft = 0;
     let s;
-    try { s = model.load(i); } catch (e) { grid.appendChild(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This sheet could not be read.')); return; }
-    if (!s.rows.length) { grid.appendChild(el('p', 'ev-media-msg', 'This sheet is empty.')); return; }
-    if (s.truncated) grid.appendChild(el('div', 'ev-banner', `Showing the first ${SHEET_ROW_MAX.toLocaleString()} rows and ${SHEET_COL_MAX} columns. Use Open with app for the rest.`));
-    const wrap = el('div', 'eo-tablewrap eo-sheet'); const t = el('table', 'eo-table eo-cells');
+    try { s = model.load(i); } catch (e) { zoomer.appendChild(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This sheet could not be read.')); return; }
+    if (!s.ncols && !s.rows.some((r) => r.length)) { zoomer.appendChild(el('p', 'ev-media-msg', 'This sheet is empty.')); return; }
+    const notes = [];
+    if (s.truncated) notes.push(`Showing the first ${SHEET_ROW_MAX.toLocaleString()} rows and ${SHEET_COL_MAX} columns. Use Open with app for the rest.`);
+    if (s.hasDrawing) notes.push('Charts and pictures in this sheet are not shown.');
+    for (const n of notes) zoomer.appendChild(el('div', 'ev-banner', n));
+    // styles used by this sheet
+    const used = new Set();
+    for (const row of s.rows) for (const c of row) if (c && c.s) used.add(c.s);
+    css.textContent = [...used].map((n) => cellCss(model.xfs[n] || model.xfs[0], n)).join('\n');
+    const nrows = s.rows.length;
+    const width = (c) => (s.colW[c] !== undefined ? s.colW[c] : s.defCol);
+    const height = (r) => (s.rowH[r] !== undefined ? s.rowH[r] : s.defRow);
+    const merge = new Map(); const skip = new Set();
+    for (const m of s.merges) { merge.set(`${m.r},${m.c}`, m); for (let r = m.r; r < m.r + m.rs; r++) for (let c = m.c; c < m.c + m.cs; c++) if (r !== m.r || c !== m.c) skip.add(`${r},${c}`); }
+    const topOf = []; let acc = HEAD_H; for (let r = 0; r < Math.min(s.freeze.rows, nrows); r++) { topOf[r] = acc; acc += height(r); }
+    const leftOf = []; acc = ROWNO_W; for (let c = 0; c < s.freeze.cols; c++) { leftOf[c] = acc; acc += width(c); }
+    const wrap = el('div', 'eo-sheet'); const t = el('table', `eo-cells${s.grid ? '' : ' eo-nogrid'}`);
+    let total = ROWNO_W; for (let c = 0; c < s.ncols; c++) total += width(c);
+    t.style.width = `${total}px`;
+    const cg = el('colgroup'); const c0 = el('col'); c0.style.width = `${ROWNO_W}px`; cg.appendChild(c0);
+    for (let c = 0; c < s.ncols; c++) { const col = el('col'); if (width(c) === 0) col.style.visibility = 'collapse'; else col.style.width = `${width(c)}px`; cg.appendChild(col); }
+    t.appendChild(cg);
     const head = el('tr'); head.appendChild(el('th', 'eo-corner'));
-    for (let c = 0; c < s.ncols; c++) head.appendChild(el('th', 'eo-col', colName(c)));
-    const th = el('thead'); th.appendChild(head); t.appendChild(th);
+    for (let c = 0; c < s.ncols; c++) { const th = el('th', 'eo-col', colName(c)); if (c < s.freeze.cols && s.freeze.cols) { th.style.left = `${leftOf[c]}px`; th.style.zIndex = '4'; } head.appendChild(th); }
+    const thead = el('thead'); thead.appendChild(head); t.appendChild(thead);
     const tb = el('tbody');
-    s.rows.forEach((row, r) => {
-      const tr = el('tr'); tr.appendChild(el('th', 'eo-row', String(r + 1)));
+    for (let r = 0; r < nrows; r++) {
+      const tr = el('tr');
+      if (height(r) === 0) { tr.style.display = 'none'; tb.appendChild(tr); continue; }
+      tr.style.height = `${height(r)}px`;
+      const rn = el('th', 'eo-row', String(r + 1));
+      if (r < s.freeze.rows) { rn.style.top = `${topOf[r]}px`; rn.style.zIndex = '4'; }
+      tr.appendChild(rn);
+      const row = s.rows[r] || [];
       for (let c = 0; c < s.ncols; c++) {
-        const v = row[c] || '';
-        const td = el('td', /^-?\d+(\.\d+)?%?$/.test(v) ? 'eo-num' : '', v);
+        if (skip.has(`${r},${c}`)) continue;
+        const cell = row[c];
+        const x = cell ? model.xfs[cell.s] || model.xfs[0] : null;
+        const td = el('td', cell && cell.s ? `xs${cell.s}` : '');
+        if (cell && cell.v !== '') td.textContent = cell.v;
+        if (cell && cell.k === 'n' && x.h === 'general') td.classList.add('eo-r'); else if (cell && cell.k === 'b' && x.h === 'general') td.classList.add('eo-ctr');
+        const m = merge.get(`${r},${c}`);
+        let cs = 1;
+        if (m) { if (m.cs > 1) td.colSpan = m.cs; if (m.rs > 1) td.rowSpan = m.rs; cs = m.cs; }
+        else if (cell && cell.k === 's' && cell.v !== '' && x && !x.wrap && (x.h === 'general' || x.h === 'left')) {
+          // text runs on over the empty cells to its right, as in a spreadsheet
+          const need = cell.v.length * x.font.size * 0.6 * 4 / 3; let have = width(c);
+          while (have < need && c + cs < s.ncols && width(c + cs) > 0) {
+            const nx = row[c + cs];
+            if (skip.has(`${r},${c + cs}`) || merge.has(`${r},${c + cs}`) || (nx && (nx.v !== '' || model.xfs[nx.s].fill || model.xfs[nx.s].border))) break;
+            have += width(c + cs); skip.add(`${r},${c + cs}`); cs++;
+          }
+          if (cs > 1) td.colSpan = cs;
+        }
+        const fr = r < s.freeze.rows; const fc = c < s.freeze.cols;
+        if (fr || fc) { td.classList.add('eo-frz'); if (fr) td.style.top = `${topOf[r]}px`; if (fc) td.style.left = `${leftOf[c]}px`; td.style.zIndex = fr && fc ? '3' : '2'; }
         tr.appendChild(td);
       }
       tb.appendChild(tr);
-    });
-    t.appendChild(tb); wrap.appendChild(t); grid.appendChild(wrap);
+    }
+    t.appendChild(tb); wrap.appendChild(t); zoomer.appendChild(wrap);
   }
   show(0);
   return {};
@@ -360,9 +441,14 @@ export function mountOffice(kind, bytes, host, ctx) {
     bars.bar = buildBar(host, ui, tmp.extra);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
+  } else if (kind === 'xlsx') {
+    const holder = el('div'); const tmp = { extra: null };
+    inner = mountXlsx(model, holder, ui, tmp);
+    bars.bar = buildBar(host, ui, tmp.extra);
+    while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     bars.bar = buildBar(host, ui, null);
-    inner = kind === 'xlsx' ? mountXlsx(model, host, ui) : mountPptx(model, host, ui, setCount, u);
+    inner = mountPptx(model, host, ui, setCount, u);
   }
   return { destroy() { if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }
