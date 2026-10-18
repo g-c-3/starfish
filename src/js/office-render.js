@@ -52,11 +52,39 @@ function applyFill(e, hex) {
   cv(e, 'c', dark, fi.kept ? dark : 'E8E6F2');
   return fi;
 }
+// ---- fonts: bundled stand-ins (Decisions 231, 232), a similar bundled font for any other name, and a notice for missing ones ----
+const BUNDLED = new Set(['Anton', 'Aptos', 'Arial', 'Caladea', 'Calibri', 'Calibri Light', 'Cambria', 'Candara', 'Century Gothic', 'Comic Neue', 'Comic Sans MS', 'Consolas', 'Corbel', 'Courier New', 'Cousine', 'Gelasio', 'Georgia', 'Gotham', 'Helvetica', 'Helvetica Neue', 'Impact', 'Lato', 'Lucida Console', 'Montserrat', 'Open Sans', 'Poppins', 'Roboto', 'Segoe UI', 'Tahoma', 'Times', 'Times New Roman', 'Trebuchet MS', 'Verdana']);
+const SERIF = /times|georgia|cambria|garamond|palatino|book antiqua|bookman|baskerville|minion|century schoolbook|constantia|didot|serif/i;
+const MONO = /courier|consolas|mono|menlo|lucida console|andale|typewriter/i;
+let usedFonts = new Set();
+let embeddedNames = new Set();
 function stack(name) {
   const n = name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'sans-serif';
-  const gen = /times|georgia|cambria|garamond|palatino|book antiqua|minion|century|serif(?!.*sans)/i.test(n) && !/sans/i.test(n) ? 'serif' : /courier|consolas|mono|menlo|lucida console/i.test(n) ? 'monospace' : 'sans-serif';
-  const alias = { Calibri: 'Calibri, Carlito, Roboto', Cambria: 'Cambria, Caladea, "Noto Serif"', Arial: 'Arial, Roboto', 'Times New Roman': '"Times New Roman", "Noto Serif"', 'Courier New': '"Courier New", "Droid Sans Mono"' }[n];
-  return `${alias || `"${n}"`}, ${gen}`;
+  usedFonts.add(n);
+  if (BUNDLED.has(n)) {
+    const gen = SERIF.test(n) && !/sans/i.test(n) ? 'serif' : MONO.test(n) ? 'monospace' : 'sans-serif';
+    return `"${n}", ${gen}`;
+  }
+  if (SERIF.test(n) && !/sans/i.test(n)) return `"${n}", "Times New Roman", serif`;
+  if (MONO.test(n)) return `"${n}", "Courier New", monospace`;
+  return `"${n}", "Open Sans", sans-serif`;
+}
+// Whether the phone itself has a font: a name that changes the width of a test string against plain fallbacks is present.
+function phoneHasFont(name) {
+  try {
+    const c = document.createElement('canvas').getContext('2d');
+    if (!c) return true;
+    const t = 'mmmmmmmmmmlliWW@';
+    const w = (f) => { c.font = `72px ${f}`; return c.measureText(t).width; };
+    return ['monospace', 'serif', 'sans-serif'].some((g) => w(`"${name}",${g}`) !== w(g));
+  } catch { return true; }
+}
+function fontNotice(host) {
+  const missing = [...usedFonts].filter((n) => !BUNDLED.has(n) && !embeddedNames.has(n) && !/^(sans-serif|serif|monospace)$/.test(n) && !phoneHasFont(n));
+  if (!missing.length) return;
+  const note = el('div', 'eo-fontnote', `Fonts not on this phone, shown in a similar one: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}.`);
+  const bar = host.querySelector('.eo-bar');
+  if (bar) bar.after(note); else host.prepend(note);
 }
 
 // ---- viewer settings: one theme for the three viewers, kept on this phone (Decision 227) ----
@@ -571,10 +599,21 @@ export function mountOffice(kind, bytes, host, ctx) {
   const { ui, setCount = () => {} } = ctx;
   const u = urls();
   host.classList.add('ev-office');
+  usedFonts = new Set(); embeddedNames = new Set();
+  const faces = [];
   const bars = {};
   let inner = {};
   const model = kind === 'docx' ? readDocx(bytes) : kind === 'xlsx' ? readXlsx(bytes) : kind === 'pptx' ? readPptx(bytes) : null;
   if (!model) throw new OfficeError('This type is not supported here.');
+  if (kind === 'docx' && model.embedded.length && typeof FontFace !== 'undefined') {
+    for (const f of model.embedded) {
+      try {
+        const face = new FontFace(f.name, f.bytes, { weight: f.b ? '700' : '400', style: f.i ? 'italic' : 'normal' });
+        face.load().then(() => document.fonts.add(face)).catch(() => {});
+        faces.push(face); embeddedNames.add(f.name);
+      } catch { /* a font that cannot be read is skipped */ }
+    }
+  }
   if (kind === 'docx') {
     // the toolbar comes first; the docx mount fills in its view and zoom controls through bars.extra
     const holder = el('div'); const tmp = { extra: null };
@@ -593,5 +632,6 @@ export function mountOffice(kind, bytes, host, ctx) {
     bars.bar = buildBar(host, ui, tmp.extra);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
-  return { destroy() { if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
+  fontNotice(host);
+  return { destroy() { for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }

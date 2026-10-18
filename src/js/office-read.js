@@ -23,7 +23,7 @@ function unpack(bytes, rootDir, mainPart) {
       filter: (f) => {
         if (!f.name.startsWith(rootDir)) return false;
         const ext = f.name.slice(f.name.lastIndexOf('.') + 1).toLowerCase();
-        if (ext !== 'xml' && ext !== 'rels' && !IMG_MIME[ext]) return false;
+        if (ext !== 'xml' && ext !== 'rels' && ext !== 'odttf' && !IMG_MIME[ext]) return false;
         if (f.originalSize > PART_MAX) return false;
         total += f.originalSize;
         return total <= TOTAL_MAX;
@@ -435,7 +435,26 @@ export function readDocx(bytes) {
       if (f) footnotes.push({ n: fnNo[id], blocks: blocksOf(f, 0) });
     }
   }
-  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes };
+  // fonts the author embedded in the file: obfuscated by XOR of the first 32 bytes with the font's key
+  const embedded = [];
+  const ft = xml(files, 'word/fontTable.xml');
+  if (ft) {
+    const frel = rels(files, 'word/fontTable.xml');
+    for (const f of kids(ft, 'font')) {
+      for (const [tag, b, i] of [['embedRegular', false, false], ['embedBold', true, false], ['embedItalic', false, true], ['embedBoldItalic', true, true]]) {
+        const e = kid(f, tag);
+        const part = e && frel[rat(e, 'id')];
+        const data = part && files[part.path];
+        const key = (at(e, 'fontKey') || '').replace(/[{}-]/g, '');
+        if (!data || key.length !== 32) continue;
+        const out = new Uint8Array(data);
+        const kb = Array.from({ length: 16 }, (_, k) => parseInt(key.slice(k * 2, k * 2 + 2), 16));
+        for (let k = 0; k < 32 && k < out.length; k++) out[k] ^= kb[15 - (k % 16)];
+        embedded.push({ name: at(f, 'name'), b, i, bytes: out });
+      }
+    }
+  }
+  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded };
 }
 
 // ---- xlsx ----
