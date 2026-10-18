@@ -895,3 +895,34 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* the Back bar floats over every overlay */
 #explorer-viewer .pdf-zoom, #explorer-viewer .pdf-tools { bottom: 20px; }
 
+/* Office viewers (Decision 226): docx page, xlsx grid, pptx slides; view only */
+.eo-host { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; color: var(--fg); }
+.eo-page { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); line-height: 1.5; font-size: 15px; overflow-wrap: anywhere; }
+.eo-p { margin: 0 0 8px; }
+.eo-h { margin: 14px 0 8px; line-height: 1.25; }
+.eo-li { position: relative; padding-left: 22px; }
+.eo-mark { position: absolute; left: 0; color: var(--muted); }
+.eo-slide .eo-li, .eo-slide .eo-p .eo-mark { position: static; margin-right: 8px; }
+.eo-img { display: block; max-width: 100%; height: auto; margin: 8px 0; border-radius: 6px; }
+.eo-tablewrap { max-width: 100%; overflow-x: auto; margin: 8px 0; }
+.eo-table { border-collapse: collapse; font-size: 14px; }
+.eo-table td, .eo-table th { border: 1px solid var(--border-strong); padding: 5px 8px; vertical-align: top; }
+.eo-tabs { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.eo-tab { flex: none; width: auto; margin: 0; padding: 6px 14px; border-radius: 999px; font-size: 13.5px; background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); box-shadow: none; }
+.eo-tab.active { background: var(--brand); color: var(--brand-fg); border-color: transparent; }
+.eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.eo-sheet { margin: 0; }
+.eo-cells { font-size: 13px; white-space: pre; }
+.eo-cells th { background: var(--surface-2); color: var(--muted); font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 1; }
+.eo-cells th.eo-row { position: sticky; left: 0; top: auto; z-index: 1; }
+.eo-cells th.eo-corner { left: 0; z-index: 2; }
+.eo-cells td.eo-num { text-align: right; }
+.eo-slide-stage { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 8px; }
+.eo-slide { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.eo-slide-title { margin: 0 0 12px; font-size: 20px; line-height: 1.25; }
+.eo-note { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
+.eo-notes { margin: 12px 2px 0; font-size: 13.5px; color: var(--muted); white-space: pre-wrap; }
+.eo-notes-h { font-weight: 650; margin-bottom: 4px; }
+.eo-slidebar { flex: none; display: flex; gap: 10px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface-2); }
+.eo-nav { flex: 1; margin: 0; padding: 10px; border-radius: 12px; font-size: 15px; }
+.eo-nav:disabled { opacity: 0.45; }
