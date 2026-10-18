@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 138**
+
+Owner report after DP93: charts and diagrams do not load in slides; slide title colour differs from the original; request: charts in Word and Excel too, slide centred, First / Previous / Play-Pause / Next / Last buttons with blur while playing, landscape the same.
+- `src/js/office-chart.js` (new): chart model to SVG, all common types and combinations.
+- `src/js/office-read.js`: `readChart`; Word chart runs; Excel chart and picture anchors; slide charts; diagram drawings; colour-map override; style font colour precedence; geometry from layout and master placeholders; diagram text rectangles.
+- `src/js/office-render.js`: chart drawing in Word, Excel and slides; slide viewer rebuilt around five buttons, centring, fit by width and height, Play with blur.
+- `src/css/style.css`: centring, buttons, play layer, chart boxes, landscape rules.
+- Decision 233. Checks: 36 on generated files, charts rendered and inspected, `vite build` passes. Not run through CI or on a device (DP96).
+- Open: the title colour cause is unconfirmed without the owner's file.
+- Next: DP96 on device; then E3d (Word pages and shapes, a decision first).
+
+---
+
 **Session 137**
 
 Owner report after DP93: the slides lost formatting for missing fonts; Word pages showed no true page breaks, and shapes were missing. Request: do everything with the best version. Context was filling, so the fonts part was built and the Word pages and shapes part is planned for the next session (E3d).
