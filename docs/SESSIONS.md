@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 131**
+
+Start: docs read; DP87 to DP89 are device checks. Next approved item, Phase 22 E3, office viewers (Decisions 207, 226). Source read: `explorer-view.js`, `explorer.js`, `style.css`, `package.json`, the workflow.
+- `src/js/office-read.js` (new): readers for docx, xlsx, pptx over `fflate`; limits; error messages.
+- `src/js/office-render.js` (new): drawing with text nodes only; xlsx tabs and grid; pptx Previous and Next; object URL cleanup.
+- `src/js/explorer-view.js`: `docx`, `xlsx`, `pptx` added to the viewer kinds; `showOffice` (read whole, 50 MB limit, loaded on use).
+- `src/css/style.css`: office viewer styles.
+- `package.json`: `fflate` 0.8.2.
+- Docs: ROADMAP (E3, DP90), DECISIONS (226), ARCHITECTURE, TRACK.
+- Bug found and fixed while testing: list items from a list style (not set on the paragraph) showed no marker; fixed by reading the numbering from the style. Slide and sheet links were read from the wrong `id` attribute (the slide list has two); fixed by matching the relationships namespace.
+
+Decisions made: 226.
+
+Verified: 38 reader and drawing checks on generated files; 14 viewer checks; `vite build` passes (office chunk about 21 kB). Not verified: CI, any device (DP87, DP88, DP89, DP90), files made by other programs.
+
+Open: DP87 to DP90 on device; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP87 to DP90 confirmation, then an item you choose; Phase 22 has no stage after E3.
+
 **Session 130**
 
 Owner request after using the picker: when names clash, offer Replace, Skip or Rename per file with existing and new sizes, a list with the same three at the top for all, each item leaving the list when done (Decision 225). Source read: `explorer.js`, `explorer-ops.js`, `ArklyFileOpsBridge.java`.
