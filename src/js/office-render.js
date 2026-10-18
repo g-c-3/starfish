@@ -1,7 +1,8 @@
-// office-render.js — draws what office-read.js returns into the explorer viewer (Decisions 226, 227). Every string from a file
+// office-render.js — draws what office-read.js returns into the explorer viewer (Decisions 226, 227, 233). Every string from a file
 // is set with textContent; no markup from a file is ever parsed. Pictures become object URLs, revoked on destroy.
 
 import { Preferences } from '@capacitor/preferences';
+import { chartSvg } from './office-chart.js';
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -137,6 +138,11 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
     if (r.pb) { parent.appendChild(el('span', 'eo-pb')); continue; }
+    if (r.chart) {
+      const w = el('span', 'eo-chartwrap'); w.style.width = `${r.w}px`; cv(w, 'c', '404040', 'E8E6F2');
+      w.appendChild(chartSvg(r.chart, r.w, r.h)); parent.appendChild(w);
+      continue;
+    }
     if (r.img) {
       const src = u.get(r.img, media);
       if (src) { const im = el('img', 'eo-img'); im.alt = ''; im.src = src; if (r.w) im.style.width = `${r.w}px`; parent.appendChild(im); }
@@ -330,7 +336,7 @@ function cellCss(x, n) {
   if (x.indent && (x.h === 'left' || x.h === 'general')) L.push(`padding-left:${x.indent * 9 + 3}px`);
   return `.xs${n}{${L.join(';')}}${D.length ? `.eo-host[data-theme="dark"] .xs${n}{${D.join(';')}}` : ''}`;
 }
-function mountXlsx(model, host, ui, bars) {
+function mountXlsx(model, host, ui, bars, u) {
   const tabs = el('div', 'eo-tabs'); const grid = el('div', 'eo-grid'); const zoomer = el('div', 'eo-xzoom');
   const css = el('style'); const cellbar = el('div', 'eo-cellbar'); cellbar.hidden = true;
   const cbRef = el('span', 'eo-cbref'); const cbText = el('div', 'eo-cbtext'); cellbar.append(cbRef, cbText);
@@ -363,7 +369,7 @@ function mountXlsx(model, host, ui, bars) {
     if (!s.ncols && !s.rows.some((r) => r.length)) { zoomer.appendChild(el('p', 'ev-media-msg', 'This sheet is empty.')); return; }
     const notes = [];
     if (s.truncated) notes.push(`Showing the first ${SHEET_ROW_MAX.toLocaleString()} rows and ${SHEET_COL_MAX} columns. Use Open with app for the rest.`);
-    if (s.hasDrawing) notes.push('Charts and pictures in this sheet are not shown.');
+    if (s.hasDrawing) notes.push('Shapes and other drawings in this sheet are not shown.');
     for (const n of notes) zoomer.appendChild(el('div', 'ev-banner', n));
     // styles used by this sheet
     const used = new Set();
@@ -431,13 +437,32 @@ function mountXlsx(model, host, ui, bars) {
       }
       tb.appendChild(tr);
     }
-    t.appendChild(tb); wrap.appendChild(t); zoomer.appendChild(wrap);
+    t.appendChild(tb);
+    // charts and pictures sit over the cells they were placed on, behind the frozen headers
+    if (s.objects && s.objects.length) {
+      const ov = el('div', 'eo-xobjs');
+      const colLeft = (c) => { let x = ROWNO_W; for (let k = 0; k < c; k++) x += width(k); return x; };
+      const rowTop = (r) => { let y = HEAD_H; for (let k = 0; k < r; k++) y += height(k); return y; };
+      for (const o of s.objects) {
+        let x; let y; let w = 0; let h = 0;
+        if (o.from) { x = colLeft(o.from.col) + o.from.colOff; y = rowTop(o.from.row) + o.from.rowOff; } else { x = ROWNO_W + o.abs.x; y = HEAD_H + o.abs.y; }
+        if (o.to) { w = colLeft(o.to.col) + o.to.colOff - x; h = rowTop(o.to.row) + o.to.rowOff - y; } else if (o.ext) { w = o.ext.w; h = o.ext.h; }
+        if (!(w > 8 && h > 8)) continue;
+        const box = el('div', `eo-xobj${o.t === 'chart' ? ' eo-xchart' : ''}`);
+        box.style.left = `${x}px`; box.style.top = `${y}px`; box.style.width = `${w}px`; box.style.height = `${h}px`;
+        if (o.t === 'chart') { cv(box, 'c', '404040', 'E8E6F2'); box.appendChild(chartSvg(o.model, w, h)); }
+        else { const src = u.get(o.path, s.media); if (!src) continue; const im = el('img'); im.alt = ''; im.src = src; box.appendChild(im); }
+        ov.appendChild(box);
+      }
+      wrap.appendChild(ov);
+    }
+    wrap.appendChild(t); zoomer.appendChild(wrap);
   }
   show(0);
   return {};
 }
 
-// ---- pptx: a slide on a canvas at the size set in the file, scaled to fit; Previous, Next, swipe, zoom ----
+// ---- pptx: a slide on a canvas at the size set in the file, scaled to fit and centred; First, Previous, Play/Pause, Next, Last, swipe, zoom ----
 const css = (c) => (c.a < 1 ? `rgba(${parseInt(c.hex.slice(0, 2), 16)},${parseInt(c.hex.slice(2, 4), 16)},${parseInt(c.hex.slice(4, 6), 16)},${c.a})` : `#${c.hex}`);
 function fillCss(f) {
   if (!f) return '';
@@ -482,6 +507,7 @@ function paragraphs(body, parent, u, scale) {
 }
 function slideDom(s, u) {
   const cv = el('div', 'eo-canvas');
+  const ink = s.bg && s.bg.hex && lum(s.bg.hex) < 0.35 ? '#F2F2F2' : '#404040'; // chart text against this slide's background
   cv.style.width = `${s.w}px`; cv.style.height = `${s.h}px`;
   if (s.bg && s.bg.img) { const url = u.get(s.bg.img, s.media); if (url) { cv.style.backgroundImage = `url(${url})`; cv.style.backgroundSize = '100% 100%'; } }
   else if (s.bg) cv.style.background = fillCss(s.bg);
@@ -521,6 +547,9 @@ function slideDom(s, u) {
         tb.appendChild(tr);
       }
       t.appendChild(tb); n.appendChild(t);
+    } else if (it.t === 'chart') {
+      st.background = 'rgba(255,255,255,0)';
+      n.appendChild(chartSvg(it.chart, it.w, it.h, ink));
     } else if (it.t === 'note') {
       st.border = '1px dashed #888'; st.display = 'flex'; st.alignItems = 'center'; st.justifyContent = 'center'; st.color = '#666'; st.fontSize = '16px'; st.background = 'rgba(128,128,128,.08)';
       n.textContent = it.text;
@@ -555,21 +584,44 @@ function slideDom(s, u) {
   }
   return cv;
 }
-function mountPptx(model, host, ui, count, u, bars) {
+const ICONS = {
+  first: 'M6 5h2.4v14H6zM19 5v14L9 12z', prev: 'M17 5v14L7 12z', play: 'M8 5v14l11-7z', pause: 'M6.5 5h4v14h-4zM13.5 5h4v14h-4z',
+  next: 'M7 5v14l10-7z', last: 'M15.6 5H18v14h-2.4zM5 5v14l10-7z'
+};
+function icon(kind) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const sv = document.createElementNS(ns, 'svg'); sv.setAttribute('viewBox', '0 0 24 24'); sv.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path'); path.setAttribute('d', ICONS[kind]); path.setAttribute('fill', 'currentColor');
+  sv.appendChild(path);
+  return sv;
+}
+const PLAY_MS = 5000; // time each slide stays up while playing
+
+// root is the viewer host (the part of the page that goes full screen while playing)
+function mountPptx(model, host, ui, count, u, bars, root) {
   const scroll = el('div', 'eo-scroll eo-pscroll'); const zoomer = el('div', 'eo-zoomer'); const stage = el('div'); const notes = el('div', 'eo-notes-wrap');
-  const bar = el('div', 'eo-slidebar'); const prev = el('button', 'eo-nav', 'Previous'); const next = el('button', 'eo-nav', 'Next');
-  prev.type = next.type = 'button'; bar.append(prev, next);
-  zoomer.appendChild(stage); scroll.append(zoomer, notes); host.append(scroll, bar);
-  const sw = model.size.w;
-  const fit = () => (scroll.clientWidth ? Math.max(0.1, (scroll.clientWidth - 16) / sw) : 1);
+  const veil = el('div', 'eo-veil');
+  const bar = el('div', 'eo-slidebar');
+  const mk = (label, kind) => { const b = el('button', 'eo-nav eo-navi'); b.type = 'button'; b.setAttribute('aria-label', label); b.appendChild(icon(kind)); return b; };
+  const first = mk('First slide', 'first'); const prev = mk('Previous slide', 'prev'); const play = mk('Play', 'play'); const next = mk('Next slide', 'next'); const last = mk('Last slide', 'last');
+  bar.append(first, prev, play, next, last);
+  zoomer.appendChild(stage); scroll.append(zoomer, notes); host.append(veil, scroll, bar);
+  const sw = model.size.w; const sh = model.size.h;
+  // the whole slide fits the area, in portrait and in landscape
+  const fit = () => {
+    const cw = scroll.clientWidth - 16; const ch = scroll.clientHeight - 24;
+    if (!(cw > 0)) return 1;
+    const byW = cw / sw;
+    return Math.max(0.1, ch > 0 ? Math.min(byW, ch / sh) : byW);
+  };
   const zoom = setupZoom(scroll, zoomer, fit, ui);
   zoomer.style.width = `${sw}px`;
   bars.extra = (b) => b.appendChild(zoomButtons(ui, zoom));
-  let index = 0;
+  let index = 0; let playing = false; let timer = null;
   function show(i) {
     index = i;
     count(`${i + 1}/${model.count}`);
-    prev.disabled = i === 0; next.disabled = i === model.count - 1;
+    first.disabled = prev.disabled = i === 0; next.disabled = last.disabled = i === model.count - 1;
     stage.replaceChildren(); notes.replaceChildren(); u.revoke();
     zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
     let s;
@@ -577,20 +629,32 @@ function mountPptx(model, host, ui, count, u, bars) {
     stage.appendChild(slideDom(s, u));
     if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); notes.appendChild(n); }
   }
-  prev.onclick = () => { ui.onActivity(); if (index > 0) show(index - 1); };
-  next.onclick = () => { ui.onActivity(); if (index < model.count - 1) show(index + 1); };
+  // Play: each slide stays PLAY_MS, then the next; stops on the last. Playing blurs the rest of the page (see .eo-playing).
+  // The timer is not user activity, so the auto-lock still applies.
+  const arm = () => { if (timer) clearInterval(timer); timer = setInterval(() => { if (index < model.count - 1) show(index + 1); else setPlaying(false); }, PLAY_MS); };
+  function setPlaying(on) {
+    playing = on;
+    if (timer) { clearInterval(timer); timer = null; }
+    root.classList.toggle('eo-playing', on);
+    play.replaceChildren(icon(on ? 'pause' : 'play')); play.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    if (on) arm();
+    zoom.reset();
+  }
+  const go = (i) => { if (i < 0 || i >= model.count || i === index) return; ui.onActivity(); show(i); if (playing) arm(); };
+  first.onclick = () => go(0); prev.onclick = () => go(index - 1); next.onclick = () => go(index + 1); last.onclick = () => go(model.count - 1);
+  play.onclick = () => { ui.onActivity(); if (!playing && index === model.count - 1) show(0); setPlaying(!playing); };
   // swipe sideways to change slide, only while not zoomed in
   let t0 = null;
   scroll.addEventListener('touchstart', (e) => { t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
   scroll.addEventListener('touchend', (e) => {
     if (!t0 || !e.changedTouches.length || zoom.user() > 1.05) { t0 = null; return; }
     const dx = e.changedTouches[0].clientX - t0.x; const dy = e.changedTouches[0].clientY - t0.y; t0 = null;
-    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) { ui.onActivity(); if (dx < 0 && index < model.count - 1) show(index + 1); else if (dx > 0 && index > 0) show(index - 1); }
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) go(dx < 0 ? index + 1 : index - 1);
   }, { passive: true });
   show(0);
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
-  return { destroy() { if (ro) ro.disconnect(); } };
+  return { destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -623,12 +687,12 @@ export function mountOffice(kind, bytes, host, ctx) {
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {
     const holder = el('div'); const tmp = { extra: null };
-    inner = mountXlsx(model, holder, ui, tmp);
+    inner = mountXlsx(model, holder, ui, tmp, u);
     bars.bar = buildBar(host, ui, tmp.extra);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };
-    inner = mountPptx(model, holder, ui, setCount, u, tmp);
+    inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
     bars.bar = buildBar(host, ui, tmp.extra);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }

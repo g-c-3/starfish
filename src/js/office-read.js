@@ -320,6 +320,15 @@ export function readDocx(bytes) {
             if (id) out.push({ ...props, text: String(fnNo[id]), sup: true });
           } else if (kn === 'drawing' || kn === 'pict') {
             flush();
+            const chEl = kn === 'drawing' ? descendants(k, 'chart')[0] : null;
+            if (chEl) {
+              const cr = rel[rat(chEl, 'id')];
+              const model = cr && readChart(files, cr.path, { colors: tColors, map: null });
+              const ex = descendants(k, 'extent')[0];
+              const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
+              if (model && w > 0 && h > 0) out.push({ chart: model, w, h });
+              continue;
+            }
             const p = addMedia(blipId(k));
             if (p) {
               const ex = descendants(k, 'extent')[0];
@@ -646,6 +655,8 @@ export function readXlsx(bytes) {
   if (!sheets.length) throw new OfficeError('This workbook has no sheets to show.');
 
   const colPx = (w) => Math.round(w * 7 + 5);
+  let xTheme = null;
+  const xt = () => xTheme || (xTheme = themeColorsOf(files, 'xl/theme/theme1.xml'));
   function load(i) {
     const root = xml(files, sheets[i].path);
     if (!root) throw new OfficeError('This sheet could not be read.');
@@ -693,6 +704,31 @@ export function readXlsx(bytes) {
       const [a1, b1] = (at(m, 'ref') || '').split(':'); const a = cellRef(a1); const b = cellRef(b1 || a1);
       if (a && b && b.r < SHEET_ROW_MAX && a.c < SHEET_COL_MAX) merges.push({ r: a.r, c: a.c, rs: b.r - a.r + 1, cs: Math.min(b.c, SHEET_COL_MAX - 1) - a.c + 1 });
     }
+    // charts and pictures: placed by the cell they start at (and end at), read from the sheet's drawing part
+    const objects = []; const media = {}; let other = 0;
+    const dRid = rat(kid(root, 'drawing'), 'id');
+    const dRel = dRid ? rels(files, sheets[i].path)[dRid] : null;
+    const droot = dRel && xml(files, dRel.path);
+    if (droot) {
+      const drel = rels(files, dRel.path);
+      const num = (n, l) => { const x = kid(n, l); return x ? Number(x.textContent) || 0 : 0; };
+      const pt = (n) => (n ? { col: num(n, 'col'), colOff: num(n, 'colOff') / EMU, row: num(n, 'row'), rowOff: num(n, 'rowOff') / EMU } : null);
+      for (const a of droot.children) {
+        if (!/Anchor$/.test(a.localName)) continue;
+        if (objects.length >= 40) { other++; continue; }
+        const frm = kid(a, 'graphicFrame'); const pic = kid(a, 'pic'); let obj = null;
+        const chEl = frm && descendants(frm, 'chart')[0];
+        if (chEl) { const cr = drel[rat(chEl, 'id')]; const model = cr && readChart(files, cr.path, { colors: xt(), map: null }); if (model) obj = { t: 'chart', model }; }
+        else if (pic) { const bl = descendants(pic, 'blip')[0]; const pr = bl && drel[rat(bl, 'embed')]; const im = pr && image(files, pr.path); if (im) { media[pr.path] = im; obj = { t: 'pic', path: pr.path }; } }
+        if (!obj) { other++; continue; }
+        const ext = kid(a, 'ext'); const ps = kid(a, 'pos');
+        obj.from = pt(kid(a, 'from')); obj.to = a.localName === 'twoCellAnchor' ? pt(kid(a, 'to')) : null;
+        obj.ext = ext ? { w: Number(at(ext, 'cx') || 0) / EMU, h: Number(at(ext, 'cy') || 0) / EMU } : null;
+        obj.abs = ps ? { x: Number(at(ps, 'x') || 0) / EMU, y: Number(at(ps, 'y') || 0) / EMU } : null;
+        if (!obj.from && !obj.abs) { other++; continue; }
+        objects.push(obj);
+      }
+    }
     const view = kid(kid(root, 'sheetViews'), 'sheetView');
     const pane = kid(view, 'pane');
     const frozen = pane && at(pane, 'state') && /frozen/.test(at(pane, 'state'));
@@ -700,7 +736,7 @@ export function readXlsx(bytes) {
       rows, ncols, truncated, colW, defCol, rowH, defRow, merges,
       freeze: frozen ? { rows: Math.min(Number(at(pane, 'ySplit') || 0), 20), cols: Math.min(Number(at(pane, 'xSplit') || 0), 10) } : { rows: 0, cols: 0 },
       grid: at(view, 'showGridLines') !== '0' && at(view, 'showGridLines') !== 'false',
-      hasDrawing: !!kid(root, 'drawing')
+      objects, media, hasDrawing: other > 0
     };
   }
   return { kind: 'xlsx', names: sheets.map((s) => s.name), load, xfs };
@@ -770,6 +806,10 @@ export function readPptx(bytes) {
     const T = mr ? themeOf(mr.path, mrel) : { colors: {}, major: 'Calibri', minor: 'Calibri' };
     const clrMap = {};
     for (const a of kid(master, 'clrMap') ? kid(master, 'clrMap').attributes : []) clrMap[a.localName] = a.value;
+    // a slide (or its layout) can remap the scheme, e.g. a dark slide whose text colour is light
+    const ovr = (n) => kid(kid(n, 'clrMapOvr'), 'overrideClrMapping');
+    const om = ovr(root) || ovr(layout);
+    if (om) for (const a of om.attributes) clrMap[a.localName] = a.value;
     const media = {};
     const photo = (rl, id) => { const x = rl[id]; const im = x && image(files, x.path); if (im) { media[x.path] = im; return x.path; } return null; };
 
@@ -887,6 +927,7 @@ export function readPptx(bytes) {
     }
     const place = (g, xf) => ({ x: (xf.sx * g.x + xf.tx) / EMU, y: (xf.sy * g.y + xf.ty) / EMU, w: (g.w * xf.sx) / EMU, h: (g.h * xf.sy) / EMU, rot: g.rot, fh: g.fh, fv: g.fv });
 
+    const dText = defText ? [defText] : [];
     function textBody(tx, chain, ctx) {
       const bp = kid(tx, 'bodyPr');
       const body = { anchor: at(ctx.bodyPr[0], 'anchor') || at(ctx.bodyPr[1], 'anchor') || at(ctx.bodyPr[2], 'anchor') || 't' };
@@ -899,6 +940,8 @@ export function readPptx(bytes) {
       for (const p of kids(tx, 'p')) {
         const pp = kid(p, 'pPr'); const lvl = Math.min(Number(at(pp, 'lvl') || 0), 8);
         const base = lvlProps(chain, lvl); const own = readP(pp);
+        // a shape's style font colour sits above the presentation defaults, below its own list style and runs
+        if (ctx.styleColor && base.r.color && !lvlProps(chain.filter((x) => !dText.includes(x)), lvl).r.color) base.r = { ...base.r, color: ctx.styleColor };
         const props = { ...base.p, ...Object.fromEntries(Object.entries(own).filter(([k, v]) => v !== undefined && k !== 'r')) };
         const runs = [];
         for (const c of p.children) {
@@ -920,7 +963,6 @@ export function readPptx(bytes) {
       }
       return body;
     }
-    const dText = defText ? [defText] : [];
 
     const items = [];
     const defColor = { hex: T.colors[clrMap.tx1 || 'tx1'] || T.colors.dk1 || '000000', a: 1 };
@@ -950,7 +992,21 @@ export function readPptx(bytes) {
           const fx = kid(c, 'xfrm'); const g = fx ? { x: Number(at(kid(fx, 'off'), 'x') || 0), y: Number(at(kid(fx, 'off'), 'y') || 0), w: Number(at(kid(fx, 'ext'), 'cx') || 0), h: Number(at(kid(fx, 'ext'), 'cy') || 0), rot: 0 } : null;
           if (!g) continue;
           const tbl = descendants(c, 'tbl')[0];
-          items.push(tbl ? { t: 'table', ...place(g, xf), ...table(tbl, c) } : { t: 'note', ...place(g, xf), text: 'A chart or diagram is not shown here.' });
+          if (tbl) { items.push({ t: 'table', ...place(g, xf), ...table(tbl, c) }); continue; }
+          const chEl = descendants(c, 'chart')[0];
+          if (chEl) {
+            const cr = rl[rat(chEl, 'id')]; const model = cr && readChart(files, cr.path, { colors: T.colors, map: clrMap });
+            if (model) { items.push({ t: 'chart', ...place(g, xf), chart: model }); continue; }
+          }
+          // a diagram (SmartArt): the file keeps a ready drawing of it beside its data; its shapes are drawn like any others
+          const ids = descendants(c, 'relIds')[0];
+          if (ids) {
+            const dm = rl[rat(ids, 'dm')]; const dmx = dm && xml(files, dm.path);
+            const ext = dmx && descendants(dmx, 'dataModelExt')[0];
+            const dr = ext && rl[at(ext, 'relId')]; const dx = dr && xml(files, dr.path); const tree = kid(dx, 'spTree');
+            if (tree) { walk(tree, rels(files, dr.path), { sx: xf.sx, sy: xf.sy, tx: xf.sx * g.x + xf.tx, ty: xf.sy * g.y + xf.ty }, 'slide'); continue; }
+          }
+          items.push({ t: 'note', ...place(g, xf), text: 'This object is not shown here.' });
           continue;
         }
         if (n !== 'sp' && n !== 'cxnSp') continue;
@@ -969,15 +1025,22 @@ export function readPptx(bytes) {
         if (fill === undefined) fill = fr && Number(at(fr, 'idx')) > 0 ? phc(fr) : null;
         if (line === undefined) line = lnr && Number(at(lnr, 'idx')) > 0 ? { w: 1.5, color: phc(lnr), dash: 'solid' } : null;
         else if (line && line.color === undefined) line = lnr && Number(at(lnr, 'idx')) > 0 ? { ...line, color: phc(lnr), dash: 'solid' } : null;
-        const prst = at(kid(spPr, 'prstGeom'), 'prst') || (n === 'cxnSp' ? 'line' : 'rect');
-        const gd = kid(kid(kid(spPr, 'prstGeom'), 'avLst'), 'gd'); const am = gd && /val (-?\d+)/.exec(at(gd, 'fmla') || ''); const adj = am ? Number(am[1]) : 0;
+        const gn = [spPr, kid(lph, 'spPr'), kid(mph, 'spPr')].map((x) => kid(x, 'prstGeom')).find(Boolean);
+        const prst = at(gn, 'prst') || (n === 'cxnSp' ? 'line' : 'rect');
+        const gd = kid(kid(gn, 'avLst'), 'gd'); const am = gd && /val (-?\d+)/.exec(at(gd, 'fmla') || ''); const adj = am ? Number(am[1]) : 0;
         const item = { t: 'shape', ...place(g, xf), geom: prst, adj: adj || null, fill, line };
         const tx = kid(c, 'txBody');
         if (tx && n === 'sp') {
           const lst = (nd) => kid(kid(nd, 'txBody'), 'lstStyle');
           const chain = [kid(tx, 'lstStyle'), lst(lph), lst(mph), ph ? kid(txStyles, txCat(at(ph, 'type'))) : null, ...dText];
           const color = fnr ? phc(fnr) || defColor : defColor;
-          const body = textBody(tx, chain, { bodyPr: [kid(tx, 'bodyPr'), kid(kid(lph, 'txBody'), 'bodyPr'), kid(kid(mph, 'txBody'), 'bodyPr')], color });
+          const body = textBody(tx, chain, { bodyPr: [kid(tx, 'bodyPr'), kid(kid(lph, 'txBody'), 'bodyPr'), kid(kid(mph, 'txBody'), 'bodyPr')], color, styleColor: !ph && fnr ? phc(fnr) : null });
+          const tg = xfrmOf(kid(c, 'txXfrm')); // diagram shapes carry their own text rectangle
+          if (tg) {
+            body.l += (tg.x - g.x) * xf.sx / EMU; body.t += (tg.y - g.y) * xf.sy / EMU;
+            body.r = Math.max(0, body.r + ((g.x + g.w) - (tg.x + tg.w)) * xf.sx / EMU); body.b = Math.max(0, body.b + ((g.y + g.h) - (tg.y + tg.h)) * xf.sy / EMU);
+            body.l = Math.max(0, body.l); body.t = Math.max(0, body.t);
+          }
           if (body.paras.some((p) => p.runs.length)) item.text = body;
         }
         if (item.text || item.fill || item.line || level !== 'slide') items.push(item);
@@ -1038,4 +1101,123 @@ export function readPptx(bytes) {
     return { w: W, h: H, bg, items, media: media0, notes };
   }
   return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H } };
+}
+
+// ---- charts (docx, xlsx, pptx) ----
+// A chart part becomes a plain model: { title, autoTitle, legend, axes, groups: [{ kind, series }] }. office-chart.js draws it.
+// Values come from the cached copy stored in the chart part; nothing is recalculated.
+const CHART_PTS = 500;
+const CHART_SERIES = 40;
+const SCHEME_MAP = { tx1: 'dk1', bg1: 'lt1', tx2: 'dk2', bg2: 'lt2' };
+const ACCENTS = ['4472C4', 'ED7D31', 'A5A5A5', 'FFC000', '5B9BD5', '70AD47'];
+function themeColorsOf(files, path) {
+  const t = {}; const th = xml(files, path);
+  const cs = th && descendants(th, 'clrScheme')[0];
+  for (const c of cs ? cs.children : []) { const v = c.firstElementChild; if (v) t[c.localName] = String((v.localName === 'srgbClr' ? at(v, 'val') : at(v, 'lastClr')) || '000000').toUpperCase(); }
+  return t;
+}
+function chartClr(parent, tc) {
+  const c = parent && Array.from(parent.children).find((x) => ['srgbClr', 'schemeClr', 'sysClr', 'prstClr'].includes(x.localName));
+  if (!c) return null;
+  const v = at(c, 'val'); let hex = null;
+  if (c.localName === 'srgbClr') hex = (v || '').toUpperCase();
+  else if (c.localName === 'sysClr') hex = (at(c, 'lastClr') || '000000').toUpperCase();
+  else if (c.localName === 'prstClr') hex = PRST[v] || '000000';
+  else hex = String((tc.colors || {})[(tc.map && tc.map[v]) || SCHEME_MAP[v] || v] || '').toUpperCase() || null;
+  if (!hex || !/^[0-9A-F]{6}$/.test(hex)) return null;
+  for (const t of c.children) {
+    const n = t.localName; const val = Number(at(t, 'val') || 0) / 100000;
+    if (n === 'lumMod' || n === 'lumOff') { const [h, s, l] = toHsl(hex); hex = fromHsl(h, s, n === 'lumMod' ? Math.min(1, l * val) : Math.min(1, l + val)); }
+    else if (n === 'tint') hex = mixHex(hex, 'FFFFFF', 1 - val);
+    else if (n === 'shade') hex = mixHex(hex, '000000', 1 - val);
+  }
+  return hex;
+}
+// undefined: not set here; null: explicitly no fill or line
+function chartFill(sp, tc) {
+  if (!sp) return undefined;
+  if (kid(sp, 'noFill')) return null;
+  const sf = kid(sp, 'solidFill'); if (sf) return chartClr(sf, tc) || undefined;
+  const g = kid(sp, 'gradFill'); const gs = g && kids(kid(g, 'gsLst'), 'gs')[0];
+  return gs ? chartClr(gs, tc) || undefined : undefined;
+}
+function chartLine(sp, tc) {
+  const ln = kid(sp, 'ln');
+  if (!ln) return undefined;
+  if (kid(ln, 'noFill')) return null;
+  const sf = kid(ln, 'solidFill'); return sf ? chartClr(sf, tc) || undefined : undefined;
+}
+const BAR_T = ['barChart', 'bar3DChart']; const LINE_T = ['lineChart', 'line3DChart']; const AREA_T = ['areaChart', 'area3DChart'];
+const PIE_T = ['pieChart', 'pie3DChart', 'ofPieChart'];
+export function readChart(files, path, tc) {
+  const root = xml(files, path);
+  const chart = kid(root, 'chart'); const plot = kid(chart, 'plotArea');
+  if (!plot) return null;
+  const val = (n, d = null) => { const x = n && at(n, 'val'); return x === null || x === undefined ? d : x; };
+  const on = (n, d = false) => (n ? !['0', 'false'].includes(String(val(n, '1')).toLowerCase()) : d);
+  const textOf = (n) => (n ? descendants(n, 't').map((x) => x.textContent).join('') : '');
+  const data = (n) => {
+    const ref = n && Array.from(n.children).find((x) => ['numRef', 'strRef', 'multiLvlStrRef', 'numLit', 'strLit'].includes(x.localName));
+    if (!ref) return null;
+    let cache = Array.from(ref.children).find((x) => /Cache$/.test(x.localName)) || ref;
+    if (cache.localName === 'multiLvlStrCache') cache = kids(cache, 'lvl')[0] || cache;
+    const out = [];
+    for (const p of kids(cache, 'pt')) { const i = Number(at(p, 'idx')); if (i >= 0 && i < CHART_PTS) out[i] = kid(p, 'v') ? kid(p, 'v').textContent : ''; }
+    out.length = Math.min(CHART_PTS, Math.max(out.length, Number(val(kid(cache, 'ptCount'), 0))));
+    const fc = kid(cache, 'formatCode');
+    return { pts: Array.from(out, (v) => v ?? ''), fmt: fc ? fc.textContent : null };
+  };
+  const nums = (d) => (d ? d.pts.map((v) => (v === '' || Number.isNaN(Number(v)) ? null : Number(v))) : []);
+  const labelsOf = (d) => {
+    if (!d || on(kid(d, 'delete'))) return null;
+    const nf = kid(d, 'numFmt');
+    return { val: on(kid(d, 'showVal')), cat: on(kid(d, 'showCatName')), pct: on(kid(d, 'showPercent')), fmt: nf && at(nf, 'sourceLinked') !== '1' ? at(nf, 'formatCode') : null };
+  };
+  const axes = {};
+  for (const ax of plot.children) {
+    if (!['catAx', 'valAx', 'dateAx', 'serAx'].includes(ax.localName)) continue;
+    const id = val(kid(ax, 'axId')); const sc = kid(ax, 'scaling'); const nf = kid(ax, 'numFmt');
+    axes[id] = {
+      id, kind: ax.localName === 'valAx' ? 'val' : 'cat', pos: val(kid(ax, 'axPos'), 'b'),
+      min: sc && kid(sc, 'min') ? Number(val(kid(sc, 'min'))) : null, max: sc && kid(sc, 'max') ? Number(val(kid(sc, 'max'))) : null,
+      rev: !!sc && val(kid(sc, 'orientation')) === 'maxMin', del: on(kid(ax, 'delete')), title: textOf(kid(ax, 'title')),
+      fmt: nf && at(nf, 'sourceLinked') !== '1' ? at(nf, 'formatCode') : null, grid: !!kid(ax, 'majorGridlines')
+    };
+  }
+  const palette = (i) => { const a = (tc.colors || {})[`accent${(i % 6) + 1}`] || ACCENTS[i % 6]; const r = Math.floor(i / 6); return r ? mixHex(a, r % 2 ? '000000' : 'FFFFFF', 0.3) : a; };
+  const groups = []; let idx = 0;
+  for (const g of plot.children) {
+    const n = g.localName;
+    const kind = BAR_T.includes(n) ? 'bar' : LINE_T.includes(n) ? 'line' : AREA_T.includes(n) ? 'area' : PIE_T.includes(n) ? 'pie' : n === 'doughnutChart' ? 'doughnut'
+      : n === 'scatterChart' ? 'scatter' : n === 'bubbleChart' ? 'bubble' : n === 'radarChart' ? 'radar' : null;
+    if (!kind) continue;
+    const grp = { kind, dir: val(kid(g, 'barDir'), 'col'), grouping: val(kid(g, 'grouping'), 'standard'), axIds: kids(g, 'axId').map((a) => val(a)),
+      gap: Number(val(kid(g, 'gapWidth'), 150)), hole: Number(val(kid(g, 'holeSize'), 50)), style: val(kid(g, 'scatterStyle'), 'lineMarker'), labels: labelsOf(kid(g, 'dLbls')), series: [] };
+    const isLine = kind === 'line' || kind === 'scatter' || kind === 'radar';
+    const gMarker = on(kid(g, 'marker'), true);
+    for (const s of kids(g, 'ser')) {
+      if (grp.series.length >= CHART_SERIES) break;
+      const tx = kid(s, 'tx'); const d0 = tx && data(tx);
+      const name = tx ? (kid(tx, 'v') ? kid(tx, 'v').textContent : d0 ? d0.pts[0] || '' : '') : '';
+      const sp = kid(s, 'spPr'); const lc = chartLine(sp, tc); const fc = chartFill(sp, tc);
+      const mk = kid(s, 'marker'); const sym = val(kid(mk, 'symbol'), 'auto'); const mfill = chartFill(kid(mk, 'spPr'), tc);
+      let color;
+      if (isLine) color = lc || mfill || fc || palette(idx); else color = fc === null ? null : fc || lc || palette(idx);
+      const lw = kid(sp, 'ln') && at(kid(sp, 'ln'), 'w');
+      const catD = data(kid(s, 'cat') || kid(s, 'xVal')); const valD = data(kid(s, 'val') || kid(s, 'yVal'));
+      const vals = nums(valD);
+      const ser = { name, color, noLine: isLine && lc === null, w: lw ? Math.max(1, Number(lw) / EMU) : null, smooth: on(kid(s, 'smooth')),
+        marker: sym !== 'none' && (kind === 'scatter' || !!mk || gMarker), cats: catD ? catD.pts : [], vals, fmt: valD ? valD.fmt : null,
+        xs: kind === 'scatter' || kind === 'bubble' ? nums(data(kid(s, 'xVal'))) : null, size: kind === 'bubble' ? nums(data(kid(s, 'bubbleSize'))) : null,
+        labels: kid(s, 'dLbls') ? labelsOf(kid(s, 'dLbls')) : undefined, dpt: {} };
+      for (const dp of kids(s, 'dPt')) { const c = chartFill(kid(dp, 'spPr'), tc); if (c) ser.dpt[Number(val(kid(dp, 'idx'), 0))] = c; }
+      if (kind === 'pie' || kind === 'doughnut') ser.pcolors = vals.map((_, i) => ser.dpt[i] || palette(i));
+      grp.series.push(ser); idx++;
+    }
+    if (grp.series.length) groups.push(grp);
+  }
+  if (!groups.length) return null;
+  const t = kid(chart, 'title'); const deleted = on(kid(chart, 'autoTitleDeleted'));
+  const lg = kid(chart, 'legend');
+  return { title: deleted ? '' : textOf(t), autoTitle: !!t && !deleted && !textOf(t), legend: lg && !on(kid(lg, 'delete')) ? val(kid(lg, 'legendPos'), 'r') : null, axes, groups };
 }
