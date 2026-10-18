@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 132**
+
+Owner confirmed DP87 to DP90 on device. Request: the office viewers lost all formatting; wanted a fuller viewer and a dark mode switch of their own, system by default and kept once set. Choices: one theme setting for the three viewers; dark rendering left to me (Decision 227). Stage 1 of three: docx and the shared toolbar and theme. Source read: `explorer-view.js`, `office-read.js`, `office-render.js`, `style.css`.
+- `src/js/office-read.js`: `readDocx` rewritten: theme, style inheritance, run and paragraph formatting, numbering levels, tables, picture sizes, header, footer, footnotes, page size.
+- `src/js/office-render.js`: theme switch and saved settings, colours for both themes, docx Page and Reflow views, zoom and pinch, table and paragraph drawing; xlsx and pptx open under the same bar.
+- `src/css/style.css`: viewer theme variables and styles.
+- Docs: ROADMAP (DP87 to DP90 confirmed, E3b, DP91), DECISIONS (227), ARCHITECTURE, TRACK.
+- Found while testing: yellow highlight was treated as near-white and lost in dark mode; fixed by testing all three colour channels.
+
+Decisions made: 227.
+
+Verified: 63 reader, drawing and theme checks; 14 viewer checks; `vite build` passes. Not verified: CI, any device (DP91), pinch and CSS zoom in the WebView, system theme reporting.
+
+Open: DP91 on device; E3b stage 2 xlsx, stage 3 pptx; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP91 confirmation, then E3b stage 2 (xlsx).
+
 **Session 131**
 
 Start: docs read; DP87 to DP89 are device checks. Next approved item, Phase 22 E3, office viewers (Decisions 207, 226). Source read: `explorer-view.js`, `explorer.js`, `style.css`, `package.json`, the workflow.
