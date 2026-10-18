@@ -895,30 +895,59 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* the Back bar floats over every overlay */
 #explorer-viewer .pdf-zoom, #explorer-viewer .pdf-tools { bottom: 20px; }
 
-/* Office viewers (Decision 226): docx page, xlsx grid, pptx slides; view only */
-.eo-host { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; color: var(--fg); }
-.eo-page { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); line-height: 1.5; font-size: 15px; overflow-wrap: anywhere; }
-.eo-p { margin: 0 0 8px; }
-.eo-h { margin: 14px 0 8px; line-height: 1.25; }
-.eo-li { position: relative; padding-left: 22px; }
-.eo-mark { position: absolute; left: 0; color: var(--muted); }
-.eo-slide .eo-li, .eo-slide .eo-p .eo-mark { position: static; margin-right: 8px; }
-.eo-img { display: block; max-width: 100%; height: auto; margin: 8px 0; border-radius: 6px; }
-.eo-tablewrap { max-width: 100%; overflow-x: auto; margin: 8px 0; }
+/* Office viewers (Decisions 226, 227): docx page, xlsx grid, pptx slides; view only. The viewer has its own theme
+   (data-theme on .eo-host, set from the viewer's switch), so every colour below comes from the variables set here. */
+.eo-host { --bg: #f4f2fb; --surface: #ffffff; --surface-2: #efecfa; --fg: #17142b; --muted: #6b6785; --border: rgba(23,20,43,.09); --border-strong: rgba(23,20,43,.18);
+  --eo-desk: #dedaf0; --eo-paper: #ffffff; --eo-ink: #17142b; --eo-line: #17142b; --eo-accent: #6c5ce7; --eo-accent-fg: #ffffff;
+  position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); color: var(--fg); color-scheme: light; }
+.eo-host[data-theme="dark"] { --bg: #121118; --surface: #1c1b26; --surface-2: #252434; --fg: #e8e6f2; --muted: #a09cbc; --border: rgba(255,255,255,.08); --border-strong: rgba(255,255,255,.2);
+  --eo-desk: #0c0b11; --eo-paper: #1c1b26; --eo-ink: #e8e6f2; --eo-line: #e8e6f2; --eo-accent: #8b7dff; --eo-accent-fg: #0c0b11; color-scheme: dark; }
+.eo-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.eo-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+.eo-segbtn { width: auto; margin: 0; padding: 6px 11px; border: none; border-radius: 0; background: transparent; color: var(--fg); font-size: 13px; box-shadow: none; }
+.eo-segbtn + .eo-segbtn { border-left: 1px solid var(--border-strong); }
+.eo-segbtn.active { background: var(--eo-accent); color: var(--eo-accent-fg); }
+.eo-zbtn { font-size: 16px; min-width: 38px; }
+/* per-theme colour roles set from the file: text (c), fill (f), borders (bt bb bl br) */
+.eo-c { color: var(--c-l); } .eo-f { background: var(--f-l); }
+.eo-bt { border-top-color: var(--bt-l); } .eo-bb { border-bottom-color: var(--bb-l); } .eo-bl { border-left-color: var(--bl-l); } .eo-br { border-right-color: var(--br-l); }
+.eo-host[data-theme="dark"] .eo-c { color: var(--c-d); } .eo-host[data-theme="dark"] .eo-f { background: var(--f-d); }
+.eo-host[data-theme="dark"] .eo-bt { border-top-color: var(--bt-d); } .eo-host[data-theme="dark"] .eo-bb { border-bottom-color: var(--bb-d); }
+.eo-host[data-theme="dark"] .eo-bl { border-left-color: var(--bl-d); } .eo-host[data-theme="dark"] .eo-br { border-right-color: var(--br-d); }
+/* docx */
+.eo-scroll { flex: 1; min-height: 0; overflow: auto; background: var(--eo-desk); padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); touch-action: pan-x pan-y; }
+.eo-zoomer { margin: 0 auto; }
+.eo-paper { background: var(--eo-paper); color: var(--eo-ink); font-family: Calibri, Carlito, Roboto, sans-serif; font-size: 14.67px; line-height: 1.2; overflow-wrap: anywhere; box-sizing: border-box; min-height: 40px; }
+.eo-paper.eo-pagemode { box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+.eo-paper.eo-reflow { max-width: 760px; margin: 0 auto; }
+.eo-p { margin: 0; font: inherit; font-weight: inherit; white-space: pre-wrap; }
+.eo-mark { display: inline-block; text-indent: 0; white-space: pre; }
+.eo-hf { opacity: .85; }
+.eo-pb { display: block; border-top: 1px dashed var(--eo-line); opacity: .35; margin: 8px 0; }
+.eo-fn { margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--eo-line); font-size: .85em; }
+.eo-fnrow { display: flex; gap: 6px; }
+.eo-img { display: inline-block; max-width: 100%; height: auto; vertical-align: bottom; }
+.eo-tablewrap { max-width: 100%; overflow-x: auto; margin: 6px 0; }
 .eo-table { border-collapse: collapse; font-size: 14px; }
 .eo-table td, .eo-table th { border: 1px solid var(--border-strong); padding: 5px 8px; vertical-align: top; }
+.eo-dtable { font-size: inherit; }
+.eo-dtable td { border: 0 solid var(--eo-line); padding: 0 7px; }
+/* xlsx */
 .eo-tabs { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
 .eo-tab { flex: none; width: auto; margin: 0; padding: 6px 14px; border-radius: 999px; font-size: 13.5px; background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); box-shadow: none; }
-.eo-tab.active { background: var(--brand); color: var(--brand-fg); border-color: transparent; }
-.eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.eo-tab.active { background: var(--eo-accent); color: var(--eo-accent-fg); border-color: transparent; }
+.eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); }
 .eo-sheet { margin: 0; }
-.eo-cells { font-size: 13px; white-space: pre; }
+.eo-cells { font-size: 13px; white-space: pre; color: var(--fg); }
 .eo-cells th { background: var(--surface-2); color: var(--muted); font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 1; }
 .eo-cells th.eo-row { position: sticky; left: 0; top: auto; z-index: 1; }
 .eo-cells th.eo-corner { left: 0; z-index: 2; }
 .eo-cells td.eo-num { text-align: right; }
+/* pptx */
 .eo-slide-stage { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 8px; }
-.eo-slide { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.eo-slide { background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.eo-slide .eo-p { margin-bottom: 8px; }
+.eo-slide .eo-mark { margin-right: 8px; }
 .eo-slide-title { margin: 0 0 12px; font-size: 20px; line-height: 1.25; }
 .eo-note { color: var(--muted); font-size: 13.5px; margin: 8px 0 0; }
 .eo-notes { margin: 12px 2px 0; font-size: 13.5px; color: var(--muted); white-space: pre-wrap; }
@@ -926,3 +955,4 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 .eo-slidebar { flex: none; display: flex; gap: 10px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--surface-2); }
 .eo-nav { flex: 1; margin: 0; padding: 10px; border-radius: 12px; font-size: 15px; }
 .eo-nav:disabled { opacity: 0.45; }
+.eo-host .ev-banner, .eo-host .ev-media-msg { color: var(--muted); }
