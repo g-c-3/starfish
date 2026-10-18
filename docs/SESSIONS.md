@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 137**
+
+Owner report after DP93: the slides lost formatting for missing fonts; Word pages showed no true page breaks, and shapes were missing. Request: do everything with the best version. Context was filling, so the fonts part was built and the Word pages and shapes part is planned for the next session (E3d).
+- `src/fonts`: 80 files (ten families, four styles each, two subsets, ten licence files).
+- `src/css/style.css`: declarations under many names, with character ranges; font notice style.
+- `src/js/office-render.js`: font stacks with same-kind fallback to bundled fonts, list of fonts used, missing-font notice, embedded fonts loaded and removed with the viewer.
+- `src/js/office-read.js`: Word embedded fonts read and restored.
+- Docs: ROADMAP (E3c, E3d planned, DP95), DECISIONS (232), ARCHITECTURE, TRACK.
+
+Decisions made: 232.
+
+Verified: 111 reader, drawing and theme checks; 14 viewer checks; `vite build` passes and emits the fonts. Not verified: CI, any device (DP91, DP93, DP94, DP95).
+
+Open: DP91, DP93, DP94, DP95 on device; E3d Word pages and shapes (a decision first); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP95 and the other device checks, then E3d (Word pages, headers and footers on every page, shapes, text boxes, floating pictures, simple charts); a decision comes first.
+
 **Session 136**
 
 Owner request: add Arial, Times New Roman and Calibri and their sans versions if they exist. The Microsoft fonts cannot be redistributed in a public repository; open fonts with the same widths were added instead (Decision 231).

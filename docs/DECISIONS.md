@@ -2687,3 +2687,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cost: 24 font files, about 1.3 MB added to the APK.
 - Effect: also applies to any other text in the app set in these names; the app's own interface keeps Inter.
 - Risks: not run through CI or on a device (DP94). Glyphs outside the two subsets (Indian scripts, Greek, Cyrillic) fall back to the phone's fonts.
+
+**232. More document fonts, matching and notice (Phase 22, stage E3c).** Owner report: slides lost their formatting for missing fonts; request: the best version of every font option.
+- Ten more open families with all four styles, Latin and Latin Extended: Open Sans, Montserrat, Poppins, Lato, Roboto, Gelasio, Caladea, Cousine, Comic Neue, Anton (Anton has one style). SIL Open Font License 1.1; licence files kept beside them. About 1.4 MB added; with Decision 231 the fonts are about 2.7 MB, each file fetched only when used.
+- Names documents use map to them: Segoe UI, Verdana, Tahoma, Aptos, Trebuchet MS to Open Sans; Century Gothic to Poppins; Gotham to Montserrat; Candara, Corbel to Lato; Georgia to Gelasio; Cambria to Caladea; Courier New, Consolas, Lucida Console to Cousine; Comic Sans MS to Comic Neue; Impact to Anton; Helvetica and Helvetica Neue to Arimo; Times to Tinos; Calibri Light to Carlito.
+- Any other name falls back to a bundled font of the same kind: serif to Times New Roman's stand-in, monospace to Courier New's, everything else to Open Sans, instead of the phone's default.
+- Notice: after drawing, a one-line notice lists the fonts the document uses that are neither bundled, embedded nor on the phone (found by comparing text widths against plain fallbacks), up to four names. It is shown once per opening and stores nothing.
+- Embedded fonts: fonts a Word file carries (obfuscated parts) are read, restored with the key stored beside each, loaded for that viewer only and removed when it closes. Fonts embedded in a presentation are not read (their format is not supported). The font's licence flags are not applied; the file is only viewed on this phone.
+- Checks: 111 reader, drawing and theme checks (embedded font restored to a TrueType header, none in a plain file, name mapping); 14 viewer checks; `vite build` passes and emits the font files.
+- Risks: not run on a device (DP95). Matching is by name, not by look: an unusual display font will still differ. The notice relies on a text-width test that can miss a font whose width equals the fallback's.
