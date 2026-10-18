@@ -304,9 +304,21 @@ function cellCss(x, n) {
 }
 function mountXlsx(model, host, ui, bars) {
   const tabs = el('div', 'eo-tabs'); const grid = el('div', 'eo-grid'); const zoomer = el('div', 'eo-xzoom');
-  const css = el('style');
+  const css = el('style'); const cellbar = el('div', 'eo-cellbar'); cellbar.hidden = true;
+  const cbRef = el('span', 'eo-cbref'); const cbText = el('div', 'eo-cbtext'); cellbar.append(cbRef, cbText);
   grid.appendChild(zoomer);
-  host.append(tabs, grid, css);
+  host.append(tabs, cellbar, grid, css);
+  let selected = null;
+  // tap a cell to read all of it, including text the cell is too small to show
+  zoomer.addEventListener('click', (e) => {
+    const td = e.target.closest && e.target.closest('td');
+    if (selected) { selected.classList.remove('eo-sel'); selected = null; }
+    if (!td || td.dataset.c === undefined) { cellbar.hidden = true; return; }
+    ui.onActivity();
+    selected = td; td.classList.add('eo-sel');
+    cbRef.textContent = `${colName(Number(td.dataset.c))}${Number(td.parentElement.dataset.r) + 1}`;
+    cbText.textContent = td.textContent; cellbar.hidden = false;
+  });
   const zoom = setupZoom(grid, zoomer, () => 1, ui);
   bars.extra = (bar) => bar.appendChild(zoomButtons(ui, zoom));
   const buttons = model.names.map((name, i) => {
@@ -317,7 +329,7 @@ function mountXlsx(model, host, ui, bars) {
   });
   function show(i) {
     buttons.forEach((b, k) => b.classList.toggle('active', k === i));
-    zoomer.replaceChildren(); css.textContent = ''; grid.scrollTop = 0; grid.scrollLeft = 0;
+    zoomer.replaceChildren(); css.textContent = ''; grid.scrollTop = 0; grid.scrollLeft = 0; cellbar.hidden = true; selected = null;
     let s;
     try { s = model.load(i); } catch (e) { zoomer.appendChild(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This sheet could not be read.')); return; }
     if (!s.ncols && !s.rows.some((r) => r.length)) { zoomer.appendChild(el('p', 'ev-media-msg', 'This sheet is empty.')); return; }
@@ -332,46 +344,57 @@ function mountXlsx(model, host, ui, bars) {
     const nrows = s.rows.length;
     const width = (c) => (s.colW[c] !== undefined ? s.colW[c] : s.defCol);
     const height = (r) => (s.rowH[r] !== undefined ? s.rowH[r] : s.defRow);
-    const merge = new Map(); const skip = new Set();
+    const merge = new Map(); const skip = new Set(); const spilled = new Set();
     for (const m of s.merges) { merge.set(`${m.r},${m.c}`, m); for (let r = m.r; r < m.r + m.rs; r++) for (let c = m.c; c < m.c + m.cs; c++) if (r !== m.r || c !== m.c) skip.add(`${r},${c}`); }
+    // how many columns a text cell runs over: the empty, unstyled cells to its right, as in a spreadsheet
+    const spanOf = (r, c) => {
+      const row = s.rows[r] || []; const cell = row[c]; const x = cell && model.xfs[cell.s];
+      if (!cell || cell.k !== 's' || cell.v === '' || x.wrap || !(x.h === 'general' || x.h === 'left') || merge.has(`${r},${c}`)) return 1;
+      const need = cell.v.length * x.font.size * 0.6 * 4 / 3; let have = width(c); let cs = 1;
+      while (have < need && c + cs < SHEET_COL_MAX && width(c + cs) > 0) {
+        const nx = row[c + cs];
+        if (skip.has(`${r},${c + cs}`) || merge.has(`${r},${c + cs}`) || (nx && (nx.v !== '' || model.xfs[nx.s].fill || model.xfs[nx.s].border))) break;
+        have += width(c + cs); cs++;
+      }
+      return cs;
+    };
+    // the table gets the columns that text runs into, and a few spare ones, so nothing is cut at the table edge
+    let vcols = s.ncols;
+    for (let r = 0; r < nrows; r++) { const row = s.rows[r] || []; for (let c = 0; c < row.length; c++) if (row[c]) vcols = Math.max(vcols, c + spanOf(r, c)); }
+    vcols = Math.min(SHEET_COL_MAX, Math.max(vcols, s.ncols + 3));
     const topOf = []; let acc = HEAD_H; for (let r = 0; r < Math.min(s.freeze.rows, nrows); r++) { topOf[r] = acc; acc += height(r); }
     const leftOf = []; acc = ROWNO_W; for (let c = 0; c < s.freeze.cols; c++) { leftOf[c] = acc; acc += width(c); }
     const wrap = el('div', 'eo-sheet'); const t = el('table', `eo-cells${s.grid ? '' : ' eo-nogrid'}`);
-    let total = ROWNO_W; for (let c = 0; c < s.ncols; c++) total += width(c);
+    let total = ROWNO_W; for (let c = 0; c < vcols; c++) total += width(c);
     t.style.width = `${total}px`;
     const cg = el('colgroup'); const c0 = el('col'); c0.style.width = `${ROWNO_W}px`; cg.appendChild(c0);
-    for (let c = 0; c < s.ncols; c++) { const col = el('col'); if (width(c) === 0) col.style.visibility = 'collapse'; else col.style.width = `${width(c)}px`; cg.appendChild(col); }
+    for (let c = 0; c < vcols; c++) { const col = el('col'); if (width(c) === 0) col.style.visibility = 'collapse'; else col.style.width = `${width(c)}px`; cg.appendChild(col); }
     t.appendChild(cg);
     const head = el('tr'); head.appendChild(el('th', 'eo-corner'));
-    for (let c = 0; c < s.ncols; c++) { const th = el('th', 'eo-col', colName(c)); if (c < s.freeze.cols && s.freeze.cols) { th.style.left = `${leftOf[c]}px`; th.style.zIndex = '4'; } head.appendChild(th); }
+    for (let c = 0; c < vcols; c++) { const th = el('th', 'eo-col', colName(c)); if (c < s.freeze.cols && s.freeze.cols) { th.style.left = `${leftOf[c]}px`; th.style.zIndex = '4'; } head.appendChild(th); }
     const thead = el('thead'); thead.appendChild(head); t.appendChild(thead);
     const tb = el('tbody');
     for (let r = 0; r < nrows; r++) {
-      const tr = el('tr');
+      const tr = el('tr'); tr.dataset.r = String(r);
       if (height(r) === 0) { tr.style.display = 'none'; tb.appendChild(tr); continue; }
       tr.style.height = `${height(r)}px`;
       const rn = el('th', 'eo-row', String(r + 1));
       if (r < s.freeze.rows) { rn.style.top = `${topOf[r]}px`; rn.style.zIndex = '4'; }
       tr.appendChild(rn);
       const row = s.rows[r] || [];
-      for (let c = 0; c < s.ncols; c++) {
-        if (skip.has(`${r},${c}`)) continue;
+      for (let c = 0; c < vcols; c++) {
+        if (skip.has(`${r},${c}`) || spilled.has(`${r},${c}`)) continue;
         const cell = row[c];
         const x = cell ? model.xfs[cell.s] || model.xfs[0] : null;
         const td = el('td', cell && cell.s ? `xs${cell.s}` : '');
-        if (cell && cell.v !== '') td.textContent = cell.v;
+        if (cell && cell.v !== '') { td.textContent = cell.v; td.dataset.c = String(c); }
         if (cell && cell.k === 'n' && x.h === 'general') td.classList.add('eo-r'); else if (cell && cell.k === 'b' && x.h === 'general') td.classList.add('eo-ctr');
         const m = merge.get(`${r},${c}`);
         let cs = 1;
         if (m) { if (m.cs > 1) td.colSpan = m.cs; if (m.rs > 1) td.rowSpan = m.rs; cs = m.cs; }
-        else if (cell && cell.k === 's' && cell.v !== '' && x && !x.wrap && (x.h === 'general' || x.h === 'left')) {
-          // text runs on over the empty cells to its right, as in a spreadsheet
-          const need = cell.v.length * x.font.size * 0.6 * 4 / 3; let have = width(c);
-          while (have < need && c + cs < s.ncols && width(c + cs) > 0) {
-            const nx = row[c + cs];
-            if (skip.has(`${r},${c + cs}`) || merge.has(`${r},${c + cs}`) || (nx && (nx.v !== '' || model.xfs[nx.s].fill || model.xfs[nx.s].border))) break;
-            have += width(c + cs); skip.add(`${r},${c + cs}`); cs++;
-          }
+        else {
+          cs = spanOf(r, c);
+          for (let k = 1; k < cs; k++) spilled.add(`${r},${c + k}`);
           if (cs > 1) td.colSpan = cs;
         }
         const fr = r < s.freeze.rows; const fc = c < s.freeze.cols;
