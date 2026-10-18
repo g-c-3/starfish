@@ -2679,3 +2679,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not built: thumbnail strip (promised in Decision 227), charts and diagrams (a labelled empty box), picture and pattern fills, animations, transitions, text direction, WordArt, shadows and effects, group rotation.
 - Checks: 107 reader, drawing and theme checks (a 4:3 deck and a 16:9 deck made with python-pptx: placeholders, bullets, notes, background, rounded shape, ellipse, picture, table, line, group); 14 viewer checks; `vite build` passes; the office chunk is about 65 kB.
 - Risks: not run through CI or on a device (DP93). Decks from other programs may use shapes, fills or table styles not read; fonts differ from the original, so text may wrap differently; text that overflows its shape is shown, not clipped.
+
+**231. Bundled document fonts (Phase 22, stage E3b).** Owner request: add Arial, Times New Roman and Calibri, and their sans versions if they exist.
+- The three Microsoft fonts cannot be redistributed in a public repository. Open fonts with the same character widths are bundled instead: Carlito for Calibri, Arimo for Arial (the same design as Liberation Sans), Tinos for Times New Roman (the same design as Liberation Serif). All three are under the SIL Open Font License 1.1; each licence file is kept beside the fonts.
+- They are declared in `style.css` under the names documents use ("Calibri", "Arial", "Times New Roman"), regular, bold, italic and bold italic, in two subsets: Latin, and Latin Extended (which holds the rupee sign). Character ranges split the subsets. A file is fetched from the app only when text uses it; nothing is read from the network.
+- Calibri and Arial are already sans; Times New Roman has no sans version, so none is added. Other font names still map to the nearest phone font of the same kind (Decision 227). Cambria (Caladea) and Helvetica are not added.
+- Cost: 24 font files, about 1.3 MB added to the APK.
+- Effect: also applies to any other text in the app set in these names; the app's own interface keeps Inter.
+- Risks: not run through CI or on a device (DP94). Glyphs outside the two subsets (Indian scripts, Greek, Cyrillic) fall back to the phone's fonts.

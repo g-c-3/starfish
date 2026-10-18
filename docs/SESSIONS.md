@@ -4,6 +4,22 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 136**
+
+Owner request: add Arial, Times New Roman and Calibri and their sans versions if they exist. The Microsoft fonts cannot be redistributed in a public repository; open fonts with the same widths were added instead (Decision 231).
+- `src/fonts`: 24 font files (Carlito, Arimo, Tinos; regular, bold, italic, bold italic; Latin and Latin Extended) and three licence files.
+- `src/css/style.css`: font declarations under the Microsoft names, with character ranges.
+- Docs: ROADMAP (fonts, DP94), DECISIONS (231), ARCHITECTURE, TRACK.
+- Checked: the rupee sign is in the Latin Extended subsets only, so both subsets are bundled.
+
+Decisions made: 231.
+
+Verified: `vite build` passes and emits the font files; 107 viewer checks pass. Not verified: CI, any device (DP91, DP93, DP94), line breaks against the original.
+
+Open: DP91, DP93, DP94 on device; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP91, DP93, DP94 confirmation, then an item you choose.
+
 **Session 135**
 
 Owner confirmed the xlsx fixes (DP92). Next item: E3b stage 3, pptx (Decision 230). DP91 (docx and theme) was not confirmed as a whole; the docx look was reported close to the reference.
