@@ -688,25 +688,24 @@ export function readXlsx(bytes) {
 }
 
 // ---- pptx ----
-function textRuns(p) {
-  const out = [];
-  for (const c of p.children) {
-    if (c.localName === 'r' || c.localName === 'fld') {
-      const rp = kid(c, 'rPr');
-      const text = kids(c, 't').map((t) => t.textContent).join('');
-      if (!text) continue;
-      const f = { text };
-      if (rp) {
-        if (at(rp, 'b') === '1' || at(rp, 'b') === 'true') f.b = true;
-        if (at(rp, 'i') === '1' || at(rp, 'i') === 'true') f.i = true;
-        const u = at(rp, 'u'); if (u && u !== 'none') f.u = true;
-      }
-      out.push(f);
-    } else if (c.localName === 'br') out.push({ br: true });
-  }
-  return out;
+// Slides are resolved here to absolutely positioned items in px (shapes, pictures, tables, lines), with every
+// inherited property (placeholder position, text size, colour, bullet, background) already applied, so drawing is plain.
+const EMU = 9525;
+const PRST = { black: '000000', white: 'FFFFFF', red: 'FF0000', green: '008000', blue: '0000FF', yellow: 'FFFF00', gray: '808080', grey: '808080', orange: 'FFA500', purple: '800080', cyan: '00FFFF', magenta: 'FF00FF' };
+function toHsl(h) {
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [hh * 60, s, l];
 }
-const BODY_PH = new Set(['body', 'obj', '']);
+function fromHsl(h, s, l) {
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0), f(8), f(4)].map((v) => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+const mixHex = (hex, to, t) => [0, 2, 4].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + parseInt(to.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
 
 export function readPptx(bytes) {
   const files = unpack(bytes, 'ppt/', 'ppt/presentation.xml');
@@ -714,6 +713,9 @@ export function readPptx(bytes) {
   const pres = xml(files, main);
   if (!pres) throw new OfficeError('This is not a valid file of this type.');
   const rel = rels(files, main);
+  const sz = kid(pres, 'sldSz');
+  const W = Number(at(sz, 'cx') || 9144000) / EMU; const H = Number(at(sz, 'cy') || 6858000) / EMU;
+  const defText = kid(pres, 'defaultTextStyle');
   const slides = [];
   for (const s of kids(kid(pres, 'sldIdLst'), 'sldId')) {
     const r = rel[rat(s, 'id')];
@@ -721,64 +723,300 @@ export function readPptx(bytes) {
     if (slides.length >= SLIDE_MAX) break;
   }
   if (!slides.length) throw new OfficeError('This presentation has no slides to show.');
+  const themes = {};
+  function themeOf(masterPath, mrel) {
+    if (themes[masterPath]) return themes[masterPath];
+    const t = { colors: {}, major: 'Calibri', minor: 'Calibri' };
+    const tr = Object.values(mrel).find((x) => x.type.endsWith('/theme'));
+    const th = tr && xml(files, tr.path);
+    if (th) {
+      const cs = descendants(th, 'clrScheme')[0];
+      for (const c of cs ? cs.children : []) { const v = c.firstElementChild; if (v) t.colors[c.localName] = String((v.localName === 'srgbClr' ? at(v, 'val') : at(v, 'lastClr')) || '000000').toUpperCase(); }
+      t.major = at(kid(descendants(th, 'majorFont')[0], 'latin'), 'typeface') || t.major;
+      t.minor = at(kid(descendants(th, 'minorFont')[0], 'latin'), 'typeface') || t.minor;
+    }
+    themes[masterPath] = t;
+    return t;
+  }
 
   function load(i) {
     const part = slides[i];
     const root = xml(files, part);
     if (!root) throw new OfficeError('This slide could not be read.');
     const srel = rels(files, part);
+    const lr = Object.values(srel).find((x) => x.type.endsWith('/slideLayout'));
+    const layout = lr && xml(files, lr.path); const lrel = lr ? rels(files, lr.path) : {};
+    const mr = Object.values(lrel).find((x) => x.type.endsWith('/slideMaster'));
+    const master = mr && xml(files, mr.path); const mrel = mr ? rels(files, mr.path) : {};
+    const T = mr ? themeOf(mr.path, mrel) : { colors: {}, major: 'Calibri', minor: 'Calibri' };
+    const clrMap = {};
+    for (const a of kid(master, 'clrMap') ? kid(master, 'clrMap').attributes : []) clrMap[a.localName] = a.value;
     const media = {};
-    const blocks = [];
-    const paragraphs = (tx, isTitle, bulletDefault) => {
-      const out = [];
+    const photo = (rl, id) => { const x = rl[id]; const im = x && image(files, x.path); if (im) { media[x.path] = im; return x.path; } return null; };
+
+    // ---- colour ----
+    function clr(parent, ph) {
+      const c = parent && Array.from(parent.children).find((x) => ['srgbClr', 'schemeClr', 'sysClr', 'prstClr'].includes(x.localName));
+      if (!c) return null;
+      let hex = null; const v = at(c, 'val');
+      if (c.localName === 'srgbClr') hex = (v || '').toUpperCase();
+      else if (c.localName === 'sysClr') hex = (at(c, 'lastClr') || '000000').toUpperCase();
+      else if (c.localName === 'prstClr') hex = PRST[v] || '000000';
+      else if (v === 'phClr') hex = ph || null;
+      else hex = T.colors[clrMap[v] || v] || null;
+      if (!hex || !/^[0-9A-F]{6}$/.test(hex)) return null;
+      let a = 1;
+      for (const t of c.children) {
+        const n = t.localName; const val = Number(at(t, 'val') || 0) / 100000;
+        if (n === 'lumMod' || n === 'lumOff') { const [h, s, l] = toHsl(hex); hex = fromHsl(h, s, n === 'lumMod' ? Math.min(1, l * val) : Math.min(1, l + val)); }
+        else if (n === 'tint') hex = mixHex(hex, 'FFFFFF', 1 - val);
+        else if (n === 'shade') hex = mixHex(hex, '000000', 1 - val);
+        else if (n === 'alpha') a = val;
+      }
+      return { hex, a };
+    }
+    const fillOf = (sp, ph) => { // undefined: not set here; null: no fill
+      if (!sp) return undefined;
+      if (kid(sp, 'noFill')) return null;
+      if (kid(sp, 'solidFill')) return clr(kid(sp, 'solidFill'), ph);
+      const g = kid(sp, 'gradFill');
+      if (g) {
+        const stops = kids(kid(g, 'gsLst'), 'gs').map((s) => ({ pos: Number(at(s, 'pos') || 0) / 1000, c: clr(s, ph) })).filter((s) => s.c);
+        const ang = (Number(at(kid(g, 'lin'), 'ang') || 5400000) / 60000 + 90) % 360;
+        return stops.length ? { grad: stops, ang } : null;
+      }
+      return undefined;
+    };
+    const lineOf = (ln, ph) => {
+      if (!ln) return undefined;
+      if (kid(ln, 'noFill')) return null;
+      const c = kid(ln, 'solidFill') ? clr(kid(ln, 'solidFill'), ph) : undefined;
+      if (c === undefined) return at(ln, 'w') ? { w: Math.max(1, Number(at(ln, 'w')) / EMU) } : undefined;
+      const d = at(kid(ln, 'prstDash'), 'val');
+      return c && { w: Math.max(1, Number(at(ln, 'w') || 12700) / EMU), color: c, dash: d && d !== 'solid' ? (/sys|dot/i.test(d) ? 'dotted' : 'dashed') : 'solid' };
+    };
+
+    // ---- text property readers ----
+    const fontName = (f) => (f === '+mj-lt' ? T.major : f === '+mn-lt' ? T.minor : f);
+    const readR = (rp) => {
+      const o = {};
+      if (!rp) return o;
+      if (at(rp, 'sz')) o.size = Number(at(rp, 'sz')) / 100 * PX_PT;
+      for (const [k, n] of [['b', 'b'], ['i', 'i']]) if (at(rp, n) !== null) o[k] = at(rp, n) === '1' || at(rp, n) === 'true';
+      if (at(rp, 'u') !== null) o.u = at(rp, 'u') !== 'none';
+      if (at(rp, 'strike') !== null) o.s = at(rp, 'strike') !== 'noStrike';
+      if (at(rp, 'cap') !== null) o.caps = at(rp, 'cap') === 'all';
+      if (at(rp, 'baseline')) { const b = Number(at(rp, 'baseline')); if (b > 0) o.sup = true; else if (b < 0) o.sub = true; }
+      const sf = kid(rp, 'solidFill'); if (sf) o.color = clr(sf);
+      const lat = kid(rp, 'latin'); if (lat && at(lat, 'typeface')) o.font = fontName(at(lat, 'typeface'));
+      return o;
+    };
+    const readP = (pp) => {
+      const o = {};
+      if (!pp) return o;
+      const al = at(pp, 'algn'); if (al) o.algn = { l: 'left', ctr: 'center', r: 'right', just: 'justify', dist: 'justify' }[al] || 'left';
+      if (at(pp, 'marL') !== null) o.marL = Number(at(pp, 'marL')) / EMU;
+      if (at(pp, 'indent') !== null) o.indent = Number(at(pp, 'indent')) / EMU;
+      const sp = (n) => { const x = kid(pp, n); if (!x) return undefined; const pt = kid(x, 'spcPts'); const pc = kid(x, 'spcPct'); return pt ? { px: Number(at(pt, 'val')) / 100 * PX_PT } : pc ? { pct: Number(at(pc, 'val')) / 100000 } : undefined; };
+      o.sb = sp('spcBef'); o.sa = sp('spcAft');
+      const ls = sp('lnSpc'); if (ls) o.ln = ls;
+      if (kid(pp, 'buNone')) o.bu = { none: true };
+      else if (kid(pp, 'buChar')) o.bu = { char: at(kid(pp, 'buChar'), 'char') || '\u2022' };
+      else if (kid(pp, 'buAutoNum')) o.bu = { auto: at(kid(pp, 'buAutoNum'), 'type') || 'arabicPeriod', start: Number(at(kid(pp, 'buAutoNum'), 'startAt') || 1) };
+      if (o.bu || kid(pp, 'buClr') || kid(pp, 'buSzPct') || kid(pp, 'buFont')) {
+        o.buc = kid(pp, 'buClr') ? clr(kid(pp, 'buClr')) : undefined;
+        o.bus = kid(pp, 'buSzPct') ? Number(at(kid(pp, 'buSzPct'), 'val')) / 100000 : undefined;
+        o.buf = kid(pp, 'buFont') ? at(kid(pp, 'buFont'), 'typeface') : undefined;
+      }
+      const d = kid(pp, 'defRPr'); if (d) o.r = readR(d);
+      return o;
+    };
+    const lvlProps = (chain, lvl) => {
+      const p = {}; const rr = {};
+      for (let k = chain.length - 1; k >= 0; k--) {
+        const x = chain[k] && kid(chain[k], `lvl${lvl + 1}pPr`);
+        if (!x) continue;
+        const pp = readP(x);
+        for (const [key, val] of Object.entries(pp)) if (val !== undefined && key !== 'r') p[key] = val;
+        if (pp.r) Object.assign(rr, pp.r);
+      }
+      return { p, r: rr };
+    };
+
+    // ---- placeholders: find the matching shape in the layout and master ----
+    const spTreeOf = (n) => kid(kid(n, 'cSld'), 'spTree');
+    const phOf = (sp) => kid(kid(kid(sp, 'nvSpPr'), 'nvPr'), 'ph');
+    const baseType = (t) => (t === 'ctrTitle' ? 'title' : t === 'subTitle' || t === 'obj' || t === '' || t === null ? 'body' : t);
+    function findPh(tree, ph) {
+      if (!tree || !ph) return null;
+      const idx = at(ph, 'idx'); const type = at(ph, 'type');
+      const all = kids(tree, 'sp').filter((s) => phOf(s));
+      return all.find((s) => idx !== null && at(phOf(s), 'idx') === idx && (at(phOf(s), 'type') || null) === (type || null))
+        || all.find((s) => idx !== null && at(phOf(s), 'idx') === idx)
+        || all.find((s) => baseType(at(phOf(s), 'type')) === baseType(type)) || null;
+    }
+    const lTree = spTreeOf(layout); const mTree = spTreeOf(master);
+    const txCat = (type) => { const b = baseType(type); return b === 'title' ? 'titleStyle' : b === 'body' ? 'bodyStyle' : 'otherStyle'; };
+    const txStyles = kid(master, 'txStyles');
+
+    function xfrmOf(spPr) {
+      const x = kid(spPr, 'xfrm');
+      if (!x) return null;
+      const off = kid(x, 'off'); const ext = kid(x, 'ext');
+      if (!ext) return null;
+      return { x: Number(at(off, 'x') || 0), y: Number(at(off, 'y') || 0), w: Number(at(ext, 'cx') || 0), h: Number(at(ext, 'cy') || 0), rot: Number(at(x, 'rot') || 0) / 60000, fh: at(x, 'flipH') === '1', fv: at(x, 'flipV') === '1' };
+    }
+    const place = (g, xf) => ({ x: (xf.sx * g.x + xf.tx) / EMU, y: (xf.sy * g.y + xf.ty) / EMU, w: (g.w * xf.sx) / EMU, h: (g.h * xf.sy) / EMU, rot: g.rot, fh: g.fh, fv: g.fv });
+
+    function textBody(tx, chain, ctx) {
+      const bp = kid(tx, 'bodyPr');
+      const body = { anchor: at(ctx.bodyPr[0], 'anchor') || at(ctx.bodyPr[1], 'anchor') || at(ctx.bodyPr[2], 'anchor') || 't' };
+      const pick = (n, d) => { for (const b of ctx.bodyPr) if (b && at(b, n) !== null) return Number(at(b, n)); return d; };
+      body.l = pick('lIns', 91440) / EMU; body.r = pick('rIns', 91440) / EMU; body.t = pick('tIns', 45720) / EMU; body.b = pick('bIns', 45720) / EMU;
+      const wb = ctx.bodyPr.find((b) => b && at(b, 'wrap') !== null); body.wrap = !wb || at(wb, 'wrap') !== 'none';
+      const na = kid(bp, 'normAutofit'); body.scale = na && at(na, 'fontScale') ? Number(at(na, 'fontScale')) / 100000 : 1;
+      const counters = [];
+      body.paras = [];
       for (const p of kids(tx, 'p')) {
-        const runs = textRuns(p);
-        if (!runs.some((r) => r.text)) continue;
-        const pp = kid(p, 'pPr');
-        const explicit = !!(kid(pp, 'buChar') || kid(pp, 'buAutoNum'));
-        const none = !!kid(pp, 'buNone');
-        out.push({ t: 'p', level: Math.min(Number(at(pp, 'lvl') || 0), 5), bullet: !isTitle && !none && (explicit || bulletDefault), runs });
+        const pp = kid(p, 'pPr'); const lvl = Math.min(Number(at(pp, 'lvl') || 0), 8);
+        const base = lvlProps(chain, lvl); const own = readP(pp);
+        const props = { ...base.p, ...Object.fromEntries(Object.entries(own).filter(([k, v]) => v !== undefined && k !== 'r')) };
+        const runs = [];
+        for (const c of p.children) {
+          if (c.localName === 'r' || c.localName === 'fld') {
+            const text = kids(c, 't').map((t) => t.textContent).join('');
+            if (!text) continue;
+            const f = { ...base.r, ...(own.r || {}), ...readR(kid(c, 'rPr')) };
+            runs.push({ text, font: f.font || T.minor, size: f.size, b: f.b, i: f.i, u: f.u, s: f.s, caps: f.caps, sup: f.sup, sub: f.sub, color: f.color || ctx.color });
+          } else if (c.localName === 'br') runs.push({ br: true });
+        }
+        const endR = { ...base.r, ...readR(kid(p, 'endParaRPr')) };
+        let bullet = null;
+        if (runs.length && props.bu && !props.bu.none) {
+          if (props.bu.char) bullet = { text: props.bu.char === '\u00a7' ? '\u25aa' : props.bu.char };
+          else { counters[lvl] = counters[lvl] === undefined ? props.bu.start : counters[lvl] + 1; counters.length = lvl + 1; const n = counters[lvl]; bullet = { text: /alpha/i.test(props.bu.auto) ? letters(n, /Uc/.test(props.bu.auto)) + (/ParenR/.test(props.bu.auto) ? ')' : '.') : n + (/ParenR/.test(props.bu.auto) ? ')' : '.') }; }
+          bullet.color = props.buc || (runs.find((x) => x.color) || {}).color; bullet.size = props.bus;
+        } else if (!props.bu) counters.length = Math.min(counters.length, lvl);
+        body.paras.push({ algn: props.algn || 'left', marL: props.marL || 0, indent: props.indent || 0, sb: props.sb, sa: props.sa, ln: props.ln, bullet, runs, size: endR.size || (runs.find((x) => x.size) || {}).size });
       }
-      return out;
-    };
-    const shapes = (node) => {
-      for (const c of node.children) {
+      return body;
+    }
+    const dText = defText ? [defText] : [];
+
+    const items = [];
+    const defColor = { hex: T.colors[clrMap.tx1 || 'tx1'] || T.colors.dk1 || '000000', a: 1 };
+    function walk(tree, rl, xf, level) {
+      for (const c of tree.children) {
         const n = c.localName;
-        if (n === 'sp') {
-          const ph = kid(kid(kid(c, 'nvSpPr'), 'nvPr'), 'ph');
-          const type = ph ? at(ph, 'type') || '' : null;
-          const isTitle = type === 'title' || type === 'ctrTitle';
-          const tx = kid(c, 'txBody');
-          if (!tx) continue;
-          const paras = paragraphs(tx, isTitle, ph !== null && BODY_PH.has(type));
-          if (isTitle && paras.length) blocks.push({ t: 'title', runs: paras.flatMap((p) => p.runs) });
-          else blocks.push(...paras);
-        } else if (n === 'pic') {
-          const r = srel[blipId(c)];
-          const img = r && image(files, r.path);
-          if (img) { media[r.path] = img; blocks.push({ t: 'img', path: r.path }); }
-        } else if (n === 'graphicFrame') {
+        if (n === 'AlternateContent') { const ch = kid(c, 'Choice'); if (ch) walk({ children: ch.children }, rl, xf, level); continue; }
+        if (n === 'grpSp') {
+          const gx = kid(kid(c, 'grpSpPr'), 'xfrm');
+          let nx = xf;
+          if (gx && kid(gx, 'off') && kid(gx, 'chOff')) {
+            const o = kid(gx, 'off'), e = kid(gx, 'ext'), co = kid(gx, 'chOff'), ce = kid(gx, 'chExt');
+            const kx = Number(at(ce, 'cx')) ? Number(at(e, 'cx')) / Number(at(ce, 'cx')) : 1; const ky = Number(at(ce, 'cy')) ? Number(at(e, 'cy')) / Number(at(ce, 'cy')) : 1;
+            nx = { sx: xf.sx * kx, sy: xf.sy * ky, tx: xf.sx * (Number(at(o, 'x')) - Number(at(co, 'x')) * kx) + xf.tx, ty: xf.sy * (Number(at(o, 'y')) - Number(at(co, 'y')) * ky) + xf.ty };
+          }
+          walk(c, rl, nx, level);
+          continue;
+        }
+        if (n === 'pic') {
+          const spPr = kid(c, 'spPr'); const g = xfrmOf(spPr); if (!g) continue;
+          const path = photo(rl, rat(kid(kid(c, 'blipFill'), 'blip'), 'embed')); if (!path) continue;
+          const sr = kid(kid(c, 'blipFill'), 'srcRect');
+          items.push({ t: 'pic', ...place(g, xf), path, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null, line: lineOf(kid(spPr, 'ln')) || null });
+          continue;
+        }
+        if (n === 'graphicFrame') {
+          const fx = kid(c, 'xfrm'); const g = fx ? { x: Number(at(kid(fx, 'off'), 'x') || 0), y: Number(at(kid(fx, 'off'), 'y') || 0), w: Number(at(kid(fx, 'ext'), 'cx') || 0), h: Number(at(kid(fx, 'ext'), 'cy') || 0), rot: 0 } : null;
+          if (!g) continue;
           const tbl = descendants(c, 'tbl')[0];
-          if (tbl) {
-            blocks.push({ t: 'table', rows: kids(tbl, 'tr').map((tr) => kids(tr, 'tc').map((tc) => ({
-              span: Number(at(tc, 'gridSpan')) || 1,
-              text: kids(kid(tc, 'txBody'), 'p').map((p) => textRuns(p).map((r) => r.text || '\n').join('')).join('\n')
-            }))) });
-          } else blocks.push({ t: 'note', text: 'A chart or diagram is not shown here.' });
-        } else if (n === 'grpSp') shapes(c);
-        else if (n === 'AlternateContent') { const ch = kid(c, 'Choice'); if (ch) shapes(ch); }
+          items.push(tbl ? { t: 'table', ...place(g, xf), ...table(tbl, c) } : { t: 'note', ...place(g, xf), text: 'A chart or diagram is not shown here.' });
+          continue;
+        }
+        if (n !== 'sp' && n !== 'cxnSp') continue;
+        const ph = n === 'sp' ? phOf(c) : null;
+        if (ph && level !== 'slide') continue; // layout and master placeholders only lend their properties
+        const spPr = kid(c, 'spPr');
+        const lph = level === 'slide' && ph ? findPh(lTree, ph) : null;
+        const mph = ph ? findPh(mTree, lph ? phOf(lph) : ph) : null;
+        const g = xfrmOf(spPr) || xfrmOf(kid(lph, 'spPr')) || xfrmOf(kid(mph, 'spPr'));
+        if (!g) continue;
+        const style = kid(c, 'style');
+        const fr = kid(style, 'fillRef'); const lnr = kid(style, 'lnRef'); const fnr = kid(style, 'fontRef');
+        const phc = (n2) => (n2 ? clr(n2) : null);
+        let fill; let line;
+        for (const sp of [spPr, kid(lph, 'spPr'), kid(mph, 'spPr')]) { if (fill === undefined) fill = fillOf(sp); if (line === undefined) line = lineOf(kid(sp, 'ln')); }
+        if (fill === undefined) fill = fr && Number(at(fr, 'idx')) > 0 ? phc(fr) : null;
+        if (line === undefined) line = lnr && Number(at(lnr, 'idx')) > 0 ? { w: 1.5, color: phc(lnr), dash: 'solid' } : null;
+        else if (line && line.color === undefined) line = lnr && Number(at(lnr, 'idx')) > 0 ? { ...line, color: phc(lnr), dash: 'solid' } : null;
+        const prst = at(kid(spPr, 'prstGeom'), 'prst') || (n === 'cxnSp' ? 'line' : 'rect');
+        const gd = kid(kid(kid(spPr, 'prstGeom'), 'avLst'), 'gd'); const am = gd && /val (-?\d+)/.exec(at(gd, 'fmla') || ''); const adj = am ? Number(am[1]) : 0;
+        const item = { t: 'shape', ...place(g, xf), geom: prst, adj: adj || null, fill, line };
+        const tx = kid(c, 'txBody');
+        if (tx && n === 'sp') {
+          const lst = (nd) => kid(kid(nd, 'txBody'), 'lstStyle');
+          const chain = [kid(tx, 'lstStyle'), lst(lph), lst(mph), ph ? kid(txStyles, txCat(at(ph, 'type'))) : null, ...dText];
+          const color = fnr ? phc(fnr) || defColor : defColor;
+          const body = textBody(tx, chain, { bodyPr: [kid(tx, 'bodyPr'), kid(kid(lph, 'txBody'), 'bodyPr'), kid(kid(mph, 'txBody'), 'bodyPr')], color });
+          if (body.paras.some((p) => p.runs.length)) item.text = body;
+        }
+        if (item.text || item.fill || item.line || level !== 'slide') items.push(item);
       }
-    };
-    shapes(kid(kid(root, 'cSld'), 'spTree') || root);
+    }
+    function table(tbl, frame) {
+      const tp = kid(tbl, 'tblPr'); const sid = kid(tp, 'tableStyleId') ? kid(tp, 'tableStyleId').textContent.trim() : '';
+      const cols = kids(kid(tbl, 'tblGrid'), 'gridCol').map((x) => Number(at(x, 'w')) / EMU);
+      const first = at(tp, 'firstRow') === '1'; const band = at(tp, 'bandRow') === '1';
+      const a1 = T.colors.accent1 || '4472C4'; const lt = T.colors.lt1 || 'FFFFFF'; const dk = T.colors.dk1 || '000000';
+      const none = /2D5ABB26/i.test(sid); const grid = /5940675A/i.test(sid);
+      const rows = kids(tbl, 'tr').map((tr, ri) => ({
+        h: Number(at(tr, 'h') || 0) / EMU,
+        cells: kids(tr, 'tc').map((tc) => {
+          const cp = kid(tc, 'tcPr');
+          const own = fillOf(cp);
+          let fill = own; let color = defColor; let bold = false;
+          if (own === undefined && !none && !grid) {
+            if (first && ri === 0) { fill = { hex: a1, a: 1 }; color = { hex: lt, a: 1 }; bold = true; }
+            else fill = { hex: mixHex(a1, 'FFFFFF', band && ri % 2 === 1 ? 0.6 : 0.8), a: 1 };
+          }
+          const bd = {};
+          for (const [k, nm] of [['l', 'lnL'], ['r', 'lnR'], ['t', 'lnT'], ['b', 'lnB']]) { const l = lineOf(kid(cp, nm)); bd[k] = l === undefined ? (none ? null : grid ? { w: 1, color: { hex: dk, a: 1 }, dash: 'solid' } : { w: 1, color: { hex: lt, a: 1 }, dash: 'solid' }) : l; }
+          const tx = kid(tc, 'txBody');
+          const body = tx ? textBody(tx, [kid(tx, 'lstStyle'), ...dText], { bodyPr: [null, null, null], color }) : { paras: [] };
+          if (bold) for (const p of body.paras) for (const r2 of p.runs) if (r2.b === undefined) r2.b = true;
+          const pad = (nm, d) => (at(cp, nm) !== null ? Number(at(cp, nm)) / EMU : d);
+          return { span: Number(at(tc, 'gridSpan') || 1), rowSpan: Number(at(tc, 'rowSpan') || 1), skip: at(tc, 'hMerge') === '1' || at(tc, 'vMerge') === '1', fill, bd, anchor: at(cp, 'anchor') || 't', pl: pad('marL', 9.6), pr: pad('marR', 9.6), pt: pad('marT', 4.8), pb: pad('marB', 4.8), body };
+        })
+      }));
+      return { cols, rows };
+    }
+
+    const media0 = media;
+    // ---- background ----
+    let bg = null;
+    for (const [node, rl] of [[root, srel], [layout, lrel], [master, mrel]]) {
+      const b = kid(kid(node, 'cSld'), 'bg'); if (!b) continue;
+      const pr = kid(b, 'bgPr'); const ref = kid(b, 'bgRef');
+      const f = pr ? fillOf(pr) : ref ? clr(ref) : undefined;
+      if (f !== undefined) { bg = f; break; }
+      const bl = kid(pr, 'blipFill'); if (bl) { const p = photo(rl, rat(kid(bl, 'blip'), 'embed')); if (p) { bg = { img: p }; break; } }
+    }
+    if (bg === null) bg = { hex: T.colors[clrMap.bg1 || 'bg1'] || T.colors.lt1 || 'FFFFFF', a: 1 };
+    const id = { sx: 1, sy: 1, tx: 0, ty: 0 };
+    const showM = at(root, 'showMasterSp') !== '0' && at(layout, 'showMasterSp') !== '0';
+    if (master && showM) walk(spTreeOf(master), mrel, id, 'master');
+    if (layout && at(root, 'showMasterSp') !== '0') walk(lTree, lrel, id, 'layout');
+    walk(spTreeOf(root), srel, id, 'slide');
     // speaker notes: the body placeholder of the notes page
     let notes = '';
-    const nr = Object.values(srel).find((r) => r.type.endsWith('/notesSlide'));
+    const nr = Object.values(srel).find((x) => x.type.endsWith('/notesSlide'));
     const nroot = nr && xml(files, nr.path);
     if (nroot) {
-      notes = descendants(nroot, 'sp').filter((sp) => at(kid(kid(kid(sp, 'nvSpPr'), 'nvPr'), 'ph'), 'type') === 'body')
-        .map((sp) => kids(kid(sp, 'txBody'), 'p').map((p) => textRuns(p).map((r) => r.text || '\n').join('')).join('\n')).join('\n').trim();
+      notes = descendants(nroot, 'sp').filter((sp) => at(phOf(sp), 'type') === 'body')
+        .map((sp) => kids(kid(sp, 'txBody'), 'p').map((p) => descendants(p, 't').map((t) => t.textContent).join('')).join('\n')).join('\n').trim();
     }
-    return { blocks, media, notes };
+    return { w: W, h: H, bg, items, media: media0, notes };
   }
-  return { kind: 'pptx', count: slides.length, load };
+  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H } };
 }

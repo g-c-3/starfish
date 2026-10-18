@@ -231,7 +231,7 @@ function setupZoom(scroll, zoomer, fit, ui) {
     pinch.last = f;
   }, { passive: false });
   scroll.addEventListener('touchend', () => { pinch = null; }, { passive: true });
-  return { apply, by, reset() { user = 1; apply(); } };
+  return { apply, by, user: () => user, reset() { user = 1; apply(); } };
 }
 function zoomButtons(ui, zoom) {
   const zin = el('button', 'eo-segbtn eo-zbtn', '+'); const zout = el('button', 'eo-segbtn eo-zbtn', '\u2212');
@@ -409,42 +409,160 @@ function mountXlsx(model, host, ui, bars) {
   return {};
 }
 
-// ---- pptx: one slide at a time, Previous and Next ----
-function mountPptx(model, host, ui, count, u) {
-  const stage = el('div', 'eo-slide-stage'); const bar = el('div', 'eo-slidebar');
-  const prev = el('button', 'eo-nav', 'Previous'); const next = el('button', 'eo-nav', 'Next');
-  prev.type = next.type = 'button';
-  bar.append(prev, next); host.append(stage, bar);
+// ---- pptx: a slide on a canvas at the size set in the file, scaled to fit; Previous, Next, swipe, zoom ----
+const css = (c) => (c.a < 1 ? `rgba(${parseInt(c.hex.slice(0, 2), 16)},${parseInt(c.hex.slice(2, 4), 16)},${parseInt(c.hex.slice(4, 6), 16)},${c.a})` : `#${c.hex}`);
+function fillCss(f) {
+  if (!f) return '';
+  if (f.grad) return `linear-gradient(${f.ang}deg,${f.grad.map((g) => `${css(g.c)} ${g.pos}%`).join(',')})`;
+  return css(f);
+}
+const CLIP = { triangle: 'polygon(50% 0,100% 100%,0 100%)', rtTriangle: 'polygon(0 0,100% 100%,0 100%)', diamond: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', hexagon: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)', pentagon: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)', parallelogram: 'polygon(25% 0,100% 0,75% 100%,0 100%)', trapezoid: 'polygon(25% 0,75% 0,100% 100%,0 100%)', rightArrow: 'polygon(0 25%,60% 25%,60% 0,100% 50%,60% 100%,60% 75%,0 75%)', leftArrow: 'polygon(100% 25%,40% 25%,40% 0,0 50%,40% 100%,40% 75%,100% 75%)', chevron: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%,25% 50%)', homePlate: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%)' };
+function paragraphs(body, parent, u, scale) {
+  for (const p of body.paras) {
+    const d = el('div');
+    const st = d.style;
+    st.textAlign = p.algn; st.whiteSpace = body.wrap === false ? 'pre' : 'pre-wrap';
+    if (p.marL) st.marginLeft = `${p.marL}px`;
+    const size = (p.size || 24) * scale;
+    if (p.indent) st.textIndent = `${p.indent}px`;
+    if (p.sb) st.marginTop = p.sb.px !== undefined ? `${p.sb.px}px` : `${p.sb.pct * size}px`;
+    if (p.sa) st.marginBottom = p.sa.px !== undefined ? `${p.sa.px}px` : `${p.sa.pct * size}px`;
+    if (p.ln) st.lineHeight = p.ln.pct !== undefined ? String(p.ln.pct * 1.2) : `${p.ln.px}px`; else st.lineHeight = '1.2';
+    if (p.bullet) {
+      const m = el('span', 'eo-mark', p.bullet.text);
+      m.style.display = 'inline-block'; m.style.textIndent = '0';
+      if (p.indent < 0) m.style.minWidth = `${-p.indent}px`; else m.style.marginRight = '6px';
+      if (p.bullet.color) m.style.color = css(p.bullet.color);
+      if (p.bullet.size) m.style.fontSize = `${size * p.bullet.size}px`;
+      d.appendChild(m);
+    }
+    for (const r of p.runs) {
+      if (r.br) { d.appendChild(document.createElement('br')); continue; }
+      let node = el('span', '', r.text);
+      if (r.sup) { const x = el('sup'); x.appendChild(node); node = x; } else if (r.sub) { const x = el('sub'); x.appendChild(node); node = x; }
+      const ns = node.style;
+      ns.fontFamily = stack(r.font || 'Calibri'); ns.fontSize = `${(r.size || 24) * scale}px`;
+      if (r.color) ns.color = css(r.color);
+      if (r.b) ns.fontWeight = '700'; if (r.i) ns.fontStyle = 'italic';
+      const deco = [r.u ? 'underline' : '', r.s ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) ns.textDecoration = deco;
+      if (r.caps) ns.textTransform = 'uppercase';
+      d.appendChild(node);
+    }
+    if (!p.runs.length) { d.appendChild(el('br')); st.fontSize = `${size}px`; }
+    parent.appendChild(d);
+  }
+}
+function slideDom(s, u) {
+  const cv = el('div', 'eo-canvas');
+  cv.style.width = `${s.w}px`; cv.style.height = `${s.h}px`;
+  if (s.bg && s.bg.img) { const url = u.get(s.bg.img, s.media); if (url) { cv.style.backgroundImage = `url(${url})`; cv.style.backgroundSize = '100% 100%'; } }
+  else if (s.bg) cv.style.background = fillCss(s.bg);
+  for (const it of s.items) {
+    const n = el('div', 'eo-it'); const st = n.style;
+    st.left = `${it.x}px`; st.top = `${it.y}px`; st.width = `${it.w}px`; st.height = `${it.h}px`;
+    const tf = [it.rot ? `rotate(${it.rot}deg)` : '', it.fh ? 'scaleX(-1)' : '', it.fv ? 'scaleY(-1)' : ''].filter(Boolean).join(' '); if (tf) st.transform = tf;
+    if (it.t === 'pic') {
+      const url = u.get(it.path, s.media);
+      if (!url) continue;
+      st.overflow = 'hidden';
+      const im = el('img'); im.alt = ''; im.src = url; im.style.position = 'absolute';
+      if (it.crop && (it.crop.l || it.crop.r || it.crop.t || it.crop.b)) {
+        const iw = it.w * 100 / Math.max(1, 100 - it.crop.l - it.crop.r); const ih = it.h * 100 / Math.max(1, 100 - it.crop.t - it.crop.b);
+        im.style.width = `${iw}px`; im.style.height = `${ih}px`; im.style.left = `${-iw * it.crop.l / 100}px`; im.style.top = `${-ih * it.crop.t / 100}px`;
+      } else { im.style.width = '100%'; im.style.height = '100%'; }
+      n.appendChild(im);
+      if (it.line && it.line.color) { st.boxSizing = 'border-box'; st.border = `${it.line.w}px ${it.line.dash} ${css(it.line.color)}`; }
+    } else if (it.t === 'table') {
+      const total = it.cols.reduce((a, x) => a + x, 0);
+      st.width = `${total}px`; st.height = 'auto';
+      const t = el('table', 'eo-ptable'); t.style.width = `${total}px`;
+      const cg = el('colgroup'); for (const w of it.cols) { const c = el('col'); c.style.width = `${w}px`; cg.appendChild(c); } t.appendChild(cg);
+      const tb = el('tbody');
+      for (const row of it.rows) {
+        const tr = el('tr'); tr.style.height = `${row.h}px`;
+        for (const c of row.cells) {
+          if (c.skip) continue;
+          const td = el('td'); const ts = td.style;
+          if (c.span > 1) td.colSpan = c.span; if (c.rowSpan > 1) td.rowSpan = c.rowSpan;
+          if (c.fill) ts.background = fillCss(c.fill);
+          for (const [k, side] of [['l', 'Left'], ['r', 'Right'], ['t', 'Top'], ['b', 'Bottom']]) { const b = c.bd[k]; ts[`border${side}`] = b && b.color ? `${b.w}px ${b.dash} ${css(b.color)}` : 'none'; }
+          ts.padding = `${c.pt}px ${c.pr}px ${c.pb}px ${c.pl}px`; ts.verticalAlign = c.anchor === 'ctr' ? 'middle' : c.anchor === 'b' ? 'bottom' : 'top';
+          paragraphs(c.body, td, u, 1);
+          tr.appendChild(td);
+        }
+        tb.appendChild(tr);
+      }
+      t.appendChild(tb); n.appendChild(t);
+    } else if (it.t === 'note') {
+      st.border = '1px dashed #888'; st.display = 'flex'; st.alignItems = 'center'; st.justifyContent = 'center'; st.color = '#666'; st.fontSize = '16px'; st.background = 'rgba(128,128,128,.08)';
+      n.textContent = it.text;
+    } else {
+      const g = it.geom;
+      st.boxSizing = 'border-box';
+      if (/^(line|straightConnector1|bentConnector\d|curvedConnector\d)$/.test(g)) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const sv = document.createElementNS(ns, 'svg'); sv.setAttribute('width', String(Math.max(1, it.w))); sv.setAttribute('height', String(Math.max(1, it.h))); sv.style.overflow = 'visible';
+        const ln = document.createElementNS(ns, 'line'); ln.setAttribute('x1', '0'); ln.setAttribute('y1', '0'); ln.setAttribute('x2', String(it.w)); ln.setAttribute('y2', String(it.h));
+        ln.setAttribute('stroke', it.line && it.line.color ? css(it.line.color) : '#000'); ln.setAttribute('stroke-width', String(it.line ? it.line.w : 1));
+        if (it.line && it.line.dash !== 'solid') ln.setAttribute('stroke-dasharray', it.line.dash === 'dotted' ? '2 3' : '6 4');
+        sv.appendChild(ln); n.appendChild(sv);
+      } else {
+        if (it.fill) st.background = fillCss(it.fill);
+        if (CLIP[g]) st.clipPath = CLIP[g];
+        else {
+          if (it.line && it.line.color) st.border = `${it.line.w}px ${it.line.dash} ${css(it.line.color)}`;
+          if (g === 'ellipse') st.borderRadius = '50%';
+          else if (g === 'roundRect') st.borderRadius = `${Math.min(it.w, it.h) * (it.adj ? it.adj / 100000 : 0.16667)}px`;
+        }
+      }
+      if (it.text) {
+        const b = it.text; const tx = el('div', 'eo-tx'); const ts = tx.style;
+        ts.padding = `${b.t}px ${b.r}px ${b.b}px ${b.l}px`;
+        ts.justifyContent = b.anchor === 'ctr' ? 'center' : b.anchor === 'b' ? 'flex-end' : 'flex-start';
+        paragraphs(b, tx, u, b.scale);
+        n.appendChild(tx);
+      }
+    }
+    cv.appendChild(n);
+  }
+  return cv;
+}
+function mountPptx(model, host, ui, count, u, bars) {
+  const scroll = el('div', 'eo-scroll eo-pscroll'); const zoomer = el('div', 'eo-zoomer'); const stage = el('div'); const notes = el('div', 'eo-notes-wrap');
+  const bar = el('div', 'eo-slidebar'); const prev = el('button', 'eo-nav', 'Previous'); const next = el('button', 'eo-nav', 'Next');
+  prev.type = next.type = 'button'; bar.append(prev, next);
+  zoomer.appendChild(stage); scroll.append(zoomer, notes); host.append(scroll, bar);
+  const sw = model.size.w;
+  const fit = () => (scroll.clientWidth ? Math.max(0.1, (scroll.clientWidth - 16) / sw) : 1);
+  const zoom = setupZoom(scroll, zoomer, fit, ui);
+  zoomer.style.width = `${sw}px`;
+  bars.extra = (b) => b.appendChild(zoomButtons(ui, zoom));
   let index = 0;
   function show(i) {
     index = i;
     count(`${i + 1}/${model.count}`);
     prev.disabled = i === 0; next.disabled = i === model.count - 1;
-    stage.replaceChildren(); stage.scrollTop = 0; u.revoke();
+    stage.replaceChildren(); notes.replaceChildren(); u.revoke();
+    zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
     let s;
     try { s = model.load(i); } catch (e) { stage.appendChild(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This slide could not be read.')); return; }
-    const card = el('div', 'eo-slide');
-    for (const b of s.blocks) {
-      if (b.t === 'title') { const h = el('h2', 'eo-slide-title'); appendRuns(h, b.runs, s.media, u); card.appendChild(h); }
-      else if (b.t === 'p') {
-        const p = el('p', 'eo-p'); p.style.marginLeft = `${b.level * 18}px`;
-        if (b.bullet) p.appendChild(el('span', 'eo-mark', '\u2022'));
-        appendRuns(p, b.runs, s.media, u); card.appendChild(p);
-      } else if (b.t === 'img') { const src = u.get(b.path, s.media); if (src) { const im = el('img', 'eo-img'); im.alt = ''; im.src = src; card.appendChild(im); } }
-      else if (b.t === 'table') {
-        const wrap = el('div', 'eo-tablewrap'); const t = el('table', 'eo-table'); const tb = el('tbody');
-        for (const row of b.rows) { const tr = el('tr'); for (const cell of row) { const td = el('td', '', cell.text); td.style.whiteSpace = 'pre-wrap'; if (cell.span > 1) td.colSpan = cell.span; tr.appendChild(td); } tb.appendChild(tr); }
-        t.appendChild(tb); wrap.appendChild(t); card.appendChild(wrap);
-      } else if (b.t === 'note') card.appendChild(el('p', 'eo-note', b.text));
-    }
-    if (!card.childNodes.length) card.appendChild(el('p', 'eo-note', 'This slide has no text to show.'));
-    stage.appendChild(card);
-    if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); stage.appendChild(n); }
+    stage.appendChild(slideDom(s, u));
+    if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); notes.appendChild(n); }
   }
   prev.onclick = () => { ui.onActivity(); if (index > 0) show(index - 1); };
   next.onclick = () => { ui.onActivity(); if (index < model.count - 1) show(index + 1); };
+  // swipe sideways to change slide, only while not zoomed in
+  let t0 = null;
+  scroll.addEventListener('touchstart', (e) => { t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+  scroll.addEventListener('touchend', (e) => {
+    if (!t0 || !e.changedTouches.length || zoom.user() > 1.05) { t0 = null; return; }
+    const dx = e.changedTouches[0].clientX - t0.x; const dy = e.changedTouches[0].clientY - t0.y; t0 = null;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) { ui.onActivity(); if (dx < 0 && index < model.count - 1) show(index + 1); else if (dx > 0 && index > 0) show(index - 1); }
+  }, { passive: true });
   show(0);
-  return {};
+  let ro = null;
+  if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
+  return { destroy() { if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -470,8 +588,10 @@ export function mountOffice(kind, bytes, host, ctx) {
     bars.bar = buildBar(host, ui, tmp.extra);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
-    bars.bar = buildBar(host, ui, null);
-    inner = mountPptx(model, host, ui, setCount, u);
+    const holder = el('div'); const tmp = { extra: null };
+    inner = mountPptx(model, holder, ui, setCount, u, tmp);
+    bars.bar = buildBar(host, ui, tmp.extra);
+    while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   return { destroy() { if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }
