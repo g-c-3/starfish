@@ -1,13 +1,14 @@
 // explorer-view.js — built-in viewers of the File explorer (Decision 211): text (view and edit, saved back to the file),
-// image, PDF (reading tools only), audio and video. Files are read where they are; nothing is copied, stored or sent
+// image, PDF (reading tools only), audio, video, and docx, xlsx and pptx (view only, Decision 226). Files are read where they are; nothing is copied, stored or sent
 // anywhere, and no database row is written. The screen's own lock rules apply: destroy() runs on an app or Vault lock.
 
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
-export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video'];
+export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
 export const TEXT_MAX = 2 * 1024 * 1024; // larger text goes to another app: a textarea of that size is slow on a phone
 export const PDF_MAX = 150 * 1024 * 1024; // the whole file is held in memory while it is open
+export const OFFICE_MAX = 50 * 1024 * 1024; // same reason; docx, xlsx and pptx are unpacked in memory
 
 // Binary data (a NUL) is not text. U+FFFD means invalid bytes were replaced on reading: saving would write the
 // replacements back, so such a file opens read-only.
@@ -135,6 +136,29 @@ export function openFileViewer(file, ctx) {
     }
   }
 
+  // ---- Office documents (view only) ----
+  async function showOffice(f, kind, mine) {
+    if (f.size > OFFICE_MAX) { note('This file is too large to open here. Use Open with app.'); return; }
+    note('Loading…');
+    let mounted = null;
+    cleanup = () => { if (mounted) { mounted.destroy(); mounted = null; } };
+    try {
+      const res = await fetch(mediaSrc(toUri(f.path)));
+      if (!res.ok) throw new Error('The file could not be read.');
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const { mountOffice } = await import('./office-render.js');
+      if (mine !== token || closed) return;
+      body.replaceChildren();
+      const host = el('div', 'eo-host');
+      body.appendChild(host);
+      mounted = mountOffice(kind, bytes, host, { ui, setCount: (t) => { if (mine === token) countEl.textContent = t; } });
+    } catch (err) {
+      if (mine !== token) return;
+      if (mounted) { mounted.destroy(); mounted = null; }
+      note(err && err.office ? err.message : 'This file cannot be shown here. Use Open with app.');
+    }
+  }
+
   // ---- Audio and video ----
   function showMedia(f, kind) {
     const box = el('div', kind === 'video' ? 'ev-media' : 'ev-media ev-audio');
@@ -161,6 +185,7 @@ export function openFileViewer(file, ctx) {
     if (kind === 'text') showText(f, mine);
     else if (kind === 'image') showImage(f);
     else if (kind === 'pdf') showPdf(f, mine);
+    else if (kind === 'docx' || kind === 'xlsx' || kind === 'pptx') showOffice(f, kind, mine);
     else showMedia(f, kind);
   }
 
