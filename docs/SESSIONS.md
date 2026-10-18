@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 133**
+
+Owner shared screenshots comparing the viewers with a reference reader: docx in Page view is close to it; xlsx showed values only. Stage 2 of E3b: xlsx (Decision 228). DP91 not yet fully confirmed (the docx look only).
+- `src/js/office-read.js`: `readXlsx` rewritten: theme and indexed colours, fonts, fills, borders, alignment, number formats (`formatValue`), widths, heights, hidden rows and columns, merges, frozen panes, grid lines, drawing notice.
+- `src/js/office-render.js`: xlsx table with a style rule per cell style, text spill, frozen cells, zoom shared with docx (`setupZoom`), zoom buttons; font names sanitised.
+- `src/css/style.css`: xlsx grid styles.
+- Docs: ROADMAP (stage 2, DP92), DECISIONS (228), ARCHITECTURE, TRACK.
+- Found while testing: literal text in number formats was read as digit placeholders (a literal's index contained a digit); fixed by masking each literal as one private-use character. Single-section negative numbers got two minus signs; fixed.
+
+Decisions made: 228.
+
+Verified: 85 reader, drawing and theme checks (20 number format codes among them); 14 viewer checks; `vite build` passes. Not verified: CI, any device (DP91, DP92), column width match with the original.
+
+Open: DP91, DP92 on device; E3b stage 3 pptx; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP91 and DP92 confirmation, then E3b stage 3 (pptx).
+
 **Session 132**
 
 Owner confirmed DP87 to DP90 on device. Request: the office viewers lost all formatting; wanted a fuller viewer and a dark mode switch of their own, system by default and kept once set. Choices: one theme setting for the three viewers; dark rendering left to me (Decision 227). Stage 1 of three: docx and the shared toolbar and theme. Source read: `explorer-view.js`, `office-read.js`, `office-render.js`, `style.css`.
