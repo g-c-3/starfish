@@ -1169,6 +1169,14 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 .eo-paper { background: var(--eo-paper); color: var(--eo-ink); font-family: Calibri, Carlito, Roboto, sans-serif; font-size: 14.67px; line-height: 1.2; overflow-wrap: anywhere; box-sizing: border-box; min-height: 40px; }
 .eo-paper.eo-pagemode { box-shadow: 0 2px 12px rgba(0,0,0,.25); }
 .eo-paper.eo-reflow { max-width: 760px; margin: 0 auto; }
+.eo-paper.eo-sheets { background: none; box-shadow: none; min-height: 0; }
+.eo-sheetcol { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.eo-sheet { display: flex; flex-direction: column; box-sizing: border-box; flex: none; background: var(--eo-paper); box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+.eo-sh-head { box-sizing: border-box; flex: none; }
+.eo-sh-body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.eo-sh-content { flex: none; padding-bottom: 12px; }
+.eo-sh-body .eo-fn { margin-top: auto; }
+.eo-sh-foot { box-sizing: border-box; flex: none; display: flex; flex-direction: column; justify-content: flex-end; }
 .eo-p { margin: 0; font: inherit; font-weight: inherit; white-space: pre-wrap; }
 .eo-mark { display: inline-block; text-indent: 0; white-space: pre; }
 .eo-hf { opacity: .85; }
