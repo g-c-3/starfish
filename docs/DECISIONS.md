@@ -2755,3 +2755,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The menu dock is centred horizontally on the screen, with a margin at each side.
 - Checks: 11 PDF wiring checks (including the button label) plus 17 shell, 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes.
 - Risks: not run through CI or on a device (DP102). Layout only; the dock width with the label is about 300 px.
+
+**240. Word headings outline and slide thumbnails (Phase 22, stage E3g).** Planned in Decision 234's follow-up; no editing involved (Decision 235).
+- A new Outline button (Word) or Slides button (slides) sits in the viewer menu after Info. It opens a panel under the find row; a second tap, a pick, or Play closes it.
+- Word: one row per top-level heading, indented by level (headings inside tables, headers, footers and footnotes are not listed); at most 500 rows. A tap scrolls the heading to the top. No headings gives a plain notice.
+- Slides: a horizontal strip of thumbnails, each the slide drawing scaled to 132 px wide, with number and first text line. Thumbnails are drawn when they scroll into view, with their own object URLs, released when the panel closes or the viewer closes. A tap opens that slide.
+- Excel has no panel; sheet tabs already serve.
+- Files: `src/js/office-render.js`, `src/css/style.css`. No change to the reader, credentials, backups or network use.
+- Checks: 6 simulated-page checks on a generated Word file (button present, panel hidden at start, rows and indents, tap scrolls and closes, toggle, destroy); `vite build` passes.
+- Risks: slide thumbnails not exercised, no slide file in the checks; not run through CI or on a device (DP103). Strip height with a tall slide shape and drawing cost on a long deck are unmeasured.
