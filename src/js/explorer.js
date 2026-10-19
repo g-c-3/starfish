@@ -860,7 +860,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     const kind = kindOf(file.name);
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) { openExternal(file); return; }
     viewer = openFileViewer(file, {
-      kind, siblings: [], toUri: toFileUri, ui, toast, isVault, readOnly: true, external: openExternal,
+      kind, siblings: [], toUri: toFileUri, ui, toast, isVault, readOnly: true, external: openExternal, leaving,
       onClose: () => { viewer = null; },
     });
   }
@@ -911,7 +911,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) return openExternal(e);
     const siblings = kind === 'image' ? shownItems().filter((x) => !x.isDir && kindOf(x.name) === 'image') : [];
     viewer = openFileViewer(e, {
-      kind, siblings, toUri: toFileUri, ui, toast, isVault, external: openExternal,
+      kind, siblings, toUri: toFileUri, ui, toast, isVault, external: openExternal, leaving,
       onClose: ({ changed }) => { viewer = null; if (changed && !closed && st.view === 'folder') showFolder(st.cwd); }
     });
     return undefined;

@@ -27,8 +27,12 @@ const errText = (e) => (e && e.message ? `: ${e.message}` : '.');
 // file: { name, path, size }. ctx: { kind, siblings (images of the folder, in listing order), toUri(path),
 // ui { askYesNo, askText, attachZoomPan, onActivity }, toast, external(file, chooser), isVault, onClose({ changed }) }.
 // Returns { back, destroy }; back() asks before dropping unsaved text and closes an open PDF tool first.
+// 'a.pdf' + 'marked' -> 'a (marked).pdf'
+export const copyName = (name, suffix) => `${name.replace(/\.pdf$/i, '')} (${suffix}).pdf`;
+const bytesToB64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
 export function openFileViewer(file, ctx) {
-  const { siblings = [], toUri, ui, toast, external, isVault = false, readOnly = false, onClose = () => {} } = ctx;
+  const { siblings = [], toUri, ui, toast, external, leaving = () => {}, isVault = false, readOnly = false, onClose = () => {} } = ctx;
   const $ = (id) => document.getElementById(id);
   const root = $('explorer-viewer'), body = $('ev-body'), titleEl = $('ev-title'), countEl = $('ev-count');
   const saveBtn = $('ev-save-btn'), openBtn = $('ev-open-btn');
@@ -147,7 +151,7 @@ export function openFileViewer(file, ctx) {
     enterFull(() => body.classList.toggle('pdf-menu-open'));
     stopScroll = chromeOnScroll(body, (h) => { if (h) closeMenus(); setChrome(h); }, '.pdf-scroll');
     scroll.addEventListener('pointerdown', closeMenus);
-    body.addEventListener('click', (e) => { if (e.target.closest('.pdf-find-btn, .pdf-pages-btn')) closeMenus(); });
+    body.addEventListener('click', (e) => { if (e.target.closest('.pdf-find-btn, .pdf-pages-btn, .pdf-mark-btn, .pdf-pg-btn')) closeMenus(); });
     let view = null, tools = null;
     cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } };
     guard = async () => !(tools && await tools.closeTop());
@@ -164,12 +168,49 @@ export function openFileViewer(file, ctx) {
       if (mine !== token || closed) { next.destroy(); return; }
       view = next;
       countEl.textContent = `1/${view.pageCount}`;
-      body.insertAdjacentHTML('beforeend', '<div class="pdf-zoom"><button type="button" class="pdf-zin" aria-label="Zoom in">+</button><button type="button" class="pdf-zout" aria-label="Zoom out">\u2212</button></div>');
-      body.querySelector('.pdf-zin').onclick = () => { ui.onActivity(); view?.zoomIn(); };
-      body.querySelector('.pdf-zout').onclick = () => { ui.onActivity(); view?.zoomOut(); };
       const { mountPdfTools } = await import('./pdftools.js');
       if (mine !== token || closed) return;
       tools = mountPdfTools(body, view, { onActivity: ui.onActivity });
+      // Mark up and Edit pages (Decisions 166, 167) save a new PDF next to this one; Replace writes over it. Zoom is by pinch.
+      const dir = f.path.slice(0, f.path.lastIndexOf('/'));
+      const pdfCtx = {
+        isVault, onActivity: ui.onActivity, askText: ui.askText, askYesNo: ui.askYesNo, toast,
+        askDiscard: () => ui.askYesNo({ title: 'Discard changes?', text: 'Your changes have not been saved.', yes: 'Yes, discard', no: 'No, keep editing' }),
+        pickImage: () => new Promise((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file'; input.accept = 'image/*';
+          input.onchange = async () => { const p = input.files && input.files[0]; resolve(p ? new Uint8Array(await p.arrayBuffer()) : null); };
+          input.addEventListener('cancel', () => resolve(null));
+          leaving(); input.click();
+        }),
+        closeViewer: () => { destroy(); },
+        loadBytes: async () => { const r = await fetch(mediaSrc(toUri(f.path))); if (!r.ok) throw new Error('The file could not be read.'); return new Uint8Array(await r.arrayBuffer()); },
+        save: async (bytes, { replace = false, suffix = 'marked' } = {}) => {
+          let name = f.name; let path = f.path;
+          if (!replace) {
+            name = copyName(f.name, suffix); path = `${dir}/${name}`;
+            for (let n = 2; n < 100; n++) { // never over an existing file
+              try { await Filesystem.stat({ path: toUri(path) }); } catch { break; }
+              name = copyName(f.name, `${suffix} ${n}`); path = `${dir}/${name}`;
+            }
+          }
+          await Filesystem.writeFile({ path: toUri(path), data: bytesToB64(bytes) });
+          changed = true;
+          return name;
+        }
+      };
+      try { // mark-up is an extra: if it cannot load, the reading tools stay
+        const base = tools; const { mountMarkup } = await import('./pdfmark-ui.js');
+        if (mine !== token || closed) return;
+        const mk = mountMarkup(body, view, pdfCtx);
+        tools = { closeTop: async () => (await mk.closeTop()) || base.closeTop(), destroy: () => { mk.destroy(); base.destroy(); } };
+      } catch { /* reading tools only */ }
+      try { // page tools are an extra too
+        const base = tools; const { mountPageTools } = await import('./pdfpages-ui.js');
+        if (mine !== token || closed) return;
+        const pg = mountPageTools(body, view, { ...pdfCtx, save: (bytes, { suffix }) => pdfCtx.save(bytes, { replace: false, suffix }) });
+        tools = { closeTop: async () => (await pg.closeTop()) || base.closeTop(), destroy: () => { pg.destroy(); base.destroy(); } };
+      } catch { /* tools so far only */ }
     } catch (err) {
       if (mine !== token) return;
       const msg = err && err.name === 'PasswordException' ? err.message : 'This PDF cannot be shown here. Use Open with app.';
