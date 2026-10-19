@@ -1244,6 +1244,9 @@ body.ev-full #bottom-nav { display: none !important; }
 #ev-body.pdf-full .pdf-tools, #ev-body.pdf-full .pdf-zoom { display: none; }
 #ev-body.pdf-full.pdf-menu-open .pdf-tools, #ev-body.pdf-full.pdf-menu-open .pdf-zoom { display: flex; flex-direction: row; top: 8px; bottom: auto; z-index: 6; padding: 6px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
 #ev-body.pdf-full .pdf-tools button, #ev-body.pdf-full .pdf-zoom button { background: var(--surface); color: var(--fg); }
+/* the menu dock sits in the middle of the screen; Open with is a wide button with its words */
+#ev-body.pdf-full.pdf-menu-open .pdf-tools { left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100% - 24px); }
+#ev-body.pdf-full .pdf-tools .pdf-ow-btn { width: auto; padding: 0 16px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 #explorer-viewer.ev-full .pdf-scroll { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .ev-office > .eo-bar { display: none; position: absolute; top: 0; left: 8px; right: 8px; z-index: 8; border: 1px solid var(--border); border-top: none; border-radius: 0 0 16px 16px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35); }
 .ev-office.eo-menu-open > .eo-bar { display: flex; }
