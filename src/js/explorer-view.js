@@ -171,6 +171,12 @@ export function openFileViewer(file, ctx) {
       const { mountPdfTools } = await import('./pdftools.js');
       if (mine !== token || closed) return;
       tools = mountPdfTools(body, view, { onActivity: ui.onActivity });
+      // Open with: the last button of the menu, same look as the others; always lists the apps that can open the PDF
+      const ow = document.createElement('button'); ow.type = 'button'; ow.className = 'pdf-ow-btn';
+      ow.setAttribute('aria-label', 'Open with another app'); ow.title = 'Open with';
+      ow.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-share"/></svg>';
+      ow.onclick = () => { closeMenus(); ui.onActivity(); if (!closed) external(current, true); };
+      body.querySelector('.pdf-tools').append(ow);
       // Mark up and Edit pages (Decisions 166, 167) save a new PDF next to this one; Replace writes over it. Zoom is by pinch.
       const dir = f.path.slice(0, f.path.lastIndexOf('/'));
       const pdfCtx = {
@@ -211,6 +217,7 @@ export function openFileViewer(file, ctx) {
         const pg = mountPageTools(body, view, { ...pdfCtx, save: (bytes, { suffix }) => pdfCtx.save(bytes, { replace: false, suffix }) });
         tools = { closeTop: async () => (await pg.closeTop()) || base.closeTop(), destroy: () => { pg.destroy(); base.destroy(); } };
       } catch { /* tools so far only */ }
+      body.querySelector('.pdf-tools')?.append(ow); // Open with stays the last button
     } catch (err) {
       if (mine !== token) return;
       const msg = err && err.name === 'PasswordException' ? err.message : 'This PDF cannot be shown here. Use Open with app.';
