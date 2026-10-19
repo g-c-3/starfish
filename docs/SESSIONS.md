@@ -4,6 +4,15 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 143**
+
+DP100 confirmed on device. Request: Open with in the PDF menu, same style as the other buttons.
+- `src/js/explorer-view.js`: Open with button, last in the PDF menu.
+- Decision 238. Checks: 11 PDF wiring, 17 shell, 21 menu, 22 tool, 36 earlier on generated files; `vite build` passes. Not run through CI or on a device (DP101).
+- Next: DP101 on device; then thumbnails and Word outline (E3g), then E3d (Word pages and shapes).
+
+---
+
 **Session 142**
 
 DP99 confirmed on device (smooth fold, PDF menu). Owner report: PDF menu had four buttons, six expected (Mark up and Edit pages were missing); title bar too tall.

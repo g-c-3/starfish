@@ -2743,3 +2743,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Title bar: slimmer in Word, Excel, slides and PDF: smaller buttons, smaller semibold title, the page or slide count as a small pill, a thin divider, a lightly translucent blurred background. Other viewers keep the standard bar.
 - Checks: 9 PDF wiring checks (menu buttons, no zoom buttons, copy naming and no-overwrite, Replace, page tools copy, bytes written, folder told it changed, with the PDF engine and the tool panels stubbed), 17 shell, 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes.
 - Risks: not run through CI or on a device (DP100). The mark-up and page tools themselves are unchanged and not exercised here; their save route in the Explorer is new. Saving next to a file on removable storage may fail with the phone's permission message.
+
+**238. Explorer PDF: Open with in the menu (Phase 22, stage E3k).** Owner report after DP100: PDF tools work; add Open with to the PDF menu in the same style as the other buttons. Extends Decisions 236, 237.
+- A fifth round button (the share icon) closes the PDF menu row of four and sits last in it: Find, Pages and outline, Mark up, Edit pages, Open with. It lists the apps that can open the PDF, the same chooser as the share button in the title bar. The file is handed over only on that tap.
+- Word, Excel and slides already carry Open with in their menu (Decision 235); unchanged.
+- Checks: 11 PDF wiring checks (button order, chooser flag, menu closes) plus 17 shell, 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes.
+- Risks: not run through CI or on a device (DP101).
