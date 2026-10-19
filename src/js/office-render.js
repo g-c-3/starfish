@@ -1,4 +1,4 @@
-// office-render.js — draws what office-read.js returns into the explorer viewer (Decisions 226, 227, 233). Every string from a file
+// office-render.js — draws what office-read.js returns into the explorer viewer (Decisions 226, 227, 233, 234). Every string from a file
 // is set with textContent; no markup from a file is ever parsed. Pictures become object URLs, revoked on destroy.
 
 import { Preferences } from '@capacitor/preferences';
@@ -104,6 +104,158 @@ function loadPrefs() {
 }
 const savePrefs = () => { try { Preferences.set({ key: PREF_KEY, value: JSON.stringify(prefs) }).catch(() => {}); } catch { /* a setting that cannot be saved still applies for now */ } };
 
+
+// ---- tools shared by the three viewers: Find, Copy, Info (Decision 234). Text is only read and highlighted; the file is never changed. ----
+function mark(root, q) { // wraps each match of q in a <mark>; a match inside one run of text
+  const out = [];
+  if (!root || !q) return out;
+  const lq = q.toLowerCase(); const nodes = [];
+  const w = document.createTreeWalker(root, 4); // text nodes
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const par = n.parentElement;
+    if (n.nodeValue.toLowerCase().includes(lq) && par && !par.closest('mark.eo-hit, .eo-mark')) nodes.push(n);
+  }
+  for (const n of nodes) {
+    const t = n.nodeValue; const lt = t.toLowerCase(); const frag = document.createDocumentFragment(); let i = 0;
+    for (let j = lt.indexOf(lq); j >= 0; j = lt.indexOf(lq, i)) {
+      frag.appendChild(document.createTextNode(t.slice(i, j)));
+      const m = el('mark', 'eo-hit', t.slice(j, j + q.length)); frag.appendChild(m); out.push(m); i = j + q.length;
+    }
+    frag.appendChild(document.createTextNode(t.slice(i)));
+    n.parentNode.replaceChild(frag, n);
+  }
+  return out;
+}
+function unmark(root) {
+  if (!root) return;
+  for (const m of Array.from(root.querySelectorAll('mark.eo-hit'))) m.replaceWith(document.createTextNode(m.textContent));
+  root.normalize();
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }
+  try {
+    const ta = el('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return !!ok;
+  } catch { return false; }
+}
+const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? '' : 's'}`;
+const wordCount = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
+const fontList = () => (usedFonts && usedFonts.size ? ` \u00b7 Fonts: ${[...usedFonts].slice(0, 6).join(', ')}` : '');
+// t: { find: { count(q), go(k, q), clear() }, copy(), info(), goto?(n) }
+function buildTools(host, ui, bar, t) {
+  const seg = el('div', 'eo-seg'); bar.appendChild(seg);
+  const mkb = (text, label) => { const b = el('button', 'eo-segbtn', text); b.type = 'button'; b.setAttribute('aria-label', label); seg.appendChild(b); return b; };
+  const bFind = mkb('Find', 'Find in this file'); const bCopy = mkb('Copy', 'Copy text'); const bInfo = mkb('Info', 'File information');
+  const fbar = el('div', 'eo-fbar'); fbar.hidden = true;
+  const inp = el('input', 'eo-finput'); inp.type = 'search'; inp.placeholder = 'Find'; inp.setAttribute('aria-label', 'Find text');
+  const cnt = el('span', 'eo-fcount');
+  const fb = (text, label) => { const b = el('button', 'eo-segbtn eo-fbtn', text); b.type = 'button'; b.setAttribute('aria-label', label); return b; };
+  const fp = fb('\u2039', 'Previous match'); const fn = fb('\u203a', 'Next match'); const fx = fb('\u00d7', 'Close find');
+  fbar.append(inp, cnt, fp, fn);
+  let gi = null;
+  if (t.goto) { gi = el('input', 'eo-finput eo-gin'); gi.type = 'number'; gi.min = '1'; gi.placeholder = 'Go to #'; gi.setAttribute('aria-label', 'Go to slide number'); fbar.appendChild(gi); }
+  fbar.appendChild(fx);
+  const info = el('div', 'eo-info'); info.hidden = true;
+  host.append(fbar, info);
+  let n = 0; let k = 0; let last = ''; let timer = null;
+  const run = () => {
+    const q = inp.value.trim(); last = q; ui.onActivity();
+    t.find.clear(); n = q ? t.find.count(q) : 0; k = 0;
+    cnt.textContent = !q ? '' : n ? `1/${n}` : 'No match';
+    if (n) t.find.go(0, q);
+  };
+  const step = (d) => { if (!n) return; ui.onActivity(); k = (k + d + n) % n; cnt.textContent = `${k + 1}/${n}`; t.find.go(k, last); };
+  inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 350); });
+  inp.addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; clearTimeout(timer); if (n && inp.value.trim() === last) step(1); else run(); });
+  fp.onclick = () => step(-1); fn.onclick = () => step(1);
+  if (gi) gi.addEventListener('keydown', (e) => { if (e.key === 'Enter' && gi.value) { ui.onActivity(); t.goto(Number(gi.value)); } });
+  const toggleFind = () => {
+    fbar.hidden = !fbar.hidden; bFind.classList.toggle('active', !fbar.hidden);
+    if (fbar.hidden) { clearTimeout(timer); inp.value = ''; cnt.textContent = ''; n = 0; t.find.clear(); } else { ui.onActivity(); inp.focus(); }
+  };
+  bFind.onclick = toggleFind; fx.onclick = toggleFind;
+  let flash = null;
+  bCopy.onclick = async () => {
+    ui.onActivity(); const ok = await copyText(t.copy());
+    bCopy.textContent = ok ? 'Copied' : 'Not copied'; clearTimeout(flash); flash = setTimeout(() => { bCopy.textContent = 'Copy'; }, 1400);
+  };
+  bInfo.onclick = () => { ui.onActivity(); info.hidden = !info.hidden; bInfo.classList.toggle('active', !info.hidden); if (!info.hidden) info.textContent = t.info(); };
+  return { destroy() { clearTimeout(timer); clearTimeout(flash); } };
+}
+const scrollTo = (e) => { if (e && e.scrollIntoView) e.scrollIntoView({ block: 'center', inline: 'center' }); };
+const setCur = (state, m) => { if (state.cur) state.cur.classList.remove('eo-cur'); state.cur = m || null; if (state.cur) state.cur.classList.add('eo-cur'); };
+
+function docTools(host) {
+  const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
+  const text = () => { const r = root(); return r ? r.innerText || r.textContent || '' : ''; };
+  return {
+    find: { count(q) { marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
+    copy: text,
+    info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}`; }
+  };
+}
+function xlTools(model, xl, host) {
+  let hits = []; const st = { cur: null };
+  const cells = () => host.querySelector('.eo-cells');
+  return {
+    find: {
+      count(q) {
+        const lq = q.toLowerCase(); hits = [];
+        for (let i = 0; i < model.names.length && hits.length < 2000; i++) {
+          let s; try { s = model.load(i); } catch { continue; }
+          s.rows.forEach((row, r) => row.forEach((cell, c) => { if (cell && cell.v && hits.length < 2000 && cell.v.toLowerCase().includes(lq)) hits.push({ i, r, c }); }));
+        }
+        return hits.length;
+      },
+      go(k, q) {
+        const h = hits[k]; if (!h) return;
+        if (xl.cur() !== h.i) xl.show(h.i);
+        unmark(cells());
+        const td = host.querySelector(`.eo-cells tr[data-r="${h.r}"] td[data-c="${h.c}"]`); if (!td) return;
+        setCur(st, mark(td, q)[0]); scrollTo(td); td.click();
+      },
+      clear() { unmark(cells()); hits = []; st.cur = null; }
+    },
+    copy: () => { const s = model.load(xl.cur()); return s.rows.map((row) => Array.from({ length: s.ncols }, (_, c) => (row[c] ? row[c].v : '')).join('\t')).join('\n'); },
+    info: () => { const s = model.load(xl.cur()); return `${model.names.length} sheet${model.names.length === 1 ? '' : 's'} \u00b7 this sheet: ${s.rows.length.toLocaleString()} rows \u00d7 ${s.ncols} columns${fontList()}`; }
+  };
+}
+const slideParas = (s) => { // one string per paragraph, in drawing order
+  const out = []; const body = (b) => { for (const p of b.paras) out.push(p.runs.filter((r) => !r.br).map((r) => r.text).join('')); };
+  for (const it of s.items) { if (it.text) body(it.text); if (it.t === 'table') for (const row of it.rows) for (const c of row.cells) if (!c.skip && c.body) body(c.body); }
+  return out;
+};
+const slideRuns = (s) => { // one string per run, the units the drawing writes
+  const out = []; const body = (b) => { for (const p of b.paras) for (const r of p.runs) if (!r.br && r.text) out.push(r.text); };
+  for (const it of s.items) { if (it.text) body(it.text); if (it.t === 'table') for (const row of it.rows) for (const c of row.cells) if (!c.skip && c.body) body(c.body); }
+  return out;
+};
+function pptTools(model, pp) {
+  let hits = []; const st = { cur: null };
+  return {
+    find: {
+      count(q) {
+        const lq = q.toLowerCase(); hits = [];
+        for (let i = 0; i < model.count && hits.length < 2000; i++) {
+          let s; try { s = model.load(i); } catch { continue; }
+          let k = 0;
+          for (const t of slideRuns(s)) { const lt = t.toLowerCase(); for (let j = lt.indexOf(lq); j >= 0; j = lt.indexOf(lq, j + lq.length)) { if (hits.length < 2000) hits.push({ i, k }); k++; } }
+        }
+        return hits.length;
+      },
+      go(k, q) {
+        const h = hits[k]; if (!h) return;
+        if (pp.cur() !== h.i) pp.go(h.i);
+        unmark(pp.stage); setCur(st, mark(pp.stage, q)[h.k]);
+      },
+      clear() { unmark(pp.stage); hits = []; st.cur = null; }
+    },
+    copy: () => { const s = model.load(pp.cur()); return [...slideParas(s), ...(s.notes ? ['', 'Notes', s.notes] : [])].join('\n'); },
+    info: () => { const s = model.load(pp.cur()); return `${plural(model.count, 'slide')} \u00b7 slide ${pp.cur() + 1}: ${plural(wordCount(slideParas(s).join(' ')), 'word')}${fontList()}`; },
+    goto: (n) => pp.go(Math.min(Math.max(1, n), model.count) - 1)
+  };
+}
+
 // ---- toolbar: theme switch (all kinds), view and zoom (docx) ----
 function segment(labels, current, onPick) {
   const wrap = el('div', 'eo-seg');
@@ -117,7 +269,7 @@ function segment(labels, current, onPick) {
   sync(current);
   return { wrap, sync };
 }
-function buildBar(host, ui, extra) {
+function buildBar(host, ui, extra, tools) {
   const bar = el('div', 'eo-bar');
   const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   const applyTheme = () => { host.dataset.theme = prefs.theme === 'system' ? (mq && mq.matches ? 'dark' : 'light') : prefs.theme; };
@@ -127,11 +279,12 @@ function buildBar(host, ui, extra) {
   bar.appendChild(theme.wrap);
   if (extra) extra(bar);
   host.appendChild(bar);
+  const tb = tools ? buildTools(host, ui, bar, tools) : null;
   applyTheme();
   if (mq && mq.addEventListener) mq.addEventListener('change', applyTheme);
   let gone = false;
   loadPrefs().then(() => { if (!gone) { theme.sync(prefs.theme); applyTheme(); } });
-  return { theme, applyTheme, destroy() { gone = true; if (mq && mq.removeEventListener) mq.removeEventListener('change', applyTheme); } };
+  return { theme, applyTheme, destroy() { gone = true; if (tb) tb.destroy(); if (mq && mq.removeEventListener) mq.removeEventListener('change', applyTheme); } };
 }
 
 function appendRuns(parent, runs, media, u, ctx = {}) {
@@ -355,6 +508,7 @@ function mountXlsx(model, host, ui, bars, u) {
   });
   const zoom = setupZoom(grid, zoomer, () => 1, ui);
   bars.extra = (bar) => bar.appendChild(zoomButtons(ui, zoom));
+  let cur = 0;
   const buttons = model.names.map((name, i) => {
     const b = el('button', 'eo-tab', name); b.type = 'button';
     b.onclick = () => { ui.onActivity(); show(i); };
@@ -362,6 +516,7 @@ function mountXlsx(model, host, ui, bars, u) {
     return b;
   });
   function show(i) {
+    cur = i;
     buttons.forEach((b, k) => b.classList.toggle('active', k === i));
     zoomer.replaceChildren(); css.textContent = ''; grid.scrollTop = 0; grid.scrollLeft = 0; cellbar.hidden = true; selected = null;
     let s;
@@ -459,7 +614,7 @@ function mountXlsx(model, host, ui, bars, u) {
     wrap.appendChild(t); zoomer.appendChild(wrap);
   }
   show(0);
-  return {};
+  return { show, cur: () => cur };
 }
 
 // ---- pptx: a slide on a canvas at the size set in the file, scaled to fit and centred; First, Previous, Play/Pause, Next, Last, swipe, zoom ----
@@ -654,7 +809,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   show(0);
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
-  return { destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
+  return { stage, go, cur: () => index, destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -682,18 +837,21 @@ export function mountOffice(kind, bytes, host, ctx) {
     // the toolbar comes first; the docx mount fills in its view and zoom controls through bars.extra
     const holder = el('div'); const tmp = { extra: null };
     inner = mountDocx(model, holder, u, ui, tmp);
-    bars.bar = buildBar(host, ui, tmp.extra);
+    tmp.tools = docTools(host);
+    bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountXlsx(model, holder, ui, tmp, u);
-    bars.bar = buildBar(host, ui, tmp.extra);
+    tmp.tools = xlTools(model, inner, host);
+    bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
-    bars.bar = buildBar(host, ui, tmp.extra);
+    tmp.tools = pptTools(model, inner);
+    bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   fontNotice(host);
