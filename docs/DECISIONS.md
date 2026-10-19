@@ -2749,3 +2749,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Word, Excel and slides already carry Open with in their menu (Decision 235); unchanged.
 - Checks: 11 PDF wiring checks (button order, chooser flag, menu closes) plus 17 shell, 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes.
 - Risks: not run through CI or on a device (DP101).
+
+**239. PDF menu: Open with as a labelled button, dock centred (Phase 22, stage E3l).** Owner report after DP101: the share symbol on the fifth button was unclear; the dock sat at the left. Amends Decision 238.
+- The fifth button is wider and carries the words "Open with" instead of the share symbol; the other four keep their round icons.
+- The menu dock is centred horizontally on the screen, with a margin at each side.
+- Checks: 11 PDF wiring checks (including the button label) plus 17 shell, 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes.
+- Risks: not run through CI or on a device (DP102). Layout only; the dock width with the label is about 300 px.

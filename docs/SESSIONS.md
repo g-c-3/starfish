@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 144**
+
+DP101 confirmed on device. Request: Open with as a wide labelled button instead of the share symbol; centre the PDF menu dock.
+- `src/js/explorer-view.js`: Open with label.
+- `src/css/style.css`: wide button, centred dock.
+- Decision 239. Checks as Session 143; `vite build` passes. Not run through CI or on a device (DP102).
+- Next: DP102 on device; then thumbnails and Word outline (E3g), then E3d (Word pages and shapes).
+
+---
+
 **Session 143**
 
 DP100 confirmed on device. Request: Open with in the PDF menu, same style as the other buttons.
