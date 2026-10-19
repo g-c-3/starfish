@@ -1232,8 +1232,13 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 /* full screen office viewer, menu panel, folding title bar (Decision 235) */
 body.overlay-open #explorer-viewer.ev-full { padding-bottom: 0; } /* the floating Back bar is hidden here; the title bar's arrow and the system Back still leave */
 body.ev-full #bottom-nav { display: none !important; }
-#explorer-viewer.ev-full .editor-bar { transition: margin-top .2s ease, opacity .2s ease; }
-#explorer-viewer .editor-bar.ev-head-hidden { opacity: 0; pointer-events: none; }
+#explorer-viewer.ev-full .editor-bar { position: absolute; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 9; background: var(--bg); transition: transform .22s ease, opacity .22s ease; }
+#explorer-viewer .editor-bar.ev-head-hidden { transform: translateY(-110%); opacity: 0; pointer-events: none; }
+/* PDF: the find, pages and zoom buttons live in the menu */
+#ev-body.pdf-full .pdf-tools, #ev-body.pdf-full .pdf-zoom { display: none; }
+#ev-body.pdf-full.pdf-menu-open .pdf-tools, #ev-body.pdf-full.pdf-menu-open .pdf-zoom { display: flex; flex-direction: row; top: 8px; bottom: auto; z-index: 6; padding: 6px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+#ev-body.pdf-full .pdf-tools button, #ev-body.pdf-full .pdf-zoom button { background: var(--surface); color: var(--fg); }
+#explorer-viewer.ev-full .pdf-scroll { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .ev-office > .eo-bar { display: none; position: absolute; top: 0; left: 8px; right: 8px; z-index: 8; border: 1px solid var(--border); border-top: none; border-radius: 0 0 16px 16px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35); }
 .ev-office.eo-menu-open > .eo-bar { display: flex; }
 .eo-host.eo-playing > .eo-bar { display: none !important; }
