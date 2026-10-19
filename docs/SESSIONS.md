@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 140**
+
+DP97 confirmed on device. Owner report: empty bar at the bottom of all three viewers; toolbar to move into a three-dot menu; title bar to hide while scrolling; Open with list; editing dropped.
+- `src/js/explorer-view.js`: three-dot menu button, title bar fold, full-screen flag, Open with chooser for office files.
+- `src/js/explorer.js`: `openExternal` takes a chooser flag.
+- `src/js/office-render.js`: toolbar becomes the menu panel, Open with entry, scroll-driven title bar callback.
+- `src/css/style.css`: full screen, menu panel, folded title bar.
+- Decision 235. Checks: 21 shell checks, 22 tool checks and 36 earlier checks on generated files, `vite build` passes. Not run through CI or on a device (DP98).
+- Next: DP98 on device; then thumbnails and Word outline (E3g), then E3d (Word pages and shapes).
+
+---
+
 **Session 139**
 
 DP93 and DP96 confirmed on device (owner report: everything worked). Request: add all tools that can and should be added for the three kinds. Editing, thumbnails and the Word outline are large and staged; the three view-only groups were built.

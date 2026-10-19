@@ -2718,3 +2718,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Checks: 22 viewer checks on generated files (buttons, count, highlight, clearing, info, go-to field, closing); the 36 earlier checks still pass; `vite build` passes.
 - Risks: not run through CI or on a device (DP97). Find on a large workbook or deck loads every sheet or slide once per search.
 
+**235. Office viewers: full screen, three-dot menu, folding title bar, Open with chooser; editing dropped (Phase 22, stage E3h).** Owner report after DP97: a wide empty bar at the bottom of all three viewers; request: full screen, the toolbar folded into a menu beside the share button, the title bar hiding while scrolling, an Open with list of other apps, and read only for good. Supersedes the editing plan in Decision 234; extends Decisions 226, 227, 233, 234.
+- Read only: the office viewers never edit. The staged editing stage (E4) is removed. Plain text files keep their own editor.
+- Full screen: the empty bar was space reserved for the floating Back bar. While an office file is open that bar is hidden and the reservation removed; the title bar's arrow and the system Back still leave. This departs from Decision 104 (Back visible everywhere) for office files only.
+- Menu: the three-dot button sits before the share button. It opens a panel with theme, view, zoom, Find, Copy, Info and Open with. Theme, view and zoom keep it open; Find, Info and Open with close it; a tap outside closes it. Find and Info rows appear under the title bar.
+- Title bar: scrolling down hides it, scrolling up or reaching the top shows it, in Word, Excel and slides. Direction is judged over a short run and events right after a change are ignored, so the resize it causes does not flip it back. Opening the menu shows it.
+- Open with: the share button and the menu entry now always list the apps that can open the file (a chooser), instead of using the default app. Other file types keep the default behaviour. The file is handed over only on that tap.
+- Checks: 21 shell checks (menu panel, Open with, hide and show on scroll, stop after close) plus the 22 tool checks and 36 earlier checks pass on generated files; `vite build` passes.
+- Risks: not run through CI or on a device (DP98). The chooser relies on the file opener plugin showing its list when asked not to use the default app. The title bar is measured when it hides; a rotation while hidden keeps it hidden until the next scroll up.
+
