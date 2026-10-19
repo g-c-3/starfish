@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 139**
+
+DP93 and DP96 confirmed on device (owner report: everything worked). Request: add all tools that can and should be added for the three kinds. Editing, thumbnails and the Word outline are large and staged; the three view-only groups were built.
+- `src/js/office-render.js`: Find row (all three), Copy, Info, Go to slide; highlight helpers; per-kind tools; Excel sheet API for jumping to a cell.
+- `src/css/style.css`: find row, highlights, text selection, hidden while playing.
+- Decision 234. Checks: 22 viewer checks on generated files, 36 earlier checks pass, `vite build` passes. Not run through CI or on a device (DP97).
+- Next: DP97 on device; then thumbnails and Word outline, then the editing design (a decision first), then E3d (Word pages and shapes).
+
+---
+
 **Session 138**
 
 Owner report after DP93: charts and diagrams do not load in slides; slide title colour differs from the original; request: charts in Word and Excel too, slide centred, First / Previous / Play-Pause / Next / Last buttons with blur while playing, landscape the same.

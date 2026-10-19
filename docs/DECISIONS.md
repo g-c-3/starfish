@@ -2708,3 +2708,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Checks: 36 reader, drawing and viewer checks on generated files (nine chart types, diagram, style colour, layout geometry, Excel anchors, Word chart, button set, play and pause state); charts rendered to images and inspected; `vite build` passes.
 - Risks: not run through CI or on a device (DP96). The title colour cause could not be confirmed without the owner's file; the three gaps above are the known ways it differs. Full screen while playing relies on the viewer not sitting inside a transformed parent. 3D, surface, stock and funnel charts are not drawn.
 
+**234. Office viewer tools: Find, Copy, Info, Go to slide (Phase 22, stage E3f); editing and two more tools staged.** Owner request after DP96: add every tool that can and should be added for the three kinds, editing included. Extends Decisions 226, 227, 233; their privacy and limits stand.
+- Find (all three): a toolbar button opens a find row with a field, a match count, previous and next. Case-insensitive; matches are highlighted and the current one is stressed. Word: the whole text. Excel: every visible sheet, up to 2,000 matches; a match switches to its sheet, scrolls to the cell and selects it. Slides: every slide, up to 2,000 matches; a match changes slide. A match inside one run of text is found; one split across runs of different formatting is not.
+- Go to slide: a number field in the find row, slides only.
+- Copy: copies the whole text in Word, the current sheet as tab-separated rows in Excel, the current slide (with notes) in slides. Text can also be selected by long press and copied by the system. The clipboard is written only on that tap.
+- Info: words and characters (Word), sheets and the current sheet's size (Excel), slide count and the current slide's words (slides), with the fonts used.
+- Nothing in the file is changed; no network call, nothing stored. The tools are hidden while a slide show plays.
+- Staged, not built: (1) slide thumbnails and a Word headings outline; (2) editing. Editing ends the view-only rule of Decision 226 and needs its own design first: which edits (text in place, cell values), patching only the changed parts of the file so everything else is kept as is, save as a copy before any overwrite, the trash and backup rules for files in the vault, and a clear unsaved-changes state.
+- Checks: 22 viewer checks on generated files (buttons, count, highlight, clearing, info, go-to field, closing); the 36 earlier checks still pass; `vite build` passes.
+- Risks: not run through CI or on a device (DP97). Find on a large workbook or deck loads every sheet or slide once per search.
+
