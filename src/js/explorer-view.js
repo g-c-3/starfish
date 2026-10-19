@@ -174,7 +174,7 @@ export function openFileViewer(file, ctx) {
       // Open with: the last button of the menu, same look as the others; always lists the apps that can open the PDF
       const ow = document.createElement('button'); ow.type = 'button'; ow.className = 'pdf-ow-btn';
       ow.setAttribute('aria-label', 'Open with another app'); ow.title = 'Open with';
-      ow.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-share"/></svg>';
+      ow.textContent = 'Open with';
       ow.onclick = () => { closeMenus(); ui.onActivity(); if (!closed) external(current, true); };
       body.querySelector('.pdf-tools').append(ow);
       // Mark up and Edit pages (Decisions 166, 167) save a new PDF next to this one; Replace writes over it. Zoom is by pinch.
