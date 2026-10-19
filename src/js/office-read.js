@@ -15,13 +15,13 @@ const IMG_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif:
 export class OfficeError extends Error { constructor(m) { super(m); this.office = true; } } // office: true marks a message fit to show
 
 // ---- Zip and XML helpers ----
-function unpack(bytes, rootDir, mainPart) {
+function unpack(bytes, rootDir, mainPart, extra = []) {
   let files;
   let total = 0;
   try {
     files = unzipSync(bytes, {
       filter: (f) => {
-        if (!f.name.startsWith(rootDir)) return false;
+        if (!f.name.startsWith(rootDir) && !extra.includes(f.name)) return false;
         const ext = f.name.slice(f.name.lastIndexOf('.') + 1).toLowerCase();
         if (ext !== 'xml' && ext !== 'rels' && ext !== 'odttf' && !IMG_MIME[ext]) return false;
         if (f.originalSize > PART_MAX) return false;
@@ -109,7 +109,7 @@ function letters(n, upper) {
   while (x > 0) { x -= 1; s = String.fromCharCode(97 + (x % 26)) + s; x = Math.floor(x / 26); }
   return upper ? s.toUpperCase() : s;
 }
-function formatNum(n, fmt) {
+export function formatNum(n, fmt) {
   if (fmt === 'lowerLetter') return letters(n, false);
   if (fmt === 'upperLetter') return letters(n, true);
   if (fmt === 'lowerRoman') return roman(n, false);
@@ -126,8 +126,17 @@ function bulletChar(t) {
   return t;
 }
 
+const PROP_KEYS = ['font', 'size', 'color', 'bg', 'b', 'i', 'u', 's', 'caps', 'sc', 'sup', 'sub'];
+const fieldKind = (s) => { const m = /^\s*(PAGE|NUMPAGES|SECTIONPAGES)\b/i.exec(s || ''); return m ? m[1].toLowerCase() : null; };
+function hasLrb(blocks) { // a saved page break (Decision 242) anywhere in these blocks
+  for (const b of blocks) {
+    if (b.t === 'table') { if (b.rows.some((r) => r.some((c) => hasLrb(c.blocks)))) return true; } else if (b.runs.some((r) => r.lrb)) return true;
+  }
+  return false;
+}
+
 export function readDocx(bytes) {
-  const files = unpack(bytes, 'word/', 'word/document.xml');
+  const files = unpack(bytes, 'word/', 'word/document.xml', ['docProps/app.xml']);
   const main = 'word/document.xml';
   const root = xml(files, main);
   if (!root) throw new OfficeError('This is not a valid file of this type.');
@@ -294,6 +303,7 @@ export function readDocx(bytes) {
   let count = 0; let truncated = false;
 
   // ---- runs ----
+  let fld = null; // complex field being read: PAGE, NUMPAGES and SECTIONPAGES become markers (Decision 242)
   const runsOf = (node, out, base, link) => {
     for (const c of node.children) {
       const n = c.localName;
@@ -304,12 +314,20 @@ export function readDocx(bytes) {
         if (link && !rs && f.color === undefined) { f.color = '0563C1'; f.u = true; }
         if (f.hidden) continue;
         const props = {};
-        for (const k of ['font', 'size', 'color', 'bg', 'b', 'i', 'u', 's', 'caps', 'sc', 'sup', 'sub']) if (f[k]) props[k] = f[k];
+        for (const k of PROP_KEYS) if (f[k]) props[k] = f[k];
         let text = '';
         const flush = () => { if (text) { out.push({ ...props, text }); text = ''; } };
         for (const k of c.children) {
           const kn = k.localName;
-          if (kn === 't') text += k.textContent;
+          if (kn === 'fldChar') {
+            flush();
+            const ty = at(k, 'fldCharType');
+            if (ty === 'begin') { if (!fld) fld = { depth: 1, instr: '', stage: 'instr', kind: null, props, text: '' }; else fld.depth++; }
+            else if (ty === 'separate') { if (fld && fld.depth === 1) { fld.stage = 'result'; fld.kind = fieldKind(fld.instr); fld.props = props; } }
+            else if (ty === 'end' && fld) { fld.depth--; if (fld.depth === 0) { if (fld.kind) out.push({ ...fld.props, field: fld.kind, text: fld.text }); fld = null; } }
+          } else if (kn === 'instrText') { if (fld && fld.depth === 1 && fld.stage === 'instr') fld.instr += k.textContent; }
+          else if (kn === 'lastRenderedPageBreak') { flush(); out.push({ lrb: true }); }
+          else if (kn === 't') { if (fld && fld.stage === 'instr') continue; if (fld && fld.kind) fld.text += k.textContent; else text += k.textContent; }
           else if (kn === 'tab') text += '\t';
           else if (kn === 'noBreakHyphen') text += '-';
           else if (kn === 'br' || kn === 'cr') { flush(); out.push(at(k, 'type') === 'page' ? { pb: true } : { br: true }); }
@@ -317,7 +335,7 @@ export function readDocx(bytes) {
             flush();
             const id = at(k, 'id');
             if (id && !(id in fnNo)) { fnNo[id] = fnOrder.length + 1; fnOrder.push(id); }
-            if (id) out.push({ ...props, text: String(fnNo[id]), sup: true });
+            if (id) out.push({ ...props, text: String(fnNo[id]), sup: true, fn: fnNo[id] });
           } else if (kn === 'drawing' || kn === 'pict') {
             flush();
             const chEl = kn === 'drawing' ? descendants(k, 'chart')[0] : null;
@@ -338,6 +356,11 @@ export function readDocx(bytes) {
           }
         }
         flush();
+      } else if (n === 'fldSimple' && fieldKind(at(c, 'instr'))) {
+        const rr = kid(c, 'r'); const rp = kid(rr, 'rPr');
+        const f = { ...base, ...resolve(at(kid(rp, 'rStyle'), 'val')).r, ...parseR(rp) };
+        const props = {}; for (const k of PROP_KEYS) if (f[k]) props[k] = f[k];
+        out.push({ ...props, field: fieldKind(at(c, 'instr')), text: rr ? rr.textContent : '' });
       } else if (['hyperlink', 'ins', 'smartTag', 'fldSimple', 'moveTo'].includes(n)) runsOf(c, out, base, link || n === 'hyperlink');
       else if (n === 'sdt') runsOf(kid(c, 'sdtContent') || c, out, base, link);
       else if (n === 'AlternateContent') { const ch = kid(c, 'Choice'); if (ch) runsOf(ch, out, base, link); }
@@ -345,6 +368,7 @@ export function readDocx(bytes) {
     return out;
   };
 
+  const sectNodes = []; // sectPr of each paragraph that ends a section, in order
   // ---- paragraphs and tables ----
   const paragraph = (p) => {
     const pp = kid(p, 'pPr');
@@ -366,10 +390,13 @@ export function readDocx(bytes) {
       if (m.first !== undefined) eff.first = m.first;
     }
     eff = { ...eff, ...direct };
+    fld = null;
     const runs = runsOf(p, [], rbase, false);
+    const sp = kid(pp, 'sectPr'); let sectEnd;
+    if (sp) { sectNodes.push(sp); sectEnd = sectNodes.length - 1; }
     if (list) { const t = runs.find((x) => x.text); list.fmt = t ? { font: t.font, size: t.size, b: t.b, i: t.i, color: t.color } : { font: rbase.font, size: rbase.size }; list.hang = eff.first < 0 ? -eff.first : 0; }
     const { outline, ...pr } = eff;
-    return { t: 'p', level: Math.min(level, 6), list, pr, runs };
+    return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd };
   };
   const blocksOf = (node, depth) => {
     const out = [];
@@ -415,7 +442,7 @@ export function readDocx(bytes) {
       for (let k = ri + 1; k < rows.length; k++) { const nx = rows[k].find((x) => x.col === cell.col); if (nx && nx.vm === 'cont') { nx.skip = true; n++; } else break; }
       cell.rowSpan = n;
     }
-    return { t: 'table', rows, borders: bd, grid, pct: at(w, 'type') === 'pct' ? Number(at(w, 'w')) / 50 : null, pad, align: at(kid(tp, 'jc'), 'val') };
+    return { t: 'table', rows, rowBrk: rows.map((r) => r.some((c) => hasLrb(c.blocks))), borders: bd, grid, pct: at(w, 'type') === 'pct' ? Number(at(w, 'w')) / 50 : null, pad, align: at(kid(tp, 'jc'), 'val') };
   }
 
   const body = kid(root, 'body') || root;
@@ -423,19 +450,47 @@ export function readDocx(bytes) {
 
   // ---- page, header, footer, footnotes ----
   const sect = kid(body, 'sectPr');
-  const sz = kid(sect, 'pgSize') || kid(sect, 'pgSz'); const mg = kid(sect, 'pgMar');
-  const page = {
-    w: tw(at(sz, 'w')) || 816, h: tw(at(sz, 'h')) || 1056,
-    t: tw(at(mg, 'top')) ?? 96, r: tw(at(mg, 'right')) ?? 96, b: tw(at(mg, 'bottom')) ?? 96, l: tw(at(mg, 'left')) ?? 96
+  const pageOf = (sp) => {
+    const sz = kid(sp, 'pgSize') || kid(sp, 'pgSz'); const mg = kid(sp, 'pgMar');
+    return {
+      w: tw(at(sz, 'w')) || 816, h: tw(at(sz, 'h')) || 1056,
+      t: tw(at(mg, 'top')) ?? 96, r: tw(at(mg, 'right')) ?? 96, b: tw(at(mg, 'bottom')) ?? 96, l: tw(at(mg, 'left')) ?? 96,
+      hd: tw(at(mg, 'header')) ?? 48, ft: tw(at(mg, 'footer')) ?? 48
+    };
+  };
+  const page = pageOf(sect);
+  const partCache = {}; // a header or footer part is read once, even when several sections use it
+  const loadPart = (ref) => {
+    const rr = ref && rel[rat(ref, 'id')];
+    if (!rr) return null;
+    if (!(rr.path in partCache)) { const hr = xml(files, rr.path); partCache[rr.path] = hr ? blocksOf(hr, 0) : []; }
+    return partCache[rr.path];
   };
   const part = (refName) => {
     const refs = kids(sect, refName);
-    const ref = refs.find((x) => at(x, 'type') === 'default') || refs[0];
-    const rr = ref && rel[rat(ref, 'id')];
-    const hr = rr && xml(files, rr.path);
-    return hr ? blocksOf(hr, 0) : [];
+    return loadPart(refs.find((x) => at(x, 'type') === 'default') || refs[0]) || [];
   };
   const header = part('headerReference'); const footer = part('footerReference');
+  // sections (Decision 242): page set-up, how the section starts, numbering and the header and footer of each kind;
+  // a section without its own header or footer reference takes the previous one
+  const refsOf = (sp, name) => { const o = {}; for (const r of kids(sp, name)) o[at(r, 'type') || 'default'] = r; return o; };
+  let prevHF = { hdr: {}, ftr: {} };
+  const sections = [...sectNodes, sect].map((sp) => {
+    const hr = refsOf(sp, 'headerReference'); const fr = refsOf(sp, 'footerReference');
+    const hdr = {}; const ftr = {};
+    for (const t of ['default', 'first', 'even']) { hdr[t] = hr[t] ? loadPart(hr[t]) : prevHF.hdr[t]; ftr[t] = fr[t] ? loadPart(fr[t]) : prevHF.ftr[t]; }
+    prevHF = { hdr, ftr };
+    const pn = kid(sp, 'pgNumType');
+    const st = pn && at(pn, 'start');
+    return {
+      page: pageOf(sp), type: at(kid(sp, 'type'), 'val') || 'nextPage', titlePg: flag(kid(sp, 'titlePg')),
+      pgStart: st !== null && st !== undefined && st !== '' ? Number(st) : null, pgFmt: pn ? at(pn, 'fmt') : null, hdr, ftr
+    };
+  });
+  const evenOdd = !!kid(xml(files, 'word/settings.xml'), 'evenAndOddHeaders');
+  const app = xml(files, 'docProps/app.xml');
+  const pagesEl = app ? descendants(app, 'Pages')[0] : null;
+  const storedPages = pagesEl ? Number(pagesEl.textContent) || 0 : 0; // pages as last saved by the program that wrote the file
   const footnotes = [];
   if (fnOrder.length) {
     const fr = xml(files, 'word/footnotes.xml');
@@ -463,7 +518,7 @@ export function readDocx(bytes) {
       }
     }
   }
-  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded };
+  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages };
 }
 
 // ---- xlsx ----

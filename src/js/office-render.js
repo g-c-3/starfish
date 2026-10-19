@@ -4,6 +4,7 @@
 import { Preferences } from '@capacitor/preferences';
 import { chartSvg } from './office-chart.js';
 import { chromeOnScroll } from './chrome-scroll.js';
+import { paginate, pickHF } from './office-pages.js';
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -198,7 +199,7 @@ const setCur = (state, m) => { if (state.cur) state.cur.classList.remove('eo-cur
 
 function docTools(host, doc) {
   const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
-  const text = () => { const r = root(); return r ? r.innerText || r.textContent || '' : ''; };
+  const text = () => { const r = root(); if (!r) return ''; const c = r.querySelectorAll('.eo-sh-content'); return c.length ? Array.from(c, (x) => x.innerText || x.textContent || '').join('\n') : r.innerText || r.textContent || ''; };
   return {
     find: { count(q) { marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
     copy: text,
@@ -352,6 +353,7 @@ function buildBar(host, ui, extra, tools) {
 function appendRuns(parent, runs, media, u, ctx = {}) {
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
+    if (r.lrb) continue;
     if (r.pb) { parent.appendChild(el('span', 'eo-pb')); continue; }
     if (r.chart) {
       const w = el('span', 'eo-chartwrap'); w.style.width = `${r.w}px`; cv(w, 'c', '404040', 'E8E6F2');
@@ -363,7 +365,7 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
       if (src) { const im = el('img', 'eo-img'); im.alt = ''; im.src = src; if (r.w) im.style.width = `${r.w}px`; parent.appendChild(im); }
       continue;
     }
-    let node = el('span', '', r.text);
+    let node = el('span', '', r.field && ctx.pg ? ({ page: ctx.pg.label, numpages: String(ctx.pg.total), sectionpages: String(ctx.pg.secPages) })[r.field] : r.text);
     if (r.sup) { const s = el('sup'); s.appendChild(node); node = s; } else if (r.sub) { const s = el('sub'); s.appendChild(node); node = s; }
     const t = node;
     const st = t.style;
@@ -420,7 +422,7 @@ function docxTable(b, media, u, ctx) {
       let fill = ctx.fill || null;
       if (cell.bg) fill = applyFill(td, cell.bg);
       if (cell.bold) td.style.fontWeight = '700';
-      docxBlocks(cell.blocks, td, media, u, { fill });
+      docxBlocks(cell.blocks, td, media, u, { fill, pg: ctx.pg });
       tr.appendChild(td);
     });
     tb.appendChild(tr);
@@ -455,9 +457,9 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
       if (f.color) cv(m, 'c', f.color, fill && fill.kept ? f.color : adaptText(f.color));
       p.appendChild(m);
     }
-    appendRuns(p, b.runs, media, u, { fill });
+    appendRuns(p, b.runs, media, u, { fill, pg: ctx.pg });
     if (!b.runs.length) p.appendChild(el('br'));
-    if (ctx.heads && b.level && b.runs.length) ctx.heads.push(p);
+    if (ctx.heads && b.level && b.runs.length && !b.cont) ctx.heads.push(p);
     parent.appendChild(p);
   }
 }
@@ -493,15 +495,59 @@ function zoomButtons(ui, zoom) {
 
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
-  const pg = model.page;
+  const lay = paginate(model); // sheets from the saved breaks, or null: one continuous sheet (Decision 242)
+  const pg = lay ? { ...model.page, w: Math.max(...lay.sheets.map((s) => model.sections[s.sec].page.w)) } : model.page;
+  const heads = []; // top-level heading elements, for the outline (Decision 240); refilled on each build
+  let built = null;
+  const banner = (t) => paper.appendChild(el('div', 'ev-banner', t));
+  const notesOf = (list, parent) => {
+    const fn = el('div', 'eo-fn');
+    for (const f of list) { const row = el('div', 'eo-fnrow'); row.appendChild(el('sup', '', String(f.n))); const c = el('div'); docxBlocks(f.blocks, c, model.media, u); row.appendChild(c); fn.appendChild(row); }
+    parent.appendChild(fn);
+  };
+  const flowDom = () => {
+    if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
+    if (!lay && model.storedPages > 1 && prefs.doc === 'page') banner(`This file holds no saved page breaks (${model.storedPages} pages when saved). Shown as one sheet.`);
+    if (model.header.length) { const h = el('div', 'eo-hf'); docxBlocks(model.header, h, model.media, u); paper.appendChild(h); }
+    docxBlocks(model.blocks, paper, model.media, u, { heads });
+    if (!model.blocks.length) paper.appendChild(el('p', 'ev-media-msg', 'This document has no text to show.'));
+    if (model.footnotes.length) notesOf(model.footnotes, paper);
+    if (model.footer.length) { const h = el('div', 'eo-hf'); docxBlocks(model.footer, h, model.media, u); paper.appendChild(h); }
+  };
+  const sheetsDom = () => {
+    if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
+    if (lay.note) banner(lay.note);
+    const col = el('div', 'eo-sheetcol');
+    for (const s of lay.sheets) {
+      const q = model.sections[s.sec].page;
+      const ctx = { pg: { label: s.label, total: lay.total, secPages: s.secPages } };
+      const sh = el('section', 'eo-sheet'); sh.style.width = `${q.w}px`; sh.style.minHeight = `${q.h}px`;
+      const head = el('div', 'eo-sh-head'); head.style.padding = `${q.hd}px ${q.r}px 0 ${q.l}px`; head.style.minHeight = `${q.t}px`;
+      const hb = pickHF(model, s, 'hdr'); if (hb.length) { const h = el('div', 'eo-hf'); docxBlocks(hb, h, model.media, u, ctx); head.appendChild(h); }
+      const body = el('div', 'eo-sh-body'); body.style.padding = `0 ${q.r}px 0 ${q.l}px`;
+      const content = el('div', 'eo-sh-content'); docxBlocks(s.blocks, content, model.media, u, { heads }); body.appendChild(content);
+      const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
+      if (notes.length) notesOf(notes, body);
+      const foot = el('div', 'eo-sh-foot'); foot.style.padding = `0 ${q.r}px ${q.ft}px ${q.l}px`; foot.style.minHeight = `${q.b}px`;
+      const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
+      sh.append(head, body, foot); col.appendChild(sh);
+    }
+    paper.appendChild(col);
+  };
+  const build = (page) => { // the DOM is rebuilt only when the view changes
+    if (built === page) return;
+    built = page; paper.replaceChildren(); heads.length = 0;
+    if (page && lay) sheetsDom(); else flowDom();
+  };
   const fit = () => (prefs.doc === 'page' && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
   const zoom = setupZoom(scroll, zoomer, fit, ui);
   const apply = () => {
-    const page = prefs.doc === 'page';
-    paper.classList.toggle('eo-pagemode', page); paper.classList.toggle('eo-reflow', !page);
+    const page = prefs.doc === 'page'; const sheeted = page && !!lay;
+    build(page);
+    paper.classList.toggle('eo-pagemode', page && !lay); paper.classList.toggle('eo-sheets', sheeted); paper.classList.toggle('eo-reflow', !page);
     paper.style.setProperty('--eo-indk', page ? '1' : '0.5');
     zoomer.style.width = page ? `${pg.w}px` : '100%';
-    paper.style.padding = page ? `${pg.t}px ${pg.r}px ${pg.b}px ${pg.l}px` : '16px';
+    paper.style.padding = sheeted ? '0' : page ? `${pg.t}px ${pg.r}px ${pg.b}px ${pg.l}px` : '16px';
     zoom.apply();
   };
   bars.extra = (bar) => {
@@ -509,17 +555,6 @@ function mountDocx(model, host, u, ui, bars) {
     bar.append(view.wrap, zoomButtons(ui, zoom));
     bars.viewSync = () => view.sync(prefs.doc);
   };
-  if (model.truncated) paper.appendChild(el('div', 'ev-banner', `Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`));
-  if (model.header.length) { const h = el('div', 'eo-hf'); docxBlocks(model.header, h, model.media, u); paper.appendChild(h); }
-  const heads = []; // top-level heading elements, for the outline (Decision 240)
-  docxBlocks(model.blocks, paper, model.media, u, { heads });
-  if (!model.blocks.length) paper.appendChild(el('p', 'ev-media-msg', 'This document has no text to show.'));
-  if (model.footnotes.length) {
-    const fn = el('div', 'eo-fn');
-    for (const f of model.footnotes) { const row = el('div', 'eo-fnrow'); row.appendChild(el('sup', '', String(f.n))); const c = el('div'); docxBlocks(f.blocks, c, model.media, u); row.appendChild(c); fn.appendChild(row); }
-    paper.appendChild(fn);
-  }
-  if (model.footer.length) { const h = el('div', 'eo-hf'); docxBlocks(model.footer, h, model.media, u); paper.appendChild(h); }
   zoomer.appendChild(paper); scroll.appendChild(zoomer); host.appendChild(scroll);
   apply();
   let ro = null;
