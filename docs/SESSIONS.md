@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 141**
+
+DP98 confirmed on device (Open with works). Owner report: title bar fold is jerky; empty bottom bar and three-dot menu wanted for PDF too.
+- `src/js/chrome-scroll.js` (new): shared scroll-direction logic.
+- `src/js/explorer-view.js`: title bar floats and the body glides; PDF enters the full-screen shell with its menu; Open with chooser for PDF.
+- `src/js/office-render.js`: uses the shared scroll logic.
+- `src/css/style.css`: floating title bar, PDF menu panel, PDF bottom space.
+- Decision 236. Checks: 17 shell, 21 menu, 22 tool, 36 earlier on generated files; `vite build` passes. Not run through CI or on a device (DP99).
+- Next: DP99 on device; then thumbnails and Word outline (E3g), then E3d (Word pages and shapes).
+
+---
+
 **Session 140**
 
 DP97 confirmed on device. Owner report: empty bar at the bottom of all three viewers; toolbar to move into a three-dot menu; title bar to hide while scrolling; Open with list; editing dropped.

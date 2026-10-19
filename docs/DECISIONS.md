@@ -2727,3 +2727,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Checks: 21 shell checks (menu panel, Open with, hide and show on scroll, stop after close) plus the 22 tool checks and 36 earlier checks pass on generated files; `vite build` passes.
 - Risks: not run through CI or on a device (DP98). The chooser relies on the file opener plugin showing its list when asked not to use the default app. The title bar is measured when it hides; a rotation while hidden keeps it hidden until the next scroll up.
 
+**236. PDF in the full-screen shell; smooth title bar fold (Phase 22, stage E3i).** Owner report after DP98: Open with works; the title bar fold was jerky; the empty bottom bar and the three-dot menu are wanted for PDF too. Amends Decision 235.
+- PDF: opens in the same shell as office files: no reserved bottom space, floating Back bar hidden, three-dot button before the share button, title bar folds while scrolling. The menu holds Find, Pages and outline, Zoom in and Zoom out (they were floating buttons); Find and Pages close it, zoom keeps it open, a tap on the page closes it. The share button lists the apps that can open the PDF.
+- Fold: the cause of the jerk was resizing the whole viewer on every frame of the animation. The title bar now floats over the file; the body's top margin changes once and the body slides from its old position with a transform (about a fifth of a second), so only the compositor moves. The transform is cleared when the slide ends, because a leftover transform would become the frame of the full-screen slide show.
+- Scroll logic moved to `chrome-scroll.js`, shared by the office viewers and PDF; events for 450 ms after a change are ignored.
+- Images, text, audio and video keep their shell.
+- Checks: 17 shell checks (office and PDF: flags, menu, Open with, fold and unfold, glide cleanup, restore on close; text unchanged), 21 menu, 22 tool and 36 earlier checks pass on generated files; `vite build` passes. The PDF engine itself is not loaded in these checks.
+- Risks: not run through CI or on a device (DP99). The PDF menu panel sits over the page; check it does not hide the search bar.
