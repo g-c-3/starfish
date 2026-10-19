@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 142**
+
+DP99 confirmed on device (smooth fold, PDF menu). Owner report: PDF menu had four buttons, six expected (Mark up and Edit pages were missing); title bar too tall.
+- `src/js/explorer-view.js`: Mark up and Edit pages mounted in the Explorer PDF with a save route (new copy next to the file, or Replace); zoom buttons removed (pinch).
+- `src/js/explorer.js`: passes the hand-over hook to the viewer.
+- `src/css/style.css`: slim title bar.
+- Decision 237. Checks: 9 PDF wiring, 17 shell, 21 menu, 22 tool, 36 earlier on generated files; `vite build` passes. Not run through CI or on a device (DP100).
+- Next: DP100 on device; then thumbnails and Word outline (E3g), then E3d (Word pages and shapes).
+
+---
+
 **Session 141**
 
 DP98 confirmed on device (Open with works). Owner report: title bar fold is jerky; empty bottom bar and three-dot menu wanted for PDF too.
