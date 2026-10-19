@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 146**
+
+Start: Tier 1 docs read; DECISIONS read from Decision 241, ARCHITECTURE section headings. Next item: E3d stage 1, Word pages from saved breaks.
+- `src/js/office-read.js`: saved page markers, PAGE, NUMPAGES and SECTIONPAGES fields (complex and simple) read as markers; footnote references flagged; per-section page set-up, start type, numbering, header and footer sets (default, first, even) with inheritance; stored page count from `docProps/app.xml`; table rows flagged where a saved break starts.
+- `src/js/office-pages.js` (new): splits blocks into sheets at saved markers, explicit breaks, page-break-before and section breaks; a paragraph is split at a marker; a table splits between rows; page numbers and formats; header and footer pick; returns null when the file holds no break.
+- `src/js/office-render.js`: Page view draws sheets with header and footer on each, fields filled, footnotes at the foot of the citing sheet; Reflow unchanged; DOM rebuilt only when the view changes; Info and Copy skip repeated headers.
+- `src/css/style.css`: sheet rules.
+- Decision 242.
+
+Decisions made: 242.
+
+Verified: 14 checks on generated Word files (mid-paragraph split, marker after an explicit break adds no page, table split, page-break-before, section numbering, field markers, header and footer inheritance, no-marker file); `vite build` passes. Not verified: rendering in a browser or on a device (DP104), CI.
+
+Open: DP94, DP95 and DP104 not yet run; E3d stage 2 (measured breaks) and stage 3 (shapes); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: confirm DP104 on a device; then E3d stage 2 (measured breaks) if stage 1 holds.
+
+---
+
 **Session 145**
 
 Start: Tier 1 docs read; DECISIONS and ARCHITECTURE read in part (Decision 239, section headings). Next item: E3g, Word headings outline and slide thumbnails. DP102 and DP103 confirmed on device from owner screenshots (outline panel and slide strip both work).

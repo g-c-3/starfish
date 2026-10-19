@@ -2773,3 +2773,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not planned: SmartArt, WordArt, fields that need Word to compute them (contents page numbers are shown as saved), exact match for files never saved by Word.
 - Risks: files from other programs carry no markers, so stage 2 decides their breaks; fonts with no width-matched bundled copy drift; a long document measured page by page may be slow on a phone (a page limit and progress notice are part of stage 2).
 - Build order: stage 1 first, device-checked, then stage 2.
+
+**242. Word pages: stage 1, saved breaks (Phase 22, stage E3d).** Builds the first stage of Decision 241. No change to credentials, backups or network use.
+- Page view draws one sheet per page, each at its section's size and margins, with header and footer on every sheet. Breaks come only from what the file holds: saved page markers, explicit page breaks, page-break-before and section breaks (next page, even and odd treated as next page; continuous adds none).
+- A marker inside a paragraph splits it across two sheets; a marker at a table row splits the table between rows, never inside a vertically merged group. A marker straight after an explicit break adds no page.
+- Header and footer: default, first-page (when the section sets it) and even-page (when the file sets it); a section without its own takes the previous one. PAGE, NUMPAGES and SECTIONPAGES are filled per sheet; numbering follows each section's start and format. Reflow view still shows the saved field text.
+- Footnotes appear at the foot of the sheet that cites them. Info and Copy leave out the repeated headers and footers.
+- Stored page count (`docProps/app.xml`) is read; a notice shows when it differs from the sheets drawn. A file with no saved break stays one continuous sheet, with a notice when it was saved with more than one page; stage 2 is for those.
+- Reflow view is unchanged. The page DOM is rebuilt only when the view switches.
+- Files: `src/js/office-read.js`, `src/js/office-pages.js` (new), `src/js/office-render.js`, `src/css/style.css`.
+- Checks: 14 on generated Word files; `vite build` passes.
+- Risks: not run in a browser, through CI or on a device (DP104). Fonts that differ from the original move text within a sheet but not the break. A sheet grows when its content is taller than the page.
