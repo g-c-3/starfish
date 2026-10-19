@@ -2764,3 +2764,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/office-render.js`, `src/css/style.css`. No change to the reader, credentials, backups or network use.
 - Checks: 6 simulated-page checks on a generated Word file (button present, panel hidden at start, rows and indents, tap scrolls and closes, toggle, destroy); `vite build` passes.
 - Risks: slide thumbnails not exercised, no slide file in the checks; not run through CI or on a device (DP103). Strip height with a tall slide shape and drawing cost on a long deck are unmeasured.
+
+**241. Word pages: plan (Phase 22, stage E3d).** Owner report: a Word file shows as one long sheet, not as pages. Aim: page breaks as close to the original as the file allows. Nothing built; no decision here changes credentials, backups or network use.
+- Stage 1, saved breaks (exact when present): page sheets drawn from the breaks the file already holds (`lastRenderedPageBreak` markers, explicit page breaks, page-break-before on a paragraph, section breaks). Header and footer on every page, with page number and page count fields filled in. The stored page count (`docProps/app.xml`) is read for comparison.
+- Stage 2, measured breaks (fallback, an estimate): used only when the file has no saved markers. Text is measured with the bundled fonts. Rules followed: line height from font metrics, space before and after, keep with next, keep lines together, widow and orphan control, table rows not split across pages. When the page count differs from the stored count, a notice says page breaks are estimated.
+- Stage 3, shapes: text boxes, shapes and floating pictures at their positions, reusing the slide drawing. Equations after that.
+- Reflow view stays as it is; Page view takes the sheets.
+- Not planned: SmartArt, WordArt, fields that need Word to compute them (contents page numbers are shown as saved), exact match for files never saved by Word.
+- Risks: files from other programs carry no markers, so stage 2 decides their breaks; fonts with no width-matched bundled copy drift; a long document measured page by page may be slow on a phone (a page limit and progress notice are part of stage 2).
+- Build order: stage 1 first, device-checked, then stage 2.

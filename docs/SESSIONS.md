@@ -6,18 +6,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 **Session 145**
 
-Start: Tier 1 docs read; DECISIONS and ARCHITECTURE read in part (Decision 239, section headings). Next item: E3g, Word headings outline and slide thumbnails. DP102 still to run on device.
+Start: Tier 1 docs read; DECISIONS and ARCHITECTURE read in part (Decision 239, section headings). Next item: E3g, Word headings outline and slide thumbnails. DP102 and DP103 confirmed on device from owner screenshots (outline panel and slide strip both work).
 - `src/js/office-render.js`: Outline and Slides button and panel in `buildTools`; heading elements collected by `docxBlocks` for the top-level body; Word outline rows; slide thumbnail strip drawn lazily with its own object URLs, released on close.
 - `src/css/style.css`: outline rows, thumbnail strip, hidden while playing.
 - Decision 240.
+- Owner report: a Word file still shows as one long sheet. Decision 241 records the plan for true pages (saved breaks first, measured breaks as a fallback, shapes after). No code written for it; context was full.
 
-Decisions made: 240.
+Decisions made: 240, 241.
 
-Verified: 6 simulated-page checks on a generated Word file; `vite build` passes. Not verified: slide thumbnails (no slide file in the checks), CI, any device (DP102, DP103). Release status not checked: the GitHub API rate limit was hit.
+Verified: 6 simulated-page checks on a generated Word file; `vite build` passes. Not verified: CI. Slide thumbnails were confirmed on a device only. Release status not checked: the GitHub API rate limit was hit.
 
-Open: DP102 and DP103 on device; DP94 and DP95 not yet run; E3d Word pages and shapes (a decision first); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: DP94 and DP95 not yet run; E3d Word pages (Decision 241, not started); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP102 and DP103 on device, then E3d (a decision first).
+Next session start point: E3d stage 1 (saved page breaks, page sheets, header and footer on every page). Source to read first: `office-read.js` (`readDocx`, section properties, header and footer parts), `office-render.js` (`mountDocx`, `docxBlocks`), `style.css` paper rules.
 
 ---
 
