@@ -4,6 +4,7 @@
 
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import { chromeOnScroll } from './chrome-scroll.js';
 
 export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
 export const TEXT_MAX = 2 * 1024 * 1024; // larger text goes to another app: a textarea of that size is slow on a phone
@@ -34,27 +35,47 @@ export function openFileViewer(file, ctx) {
   let current = file, token = 0, closed = false, changed = false;
   let guard = async () => true; // resolves false when Back must not leave yet
   let cleanup = () => {};
-  let officeOpen = false; let menuBtn = null; let chromeHidden = false;
+  let fullOpen = false; let menuBtn = null; let chromeHidden = false; let stopScroll = () => {};
   const header = root.querySelector('.editor-bar');
-  // Office files get the whole screen: the title bar folds away while scrolling down, the three-dot menu holds the tools
-  function setChrome(hidden) {
-    if (!header || hidden === chromeHidden) return;
-    chromeHidden = hidden;
-    if (hidden) header.style.marginTop = `-${header.offsetHeight}px`; else header.style.marginTop = '';
-    header.classList.toggle('ev-head-hidden', hidden);
+  const closeMenus = () => { body.classList.remove('pdf-menu-open'); const h = body.querySelector('.eo-host'); if (h) h.classList.remove('eo-menu-open'); };
+  // Office files and PDFs get the whole screen. The title bar floats over the file and the body's top margin makes room for it.
+  // Folding changes that margin once and slides the body from where it was, so the file glides instead of resizing frame by frame.
+  let glideTimer = 0;
+  function glide(hidden) {
+    const h = header.offsetHeight; clearTimeout(glideTimer);
+    body.style.transition = 'none'; body.style.marginTop = hidden ? '0px' : `${h}px`; body.style.transform = `translateY(${hidden ? h : -h}px)`;
+    void body.offsetHeight;
+    body.style.transition = 'transform .22s ease'; body.style.transform = 'translateY(0)';
+    // a transform left on the body would become the frame of full-screen children (the slide show), so it is cleared when the slide ends
+    glideTimer = setTimeout(() => { body.style.transition = ''; body.style.transform = ''; }, 260);
   }
-  function leaveOffice() {
-    officeOpen = false; setChrome(false);
+  function setChrome(hidden) {
+    if (!header || !fullOpen || hidden === chromeHidden) return;
+    chromeHidden = hidden; header.classList.toggle('ev-head-hidden', hidden); glide(hidden);
+  }
+  function enterFull(toggleMenu) {
+    fullOpen = true; root.classList.add('ev-full'); document.body.classList.add('ev-full');
+    body.style.marginTop = `${header.offsetHeight}px`;
+    menuBtn = el('button', 'icon-btn ev-menu-btn'); menuBtn.type = 'button'; menuBtn.setAttribute('aria-label', 'Menu'); menuBtn.title = 'Menu';
+    const ns = 'http://www.w3.org/2000/svg'; const dots = document.createElementNS(ns, 'svg'); dots.setAttribute('class', 'ic'); dots.setAttribute('viewBox', '0 0 24 24'); dots.setAttribute('aria-hidden', 'true');
+    for (const cy of [5, 12, 19]) { const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', '12'); c.setAttribute('cy', String(cy)); c.setAttribute('r', '2'); c.setAttribute('fill', 'currentColor'); c.setAttribute('stroke', 'none'); dots.appendChild(c); }
+    menuBtn.appendChild(dots); openBtn.before(menuBtn);
+    menuBtn.onclick = () => { setChrome(false); toggleMenu(); };
+  }
+  function leaveFull() {
+    if (!fullOpen) return;
+    stopScroll(); stopScroll = () => {}; closeMenus(); clearTimeout(glideTimer);
+    fullOpen = false; chromeHidden = false; header.classList.remove('ev-head-hidden');
+    body.style.marginTop = ''; body.style.transform = ''; body.style.transition = ''; body.classList.remove('pdf-full');
     if (menuBtn) { menuBtn.remove(); menuBtn = null; }
     root.classList.remove('ev-full'); document.body.classList.remove('ev-full');
   }
-
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const note = (text) => { body.replaceChildren(); const b = el('div', 'pdf-msg'); b.appendChild(el('p', '', text)); body.appendChild(b); };
   const reset = () => {
     try { cleanup(); } catch { /* a teardown must not block the next file */ }
     cleanup = () => {}; guard = async () => true;
-    leaveOffice();
+    leaveFull();
     token++;
     saveBtn.classList.add('hidden'); saveBtn.disabled = true; saveBtn.onclick = null;
     countEl.textContent = '';
@@ -122,6 +143,11 @@ export function openFileViewer(file, ctx) {
     if (f.size > PDF_MAX) { note('This PDF is too large to open here. Use Open with app.'); return; }
     body.innerHTML = '<div class="pdf-scroll"><div class="pdf-msg">Loading…</div></div>';
     const scroll = body.querySelector('.pdf-scroll');
+    body.classList.add('pdf-full');
+    enterFull(() => body.classList.toggle('pdf-menu-open'));
+    stopScroll = chromeOnScroll(body, (h) => { if (h) closeMenus(); setChrome(h); }, '.pdf-scroll');
+    scroll.addEventListener('pointerdown', closeMenus);
+    body.addEventListener('click', (e) => { if (e.target.closest('.pdf-find-btn, .pdf-pages-btn')) closeMenus(); });
     let view = null, tools = null;
     cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } };
     guard = async () => !(tools && await tools.closeTop());
@@ -166,16 +192,11 @@ export function openFileViewer(file, ctx) {
       body.replaceChildren();
       const host = el('div', 'eo-host');
       body.appendChild(host);
-      officeOpen = true; root.classList.add('ev-full'); document.body.classList.add('ev-full');
-      menuBtn = el('button', 'icon-btn ev-menu-btn'); menuBtn.type = 'button'; menuBtn.setAttribute('aria-label', 'Menu'); menuBtn.title = 'Menu';
-      const ns = 'http://www.w3.org/2000/svg'; const dots = document.createElementNS(ns, 'svg'); dots.setAttribute('class', 'ic'); dots.setAttribute('viewBox', '0 0 24 24'); dots.setAttribute('aria-hidden', 'true');
-      for (const cy of [5, 12, 19]) { const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', '12'); c.setAttribute('cy', String(cy)); c.setAttribute('r', '2'); c.setAttribute('fill', 'currentColor'); c.setAttribute('stroke', 'none'); dots.appendChild(c); }
-      menuBtn.appendChild(dots); openBtn.before(menuBtn);
-      menuBtn.onclick = () => { setChrome(false); host.classList.toggle('eo-menu-open'); };
+      enterFull(() => host.classList.toggle('eo-menu-open'));
       host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
       mounted = mountOffice(kind, bytes, host, {
         ui, setCount: (t) => { if (mine === token) countEl.textContent = t; },
-        onChrome: (h) => { if (h) host.classList.remove('eo-menu-open'); setChrome(h); },
+        onChrome: (h) => { if (h) closeMenus(); setChrome(h); },
         openWith: () => { if (!closed) external(current, true); }
       });
     } catch (err) {
@@ -230,7 +251,7 @@ export function openFileViewer(file, ctx) {
   }
 
   $('ev-back-btn').onclick = back;
-  openBtn.onclick = () => { if (!closed) external(current, officeOpen); }; // an office file: always the list of apps to choose from
+  openBtn.onclick = () => { if (!closed) external(current, fullOpen); }; // an office file or PDF: always the list of apps to choose from
   root.classList.remove('hidden');
   show(file);
   return { back, destroy };

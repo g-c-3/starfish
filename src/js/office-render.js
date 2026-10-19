@@ -3,6 +3,7 @@
 
 import { Preferences } from '@capacitor/preferences';
 import { chartSvg } from './office-chart.js';
+import { chromeOnScroll } from './chrome-scroll.js';
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -816,27 +817,6 @@ function mountPptx(model, host, ui, count, u, bars, root) {
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
 // fit to show; any other error is shown as the generic one by the caller.
-// Scrolling down hides the viewer's title bar and scrolling up (or reaching the top) brings it back, so the file gets the whole screen.
-// onChrome(hidden) is the shell's callback. Direction is judged over a short run, and events right after a change are ignored,
-// because the change itself resizes the scroll area.
-function chromeOnScroll(host, onChrome) {
-  if (!onChrome) return () => {};
-  const last = new WeakMap(); let acc = 0; let hidden = false; let quiet = 0;
-  const set = (h) => { if (h === hidden) return; hidden = h; quiet = Date.now() + 400; acc = 0; onChrome(h); };
-  const on = (e) => {
-    const t = e.target;
-    if (!t || t.nodeType !== 1 || !t.matches('.eo-scroll, .eo-grid')) return;
-    const top = t.scrollTop; const prev = last.has(t) ? last.get(t) : top; last.set(t, top);
-    if (Date.now() < quiet) return;
-    if (top < 12) { set(false); return; }
-    const dy = top - prev; if (!dy) return;
-    acc = (acc > 0) === (dy > 0) ? acc + dy : dy;
-    if (acc > 28) set(true); else if (acc < -28) set(false);
-  };
-  host.addEventListener('scroll', on, true);
-  return () => host.removeEventListener('scroll', on, true);
-}
-
 export function mountOffice(kind, bytes, host, ctx) {
   const { ui, setCount = () => {} } = ctx;
   const u = urls();
@@ -878,6 +858,6 @@ export function mountOffice(kind, bytes, host, ctx) {
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   fontNotice(host);
-  const stopChrome = chromeOnScroll(host, ctx.onChrome);
+  const stopChrome = chromeOnScroll(host, ctx.onChrome, '.eo-scroll, .eo-grid');
   return { destroy() { stopChrome(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }
