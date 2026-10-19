@@ -1263,6 +1263,21 @@ mark.eo-hit { background: #ffe14d; color: #111; border-radius: 2px; }
 mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .eo-paper, .eo-canvas, .eo-cells, .eo-notes { user-select: text; -webkit-user-select: text; }
 .eo-host.eo-playing .eo-fbar, .eo-host.eo-playing .eo-info { display: none; }
+.eo-host.eo-playing .eo-outline { display: none; }
+/* headings outline and slide thumbnails (Decision 240) */
+.eo-outline { flex: none; max-height: 42%; overflow: auto; background: var(--surface); border-bottom: 1px solid var(--border); padding: 4px 0; }
+.eo-outline[hidden] { display: none; }
+.eo-orow { display: block; width: 100%; min-height: 0; margin: 0; padding: 8px 14px; text-align: left; font-size: 14px; border: 0; border-radius: 0; background: none; color: var(--fg); }
+.eo-ohint { padding: 8px 14px; font-size: 12.5px; color: var(--muted); }
+.eo-outline.eo-strip { display: flex; gap: 8px; max-height: none; padding: 8px 10px; overflow-x: auto; overflow-y: hidden; }
+.eo-outline.eo-strip[hidden] { display: none; }
+.eo-trow { flex: none; width: 132px; min-height: 0; margin: 0; padding: 0; text-align: left; overflow: hidden; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--fg); }
+.eo-trow.eo-ocur { border-color: var(--brand, #7c6cf0); }
+.eo-tbox { position: relative; width: 132px; overflow: hidden; background: var(--surface-2); }
+.eo-tscale { position: absolute; top: 0; left: 0; transform-origin: 0 0; pointer-events: none; }
+.eo-tcap { display: flex; gap: 6px; padding: 4px 6px; font-size: 11.5px; }
+.eo-tnum { flex: none; color: var(--muted); }
+.eo-ttitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* landscape phones: less chrome, more slide */
 @media (orientation: landscape) and (max-height: 520px) {
   .eo-bar { padding: 3px 8px; }
