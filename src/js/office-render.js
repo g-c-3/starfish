@@ -143,9 +143,11 @@ const wordCount = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
 const fontList = () => (usedFonts && usedFonts.size ? ` \u00b7 Fonts: ${[...usedFonts].slice(0, 6).join(', ')}` : '');
 // t: { find: { count(q), go(k, q), clear() }, copy(), info(), goto?(n) }
 function buildTools(host, ui, bar, t) {
+  const closeMenu = () => host.classList.remove('eo-menu-open');
   const seg = el('div', 'eo-seg'); bar.appendChild(seg);
   const mkb = (text, label) => { const b = el('button', 'eo-segbtn', text); b.type = 'button'; b.setAttribute('aria-label', label); seg.appendChild(b); return b; };
   const bFind = mkb('Find', 'Find in this file'); const bCopy = mkb('Copy', 'Copy text'); const bInfo = mkb('Info', 'File information');
+  if (t.open) { const bo = mkb('Open with', 'Open with another app'); bo.onclick = () => { closeMenu(); ui.onActivity(); t.open(); }; }
   const fbar = el('div', 'eo-fbar'); fbar.hidden = true;
   const inp = el('input', 'eo-finput'); inp.type = 'search'; inp.placeholder = 'Find'; inp.setAttribute('aria-label', 'Find text');
   const cnt = el('span', 'eo-fcount');
@@ -171,7 +173,7 @@ function buildTools(host, ui, bar, t) {
   if (gi) gi.addEventListener('keydown', (e) => { if (e.key === 'Enter' && gi.value) { ui.onActivity(); t.goto(Number(gi.value)); } });
   const toggleFind = () => {
     fbar.hidden = !fbar.hidden; bFind.classList.toggle('active', !fbar.hidden);
-    if (fbar.hidden) { clearTimeout(timer); inp.value = ''; cnt.textContent = ''; n = 0; t.find.clear(); } else { ui.onActivity(); inp.focus(); }
+    if (fbar.hidden) { clearTimeout(timer); inp.value = ''; cnt.textContent = ''; n = 0; t.find.clear(); } else { ui.onActivity(); closeMenu(); inp.focus(); }
   };
   bFind.onclick = toggleFind; fx.onclick = toggleFind;
   let flash = null;
@@ -179,7 +181,7 @@ function buildTools(host, ui, bar, t) {
     ui.onActivity(); const ok = await copyText(t.copy());
     bCopy.textContent = ok ? 'Copied' : 'Not copied'; clearTimeout(flash); flash = setTimeout(() => { bCopy.textContent = 'Copy'; }, 1400);
   };
-  bInfo.onclick = () => { ui.onActivity(); info.hidden = !info.hidden; bInfo.classList.toggle('active', !info.hidden); if (!info.hidden) info.textContent = t.info(); };
+  bInfo.onclick = () => { ui.onActivity(); info.hidden = !info.hidden; bInfo.classList.toggle('active', !info.hidden); if (!info.hidden) { info.textContent = t.info(); closeMenu(); } };
   return { destroy() { clearTimeout(timer); clearTimeout(flash); } };
 }
 const scrollTo = (e) => { if (e && e.scrollIntoView) e.scrollIntoView({ block: 'center', inline: 'center' }); };
@@ -814,6 +816,27 @@ function mountPptx(model, host, ui, count, u, bars, root) {
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
 // fit to show; any other error is shown as the generic one by the caller.
+// Scrolling down hides the viewer's title bar and scrolling up (or reaching the top) brings it back, so the file gets the whole screen.
+// onChrome(hidden) is the shell's callback. Direction is judged over a short run, and events right after a change are ignored,
+// because the change itself resizes the scroll area.
+function chromeOnScroll(host, onChrome) {
+  if (!onChrome) return () => {};
+  const last = new WeakMap(); let acc = 0; let hidden = false; let quiet = 0;
+  const set = (h) => { if (h === hidden) return; hidden = h; quiet = Date.now() + 400; acc = 0; onChrome(h); };
+  const on = (e) => {
+    const t = e.target;
+    if (!t || t.nodeType !== 1 || !t.matches('.eo-scroll, .eo-grid')) return;
+    const top = t.scrollTop; const prev = last.has(t) ? last.get(t) : top; last.set(t, top);
+    if (Date.now() < quiet) return;
+    if (top < 12) { set(false); return; }
+    const dy = top - prev; if (!dy) return;
+    acc = (acc > 0) === (dy > 0) ? acc + dy : dy;
+    if (acc > 28) set(true); else if (acc < -28) set(false);
+  };
+  host.addEventListener('scroll', on, true);
+  return () => host.removeEventListener('scroll', on, true);
+}
+
 export function mountOffice(kind, bytes, host, ctx) {
   const { ui, setCount = () => {} } = ctx;
   const u = urls();
@@ -837,23 +860,24 @@ export function mountOffice(kind, bytes, host, ctx) {
     // the toolbar comes first; the docx mount fills in its view and zoom controls through bars.extra
     const holder = el('div'); const tmp = { extra: null };
     inner = mountDocx(model, holder, u, ui, tmp);
-    tmp.tools = docTools(host);
+    tmp.tools = docTools(host); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountXlsx(model, holder, ui, tmp, u);
-    tmp.tools = xlTools(model, inner, host);
+    tmp.tools = xlTools(model, inner, host); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
-    tmp.tools = pptTools(model, inner);
+    tmp.tools = pptTools(model, inner); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   fontNotice(host);
-  return { destroy() { for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
+  const stopChrome = chromeOnScroll(host, ctx.onChrome);
+  return { destroy() { stopChrome(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }

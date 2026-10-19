@@ -917,10 +917,10 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     return undefined;
   }
 
-  async function openExternal(e) {
+  async function openExternal(e, chooser = false) { // chooser: always list the apps that can open it
     try {
       leaving();
-      await FileOpener.open({ filePath: toFileUri(e.path), contentType: mimeOf(e.name), openWithDefault: true });
+      await FileOpener.open({ filePath: toFileUri(e.path), contentType: mimeOf(e.name), openWithDefault: !chooser });
     } catch (err) {
       const code = String(err?.code ?? '');
       toast(code === '8' ? 'No app on this phone can open this file type.' : code === '9' ? 'The file could not be found.' : 'Could not open the file.');

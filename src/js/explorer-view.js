@@ -24,7 +24,7 @@ export const mediaSrc = (uri) => Capacitor.convertFileSrc(uri);
 const errText = (e) => (e && e.message ? `: ${e.message}` : '.');
 
 // file: { name, path, size }. ctx: { kind, siblings (images of the folder, in listing order), toUri(path),
-// ui { askYesNo, askText, attachZoomPan, onActivity }, toast, external(file), isVault, onClose({ changed }) }.
+// ui { askYesNo, askText, attachZoomPan, onActivity }, toast, external(file, chooser), isVault, onClose({ changed }) }.
 // Returns { back, destroy }; back() asks before dropping unsaved text and closes an open PDF tool first.
 export function openFileViewer(file, ctx) {
   const { siblings = [], toUri, ui, toast, external, isVault = false, readOnly = false, onClose = () => {} } = ctx;
@@ -34,12 +34,27 @@ export function openFileViewer(file, ctx) {
   let current = file, token = 0, closed = false, changed = false;
   let guard = async () => true; // resolves false when Back must not leave yet
   let cleanup = () => {};
+  let officeOpen = false; let menuBtn = null; let chromeHidden = false;
+  const header = root.querySelector('.editor-bar');
+  // Office files get the whole screen: the title bar folds away while scrolling down, the three-dot menu holds the tools
+  function setChrome(hidden) {
+    if (!header || hidden === chromeHidden) return;
+    chromeHidden = hidden;
+    if (hidden) header.style.marginTop = `-${header.offsetHeight}px`; else header.style.marginTop = '';
+    header.classList.toggle('ev-head-hidden', hidden);
+  }
+  function leaveOffice() {
+    officeOpen = false; setChrome(false);
+    if (menuBtn) { menuBtn.remove(); menuBtn = null; }
+    root.classList.remove('ev-full'); document.body.classList.remove('ev-full');
+  }
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const note = (text) => { body.replaceChildren(); const b = el('div', 'pdf-msg'); b.appendChild(el('p', '', text)); body.appendChild(b); };
   const reset = () => {
     try { cleanup(); } catch { /* a teardown must not block the next file */ }
     cleanup = () => {}; guard = async () => true;
+    leaveOffice();
     token++;
     saveBtn.classList.add('hidden'); saveBtn.disabled = true; saveBtn.onclick = null;
     countEl.textContent = '';
@@ -151,7 +166,18 @@ export function openFileViewer(file, ctx) {
       body.replaceChildren();
       const host = el('div', 'eo-host');
       body.appendChild(host);
-      mounted = mountOffice(kind, bytes, host, { ui, setCount: (t) => { if (mine === token) countEl.textContent = t; } });
+      officeOpen = true; root.classList.add('ev-full'); document.body.classList.add('ev-full');
+      menuBtn = el('button', 'icon-btn ev-menu-btn'); menuBtn.type = 'button'; menuBtn.setAttribute('aria-label', 'Menu'); menuBtn.title = 'Menu';
+      const ns = 'http://www.w3.org/2000/svg'; const dots = document.createElementNS(ns, 'svg'); dots.setAttribute('class', 'ic'); dots.setAttribute('viewBox', '0 0 24 24'); dots.setAttribute('aria-hidden', 'true');
+      for (const cy of [5, 12, 19]) { const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', '12'); c.setAttribute('cy', String(cy)); c.setAttribute('r', '2'); c.setAttribute('fill', 'currentColor'); c.setAttribute('stroke', 'none'); dots.appendChild(c); }
+      menuBtn.appendChild(dots); openBtn.before(menuBtn);
+      menuBtn.onclick = () => { setChrome(false); host.classList.toggle('eo-menu-open'); };
+      host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
+      mounted = mountOffice(kind, bytes, host, {
+        ui, setCount: (t) => { if (mine === token) countEl.textContent = t; },
+        onChrome: (h) => { if (h) host.classList.remove('eo-menu-open'); setChrome(h); },
+        openWith: () => { if (!closed) external(current, true); }
+      });
     } catch (err) {
       if (mine !== token) return;
       if (mounted) { mounted.destroy(); mounted = null; }
@@ -204,7 +230,7 @@ export function openFileViewer(file, ctx) {
   }
 
   $('ev-back-btn').onclick = back;
-  openBtn.onclick = () => { if (!closed) external(current); };
+  openBtn.onclick = () => { if (!closed) external(current, officeOpen); }; // an office file: always the list of apps to choose from
   root.classList.remove('hidden');
   show(file);
   return { back, destroy };
