@@ -148,6 +148,7 @@ function buildTools(host, ui, bar, t) {
   const seg = el('div', 'eo-seg'); bar.appendChild(seg);
   const mkb = (text, label) => { const b = el('button', 'eo-segbtn', text); b.type = 'button'; b.setAttribute('aria-label', label); seg.appendChild(b); return b; };
   const bFind = mkb('Find', 'Find in this file'); const bCopy = mkb('Copy', 'Copy text'); const bInfo = mkb('Info', 'File information');
+  const o = t.outline || null; const bOut = o ? mkb(o.label, o.title) : null;
   if (t.open) { const bo = mkb('Open with', 'Open with another app'); bo.onclick = () => { closeMenu(); ui.onActivity(); t.open(); }; }
   const fbar = el('div', 'eo-fbar'); fbar.hidden = true;
   const inp = el('input', 'eo-finput'); inp.type = 'search'; inp.placeholder = 'Find'; inp.setAttribute('aria-label', 'Find text');
@@ -159,7 +160,8 @@ function buildTools(host, ui, bar, t) {
   if (t.goto) { gi = el('input', 'eo-finput eo-gin'); gi.type = 'number'; gi.min = '1'; gi.placeholder = 'Go to #'; gi.setAttribute('aria-label', 'Go to slide number'); fbar.appendChild(gi); }
   fbar.appendChild(fx);
   const info = el('div', 'eo-info'); info.hidden = true;
-  host.append(fbar, info);
+  const panel = el('div', `eo-outline${o && o.strip ? ' eo-strip' : ''}`); panel.hidden = true;
+  host.append(fbar, info, panel);
   let n = 0; let k = 0; let last = ''; let timer = null;
   const run = () => {
     const q = inp.value.trim(); last = q; ui.onActivity();
@@ -183,18 +185,43 @@ function buildTools(host, ui, bar, t) {
     bCopy.textContent = ok ? 'Copied' : 'Not copied'; clearTimeout(flash); flash = setTimeout(() => { bCopy.textContent = 'Copy'; }, 1400);
   };
   bInfo.onclick = () => { ui.onActivity(); info.hidden = !info.hidden; bInfo.classList.toggle('active', !info.hidden); if (!info.hidden) { info.textContent = t.info(); closeMenu(); } };
-  return { destroy() { clearTimeout(timer); clearTimeout(flash); } };
+  const closePanel = () => { panel.hidden = true; if (bOut) bOut.classList.remove('active'); if (o) o.release(); panel.replaceChildren(); };
+  if (bOut) bOut.onclick = () => {
+    ui.onActivity();
+    if (!panel.hidden) { closePanel(); return; }
+    closeMenu(); panel.hidden = false; bOut.classList.add('active'); o.fill(panel, closePanel);
+  };
+  return { destroy() { clearTimeout(timer); clearTimeout(flash); if (o) o.release(); } };
 }
 const scrollTo = (e) => { if (e && e.scrollIntoView) e.scrollIntoView({ block: 'center', inline: 'center' }); };
 const setCur = (state, m) => { if (state.cur) state.cur.classList.remove('eo-cur'); state.cur = m || null; if (state.cur) state.cur.classList.add('eo-cur'); };
 
-function docTools(host) {
+function docTools(host, doc) {
   const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
   const text = () => { const r = root(); return r ? r.innerText || r.textContent || '' : ''; };
   return {
     find: { count(q) { marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
     copy: text,
-    info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}`; }
+    info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}`; },
+    // headings outline (Decision 240): one row per top-level heading, indented by level; a tap scrolls to it
+    outline: {
+      label: 'Outline', title: 'Headings outline',
+      fill(panel, done) {
+        let n = 0;
+        for (const h of (doc && doc.heads) || []) {
+          const label = (h.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!label || n >= 500) continue;
+          n++;
+          const lv = Math.min(6, Math.max(1, Number(h.tagName.slice(1)) - 1));
+          const b = el('button', 'eo-orow', label.length > 90 ? `${label.slice(0, 89)}\u2026` : label); b.type = 'button';
+          b.style.paddingLeft = `${14 + (lv - 1) * 14}px`;
+          b.onclick = () => { done(); h.scrollIntoView({ block: 'start' }); };
+          panel.appendChild(b);
+        }
+        if (!n) panel.appendChild(el('div', 'eo-ohint', 'This document has no headings.'));
+      },
+      release() {}
+    }
   };
 }
 function xlTools(model, xl, host) {
@@ -234,7 +261,7 @@ const slideRuns = (s) => { // one string per run, the units the drawing writes
   return out;
 };
 function pptTools(model, pp) {
-  let hits = []; const st = { cur: null };
+  let hits = []; const st = { cur: null }; let tu = null; let io = null;
   return {
     find: {
       count(q) {
@@ -255,7 +282,39 @@ function pptTools(model, pp) {
     },
     copy: () => { const s = model.load(pp.cur()); return [...slideParas(s), ...(s.notes ? ['', 'Notes', s.notes] : [])].join('\n'); },
     info: () => { const s = model.load(pp.cur()); return `${plural(model.count, 'slide')} \u00b7 slide ${pp.cur() + 1}: ${plural(wordCount(slideParas(s).join(' ')), 'word')}${fontList()}`; },
-    goto: (n) => pp.go(Math.min(Math.max(1, n), model.count) - 1)
+    goto: (n) => pp.go(Math.min(Math.max(1, n), model.count) - 1),
+    // slide thumbnails (Decision 240): a strip drawn lazily with the slide drawing, scaled down; own object URLs, released on close
+    outline: {
+      label: 'Slides', title: 'Slide thumbnails', strip: true,
+      fill(panel, done) {
+        tu = urls();
+        const W = 132; const bh = Math.round(W * model.size.h / model.size.w);
+        const draw = (row) => {
+          if (row.dataset.done) return; row.dataset.done = '1';
+          let s; try { s = model.load(Number(row.dataset.i)); } catch { return; }
+          const k = W / s.w; const box = row.querySelector('.eo-tbox');
+          box.style.height = `${Math.round(s.h * k)}px`;
+          const sc = el('div', 'eo-tscale'); sc.style.width = `${s.w}px`; sc.style.height = `${s.h}px`; sc.style.transform = `scale(${k})`;
+          sc.appendChild(slideDom(s, tu)); box.appendChild(sc);
+          const first = slideParas(s)[0]; if (first) row.querySelector('.eo-ttitle').textContent = first.slice(0, 60);
+        };
+        if (window.IntersectionObserver) {
+          io = new window.IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { draw(e.target); io.unobserve(e.target); } }, { root: panel, rootMargin: '200px' });
+        }
+        for (let i = 0; i < model.count; i++) {
+          const row = el('button', `eo-trow${i === pp.cur() ? ' eo-ocur' : ''}`); row.type = 'button'; row.dataset.i = String(i);
+          row.setAttribute('aria-label', `Slide ${i + 1}`);
+          const box = el('div', 'eo-tbox'); box.style.height = `${bh}px`;
+          const cap = el('div', 'eo-tcap'); cap.append(el('span', 'eo-tnum', String(i + 1)), el('span', 'eo-ttitle'));
+          row.append(box, cap);
+          row.onclick = () => { done(); pp.go(i); };
+          panel.appendChild(row);
+          if (io) io.observe(row); else if (i < 20) draw(row);
+        }
+        const cur = panel.querySelector('.eo-ocur'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ inline: 'center', block: 'nearest' });
+      },
+      release() { if (io) { io.disconnect(); io = null; } if (tu) { tu.revoke(); tu = null; } }
+    }
   };
 }
 
@@ -398,6 +457,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     }
     appendRuns(p, b.runs, media, u, { fill });
     if (!b.runs.length) p.appendChild(el('br'));
+    if (ctx.heads && b.level && b.runs.length) ctx.heads.push(p);
     parent.appendChild(p);
   }
 }
@@ -451,7 +511,8 @@ function mountDocx(model, host, u, ui, bars) {
   };
   if (model.truncated) paper.appendChild(el('div', 'ev-banner', `Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`));
   if (model.header.length) { const h = el('div', 'eo-hf'); docxBlocks(model.header, h, model.media, u); paper.appendChild(h); }
-  docxBlocks(model.blocks, paper, model.media, u);
+  const heads = []; // top-level heading elements, for the outline (Decision 240)
+  docxBlocks(model.blocks, paper, model.media, u, { heads });
   if (!model.blocks.length) paper.appendChild(el('p', 'ev-media-msg', 'This document has no text to show.'));
   if (model.footnotes.length) {
     const fn = el('div', 'eo-fn');
@@ -463,7 +524,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { destroy() { if (ro) ro.disconnect(); } };
+  return { heads, destroy() { if (ro) ro.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
@@ -840,7 +901,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     // the toolbar comes first; the docx mount fills in its view and zoom controls through bars.extra
     const holder = el('div'); const tmp = { extra: null };
     inner = mountDocx(model, holder, u, ui, tmp);
-    tmp.tools = docTools(host); tmp.tools.open = ctx.openWith;
+    tmp.tools = docTools(host, inner); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
