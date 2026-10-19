@@ -1229,6 +1229,14 @@ body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-i
 .eo-xobj { position: absolute; overflow: hidden; }
 .eo-xobj img { width: 100%; height: 100%; display: block; }
 .eo-xchart { background: var(--surface); border: 1px solid var(--border); box-sizing: border-box; }
+/* full screen office viewer, menu panel, folding title bar (Decision 235) */
+body.overlay-open #explorer-viewer.ev-full { padding-bottom: 0; } /* the floating Back bar is hidden here; the title bar's arrow and the system Back still leave */
+body.ev-full #bottom-nav { display: none !important; }
+#explorer-viewer.ev-full .editor-bar { transition: margin-top .2s ease, opacity .2s ease; }
+#explorer-viewer .editor-bar.ev-head-hidden { opacity: 0; pointer-events: none; }
+.ev-office > .eo-bar { display: none; position: absolute; top: 0; left: 8px; right: 8px; z-index: 8; border: 1px solid var(--border); border-top: none; border-radius: 0 0 16px 16px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35); }
+.ev-office.eo-menu-open > .eo-bar { display: flex; }
+.eo-host.eo-playing > .eo-bar { display: none !important; }
 /* find, copy, info (Decision 234) */
 .eo-fbar { flex: none; display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .eo-fbar[hidden], .eo-info[hidden] { display: none; }
