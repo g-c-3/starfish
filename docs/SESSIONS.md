@@ -23,7 +23,9 @@ Fifth part: sampling alone did not shorten the load on device. The text was draw
 
 Sixth part: still too slow on device. Sheets are now empty shells filled near the screen; Find, Copy, Info and Outline fill all first (Decision 247).
 
-Decisions made: 242, 243, 244, 245, 246, 247.
+Seventh part: screen recordings read frame by frame: sheets appear as soon as "Loading" ends and scrolling is smooth, so the remaining wait is before the viewer (unzip, parse, read). Reader savings and a temporary timing readout in the Word Info line (Decision 248).
+
+Decisions made: 242, 243, 244, 245, 246, 247, 248.
 
 Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 
@@ -31,7 +33,7 @@ Verified: 14 checks on generated Word files (mid-paragraph split, marker after a
 
 Open: DP94, DP95 and DP105 (including Grade_XII_updated.docx back to 157) not yet run; E3d stage 2 (measured breaks) and stage 3 (shapes); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP105 on a device (marking scheme, then a long file); then E3d stage 3 (shapes) if stage 2 holds.
+Next session start point: read the load timings from the Word Info line on the 157-page file and tune the slowest phase (E3o); DP105 on a device; then E3d stage 3 (shapes) if stage 2 holds.
 
 ---
 

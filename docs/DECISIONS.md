@@ -2821,3 +2821,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Reflow view is unchanged: it still draws the whole text once.
 - Files: `src/js/office-render.js`.
 - Checks: `vite build` passes. Not run on a device (DP105). Reading and unzipping the 5 MB file is unchanged.
+
+**248. Word load time: reader savings and a temporary timing readout (Phase 22, stage E3d).** Screen recordings of the 157-page file: about 5 s of "Loading" before the viewer, then sheets at once and smooth scrolling (Decision 247). The wait is now in reading the file, not drawing it.
+- A very large part (over 2 MB of text) is checked for a parse error at its root only; the whole-tree search is kept for small parts.
+- The tree helpers `kid` and `kids` stop at the first match and no longer copy the child list.
+- The Word Info line ends with the load timings: unzip, parse, read, pages, and the sheets drawn so far. Temporary: remove once load time is tuned (roadmap E3o).
+- Files: `src/js/office-read.js`, `src/js/office-render.js`.
+- Checks: 14 saved-break and 19 simulated-layout checks pass; `vite build` passes. The gain is not measured: the sandbox has no browser parser, so the first timings come from the phone (DP105).
