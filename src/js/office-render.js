@@ -204,15 +204,17 @@ const setCur = (state, m) => { if (state.cur) state.cur.classList.remove('eo-cur
 
 function docTools(host, doc) {
   const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
-  const text = () => { const r = root(); if (!r) return ''; const c = r.querySelectorAll('.eo-sh-content'); return c.length ? Array.from(c, (x) => x.innerText || x.textContent || '').join('\n') : r.innerText || r.textContent || ''; };
+  const all = () => { if (doc && doc.ensureAll) doc.ensureAll(); };
+  const text = () => { all(); const r = root(); if (!r) return ''; const c = r.querySelectorAll('.eo-sh-content'); return c.length ? Array.from(c, (x) => x.innerText || x.textContent || '').join('\n') : r.innerText || r.textContent || ''; };
   return {
-    find: { count(q) { marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
+    find: { count(q) { all(); marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
     copy: text,
     info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}`; },
     // headings outline (Decision 240): one row per top-level heading, indented by level; a tap scrolls to it
     outline: {
       label: 'Outline', title: 'Headings outline',
       fill(panel, done) {
+        all();
         let n = 0;
         for (const h of (doc && doc.heads) || []) {
           const label = (h.textContent || '').replace(/\s+/g, ' ').trim();
@@ -566,29 +568,48 @@ function mountDocx(model, host, u, ui, bars) {
     if (model.footnotes.length) notesOf(model.footnotes, paper);
     if (model.footer.length) { const h = el('div', 'eo-hf'); docxBlocks(model.footer, h, model.media, u); paper.appendChild(h); }
   };
+  // Sheets are drawn as empty shells of the right size and filled when they come near the screen (Decision 247);
+  // Find, Copy, Info and Outline fill them all first.
+  let io = null; let recs = [];
+  const fillSheet = (rec) => {
+    if (rec.done) return; rec.done = true;
+    const { s, q, ctx, head, body, foot } = rec;
+    const hb = pickHF(model, s, 'hdr'); if (hb.length) { const h = el('div', 'eo-hf'); docxBlocks(hb, h, model.media, u, ctx); head.appendChild(h); }
+    const content = el('div', 'eo-sh-content'); docxBlocks(s.blocks, content, model.media, u, { heads: rec.heads }); body.appendChild(content);
+    const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
+    if (notes.length) notesOf(notes, body);
+    const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
+  };
+  const ensureAll = () => {
+    if (!recs.length) return;
+    for (const rec of recs) fillSheet(rec);
+    heads.length = 0; for (const rec of recs) heads.push(...rec.heads); // in document order
+  };
   const sheetsDom = () => {
     if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
     if (lay.note) banner(lay.note);
     const col = el('div', 'eo-sheetcol');
+    const byEl = new Map();
     for (const s of lay.sheets) {
       const q = model.sections[s.sec].page;
-      const ctx = { pg: { label: s.label, total: lay.total, secPages: s.secPages } };
       const sh = el('section', 'eo-sheet'); sh.style.width = `${q.w}px`; sh.style.minHeight = `${q.h}px`;
       const head = el('div', 'eo-sh-head'); head.style.padding = `${q.hd}px ${q.r}px 0 ${q.l}px`; head.style.minHeight = `${q.t}px`;
-      const hb = pickHF(model, s, 'hdr'); if (hb.length) { const h = el('div', 'eo-hf'); docxBlocks(hb, h, model.media, u, ctx); head.appendChild(h); }
       const body = el('div', 'eo-sh-body'); body.style.padding = `0 ${q.r}px 0 ${q.l}px`;
-      const content = el('div', 'eo-sh-content'); docxBlocks(s.blocks, content, model.media, u, { heads }); body.appendChild(content);
-      const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
-      if (notes.length) notesOf(notes, body);
       const foot = el('div', 'eo-sh-foot'); foot.style.padding = `0 ${q.r}px ${q.ft}px ${q.l}px`; foot.style.minHeight = `${q.b}px`;
-      const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
       sh.append(head, body, foot); col.appendChild(sh);
+      const rec = { s, q, ctx: { pg: { label: s.label, total: lay.total, secPages: s.secPages } }, head, body, foot, heads: [], done: false };
+      recs.push(rec); byEl.set(sh, rec);
     }
     paper.appendChild(col);
+    if (window.IntersectionObserver) {
+      io = new window.IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { fillSheet(byEl.get(e.target)); io.unobserve(e.target); } }, { root: scroll, rootMargin: '1500px 0px' });
+      for (const sh of byEl.keys()) io.observe(sh);
+    } else ensureAll();
   };
   const build = (page) => { // the DOM is rebuilt only when the view changes
     if (built === page) return;
     built = page; paper.replaceChildren(); heads.length = 0;
+    if (io) io.disconnect(); io = null; recs = [];
     if (page && lay) sheetsDom(); else flowDom();
   };
   const fit = () => (prefs.doc === 'page' && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
@@ -638,7 +659,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, destroy() { gone = true; if (ro) ro.disconnect(); } };
+  return { heads, ensureAll, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
