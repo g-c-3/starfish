@@ -40,11 +40,15 @@ const decoder = new TextDecoder('utf-8');
 function xml(files, name) {
   const b = files[name];
   if (!b) return null;
-  const doc = new DOMParser().parseFromString(decoder.decode(b), 'application/xml');
-  return doc.getElementsByTagName('parsererror').length ? null : doc.documentElement;
+  const txt = decoder.decode(b);
+  const doc = new DOMParser().parseFromString(txt, 'application/xml');
+  const root = doc.documentElement; if (!root) return null;
+  // searching a very large tree for the error element is itself slow, so a big part is checked at the root only (Decision 248)
+  if (txt.length > 2e6) return root.localName === 'parsererror' || (root.firstElementChild && root.firstElementChild.localName === 'parsererror') ? null : root;
+  return doc.getElementsByTagName('parsererror').length ? null : root;
 }
-const kids = (n, local) => (n ? Array.from(n.children).filter((c) => c.localName === local) : []);
-const kid = (n, local) => (n ? Array.from(n.children).find((c) => c.localName === local) || null : null);
+const kids = (n, local) => { const o = []; if (n) for (const c of n.children) if (c.localName === local) o.push(c); return o; };
+const kid = (n, local) => { if (n) for (const c of n.children) if (c.localName === local) return c; return null; };
 const at = (n, local) => {
   if (!n) return null;
   for (const a of n.attributes) if (a.localName === local) return a.value;
@@ -136,9 +140,12 @@ function hasLrb(blocks) { // a saved page break (Decision 242) anywhere in these
 }
 
 export function readDocx(bytes) {
+  const T0 = performance.now(); // timings are shown in the Word Info line while load time is being tuned (Decision 248)
   const files = unpack(bytes, 'word/', 'word/document.xml', ['docProps/app.xml']);
+  const T1 = performance.now();
   const main = 'word/document.xml';
   const root = xml(files, main);
+  const T2 = performance.now();
   if (!root) throw new OfficeError('This is not a valid file of this type.');
   const rel = rels(files, main);
 
@@ -520,7 +527,8 @@ export function readDocx(bytes) {
       }
     }
   }
-  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages };
+  const T3 = performance.now();
+  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages, timing: { unzip: T1 - T0, parse: T2 - T1, read: T3 - T2 } };
 }
 
 // ---- xlsx ----

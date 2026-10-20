@@ -202,6 +202,8 @@ function buildTools(host, ui, bar, t) {
 const scrollTo = (e) => { if (e && e.scrollIntoView) e.scrollIntoView({ block: 'center', inline: 'center' }); };
 const setCur = (state, m) => { if (state.cur) state.cur.classList.remove('eo-cur'); state.cur = m || null; if (state.cur) state.cur.classList.add('eo-cur'); };
 
+// load timings of the open Word file, shown in Info while load time is being tuned (Decision 248)
+const loadNote = (doc) => { const t = doc && doc.timing; if (!t || t.unzip === undefined) return ''; const s = (v) => `${((v || 0) / 1000).toFixed(1)} s`; return ` \u00b7 Load: unzip ${s(t.unzip)}, parse ${s(t.parse)}, read ${s(t.read)}, pages ${s(t.pages)}${t.sheets ? `, drew ${t.sheets} sheets in ${s(t.fill)}` : ''}`; };
 function docTools(host, doc) {
   const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
   const all = () => { if (doc && doc.ensureAll) doc.ensureAll(); };
@@ -209,7 +211,7 @@ function docTools(host, doc) {
   return {
     find: { count(q) { all(); marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
     copy: text,
-    info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}`; },
+    info: () => { const t = text(); return `${plural(wordCount(t), 'word')} \u00b7 ${plural(t.replace(/\s/g, '').length, 'character')}${fontList()}${loadNote(doc)}`; },
     // headings outline (Decision 240): one row per top-level heading, indented by level; a tap scrolls to it
     outline: {
       label: 'Outline', title: 'Headings outline',
@@ -543,8 +545,10 @@ const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? 
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
+  const TP = performance.now();
   const hard0 = saved || !model.blocks.length ? null : paginate(model, { hard: true }); // the file's own hard breaks, when it has any
-  let lay = saved ? paginate(model) : hard0; // sheets from the saved breaks (Decision 242), the file's own breaks, or measuring (Decision 243); null: one sheet
+  let lay = saved ? paginate(model) : hard0;
+  const timing = { ...(model.timing || {}), pages: performance.now() - TP }; // sheets from the saved breaks (Decision 242), the file's own breaks, or measuring (Decision 243); null: one sheet
   // 'check': the file's own sheets are drawn at once and a sample is measured afterwards (Decision 246); 'idle': measuring runs the first time Page view is shown
   let auto = saved || !model.blocks.length ? 'done' : hard0 ? 'check' : 'idle';
   let gone = false;
@@ -572,13 +576,14 @@ function mountDocx(model, host, u, ui, bars) {
   // Find, Copy, Info and Outline fill them all first.
   let io = null; let recs = [];
   const fillSheet = (rec) => {
-    if (rec.done) return; rec.done = true;
+    if (rec.done) return; rec.done = true; const tf = performance.now();
     const { s, q, ctx, head, body, foot } = rec;
     const hb = pickHF(model, s, 'hdr'); if (hb.length) { const h = el('div', 'eo-hf'); docxBlocks(hb, h, model.media, u, ctx); head.appendChild(h); }
     const content = el('div', 'eo-sh-content'); docxBlocks(s.blocks, content, model.media, u, { heads: rec.heads }); body.appendChild(content);
     const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
     if (notes.length) notesOf(notes, body);
     const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
+    timing.fill = (timing.fill || 0) + (performance.now() - tf); timing.sheets = (timing.sheets || 0) + 1;
   };
   const ensureAll = () => {
     if (!recs.length) return;
@@ -659,7 +664,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, ensureAll, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
+  return { heads, ensureAll, timing, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
