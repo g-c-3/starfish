@@ -2834,3 +2834,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Reproduced without the entry (same error as the CI log) and resolved with it, using a lockfile-only install; the full build was not run.
 - Remove the entry once a later release of that package installs cleanly. A committed lockfile would stop this class of failure; not done, needs approval.
 - Files: `package.json`.
+
+**250. Word floating objects: stage 3 (Phase 22, stage E3d).** Builds the third stage of Decision 241 for anchored pictures, shapes and text boxes. No change to credentials, backups or network use.
+- `office-read.js`: a `wp:anchor` drawing holding a picture or a shape becomes a `{ float }` run: size, rotation, geometry, solid fill, outline, text-box paragraphs (size, bold, italic, underline, colour, alignment, insets), horizontal and vertical position (relative-from, offset or alignment), wrap kind, behind-text flag and wrap distances. Inline pictures and charts are read as before. A drawing inside `mc:AlternateContent` is read from its first choice; before, such a drawing was dropped.
+- `office-render.js`: `slideItem` is the slide drawing of one item, now shared; `slideDom` calls it. `floatNode` draws a float: wrap none, behind or in front is an overlay on its paragraph; square, tight and through float left or right of the column; top and bottom takes its own line. `placeFloats` sets page- and margin-relative vertical positions once a sheet is filled. Floats are drawn in Page view and in Reflow.
+- Approximations: a wrapped float sits at its paragraph, not at its vertical offset; text wraps by the box, not the outline of a tight wrap; grouped shapes, connectors with arrowheads, gradients, shadows and shape styles without an explicit fill or outline are not drawn; text-box text is not read by Copy or Info (Find sees it on screen).
+- Equations are not started.
+- Files: `src/js/office-read.js`, `src/js/office-render.js`, `src/css/style.css`.

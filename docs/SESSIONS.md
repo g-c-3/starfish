@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 147**
+
+Start: Tier 1 docs read; Decisions 241 and 249 read, ARCHITECTURE section headings. Release v0.1.0+621 exists after the Decision 249 pin. Next item: E3d stage 3, Word floating objects.
+- `src/js/office-read.js`: anchored picture, shape and text-box drawings read as `{ float }` runs (size, rotation, geometry, fill, outline, text paragraphs, position, wrap, behind flag, distances); drawings inside `mc:AlternateContent` are read.
+- `src/js/office-render.js`: `slideItem` extracted from `slideDom` and shared; `floatNode` and `placeFloats` draw floats; column width passed to the runs.
+- `src/css/style.css`: positioned paragraphs, float wrapper, sheet isolation.
+- ARCHITECTURE.md: one bullet. ROADMAP.md: E3d rows, DP105 closed on the roadmap rows, DP106 added.
+- Decision 250.
+
+Decisions made: 250.
+
+Verified: 8 read checks on a generated Word file (text box fill, outline, rotation, text, position, wrap; square picture; inline picture unchanged); `vite build` passes. Not verified: rendering in a browser or on a device (DP106), the slide drawing after the `slideItem` extraction (DP106 check 9), CI.
+
+Open: DP106; CI confirmation of the Decision 249 pin and a lockfile proposal; E3d equations; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP106 on device; then fix whatever it shows, or move to the next open item.
+
+---
+
 **Session 146**
 
 Start: Tier 1 docs read; DECISIONS read from Decision 241, ARCHITECTURE section headings. Next item: E3d stage 1, Word pages from saved breaks.
