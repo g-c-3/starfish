@@ -35,9 +35,9 @@ Device check: a file with saved breaks shows 157 sheets with gaps, header and fo
 
 Verified: 14 checks on generated Word files (mid-paragraph split, marker after an explicit break adds no page, table split, page-break-before, section numbering, field markers, header and footer inheritance, no-marker file); `vite build` passes. Not verified: rendering in a browser or on a device (DP104), CI.
 
-Open: DP105 (page count against Word, a Word-saved file, font notice fold); DP91, DP94 and DP95 confirmed Session 146; E3d stage 3 (shapes); E3o (remove load timings); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: E3d stage 3 (shapes); DP91, DP94, DP95 and DP105 confirmed Session 146; E3o left as is by the owner; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: read the load timings from the Word Info line on the 157-page file and tune the slowest phase (E3o); DP105 on a device; then E3d stage 3 (shapes) if stage 2 holds.
+Next session start point: E3d stage 3 (text boxes, shapes, floating pictures), in a fresh session.
 
 ---
 
