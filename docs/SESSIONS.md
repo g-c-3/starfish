@@ -21,7 +21,9 @@ Fourth part: the 157-page file now shows 157 pages on device; its load was slow 
 
 Fifth part: sampling alone did not shorten the load on device. The text was drawn once as a flow and again as sheets; a file with its own page breaks now shows its sheets at once and the sample runs afterwards (Decision 246).
 
-Decisions made: 242, 243, 244, 245, 246.
+Sixth part: still too slow on device. Sheets are now empty shells filled near the screen; Find, Copy, Info and Outline fill all first (Decision 247).
+
+Decisions made: 242, 243, 244, 245, 246, 247.
 
 Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 

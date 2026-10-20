@@ -2813,3 +2813,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A file with no hard break still shows the text first with "Laying out pages", then the measured sheets.
 - Files: `src/js/office-render.js`.
 - Checks: `vite build` passes. Time to open the 157-page file not yet measured on device (DP105). Reading and unzipping the 5 MB file and drawing 157 sheets are unchanged and may remain the main cost.
+
+**247. Word pages: sheets filled when near the screen (Phase 22, stage E3d).** Drawing every block of a 157-page file at once was the main wait on the phone.
+- Page view creates every sheet as an empty shell at its true size and fills a sheet with its header, text, footnotes and footer when it comes within about 1,500 px of the screen. A filled sheet stays filled. Without the browser's intersection observer, all sheets are filled at once.
+- Find, Copy, Info and Outline fill every sheet first (one wait on first use), because they read the text on screen; the heading list for the outline is then rebuilt in document order.
+- A sheet whose text runs taller than the page grows when filled, so the scroll position can shift a little while scrolling quickly.
+- Reflow view is unchanged: it still draws the whole text once.
+- Files: `src/js/office-render.js`.
+- Checks: `vite build` passes. Not run on a device (DP105). Reading and unzipping the 5 MB file is unchanged.
