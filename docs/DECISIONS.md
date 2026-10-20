@@ -2807,3 +2807,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files with saved markers and files with no hard break are unchanged.
 - Files: `src/js/office-render.js`.
 - Checks: `vite build` passes; the sampling runs against a real layout only (DP105: time to open the 157-page file).
+
+**246. Word pages: draw a file's own pages at once (Phase 22, stage E3d).** Decision 245 still drew the whole text as one flow first, then the sheets: the document was built twice and the wait was little shorter.
+- A file with its own hard page breaks and no saved marker shows its sheets immediately. The sampled check of Decision 245 runs afterwards and replaces the sheets only when it finds more than 15 percent overflow; otherwise nothing is redrawn.
+- A file with no hard break still shows the text first with "Laying out pages", then the measured sheets.
+- Files: `src/js/office-render.js`.
+- Checks: `vite build` passes. Time to open the 157-page file not yet measured on device (DP105). Reading and unzipping the 5 MB file and drawing 157 sheets are unchanged and may remain the main cost.
