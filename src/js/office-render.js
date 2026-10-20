@@ -599,8 +599,12 @@ function mountDocx(model, host, u, ui, bars) {
         await fontsReady();
         if (gone) return;
         const env = makeEnv(model, u);
-        try { lay = paginateAuto(model, env); } catch { lay = null; }
-        env.done(); auto = 'done'; pg = pgOf(); built = null; apply();
+        let est = null;
+        try { est = paginateAuto(model, env); } catch { est = null; }
+        env.done();
+        const hard = paginate(model, { hard: true }); // a file that already breaks its own pages keeps them unless measuring finds far more (Decision 244)
+        lay = hard && (!est || est.total <= hard.total * 1.15) ? hard : est;
+        auto = 'done'; pg = pgOf(); built = null; apply();
       }, 30);
     }
     build(page);

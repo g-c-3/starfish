@@ -15,8 +15,9 @@ export function hasSavedBreaks(model) { // lastRenderedPageBreak markers: writte
   return model.blocks.some((b) => (b.t === 'table' ? (b.rowBrk || []).some(Boolean) : b.runs.some((r) => r.lrb)));
 }
 
-export function paginate(model) {
-  if (!hasSavedBreaks(model)) return null;
+// opts.hard: also lay out a file that holds only hard breaks (explicit, page-break-before, section) and no saved marker (Decision 244)
+export function paginate(model, opts = {}) {
+  if (!opts.hard && !hasSavedBreaks(model)) return null;
   const secs = model.sections && model.sections.length ? model.sections : null;
   const pages = []; let cur = []; let curSec = 0; let startSec = 0; let saved = false;
   const add = (b) => { if (!cur.length) startSec = curSec; cur.push(b); };
