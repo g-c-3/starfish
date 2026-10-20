@@ -2784,3 +2784,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/office-read.js`, `src/js/office-pages.js` (new), `src/js/office-render.js`, `src/css/style.css`.
 - Checks: 14 on generated Word files; `vite build` passes.
 - Risks: not run in a browser, through CI or on a device (DP104). Fonts that differ from the original move text within a sheet but not the break. A sheet grows when its content is taller than the page.
+
+**243. Word pages: stage 2, measured breaks; font notice; break notice rule (Phase 22, stages E3d, E3m, E3n).** Builds the second stage of Decision 241 and two owner requests. No change to credentials, backups or network use.
+- Files with no saved page marker (a script-generated file, for one) are laid out by measuring. Page view shows the text at once with a "Laying out pages" notice, then swaps in the sheets; the work waits for the fonts (2.5 s at most) and runs once per file.
+- Measuring: the blocks are drawn in a hidden column as wide as the page text area; each block's top and bottom are read back. A paragraph that crosses the page bottom is cut at the last line that ends above it (found by a search over text offsets), and the rest carries on the next sheet.
+- Rules: explicit breaks, page-break-before and section breaks are honoured; keep with next (a heading travels with what follows); keep lines together; widow and orphan control (two lines each side; a paragraph under four lines is not split); table rows are never split and never inside a vertically merged group; a row taller than a page is taken whole. Space before and after is whatever the flow measured.
+- Not measured: header and footer height (the page margins alone set the text area), shapes, floating pictures, footnote space at the foot of a sheet. More than 800 sheets stops the layout and keeps one sheet with a notice.
+- The notice says the breaks are estimated, with both counts when the stored count is above 1 and differs (E3n). A stored count of 1 or none no longer shows a mismatch for saved files either.
+- Font notice (E3m): a close button removes it for that viewer; scrolling down folds it with the title bar (same short slide), scrolling up brings it back. All four viewers.
+- Files: `src/js/office-read.js` (keep-with-next, keep-lines), `src/js/office-pages.js`, `src/js/office-render.js`, `src/css/style.css`.
+- Checks: 17 on a simulated layout (fit, orphan, widow, keep with next, keep lines, short paragraph, table split, breaks, long paragraph over four sheets with no text lost, sections and numbering); 14 earlier saved-break checks still pass; `vite build` passes.
+- Risks: the DOM measuring and the cut search were not run against a real layout (DP105). A paragraph cut falls on a word wrap, so a hyphenated or very differently spaced font can move a line. Page counts will differ from Word where fonts differ or header and footer are tall.

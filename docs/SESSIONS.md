@@ -13,13 +13,17 @@ Start: Tier 1 docs read; DECISIONS read from Decision 241, ARCHITECTURE section 
 - `src/css/style.css`: sheet rules.
 - Decision 242.
 
-Decisions made: 242.
+Second part (approved: "Start" with E3m and E3n): `office-pages.js` `paginateAuto` for files with no saved marker (measured breaks); `office-render.js` hidden measuring column and cut at the last fitting line, laid out after the text is shown; font notice close button and fold with the title bar; break notice only when the stored count is above 1 and differs; `office-read.js` reads keep-with-next and keep-lines. Decision 243. 17 simulated-layout checks pass; the DOM measuring was not run against a real layout; `vite build` passes.
+
+Decisions made: 242, 243.
+
+Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 
 Verified: 14 checks on generated Word files (mid-paragraph split, marker after an explicit break adds no page, table split, page-break-before, section numbering, field markers, header and footer inheritance, no-marker file); `vite build` passes. Not verified: rendering in a browser or on a device (DP104), CI.
 
-Open: DP94, DP95 and DP104 not yet run; E3d stage 2 (measured breaks) and stage 3 (shapes); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: DP94, DP95 and DP105 not yet run; E3d stage 2 (measured breaks) and stage 3 (shapes); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: confirm DP104 on a device; then E3d stage 2 (measured breaks) if stage 1 holds.
+Next session start point: DP105 on a device (marking scheme, then a long file); then E3d stage 3 (shapes) if stage 2 holds.
 
 ---
 
