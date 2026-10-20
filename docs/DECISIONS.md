@@ -2801,3 +2801,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A file with saved markers is unchanged: markers only, no measuring.
 - Files: `src/js/office-pages.js` (`paginate` option `hard`), `src/js/office-render.js`.
 - Checks: 19 simulated-layout checks, 14 saved-break checks, `vite build`. Not run on a device: the original file should show 157 pages again (DP105).
+
+**245. Word pages: faster layout for files with their own page breaks (Phase 22, stage E3d).** A 5 MB converted file (157 pages) was fully measured only to confirm its own breaks.
+- Up to 12 of the file's own pages, spread across it, are measured alone. When their average overflow is at most 15 percent, the file's own breaks are used and the full measuring is skipped. Otherwise the whole file is measured as in Decision 244.
+- Files with saved markers and files with no hard break are unchanged.
+- Files: `src/js/office-render.js`.
+- Checks: `vite build` passes; the sampling runs against a real layout only (DP105: time to open the 157-page file).

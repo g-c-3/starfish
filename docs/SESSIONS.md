@@ -17,7 +17,9 @@ Second part (approved: "Start" with E3m and E3n): `office-pages.js` `paginateAut
 
 Third part: device check showed the 157-page converted file measured to 166 (own hard breaks ignored once stage 2 required saved markers). Fixed: own hard breaks kept unless measuring finds more than 15 percent above them. Decision 244. The marking scheme laid out as four sheets with the estimate notice on device.
 
-Decisions made: 242, 243, 244.
+Fourth part: the 157-page file now shows 157 pages on device; its load was slow because every page was measured. Decision 245 samples up to 12 pages instead.
+
+Decisions made: 242, 243, 244, 245.
 
 Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 
