@@ -224,6 +224,8 @@ export function readDocx(bytes) {
     const shd = kid(pp, 'shd'); if (shd) o.bg = colorOf(shd, 'fill', 'themeFill');
     const bd = borders(kid(pp, 'pBdr')); if (bd) o.borders = bd;
     if (kid(pp, 'pageBreakBefore')) o.pb = flag(kid(pp, 'pageBreakBefore'));
+    if (kid(pp, 'keepNext')) o.kn = flag(kid(pp, 'keepNext'));
+    if (kid(pp, 'keepLines')) o.kl = flag(kid(pp, 'keepLines'));
     const ol = at(kid(pp, 'outlineLvl'), 'val'); if (ol !== null && Number(ol) < 9) o.outline = Number(ol) + 1;
     return o;
   }

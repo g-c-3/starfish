@@ -4,7 +4,7 @@
 import { Preferences } from '@capacitor/preferences';
 import { chartSvg } from './office-chart.js';
 import { chromeOnScroll } from './chrome-scroll.js';
-import { paginate, pickHF } from './office-pages.js';
+import { paginate, paginateAuto, hasSavedBreaks, pickHF } from './office-pages.js';
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -84,10 +84,15 @@ function phoneHasFont(name) {
 }
 function fontNotice(host) {
   const missing = [...usedFonts].filter((n) => !BUNDLED.has(n) && !embeddedNames.has(n) && !/^(sans-serif|serif|monospace)$/.test(n) && !phoneHasFont(n));
-  if (!missing.length) return;
-  const note = el('div', 'eo-fontnote', `Fonts not on this phone, shown in a similar one: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}.`);
+  if (!missing.length) return null;
+  const note = el('div', 'eo-fontnote');
+  note.appendChild(el('span', 'eo-fontnote-t', `Fonts not on this phone, shown in a similar one: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}.`));
+  const x = el('button', 'eo-fontnote-x', '\u00d7'); x.type = 'button'; x.setAttribute('aria-label', 'Close notice');
+  x.onclick = () => note.remove();
+  note.appendChild(x);
   const bar = host.querySelector('.eo-bar');
   if (bar) bar.after(note); else host.prepend(note);
+  return note;
 }
 
 // ---- viewer settings: one theme for the three viewers, kept on this phone (Decision 227) ----
@@ -493,10 +498,54 @@ function zoomButtons(ui, zoom) {
   return z;
 }
 
+// Measuring for files with no saved page marker (Decision 243): the blocks are drawn once in a hidden column as wide as the
+// page text area; tops and bottoms are read back, and a paragraph is cut at the last line that ends above the page bottom.
+function makeEnv(model, u) {
+  let host = null; let kids = []; let top0 = 0;
+  const lineH = (c) => { const cs = getComputedStyle(c); const v = parseFloat(cs.lineHeight); return Number.isFinite(v) ? v : (parseFloat(cs.fontSize) || 16) * 1.2; };
+  return {
+    measure(blocks, page) {
+      if (host) host.remove();
+      host = el('div', 'eo-paper eo-measure'); host.style.width = `${page.w - page.l - page.r}px`; host.style.setProperty('--eo-indk', '1');
+      document.body.appendChild(host);
+      docxBlocks(blocks, host, model.media, u, {});
+      top0 = host.getBoundingClientRect().top; kids = Array.from(host.children);
+      return kids.map((c) => {
+        const r = c.getBoundingClientRect();
+        const m = { top: r.top - top0, bottom: r.bottom - top0, lh: lineH(c) };
+        const tb = c.querySelector('table');
+        if (tb) m.rows = Array.from(tb.rows).map((tr) => { const q = tr.getBoundingClientRect(); return { top: q.top - top0, bottom: q.bottom - top0 }; });
+        return m;
+      });
+    },
+    cut(i, limit) {
+      const p = kids[i]; const nodes = []; let total = 0;
+      const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentNode && n.parentNode.closest && n.parentNode.closest('.eo-mark') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+      for (let n = w.nextNode(); n; n = w.nextNode()) { nodes.push({ n, s: total }); total += n.data.length; }
+      const rg = document.createRange();
+      const bottomAt = (o) => {
+        let k = 0; while (k < nodes.length - 1 && o > nodes[k].s + nodes[k].n.data.length) k++;
+        rg.setStart(p, 0); rg.setEnd(nodes[k].n, o - nodes[k].s);
+        return rg.getBoundingClientRect().bottom - top0;
+      };
+      if (!nodes.length) return { offset: 0, bottom: p.getBoundingClientRect().bottom - top0 };
+      let lo = 0; let hi = total;
+      while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (bottomAt(mid) <= limit + 0.5) lo = mid; else hi = mid - 1; }
+      return { offset: lo, bottom: bottomAt(lo) };
+    },
+    done() { if (host) host.remove(); host = null; kids = []; }
+  };
+}
+const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 2500))]);
+
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
-  const lay = paginate(model); // sheets from the saved breaks, or null: one continuous sheet (Decision 242)
-  const pg = lay ? { ...model.page, w: Math.max(...lay.sheets.map((s) => model.sections[s.sec].page.w)) } : model.page;
+  const saved = hasSavedBreaks(model);
+  let lay = saved ? paginate(model) : null; // sheets from the saved breaks (Decision 242), or from measuring (Decision 243), or null: one sheet
+  let auto = saved || !model.blocks.length ? 'done' : 'idle'; // measuring runs once, the first time Page view is shown
+  let gone = false;
+  const pgOf = () => (lay ? { ...model.page, w: Math.max(...lay.sheets.map((s) => model.sections[s.sec].page.w)) } : model.page);
+  let pg = pgOf();
   const heads = []; // top-level heading elements, for the outline (Decision 240); refilled on each build
   let built = null;
   const banner = (t) => paper.appendChild(el('div', 'ev-banner', t));
@@ -507,7 +556,8 @@ function mountDocx(model, host, u, ui, bars) {
   };
   const flowDom = () => {
     if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
-    if (!lay && model.storedPages > 1 && prefs.doc === 'page') banner(`This file holds no saved page breaks (${model.storedPages} pages when saved). Shown as one sheet.`);
+    if (auto === 'busy') banner('Laying out pages\u2026');
+    else if (!lay && auto === 'done' && !saved && model.blocks.length && prefs.doc === 'page') banner('Pages could not be laid out for this file. Shown as one sheet.');
     if (model.header.length) { const h = el('div', 'eo-hf'); docxBlocks(model.header, h, model.media, u); paper.appendChild(h); }
     docxBlocks(model.blocks, paper, model.media, u, { heads });
     if (!model.blocks.length) paper.appendChild(el('p', 'ev-media-msg', 'This document has no text to show.'));
@@ -543,6 +593,16 @@ function mountDocx(model, host, u, ui, bars) {
   const zoom = setupZoom(scroll, zoomer, fit, ui);
   const apply = () => {
     const page = prefs.doc === 'page'; const sheeted = page && !!lay;
+    if (page && auto === 'idle') { // show the text at once, then lay the pages out
+      auto = 'busy';
+      setTimeout(async () => {
+        await fontsReady();
+        if (gone) return;
+        const env = makeEnv(model, u);
+        try { lay = paginateAuto(model, env); } catch { lay = null; }
+        env.done(); auto = 'done'; pg = pgOf(); built = null; apply();
+      }, 30);
+    }
     build(page);
     paper.classList.toggle('eo-pagemode', page && !lay); paper.classList.toggle('eo-sheets', sheeted); paper.classList.toggle('eo-reflow', !page);
     paper.style.setProperty('--eo-indk', page ? '1' : '0.5');
@@ -559,7 +619,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, destroy() { if (ro) ro.disconnect(); } };
+  return { heads, destroy() { gone = true; if (ro) ro.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
@@ -953,7 +1013,8 @@ export function mountOffice(kind, bytes, host, ctx) {
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
-  fontNotice(host);
-  const stopChrome = chromeOnScroll(host, ctx.onChrome, '.eo-scroll, .eo-grid');
+  const fnote = fontNotice(host);
+  // the notice folds away with the title bar on scroll (Decision 243)
+  const stopChrome = chromeOnScroll(host, (h) => { if (fnote) fnote.classList.toggle('eo-folded', h); if (ctx.onChrome) ctx.onChrome(h); }, '.eo-scroll, .eo-grid');
   return { destroy() { stopChrome(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }
