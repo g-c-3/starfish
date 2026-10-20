@@ -1301,3 +1301,8 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .eo-fontnote.eo-folded { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; border-bottom-width: 0; }
 .eo-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
 .eo-host .ev-banner, .eo-host .ev-media-msg { color: var(--muted); }
+
+/* Anchored pictures, shapes and text boxes in Word (Decision 250) */
+.eo-p { position: relative; }
+.eo-float { display: block; }
+.eo-sheet, .eo-paper { isolation: isolate; }
