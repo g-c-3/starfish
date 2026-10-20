@@ -416,6 +416,7 @@
       - [x] Stage 1 — saved breaks: page sheets from `lastRenderedPageBreak`, explicit and section breaks; header and footer on every page with page number and count; stored page count read. Built — Session 146, Decision 242; confirmed on device (DP104).
       - [~] E3m — font notice ("Fonts not on this phone"): close button; folds away smoothly with the title bar on scroll. Built — Session 146, Decision 243; not device-tested (DP105).
       - [~] E3n — break notice rule: shown only when the stored page count is above 1 and differs. Built — Session 146, Decision 243; not device-tested (DP105).
+      - [ ] CI — `overrides` pin for `@trapezedev/project` (Decision 249): confirm the build is green; remove the pin once a later release installs cleanly; lockfile proposed.
       - [ ] E3o — remove the load timings from the Word Info line once load time is tuned (Decision 248); tune the slowest of unzip, parse and read first.
       - [~] Stage 2 — measured breaks for files with no saved markers (hidden measuring column, cut at the last fitting line, keep with next, keep lines, widow and orphan control, table rows kept whole, sections and hard breaks honoured); notice says the breaks are estimated. Built — Session 146, Decision 243; not device-tested (DP105).
       - [ ] Stage 3 — text boxes, shapes and floating pictures at their positions; equations after.

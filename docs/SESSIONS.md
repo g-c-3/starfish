@@ -25,7 +25,9 @@ Sixth part: still too slow on device. Sheets are now empty shells filled near th
 
 Seventh part: screen recordings read frame by frame: sheets appear as soon as "Loading" ends and scrolling is smooth, so the remaining wait is before the viewer (unzip, parse, read). Reader savings and a temporary timing readout in the Word Info line (Decision 248).
 
-Decisions made: 242, 243, 244, 245, 246, 247, 248.
+Eighth part: CI log showed the build failing at the install step (an upstream release with a missing dependency); `package.json` pins `@trapezedev/project` at 7.1.10 (Decision 249).
+
+Decisions made: 242, 243, 244, 245, 246, 247, 248, 249.
 
 Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 

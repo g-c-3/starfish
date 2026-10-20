@@ -2828,3 +2828,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The Word Info line ends with the load timings: unzip, parse, read, pages, and the sheets drawn so far. Temporary: remove once load time is tuned (roadmap E3o).
 - Files: `src/js/office-read.js`, `src/js/office-render.js`.
 - Checks: 14 saved-break and 19 simulated-layout checks pass; `vite build` passes. The gain is not measured: the sandbox has no browser parser, so the first timings come from the phone (DP105).
+
+**249. CI install pinned past a broken package release (Phase 1, CI).** The Android build failed at "Install Node dependencies": `@trapezedev/project` 7.1.11 (pulled in by `@capacitor/assets`) was published to the registry with a dependency, `@trapezedev/gradle-parse` 7.1.11, that does not exist. The repository has no lockfile, so every run takes the newest release.
+- `package.json` gets an `overrides` entry holding `@trapezedev/project` at 7.1.10, the last release whose dependencies resolve. No application code is touched.
+- Reproduced without the entry (same error as the CI log) and resolved with it, using a lockfile-only install; the full build was not run.
+- Remove the entry once a later release of that package installs cleanly. A committed lockfile would stop this class of failure; not done, needs approval.
+- Files: `package.json`.
