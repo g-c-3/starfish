@@ -541,8 +541,10 @@ const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? 
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
-  let lay = saved ? paginate(model) : null; // sheets from the saved breaks (Decision 242), or from measuring (Decision 243), or null: one sheet
-  let auto = saved || !model.blocks.length ? 'done' : 'idle'; // measuring runs once, the first time Page view is shown
+  const hard0 = saved || !model.blocks.length ? null : paginate(model, { hard: true }); // the file's own hard breaks, when it has any
+  let lay = saved ? paginate(model) : hard0; // sheets from the saved breaks (Decision 242), the file's own breaks, or measuring (Decision 243); null: one sheet
+  // 'check': the file's own sheets are drawn at once and a sample is measured afterwards (Decision 246); 'idle': measuring runs the first time Page view is shown
+  let auto = saved || !model.blocks.length ? 'done' : hard0 ? 'check' : 'idle';
   let gone = false;
   const pgOf = () => (lay ? { ...model.page, w: Math.max(...lay.sheets.map((s) => model.sections[s.sec].page.w)) } : model.page);
   let pg = pgOf();
@@ -593,13 +595,13 @@ function mountDocx(model, host, u, ui, bars) {
   const zoom = setupZoom(scroll, zoomer, fit, ui);
   const apply = () => {
     const page = prefs.doc === 'page'; const sheeted = page && !!lay;
-    if (page && auto === 'idle') { // show the text at once, then lay the pages out
-      auto = 'busy';
+    if (page && (auto === 'idle' || auto === 'check')) { // idle: show the text at once, then lay the pages out
+      auto = 'busy'; const before = lay;
       setTimeout(async () => {
         await fontsReady();
         if (gone) return;
         const env = makeEnv(model, u);
-        const hard = paginate(model, { hard: true }); // a file that already breaks its own pages keeps them unless measuring finds far more (Decision 244)
+        const hard = hard0; // a file that already breaks its own pages keeps them unless measuring finds far more (Decision 244)
         // up to 12 of its pages, spread over the file, are measured alone; the share that overflows decides whether the whole file is measured (Decision 245)
         const overflow = () => {
           const n = hard.sheets.length; const k = Math.min(12, n); let extra = 0;
@@ -616,7 +618,8 @@ function mountDocx(model, host, u, ui, bars) {
           else { est = paginateAuto(model, env); lay = hard && (!est || est.total <= hard.total * 1.15) ? hard : est; }
         } catch { lay = hard || null; }
         env.done();
-        auto = 'done'; pg = pgOf(); built = null; apply();
+        auto = 'done';
+        if (lay !== before || !lay) { pg = pgOf(); built = null; apply(); } // the sheets already shown stay when the check agrees
       }, 30);
     }
     build(page);
