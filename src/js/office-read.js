@@ -311,6 +311,81 @@ export function readDocx(bytes) {
   const fnNo = {}; const fnOrder = [];
   let count = 0; let truncated = false;
 
+  // ---- drawings: inline pictures and charts stay in the line; anchored pictures, shapes and text boxes become floats (Decision 250) ----
+  const SCHEME = { tx1: 'dk1', bg1: 'lt1', tx2: 'dk2', bg2: 'lt2' };
+  const clrOf = (n) => {
+    const sc = kid(n, 'srgbClr'); if (sc) return at(sc, 'val');
+    const th = kid(n, 'schemeClr'); if (th) { const v = at(th, 'val'); return tColors[SCHEME[v] || v] || null; }
+    return null;
+  };
+  const posOf = (n) => { const al = kid(n, 'align'); const of = kid(n, 'posOffset'); return { rel: at(n, 'relativeFrom') || 'column', align: al ? al.textContent.trim() : null, off: of ? Number(of.textContent) / 9525 : 0 }; };
+  const textBoxBody = (w) => {
+    const tb = kid(kid(w, 'txbx'), 'txbxContent'); if (!tb) return null;
+    const bp = kid(w, 'bodyPr'); const ins = (k, d) => (at(bp, k) !== null && at(bp, k) !== '' ? Number(at(bp, k)) : d) / 9525;
+    const baseSize = (defaults.r && defaults.r.size) || 14.67;
+    const paras = kids(tb, 'p').map((p) => {
+      const jc = at(kid(kid(p, 'pPr'), 'jc'), 'val');
+      const runs = [];
+      for (const r of descendants(p, 'r')) {
+        const rp = kid(r, 'rPr'); const on = (k) => { const e = kid(rp, k); return !!e && at(e, 'val') !== '0' && at(e, 'val') !== 'false'; };
+        const sz = at(kid(rp, 'sz'), 'val'); const col = at(kid(rp, 'color'), 'val');
+        const base = { font: at(kid(rp, 'rFonts'), 'ascii') || undefined, size: sz ? (Number(sz) / 2) * PX_PT : baseSize, b: on('b'), i: on('i'), u: on('u'), color: col && col !== 'auto' ? { hex: col, a: 1 } : undefined };
+        let text = '';
+        for (const k of r.children) {
+          if (k.localName === 't') text += k.textContent; else if (k.localName === 'tab') text += '\t';
+          else if (k.localName === 'br') { if (text) { runs.push({ ...base, text }); text = ''; } runs.push({ br: true }); }
+        }
+        if (text) runs.push({ ...base, text });
+      }
+      return { algn: jc === 'center' ? 'center' : jc === 'right' || jc === 'end' ? 'right' : jc === 'both' ? 'justify' : 'left', marL: 0, indent: 0, bullet: null, runs, size: (runs.find((x) => x.size) || {}).size || baseSize };
+    });
+    return { anchor: at(bp, 'anchor') || 't', l: ins('lIns', 91440), r: ins('rIns', 91440), t: ins('tIns', 45720), b: ins('bIns', 45720), wrap: at(bp, 'wrap') !== 'none', scale: 1, paras };
+  };
+  const floatOf = (k, an) => {
+    const gd = descendants(k, 'graphicData')[0]; if (!gd) return null;
+    const ex = kid(an, 'extent'); const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
+    if (!(w > 0 && h > 0)) return null;
+    const pic = descendants(gd, 'pic')[0]; const wsp = descendants(gd, 'wsp')[0];
+    let item = null;
+    if (pic) {
+      const path = addMedia(blipId(pic)); if (!path) return null;
+      const sr = kid(kid(pic, 'blipFill'), 'srcRect');
+      item = { t: 'pic', x: 0, y: 0, w, h, rot: 0, path, line: null, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null };
+    } else if (wsp) {
+      const sp = kid(wsp, 'spPr'); const xf = kid(sp, 'xfrm');
+      let fill = null; const sf = kid(sp, 'solidFill'); if (sf) { const hx = clrOf(sf); if (hx) fill = { hex: hx, a: 1 }; }
+      let line = null; const ln = kid(sp, 'ln');
+      if (ln && !kid(ln, 'noFill')) {
+        const lc = kid(ln, 'solidFill'); const hx = lc && clrOf(lc); const d = at(kid(ln, 'prstDash'), 'val') || '';
+        line = { w: Math.max(1, Number(at(ln, 'w') || 9525) / 9525), color: { hex: hx || '000000', a: 1 }, dash: /dot/i.test(d) ? 'dotted' : /dash/i.test(d) ? 'dashed' : 'solid' };
+      }
+      const gn = kid(sp, 'prstGeom'); const text = textBoxBody(wsp);
+      item = { t: 'shape', x: 0, y: 0, w, h, rot: xf && at(xf, 'rot') ? Number(at(xf, 'rot')) / 60000 : 0, geom: at(gn, 'prst') || 'rect', adj: null, fill, line, text: text && text.paras.some((q) => q.runs.length) ? text : null };
+    } else return null;
+    const wn = ['wrapNone', 'wrapSquare', 'wrapTight', 'wrapThrough', 'wrapTopAndBottom'].find((x) => kid(an, x));
+    const dist = (a) => Number(at(an, a) || 0) / 9525;
+    return { item, h: posOf(kid(an, 'positionH')), v: posOf(kid(an, 'positionV')), wrap: wn ? wn.slice(4).toLowerCase() : 'none', behind: at(an, 'behindDoc') === '1', dist: { l: dist('distL'), r: dist('distR'), t: dist('distT'), b: dist('distB') } };
+  };
+  const addDrawing = (k, kn, out) => {
+    const chEl = kn === 'drawing' ? descendants(k, 'chart')[0] : null;
+    if (chEl) {
+      const cr = rel[rat(chEl, 'id')];
+      const model = cr && readChart(files, cr.path, { colors: tColors, map: null });
+      const ex = descendants(k, 'extent')[0];
+      const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
+      if (model && w > 0 && h > 0) out.push({ chart: model, w, h });
+      return;
+    }
+    const an = kn === 'drawing' ? kid(k, 'anchor') : null;
+    if (an) { const f = floatOf(k, an); if (f) { out.push({ float: f }); return; } }
+    const p = addMedia(blipId(k));
+    if (p) {
+      const ex = descendants(k, 'extent')[0];
+      const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
+      out.push({ img: p, w: w > 0 ? w : undefined, h: h > 0 ? h : undefined });
+    }
+  };
+
   // ---- runs ----
   let fld = null; // complex field being read: PAGE, NUMPAGES and SECTIONPAGES become markers (Decision 242)
   const runsOf = (node, out, base, link) => {
@@ -346,22 +421,10 @@ export function readDocx(bytes) {
             if (id && !(id in fnNo)) { fnNo[id] = fnOrder.length + 1; fnOrder.push(id); }
             if (id) out.push({ ...props, text: String(fnNo[id]), sup: true, fn: fnNo[id] });
           } else if (kn === 'drawing' || kn === 'pict') {
-            flush();
-            const chEl = kn === 'drawing' ? descendants(k, 'chart')[0] : null;
-            if (chEl) {
-              const cr = rel[rat(chEl, 'id')];
-              const model = cr && readChart(files, cr.path, { colors: tColors, map: null });
-              const ex = descendants(k, 'extent')[0];
-              const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
-              if (model && w > 0 && h > 0) out.push({ chart: model, w, h });
-              continue;
-            }
-            const p = addMedia(blipId(k));
-            if (p) {
-              const ex = descendants(k, 'extent')[0];
-              const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
-              out.push({ img: p, w: w > 0 ? w : undefined, h: h > 0 ? h : undefined });
-            }
+            flush(); addDrawing(k, kn, out);
+          } else if (kn === 'AlternateContent') { // a text box or shape: the first choice holds the drawing
+            const ch = kid(k, 'Choice'); const dr = ch && (kid(ch, 'drawing') || kid(ch, 'pict'));
+            if (dr) { flush(); addDrawing(dr, dr.localName, out); }
           }
         }
         flush();
