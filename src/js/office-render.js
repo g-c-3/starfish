@@ -599,11 +599,23 @@ function mountDocx(model, host, u, ui, bars) {
         await fontsReady();
         if (gone) return;
         const env = makeEnv(model, u);
-        let est = null;
-        try { est = paginateAuto(model, env); } catch { est = null; }
-        env.done();
         const hard = paginate(model, { hard: true }); // a file that already breaks its own pages keeps them unless measuring finds far more (Decision 244)
-        lay = hard && (!est || est.total <= hard.total * 1.15) ? hard : est;
+        // up to 12 of its pages, spread over the file, are measured alone; the share that overflows decides whether the whole file is measured (Decision 245)
+        const overflow = () => {
+          const n = hard.sheets.length; const k = Math.min(12, n); let extra = 0;
+          for (let j = 0; j < k; j++) {
+            const sh = hard.sheets[Math.floor((j * (n - 1)) / Math.max(1, k - 1))];
+            const sub = { ...model, blocks: sh.blocks.map((b) => (b.sectEnd !== undefined ? { ...b, sectEnd: undefined } : b)), sections: [model.sections[sh.sec]] };
+            const one = paginateAuto(sub, env); extra += one ? one.total - 1 : 12;
+          }
+          return extra / k;
+        };
+        let est = null;
+        try {
+          if (hard && overflow() <= 0.15) lay = hard;
+          else { est = paginateAuto(model, env); lay = hard && (!est || est.total <= hard.total * 1.15) ? hard : est; }
+        } catch { lay = hard || null; }
+        env.done();
         auto = 'done'; pg = pgOf(); built = null; apply();
       }, 30);
     }
