@@ -27,13 +27,15 @@ Seventh part: screen recordings read frame by frame: sheets appear as soon as "L
 
 Eighth part: CI log showed the build failing at the install step (an upstream release with a missing dependency); `package.json` pins `@trapezedev/project` at 7.1.10 (Decision 249).
 
+Device timings (Decision 248 readout), 157-page file: unzip 0.2 s, parse 0.6 s, read 1.3 s, pages 0.0 s, 157 sheets drawn in 0.5 s; "Loading" about 2.5 to 3 s. Read is the largest part.
+
 Decisions made: 242, 243, 244, 245, 246, 247, 248, 249.
 
 Device check: a file with saved breaks shows 157 sheets with gaps, header and footer with page number and count on each, a paragraph continued across two sheets, and Reflow and back;  a script-generated file stays one sheet. DP104 closed: count matches Word (157), landscape section, Outline after the switch and footnotes confirmed. E3m and E3n built in the second part.
 
 Verified: 14 checks on generated Word files (mid-paragraph split, marker after an explicit break adds no page, table split, page-break-before, section numbering, field markers, header and footer inheritance, no-marker file); `vite build` passes. Not verified: rendering in a browser or on a device (DP104), CI.
 
-Open: DP94, DP95 and DP105 (including Grade_XII_updated.docx back to 157) not yet run; E3d stage 2 (measured breaks) and stage 3 (shapes); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: DP105 (page count against Word, a Word-saved file, font notice fold); DP91, DP94 and DP95 confirmed Session 146; E3d stage 3 (shapes); E3o (remove load timings); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
 Next session start point: read the load timings from the Word Info line on the 157-page file and tune the slowest phase (E3o); DP105 on a device; then E3d stage 3 (shapes) if stage 2 holds.
 
