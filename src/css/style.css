@@ -1289,11 +1289,15 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 /* landscape phones: less chrome, more slide */
 @media (orientation: landscape) and (max-height: 520px) {
   .eo-bar { padding: 3px 8px; }
-  .eo-fontnote { padding: 3px 12px; }
+  .eo-fontnote { padding: 3px 4px 3px 12px; }
   .eo-slidebar { padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px)); }
   .eo-nav { padding: 6px; }
   .eo-navi svg { width: 20px; height: 20px; }
   .eo-pscroll { padding-top: 4px; }
 }
-.eo-fontnote { flex: none; padding: 6px 12px; font-size: 12.5px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); }
+.eo-fontnote { flex: none; display: flex; align-items: center; gap: 8px; max-height: 90px; overflow: hidden; padding: 6px 4px 6px 12px; font-size: 12.5px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); transition: max-height .22s ease, padding .22s ease, opacity .22s ease; }
+.eo-fontnote-t { flex: 1; min-width: 0; }
+.eo-fontnote-x { flex: none; width: 32px; height: 32px; border: 0; background: none; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.eo-fontnote.eo-folded { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; border-bottom-width: 0; }
+.eo-measure { position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none; }
 .eo-host .ev-banner, .eo-host .ev-media-msg { color: var(--muted); }
