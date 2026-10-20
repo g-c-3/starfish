@@ -2795,3 +2795,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/office-read.js` (keep-with-next, keep-lines), `src/js/office-pages.js`, `src/js/office-render.js`, `src/css/style.css`.
 - Checks: 17 on a simulated layout (fit, orphan, widow, keep with next, keep lines, short paragraph, table split, breaks, long paragraph over four sheets with no text lost, sections and numbering); 14 earlier saved-break checks still pass; `vite build` passes.
 - Risks: the DOM measuring and the cut search were not run against a real layout (DP105). A paragraph cut falls on a word wrap, so a hyphenated or very differently spaced font can move a line. Page counts will differ from Word where fonts differ or header and footer are tall.
+
+**244. Word pages: files that break their own pages (Phase 22, stage E3d).** Fixes a regression from Decision 243: a converted file with hard page breaks and no saved marker (157 pages in Word) was measured and gave 166.
+- Hard breaks (explicit, page-break-before, section) count as the file's own pages again. Measuring still runs for a file with no saved marker; the file's own breaks are kept unless the measured count is more than 15 percent above them. A file with no hard break, or with far fewer breaks than the text needs, uses the measured layout.
+- A file with saved markers is unchanged: markers only, no measuring.
+- Files: `src/js/office-pages.js` (`paginate` option `hard`), `src/js/office-render.js`.
+- Checks: 19 simulated-layout checks, 14 saved-break checks, `vite build`. Not run on a device: the original file should show 157 pages again (DP105).
