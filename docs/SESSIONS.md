@@ -20,7 +20,9 @@ Verified: read check on a generated Word file (inline and display, fraction, pow
 
 Open: lockfile proposal for the Decision 249 pin (needs approval); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: device pass DP107 after CI; then another open item on the owner's word.
+Start, later in the session: no code written. Phase 5 sound asset found moot (system default sound, Decision 96). Phase 17 stage N sized: the Vault already keeps an in-memory index (stage B); N still needs the persisted encrypted index blob, the body-text blob, encrypted thumbnails and entry-bound field encryption. It rewrites the Vault read and write paths, so it waits for the owner's approval.
+
+Next session start point: CI green; then owner approval for N (or another item of the owner's choice); then "Go".
 
 ---
 
