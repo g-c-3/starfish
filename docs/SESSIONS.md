@@ -4,6 +4,24 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 149**
+
+Start: "Go". Tier 1 docs read; Decisions 144, 151, 156 to 158, 195, 196, 212 and 251, 252 read; ARCHITECTURE sections 3b, 3c and headings read. Owner approved Phase 17 stage N.
+- `src/js/vault.js`: persisted index and text blobs (`readBlob`, `writeBlob`, fingerprints in SQL and JS), `buildVaultIndex` from the light rows and the stored index, per-entry rebuild when a fingerprint differs, name search with ranking and accent folding, lazy `searchVaultBodies`, `vaultTrashLabel`, flush at lock. Entries no longer carry `searchableText`.
+- `src/js/app.js`: Vault search draws name matches then appends body matches; Vault Trash labels from `vaultTrashLabel`; note editor reads a Vault note's text from its row (`vaultNoteText`); unused import removed.
+- ARCHITECTURE.md: Vault section 3b point 2 changed, table row N, new section. ROADMAP.md: N row, DP108 added. DECISIONS.md: Decision 253.
+- Decision 253.
+
+Decisions made: 253.
+
+Verified: 36 Node checks (schema taken from `db.js`, real encryption, stubbed file storage): cached unlock reads no entry and decrypts only the blob; a re-encrypted entry is the only one rebuilt; schedule change read from the row; ranked, accent-folded name search; body search from the blob on a second unlock; trash, restore and delete; trashed label with no decryption; change flushed at lock; wrong key and damaged blob; bulk rebuild with progress; blobs hold no plaintext. `vite build` passes. Not verified: CI, device (DP108), timings at 0, 500 and 5000 items, a Vault restore with the new blobs present.
+
+Open: N thumbnails and field binding; O; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details; DP107 item 5.
+
+Next session start point: CI green; DP108 on the owner's phone; then "Go".
+
+---
+
 **Session 148**
 
 Start: Tier 1 docs read; Decisions 241 to 250 read, ARCHITECTURE section headings. Next item: E3d equations.

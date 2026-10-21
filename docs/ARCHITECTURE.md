@@ -170,8 +170,8 @@ deliberate differences, all safety-necessary rather than arbitrary:
 1a. **Description is encrypted too.** A Vault entry's description lives in `encrypted_description` (same AES-GCM
    calls); `description` stays NULL. It is decrypted into the in-memory index on unlock and is searchable there.
    The label is encrypted too (Decision 145): `label` holds the placeholder `Vault item`, `encrypted_label` the real one. The schedule columns of a Vault Reminder, `type` and the timestamps are inside the encrypted database file since Phase 17 C (Decision 158).
-2. **Search is a fresh in-memory index built on unlock, discarded on lock — nothing persisted, not even
-   encrypted** (Decision 39). Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
+2. **Search runs on an in-memory index, dropped on lock. It is stored only as two blobs encrypted under the Vault key**
+   (Decision 253, replacing Decision 39's memory-only rule): see "Persisted Vault index". Same lifecycle as `privateSessionKey` itself. Also powers vault-only label
    autocomplete, which deliberately does **not** touch the shared `label_history` table — see point 4.
 3. **Share and plain Download work exactly like the main app's** (Decision 41, reversed from an earlier,
    more restrictive default) — the UI should carry a one-time notice that doing so puts a plaintext copy
@@ -217,6 +217,7 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; wired, Session 104, Decision 162; not device-tested |
 | E | Backup and restore adapted at every stage | built with D, Session 104, Decision 162; not device-tested |
 | F | One-time migration of existing plain Home files | built, Session 104, Decision 163; runs at start; not device-tested |
+| N | Persisted encrypted Vault index, name search, lazy body search, Trash from the index (Decisions 195, 253) | first part built, Session 149; thumbnails and field binding not built; not device-tested |
 
 Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
@@ -755,7 +756,7 @@ arkly/
       ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
-      vault.js          -> Private Vault: content bundling, save/load, in-memory search index
+      vault.js          -> Private Vault: content bundling, save/load, search index (memory, stored encrypted)
       fileactions.js    -> per-file actions: share, plain download, edit, delete + Select files bulk support
       move.js           -> Move between Home and Vault (Text, Location, Money, Reminder, Voice, Image, PDF, Files; Decisions 182 to 184)
       fileopen.js       -> hand a saved file to the phone's matching app (decrypted copies in cache/open/, purged)
@@ -811,7 +812,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ## Vault tools, Trash, Search and Select (Decision 147)
 - `index.html`: `#vault-tools` (`#vault-select-files-btn`, `#vault-open-search-btn`, `#vault-open-trash-btn`, `#vault-open-settings-tile`), `#vault-trash-view`, `#vault-settings-view` holding `#vault-settings-card` (always open, summary hidden by `browse.css`). Siblings inside `#vault-content`: `vault-main`, `vault-folder-view`, `vault-trash-view`, `vault-settings-view`.
 - `app.js`: top-level `vaultTrashOpen` / `closeVaultTrash()`, `vaultSettingsOpen` / `closeVaultSettings()`, and `searchMode` (`home` or `vault`) with `searchRows`, so `lockVault()`, `showScreen()` and `backAction()` reach them. `lockVault()` closes all three and a Vault-scoped Select dialog (`#select-files-screen` carries `data-scope`).
-- Vault Trash reuses `browse.js` and `showVaultTrash()`. Vault Search calls `searchVault()` on the in-memory index and draws rows with `vaultRowProps`.
+- Vault Trash reuses `browse.js` and `showVaultTrash()`. Vault Search calls `searchVault()` on the in-memory index, draws rows with `vaultRowProps`, then appends body matches from `searchVaultBodies()` (Decision 253).
 - Nothing from the Vault is stored or sent: lists are rebuilt from the index on each open and emptied on close or lock.
 
 ## Trash Undo, PDF pinch zoom, PDF viewer switch (Decision 148)
@@ -836,7 +837,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `vault.js` `refreshVaultIndexEntries(db, key, ids)`: for each id, reads the row (`rowid AS rid, *`); a live Vault row is upserted through `indexEntryFromRow`, anything else is removed from the cache. Cache order follows `rid`.
 - Callers (`app.js`): `captureToVault`, `restoreEntry`, `permanentlyDelete`, `deleteVaultEntry`, `runBulkFileAction` (delete), `offerUndo`, Vault Trash Undo, and the text, Money and repayment edit paths.
 - Full `buildVaultIndex` (with `migrateVaultLabels`): unlock, backup restore, `arkly-reminders-changed`.
-- The cache is memory only and cleared on lock; backup, restore and credentials are untouched.
+- The cache is cleared on lock and stored as encrypted blobs (Decision 253); backup, restore and credentials are untouched.
 
 ## PDF reading tools (Decision 153)
 - `pdfsearch.js`: no DOM, no pdf.js. `pageItems` keeps the items that carry a string, in the order pdf.js's `TextLayer` lays out its elements, so an item index is an index into `textDivs`. `findInItems` joins items (a line end counts as a space, whitespace collapsed) and returns item index ranges per match.
@@ -948,3 +949,12 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Hidden again on lock, unlock, text sheet close and when the app leaves the foreground.
 - The shared text sheet calls `setPasswordField(input, isPassword)`; the eye shows only while it asks for a secret.
 - Display only: no credential, key or backup path is touched.
+
+## Persisted Vault index (Decision 253)
+- Two `meta` rows, each AES-GCM under the Vault key: `vault_index_blob` (live entries: fingerprint, label, description, size, Money and Location details; trashed entries: fingerprint, label) and `vault_text_blob` (note text, file OCR text). Not in `APP_SETTINGS_KEYS`: never in a backup.
+- Fingerprint: last 20 characters of each stored encrypted field of a row (they hold the random IV). `vault.js` makes it in SQL (`FP_SQL`, light read, no bodies) and in JS (`rowFp`, `labelFp`); keep them equal.
+- `buildVaultIndex`: light rows + tags + blob; matching fingerprint -> entry from the blob; else rebuilt from the row (`indexEntryFromRow`). Schedule columns and tags always from the rows. Unreadable or missing blob -> full rebuild.
+- Writes: debounced, serialised (`writeBlob`), flushed at `clearVaultIndex()` before the key is dropped. Failure ignored.
+- `searchVaultIndex(term)`: sync; label, then tag and extension, then description and Money or Location details; accents folded. `searchVaultBodies(db, key, term, exclude)`: lazy, loads `vaultTexts` once per unlock.
+- Entries carry no note text; the note editor reads it from the row (`vaultNoteText` in `app.js`). `vaultTrashLabel` serves Vault Trash labels from the stored index.
+- Not built: encrypted thumbnails; field encryption bound to entry id and field name.
