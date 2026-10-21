@@ -318,6 +318,20 @@ export function readDocx(bytes) {
     const th = kid(n, 'schemeClr'); if (th) { const v = at(th, 'val'); return tColors[SCHEME[v] || v] || null; }
     return null;
   };
+  const clrA = (n) => { // colour with its transforms: alpha, lumMod, lumOff, tint, shade (Decision 252)
+    const c = n && Array.from(n.children).find((x) => ['srgbClr', 'schemeClr'].includes(x.localName));
+    let hex = c ? clrOf(n) : null;
+    if (!hex || !/^[0-9A-Fa-f]{6}$/.test(hex)) return null;
+    hex = hex.toUpperCase(); let a = 1;
+    for (const t of c.children) {
+      const nm = t.localName; const val = Number(at(t, 'val') || 0) / 100000;
+      if (nm === 'lumMod' || nm === 'lumOff') { const [h, sa, l] = toHsl(hex); hex = fromHsl(h, sa, nm === 'lumMod' ? Math.min(1, l * val) : Math.min(1, l + val)); }
+      else if (nm === 'tint') hex = mixHex(hex, 'FFFFFF', 1 - val);
+      else if (nm === 'shade') hex = mixHex(hex, '000000', 1 - val);
+      else if (nm === 'alpha') a = val;
+    }
+    return { hex, a };
+  };
   const posOf = (n) => { const al = kid(n, 'align'); const of = kid(n, 'posOffset'); return { rel: at(n, 'relativeFrom') || 'column', align: al ? al.textContent.trim() : null, off: of ? Number(of.textContent) / 9525 : 0 }; };
   const textBoxBody = (w) => {
     const tb = kid(kid(w, 'txbx'), 'txbxContent'); if (!tb) return null;
@@ -353,7 +367,7 @@ export function readDocx(bytes) {
       item = { t: 'pic', x: 0, y: 0, w, h, rot: 0, path, line: null, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null };
     } else if (wsp) {
       const sp = kid(wsp, 'spPr'); const xf = kid(sp, 'xfrm');
-      let fill = null; const sf = kid(sp, 'solidFill'); if (sf) { const hx = clrOf(sf); if (hx) fill = { hex: hx, a: 1 }; }
+      let fill = null; const sf = kid(sp, 'solidFill'); if (sf) { const c = clrA(sf); if (c && c.a > 0) fill = c; }
       let line = null; const ln = kid(sp, 'ln');
       if (ln && !kid(ln, 'noFill')) {
         const lc = kid(ln, 'solidFill'); const hx = lc && clrOf(lc); const d = at(kid(ln, 'prstDash'), 'val') || '';
@@ -384,6 +398,71 @@ export function readDocx(bytes) {
       const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
       out.push({ img: p, w: w > 0 ? w : undefined, h: h > 0 ? h : undefined });
     }
+  };
+
+  // ---- equations (Decision 251): Office Math read into a small tree, drawn by the renderer ----
+  const MATH_NODES = 600; const MATH_DEPTH = 24;
+  const isM = (n) => /\/math$/.test(n.namespaceURI || '');
+  const mval = (n, name, dflt) => { const x = kid(n, name); if (!x) return dflt; const v = at(x, 'val'); return v === null ? dflt : v; };
+  const readMath = (root, base) => {
+    let count = 0;
+    const seq = (n, d) => {
+      const out = [];
+      if (!n || d > MATH_DEPTH) return out;
+      for (const c of n.children) {
+        if (count >= MATH_NODES) break;
+        const x = one(c, d + 1);
+        if (x) { if (Array.isArray(x)) out.push(...x); else out.push(x); }
+      }
+      return out;
+    };
+    const one = (c, d) => {
+      const ln = c.localName;
+      if (ln === 'ins') return seq(c, d);
+      if (ln === 'del' || /Pr$/.test(ln) || !isM(c)) return null;
+      count++;
+      const arg = (name) => seq(kid(c, name), d);
+      switch (ln) {
+        case 'r': {
+          const rps = kids(c, 'rPr'); const mp = rps.find(isM); const wp = rps.find((x) => !isM(x));
+          let text = ''; for (const t of c.children) if (t.localName === 't') text += t.textContent;
+          if (!text) return null;
+          const sty = mp ? mval(mp, 'sty', '') : '';
+          const f = { ...base, ...parseR(wp) };
+          const o = { k: 'r', text, plain: sty === 'p' || sty === 'b' || (!!mp && flag(kid(mp, 'nor'))) };
+          if (sty === 'b' || sty === 'bi' || f.b) o.b = true;
+          if (f.color) o.color = f.color;
+          return o;
+        }
+        case 'f': return { k: 'f', type: mval(kid(c, 'fPr'), 'type', 'bar'), num: arg('num'), den: arg('den') };
+        case 'sSup': return { k: 'sup', e: arg('e'), sup: arg('sup') };
+        case 'sSub': return { k: 'sub', e: arg('e'), sub: arg('sub') };
+        case 'sSubSup': return { k: 'ss', e: arg('e'), sub: arg('sub'), sup: arg('sup') };
+        case 'sPre': return { k: 'pre', e: arg('e'), sub: arg('sub'), sup: arg('sup') };
+        case 'rad': return { k: 'rad', noDeg: flag(kid(kid(c, 'radPr'), 'degHide')), deg: arg('deg'), e: arg('e') };
+        case 'nary': {
+          const p = kid(c, 'naryPr');
+          return { k: 'nary', chr: mval(p, 'chr', '\u222b'), und: mval(p, 'limLoc', 'subSup') === 'undOvr', sub: flag(kid(p, 'subHide')) ? null : arg('sub'), sup: flag(kid(p, 'supHide')) ? null : arg('sup'), e: arg('e') };
+        }
+        case 'd': {
+          const p = kid(c, 'dPr');
+          return { k: 'd', beg: mval(p, 'begChr', '('), end: mval(p, 'endChr', ')'), sep: mval(p, 'sepChr', '|'), es: kids(c, 'e').map((e) => seq(e, d)) };
+        }
+        case 'func': return { k: 'func', name: arg('fName'), e: arg('e') };
+        case 'acc': return { k: 'acc', chr: mval(kid(c, 'accPr'), 'chr', '\u0302'), e: arg('e') };
+        case 'bar': return { k: 'bar', top: mval(kid(c, 'barPr'), 'pos', 'bot') === 'top', e: arg('e') };
+        case 'groupChr': { const p = kid(c, 'groupChrPr'); return { k: 'grp', chr: mval(p, 'chr', '\u23df'), top: mval(p, 'pos', 'bot') === 'top', e: arg('e') }; }
+        case 'limLow': return { k: 'lim', low: true, e: arg('e'), lim: arg('lim') };
+        case 'limUpp': return { k: 'lim', low: false, e: arg('e'), lim: arg('lim') };
+        case 'm': return { k: 'mat', rows: kids(c, 'mr').map((r) => kids(r, 'e').map((e) => seq(e, d))) };
+        case 'eqArr': return { k: 'arr', rows: kids(c, 'e').map((e) => seq(e, d)) };
+        case 'borderBox': return { k: 'bbox', e: arg('e') };
+        case 'box': case 'phant': return arg('e');
+        case 'e': case 'oMath': return seq(c, d);
+        default: return null;
+      }
+    };
+    return seq(root, 0);
   };
 
   // ---- runs ----
@@ -434,6 +513,10 @@ export function readDocx(bytes) {
         const props = {}; for (const k of PROP_KEYS) if (f[k]) props[k] = f[k];
         out.push({ ...props, field: fieldKind(at(c, 'instr')), text: rr ? rr.textContent : '' });
       } else if (['hyperlink', 'ins', 'smartTag', 'fldSimple', 'moveTo'].includes(n)) runsOf(c, out, base, link || n === 'hyperlink');
+      else if (n === 'oMath' || n === 'oMathPara') {
+        const props = {}; for (const k of ['size', 'color']) if (base[k]) props[k] = base[k];
+        for (const m of n === 'oMath' ? [c] : kids(c, 'oMath')) { const tree = readMath(m, base); if (tree.length) out.push({ ...props, math: tree, disp: n === 'oMathPara' }); }
+      }
       else if (n === 'sdt') runsOf(kid(c, 'sdtContent') || c, out, base, link);
       else if (n === 'AlternateContent') { const ch = kid(c, 'Choice'); if (ch) runsOf(ch, out, base, link); }
     }

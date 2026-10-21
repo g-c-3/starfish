@@ -207,7 +207,13 @@ const loadNote = (doc) => { const t = doc && doc.timing; if (!t || t.unzip === u
 function docTools(host, doc) {
   const root = () => host.querySelector('.eo-scroll'); const st = { cur: null }; let marks = [];
   const all = () => { if (doc && doc.ensureAll) doc.ensureAll(); };
-  const text = () => { all(); const r = root(); if (!r) return ''; const c = r.querySelectorAll('.eo-sh-content'); return c.length ? Array.from(c, (x) => x.innerText || x.textContent || '').join('\n') : r.innerText || r.textContent || ''; };
+  const text = () => { // an equation is read as its linear text, not as its drawing (Decision 251)
+    all(); const r = root(); if (!r) return '';
+    const swaps = [];
+    for (const m of r.querySelectorAll('.eo-math[data-lin]')) { const v = m.firstChild; if (v) { const t = document.createTextNode(m.dataset.lin); m.replaceChild(t, v); swaps.push([m, t, v]); } }
+    try { const c = r.querySelectorAll('.eo-sh-content'); return c.length ? Array.from(c, (x) => x.innerText || x.textContent || '').join('\n') : r.innerText || r.textContent || ''; }
+    finally { for (const [m, t, v] of swaps) m.replaceChild(v, t); }
+  };;
   return {
     find: { count(q) { all(); marks = mark(root(), q); return marks.length; }, go(k) { setCur(st, marks[k]); scrollTo(marks[k]); }, clear() { unmark(root()); marks = []; st.cur = null; } },
     copy: text,
@@ -392,9 +398,124 @@ function placeFloats(sh, q) {
     w.style.top = `${top + y - (par.getBoundingClientRect().top - sr.top) / k}px`;
   }
 }
+// ---- equations (Decision 251): the tree from office-read.js drawn with spans and CSS; text only through textContent ----
+const MATH_BR = { // stretched delimiters, a path in a 10 x 100 box
+  '(': 'M8 0Q1 50 8 100', ')': 'M2 0Q9 50 2 100', '[': 'M8 0H2V100H8', ']': 'M2 0H8V100H2',
+  '{': 'M8 0Q4 0 4 15V40Q4 50 1 50Q4 50 4 60V85Q4 100 8 100', '}': 'M2 0Q6 0 6 15V40Q6 50 9 50Q6 50 6 60V85Q6 100 2 100',
+  '|': 'M5 0V100', '\u2016': 'M3 0V100M7 0V100', '\u27e8': 'M8 0L2 50L8 100', '\u27e9': 'M2 0L8 50L2 100',
+  '\u2308': 'M8 0H2V100', '\u2309': 'M2 0H8V100', '\u230a': 'M2 0V100H8', '\u230b': 'M8 0V100H2'
+};
+const MATH_ACC = { '\u0302': '^', '\u0303': '~', '\u0307': '\u02d9', '\u0308': '\u00a8', '\u030c': '\u02c7', '\u0301': '\u00b4', '\u0300': '`', '\u20d7': '\u2192', '\u0306': '\u02d8' };
+const MATH_REL = /[=<>\u2260\u2264\u2265\u2248\u2261\u2208\u2209\u2282\u2283\u2286\u2287\u2192\u21d2\u21d4\u2194\u221d\u223c\u2245]/;
+const MATH_BIN = /[+\-\u2212\u00d7\u00f7\u00b1\u2213\u22c5\u2218\u2227\u2228\u222a\u2229\u2216]/;
+const MATH_ITAL = /[A-Za-z\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5]/;
+const MATH_TALL = new Set(['f', 'rad', 'nary', 'mat', 'lim', 'arr', 'grp']);
+const mathTall = (v) => { if (Array.isArray(v)) return v.some(mathTall); if (v && typeof v === 'object') return MATH_TALL.has(v.k) || Object.values(v).some(mathTall); return false; };
+function mathSvg(d, cls) {
+  const ns = 'http://www.w3.org/2000/svg'; const s = document.createElementNS(ns, 'svg'); const p = document.createElementNS(ns, 'path');
+  s.setAttribute('viewBox', '0 0 10 100'); s.setAttribute('preserveAspectRatio', 'none'); s.setAttribute('class', cls); s.setAttribute('aria-hidden', 'true');
+  p.setAttribute('d', d); p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '1.2'); p.setAttribute('vector-effect', 'non-scaling-stroke');
+  s.appendChild(p); return s;
+}
+const mspan = (cls, ...kids) => { const s = el('span', cls); for (const k of kids) if (k) s.appendChild(k); return s; };
+function mathBuild(nodes, ctx) {
+  const frag = document.createDocumentFragment();
+  (nodes || []).forEach((n, i) => { const x = mathOne(n, ctx, i === 0); if (x) frag.appendChild(x); });
+  return frag;
+}
+const mathStack = (sup, sub, ctx) => mspan('eo-mss', mspan('eo-mssu', mathBuild(sup, ctx)), mspan('eo-mssb', mathBuild(sub, ctx)));
+function mathText(n, ctx, lead) {
+  const t = ctx.strip ? n.text.replace(/&/g, '') : n.text; const plain = n.plain || ctx.plain;
+  const wrap = el('span', n.b ? 'eo-mb' : ''); if (n.color) cv(wrap, 'c', n.color, adaptText(n.color));
+  let buf = ''; let ital = null; let idx = 0;
+  const flush = () => { if (buf) { wrap.appendChild(el('span', ital ? 'eo-mi' : '', buf)); buf = ''; } };
+  for (const ch of t) {
+    const rel = MATH_REL.test(ch); const bin = !rel && MATH_BIN.test(ch);
+    if (rel || bin) { flush(); const unary = bin && lead && idx === 0; wrap.appendChild(el('span', unary ? '' : rel ? 'eo-mrel' : 'eo-mbin', ch === '-' ? '\u2212' : ch)); }
+    else { const it = !plain && MATH_ITAL.test(ch); if (it !== ital) flush(); ital = it; buf += ch; }
+    idx++;
+  }
+  flush(); return wrap;
+}
+const mathDelim = (chr, tall) => { if (!chr) return null; return tall && MATH_BR[chr] ? mathSvg(MATH_BR[chr], 'eo-mbr') : el('span', 'eo-mch', chr); };
+function mathOne(n, ctx, lead) {
+  switch (n.k) {
+    case 'r': return mathText(n, ctx, lead);
+    case 'f':
+      if (n.type === 'lin' || n.type === 'skw') return mspan('', mathBuild(n.num, ctx), el('span', '', '/'), mathBuild(n.den, ctx));
+      return mspan('eo-mf', mspan(n.type === 'noBar' ? 'eo-mfn eo-mnb' : 'eo-mfn', mathBuild(n.num, ctx)), mspan('eo-mfd', mathBuild(n.den, ctx)));
+    case 'sup': return mspan('', mathBuild(n.e, ctx), mspan('eo-msup', mathBuild(n.sup, ctx)));
+    case 'sub': return mspan('', mathBuild(n.e, ctx), mspan('eo-msub', mathBuild(n.sub, ctx)));
+    case 'ss': return mspan('', mathBuild(n.e, ctx), mathStack(n.sup, n.sub, ctx));
+    case 'pre': return mspan('', mathStack(n.sup, n.sub, ctx), mathBuild(n.e, ctx));
+    case 'rad': return mspan('eo-mrad', !n.noDeg && n.deg.length ? mspan('eo-mdeg', mathBuild(n.deg, ctx)) : null, mathSvg('M0 60L2 56L5 96L10 1', 'eo-mrs'), mspan('eo-mrb', mathBuild(n.e, ctx)));
+    case 'nary': {
+      const op = n.chr ? el('span', ctx.disp ? 'eo-mnop eo-mbig' : 'eo-mnop', n.chr) : null;
+      const sub = n.sub || []; const sup = n.sup || []; let head = op;
+      if (n.und && ctx.disp && (sub.length || sup.length)) head = mspan('eo-mund', sup.length ? mspan('eo-mul', mathBuild(sup, ctx)) : null, op, sub.length ? mspan('eo-mul', mathBuild(sub, ctx)) : null);
+      else if (sub.length || sup.length) head = mspan('', op, mathStack(sup, sub, ctx));
+      return mspan('', head, mspan('eo-mnb2', mathBuild(n.e, ctx)));
+    }
+    case 'd': {
+      const t = mathTall(n.es); const d = el('span', t ? 'eo-md eo-mdt' : 'eo-md'); const inner = el('span', 'eo-mdi');
+      n.es.forEach((e, i) => { if (i && n.sep) inner.appendChild(el('span', 'eo-msep', n.sep)); inner.appendChild(mathBuild(e, ctx)); });
+      for (const x of [mathDelim(n.beg, t), inner, mathDelim(n.end, t)]) if (x) d.appendChild(x);
+      return d;
+    }
+    case 'func': return mspan('', mspan('eo-mfun', mathBuild(n.name, { ...ctx, plain: true })), el('span', '', '\u2009'), mathBuild(n.e, ctx));
+    case 'acc':
+      if (n.chr === '\u0304' || n.chr === '\u00af') return mspan('eo-mbar eo-mtop', mathBuild(n.e, ctx));
+      return mspan('eo-macc', mathBuild(n.e, ctx), el('span', 'eo-mac', MATH_ACC[n.chr] || n.chr));
+    case 'bar': return mspan(n.top ? 'eo-mbar eo-mtop' : 'eo-mbar eo-mbot', mathBuild(n.e, ctx));
+    case 'grp': {
+      const c = el('span', 'eo-mgc', n.chr); const b = mspan('eo-mlb', mathBuild(n.e, ctx));
+      return n.top ? mspan('eo-mlim', c, b) : mspan('eo-mlim eo-mlow', b, c);
+    }
+    case 'lim': {
+      const b = mspan('eo-mlb', mathBuild(n.e, ctx)); const l = mspan('eo-mll', mathBuild(n.lim, ctx));
+      return n.low ? mspan('eo-mlim eo-mlow', b, l) : mspan('eo-mlim', l, b);
+    }
+    case 'mat': { const t = el('span', 'eo-mmat'); for (const row of n.rows) { const r = el('span', 'eo-mmr'); for (const c of row) r.appendChild(mspan('eo-mmc', mathBuild(c, ctx))); t.appendChild(r); } return t; }
+    case 'arr': { const t = el('span', 'eo-mmat eo-marr'); for (const row of n.rows) t.appendChild(mspan('eo-mmr', mspan('eo-mmc', mathBuild(row, { ...ctx, strip: true })))); return t; }
+    case 'bbox': return mspan('eo-mbb', mathBuild(n.e, ctx));
+    default: return null;
+  }
+}
+const mpar = (s) => (s.length > 1 ? `(${s})` : s);
+function mathLin(ns) { return (ns || []).map(mathLinOne).join(''); }
+function mathLinOne(n) {
+  const L = mathLin;
+  switch (n.k) {
+    case 'r': return n.text;
+    case 'f': return n.type === 'lin' || n.type === 'skw' ? `${L(n.num)}/${L(n.den)}` : `${mpar(L(n.num))}/${mpar(L(n.den))}`;
+    case 'sup': return `${L(n.e)}^${mpar(L(n.sup))}`;
+    case 'sub': return `${L(n.e)}_${mpar(L(n.sub))}`;
+    case 'ss': return `${L(n.e)}_${mpar(L(n.sub))}^${mpar(L(n.sup))}`;
+    case 'pre': return `_${mpar(L(n.sub))}^${mpar(L(n.sup))}${L(n.e)}`;
+    case 'rad': return `${!n.noDeg && n.deg.length ? mpar(L(n.deg)) : ''}\u221a(${L(n.e)})`;
+    case 'nary': return `${n.chr}${n.sub && n.sub.length ? `_${mpar(L(n.sub))}` : ''}${n.sup && n.sup.length ? `^${mpar(L(n.sup))}` : ''} ${L(n.e)}`;
+    case 'd': return `${n.beg}${n.es.map(L).join(n.sep)}${n.end}`;
+    case 'func': return `${L(n.name)} ${L(n.e)}`;
+    case 'acc': case 'bar': case 'grp': case 'bbox': return L(n.e);
+    case 'lim': return `${L(n.e)}${n.low ? '_' : '^'}${mpar(L(n.lim))}`;
+    case 'mat': return `[${n.rows.map((r) => r.map(L).join(', ')).join('; ')}]`;
+    case 'arr': return n.rows.map((r) => L(r).replace(/&/g, '')).join('; ');
+    default: return '';
+  }
+}
+function mathNode(r) {
+  const root = el('span', r.disp ? 'eo-math eo-mdisp' : 'eo-math');
+  if (r.size) root.style.fontSize = `${r.size}px`;
+  if (r.color) cv(root, 'c', r.color, adaptText(r.color));
+  root.dataset.lin = mathLin(r.math); // Copy and Info read this instead of the drawing
+  root.appendChild(mspan('eo-mvis', mathBuild(r.math, { disp: !!r.disp })));
+  return root;
+}
+
 function appendRuns(parent, runs, media, u, ctx = {}) {
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
+    if (r.math) { parent.appendChild(mathNode(r)); continue; }
     if (r.lrb) continue;
     if (r.float) { const fl = floatNode(r.float, media, u, ctx); if (fl) parent.appendChild(fl); continue; }
     if (r.pb) { parent.appendChild(el('span', 'eo-pb')); continue; }
@@ -558,7 +679,7 @@ function makeEnv(model, u) {
     },
     cut(i, limit) {
       const p = kids[i]; const nodes = []; let total = 0;
-      const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentNode && n.parentNode.closest && n.parentNode.closest('.eo-mark') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+      const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentNode && n.parentNode.closest && n.parentNode.closest('.eo-mark, .eo-math') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
       for (let n = w.nextNode(); n; n = w.nextNode()) { nodes.push({ n, s: total }); total += n.data.length; }
       const rg = document.createRange();
       const bottomAt = (o) => {
