@@ -16,7 +16,7 @@ Start: Tier 1 docs read; Decisions 241 to 250 read, ARCHITECTURE section heading
 
 Decisions made: 251, 252.
 
-Verified: read check on a generated Word file (inline and display, fraction, power, sum with limits, radical, matrix, delimiters, function); draw check on a sample tree (3 stretched SVG parts, italic and operator classes, linear text `x=(-b)/(2a)x^2(a/b)∑_(i=1)^n i√(y)[1, 2; 3, 4]sin θ`); `vite build` passes. Bug 252 reproduced on the owner's file by reading it (87 floats; no large black fill left). Not verified: layout on a device or in a browser (DP107), CI.
+Verified: read check on a generated Word file (inline and display, fraction, power, sum with limits, radical, matrix, delimiters, function); draw check on a sample tree (3 stretched SVG parts, italic and operator classes, linear text `x=(-b)/(2a)x^2(a/b)∑_(i=1)^n i√(y)[1, 2; 3, 4]sin θ`); `vite build` passes. Bug 252 reproduced on the owner's file by reading it (87 floats; no large black fill left) and confirmed on device by screenshot. Equations: owner reported DP107 items 2, 4 and 6 to 9 as passing and item 3 as likely; item 5 (dark theme) not reported. Not verified: layout on a device or in a browser (DP107), CI.
 
 Open: lockfile proposal for the Decision 249 pin (needs approval); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
