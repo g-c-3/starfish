@@ -380,6 +380,7 @@ function floatNode(f, media, u, ctx) {
     st.position = 'relative'; st.float = right ? 'right' : 'left'; st.margin = `${d.t}px ${d.r}px ${d.b}px ${d.l}px`;
   } else {
     st.position = 'absolute'; st.zIndex = f.behind ? '-1' : '2'; st.pointerEvents = 'none';
+    if (col && !f.h.align) w.dataset.hpage = String(x + col.l); // page x; set against the paragraph's left in placeFloats
     if (f.h.align === 'right') st.right = '0'; else if (f.h.align === 'center') { st.left = '50%'; st.transform = 'translateX(-50%)'; } else st.left = `${f.h.align === 'left' ? 0 : x}px`;
     if (f.v.rel === 'paragraph' || f.v.rel === 'line') st.top = `${f.v.off}px`;
     else { st.top = `${f.v.off}px`; w.dataset.vrel = f.v.rel; w.dataset.voff = String(f.v.off); if (f.v.align) w.dataset.valign = f.v.align; }
@@ -388,10 +389,12 @@ function floatNode(f, media, u, ctx) {
 }
 // Page- and margin-relative vertical positions are set once the sheet is laid out.
 function placeFloats(sh, q) {
-  const list = sh.querySelectorAll('.eo-float[data-vrel]'); if (!list.length) return;
+  const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage]'); if (!list.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / q.w || 1;
   for (const w of list) {
     const rel = w.dataset.vrel; const al = w.dataset.valign; const h = w.offsetHeight; const par = w.offsetParent; if (!par) continue;
+    if (w.dataset.hpage) w.style.left = `${Number(w.dataset.hpage) - (par.getBoundingClientRect().left - sr.left) / k}px`;
+    if (!rel) continue;
     const top = rel === 'page' || rel === 'topMargin' ? 0 : rel === 'bottomMargin' ? q.h - q.b : q.t;
     const span = rel === 'page' ? q.h : rel === 'topMargin' ? q.t : rel === 'bottomMargin' ? q.b : q.h - q.t - q.b;
     const y = al === 'top' ? 0 : al === 'center' ? (span - h) / 2 : al === 'bottom' ? span - h : Number(w.dataset.voff);
@@ -1059,13 +1062,21 @@ function slideItem(it, media, u, ink) {
   } else if (it.t === 'chart') {
     st.background = 'rgba(255,255,255,0)';
     n.appendChild(chartSvg(it.chart, it.w, it.h, ink));
+  } else if (it.t === 'group') {
+    for (const c of it.items) { const cn = slideItem(c, media, u, ink); if (cn) n.appendChild(cn); }
   } else if (it.t === 'note') {
     st.border = '1px dashed #888'; st.display = 'flex'; st.alignItems = 'center'; st.justifyContent = 'center'; st.color = '#666'; st.fontSize = '16px'; st.background = 'rgba(128,128,128,.08)';
     n.textContent = it.text;
   } else {
     const g = it.geom;
     st.boxSizing = 'border-box';
-    if (/^(line|straightConnector1|bentConnector\d|curvedConnector\d)$/.test(g)) {
+    if (it.cust) { // free-form outline (Decision 252)
+      const ns = 'http://www.w3.org/2000/svg'; const sv = document.createElementNS(ns, 'svg'); const pa = document.createElementNS(ns, 'path');
+      sv.setAttribute('viewBox', `0 0 ${it.cust.w} ${it.cust.h}`); sv.setAttribute('preserveAspectRatio', 'none'); sv.setAttribute('width', String(Math.max(1, it.w))); sv.setAttribute('height', String(Math.max(1, it.h))); sv.style.overflow = 'visible';
+      pa.setAttribute('d', it.cust.d); pa.setAttribute('fill', it.fill && !it.cust.nf ? fillCss(it.fill) : 'none');
+      pa.setAttribute('stroke', it.line && it.line.color ? css(it.line.color) : 'none'); if (it.line) { pa.setAttribute('stroke-width', String(it.line.w)); pa.setAttribute('vector-effect', 'non-scaling-stroke'); if (it.line.dash !== 'solid') pa.setAttribute('stroke-dasharray', it.line.dash === 'dotted' ? '2 3' : '6 4'); }
+      sv.appendChild(pa); n.appendChild(sv);
+    } else if (/^(line|straightConnector1|bentConnector\d|curvedConnector\d)$/.test(g)) {
       const ns = 'http://www.w3.org/2000/svg';
       const sv = document.createElementNS(ns, 'svg'); sv.setAttribute('width', String(Math.max(1, it.w))); sv.setAttribute('height', String(Math.max(1, it.h))); sv.style.overflow = 'visible';
       const ln = document.createElementNS(ns, 'line'); ln.setAttribute('x1', '0'); ln.setAttribute('y1', '0'); ln.setAttribute('x2', String(it.w)); ln.setAttribute('y2', String(it.h));

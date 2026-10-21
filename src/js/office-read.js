@@ -355,27 +355,62 @@ export function readDocx(bytes) {
     });
     return { anchor: at(bp, 'anchor') || 't', l: ins('lIns', 91440), r: ins('rIns', 91440), t: ins('tIns', 45720), b: ins('bIns', 45720), wrap: at(bp, 'wrap') !== 'none', scale: 1, paras };
   };
+  const picOf = (pic, x, y, w, h) => {
+    const path = addMedia(blipId(pic)); if (!path) return null;
+    const sr = kid(kid(pic, 'blipFill'), 'srcRect');
+    return { t: 'pic', x, y, w, h, rot: 0, path, line: null, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null };
+  };
+  const custOf = (cg) => { // a free-form outline as one SVG path in its own units
+    const pl = kid(cg, 'pathLst'); const ps = pl ? kids(pl, 'path') : []; let d = ''; let w = 0; let h = 0; let nf = true;
+    for (const p of ps) {
+      const pw = Number(at(p, 'w') || 0); const ph = Number(at(p, 'h') || 0); if (!(pw > 0 && ph > 0)) continue;
+      if (!w) { w = pw; h = ph; }
+      if (at(p, 'fill') !== 'none') nf = false;
+      const pt = (n) => `${(Number(at(n, 'x')) || 0) * w / pw} ${(Number(at(n, 'y')) || 0) * h / ph}`;
+      for (const c of p.children) {
+        const pts = kids(c, 'pt').map(pt); const ln = c.localName;
+        if (ln === 'moveTo' && pts[0]) d += `M${pts[0]}`; else if (ln === 'lnTo' && pts[0]) d += `L${pts[0]}`;
+        else if (ln === 'cubicBezTo' && pts.length === 3) d += `C${pts.join(' ')}`; else if (ln === 'quadBezTo' && pts.length === 2) d += `Q${pts.join(' ')}`; else if (ln === 'close') d += 'Z';
+      }
+      if (d.length > 200000) return null;
+    }
+    return d && w ? { w, h, d, nf } : null;
+  };
+  const shapeOf = (wsp, x, y, w, h) => {
+    const sp = kid(wsp, 'spPr'); const xf = kid(sp, 'xfrm');
+    let fill = null; const sf = kid(sp, 'solidFill'); if (sf) { const c = clrA(sf); if (c && c.a > 0) fill = c; }
+    let line = null; const ln = kid(sp, 'ln');
+    if (ln && !kid(ln, 'noFill')) {
+      const lc = kid(ln, 'solidFill'); const c = lc && clrA(lc); const d = at(kid(ln, 'prstDash'), 'val') || '';
+      line = { w: Math.max(1, Number(at(ln, 'w') || 9525) / 9525), color: { hex: c ? c.hex : '000000', a: c ? c.a : 1 }, dash: /dot/i.test(d) ? 'dotted' : /dash/i.test(d) ? 'dashed' : 'solid' };
+    }
+    const gn = kid(sp, 'prstGeom'); const cg = kid(sp, 'custGeom'); const cust = cg ? custOf(cg) : null; const text = textBoxBody(wsp);
+    return { t: 'shape', x, y, w, h, rot: xf && at(xf, 'rot') ? Number(at(xf, 'rot')) / 60000 : 0, geom: at(gn, 'prst') || 'rect', adj: null, fill, line, text: text && text.paras.some((q) => q.runs.length) ? text : null, ...(cust ? { cust } : {}) };
+  };
   const floatOf = (k, an) => {
     const gd = descendants(k, 'graphicData')[0]; if (!gd) return null;
     const ex = kid(an, 'extent'); const w = ex ? Number(at(ex, 'cx')) / 9525 : 0; const h = ex ? Number(at(ex, 'cy')) / 9525 : 0;
     if (!(w > 0 && h > 0)) return null;
-    const pic = descendants(gd, 'pic')[0]; const wsp = descendants(gd, 'wsp')[0];
+    const wgp = descendants(gd, 'wgp')[0]; const pic = descendants(gd, 'pic')[0]; const wsp = descendants(gd, 'wsp')[0];
     let item = null;
-    if (pic) {
-      const path = addMedia(blipId(pic)); if (!path) return null;
-      const sr = kid(kid(pic, 'blipFill'), 'srcRect');
-      item = { t: 'pic', x: 0, y: 0, w, h, rot: 0, path, line: null, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null };
-    } else if (wsp) {
-      const sp = kid(wsp, 'spPr'); const xf = kid(sp, 'xfrm');
-      let fill = null; const sf = kid(sp, 'solidFill'); if (sf) { const c = clrA(sf); if (c && c.a > 0) fill = c; }
-      let line = null; const ln = kid(sp, 'ln');
-      if (ln && !kid(ln, 'noFill')) {
-        const lc = kid(ln, 'solidFill'); const hx = lc && clrOf(lc); const d = at(kid(ln, 'prstDash'), 'val') || '';
-        line = { w: Math.max(1, Number(at(ln, 'w') || 9525) / 9525), color: { hex: hx || '000000', a: 1 }, dash: /dot/i.test(d) ? 'dotted' : /dash/i.test(d) ? 'dashed' : 'solid' };
+    if (wgp) { // a group: its pictures and shapes placed by the group's child scale (Decision 252)
+      const gx = kid(kid(wgp, 'grpSpPr'), 'xfrm'); const co = kid(gx, 'chOff'); const ce = kid(gx, 'chExt');
+      const cw = ce ? Number(at(ce, 'cx')) : 0; const ch = ce ? Number(at(ce, 'cy')) : 0;
+      if (!(cw > 0 && ch > 0)) return null;
+      const ox = co ? Number(at(co, 'x')) || 0 : 0; const oy = co ? Number(at(co, 'y')) || 0 : 0; const sx = w / cw; const sy = h / ch;
+      const items = [];
+      for (const c of wgp.children) {
+        const isPic = c.localName === 'pic'; if (!isPic && c.localName !== 'wsp') continue;
+        const xf2 = kid(kid(c, 'spPr'), 'xfrm'); const off = kid(xf2, 'off'); const ext = kid(xf2, 'ext'); if (!off || !ext) continue;
+        const gx0 = ((Number(at(off, 'x')) || 0) - ox) * sx; const gy0 = ((Number(at(off, 'y')) || 0) - oy) * sy; const gw = (Number(at(ext, 'cx')) || 0) * sx; const gh = (Number(at(ext, 'cy')) || 0) * sy;
+        const it = isPic ? picOf(c, gx0, gy0, gw, gh) : shapeOf(c, gx0, gy0, gw, gh);
+        if (it) items.push(it);
       }
-      const gn = kid(sp, 'prstGeom'); const text = textBoxBody(wsp);
-      item = { t: 'shape', x: 0, y: 0, w, h, rot: xf && at(xf, 'rot') ? Number(at(xf, 'rot')) / 60000 : 0, geom: at(gn, 'prst') || 'rect', adj: null, fill, line, text: text && text.paras.some((q) => q.runs.length) ? text : null };
-    } else return null;
+      if (!items.length) return null;
+      item = { t: 'group', x: 0, y: 0, w, h, items };
+    } else if (pic) { item = picOf(pic, 0, 0, w, h); if (!item) return null; }
+    else if (wsp) item = shapeOf(wsp, 0, 0, w, h);
+    else return null;
     const wn = ['wrapNone', 'wrapSquare', 'wrapTight', 'wrapThrough', 'wrapTopAndBottom'].find((x) => kid(an, x));
     const dist = (a) => Number(at(an, a) || 0) / 9525;
     return { item, h: posOf(kid(an, 'positionH')), v: posOf(kid(an, 'positionV')), wrap: wn ? wn.slice(4).toLowerCase() : 'none', behind: at(an, 'behindDoc') === '1', dist: { l: dist('distL'), r: dist('distR'), t: dist('distT'), b: dist('distB') } };
