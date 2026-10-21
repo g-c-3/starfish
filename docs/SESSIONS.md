@@ -15,11 +15,13 @@ Start: Tier 1 docs read; Decisions 241 and 249 read, ARCHITECTURE section headin
 
 Decisions made: 250.
 
+Second part: owner confirmed CI green. No file with floating objects is available on the device, so DP106 was run as simulated checks: 8 read, 7 drawing in a simulated page, 11 wrap and position arithmetic; the extracted slide drawing is line-for-line the old loop body. DP106 closed on that basis; real layout, zoom and fidelity against Word untested. No file changed.
+
 Verified: 8 read checks on a generated Word file (text box fill, outline, rotation, text, position, wrap; square picture; inline picture unchanged); `vite build` passes. Not verified: rendering in a browser or on a device (DP106), the slide drawing after the `slideItem` extraction (DP106 check 9), CI.
 
-Open: DP106; CI confirmation of the Decision 249 pin and a lockfile proposal; E3d equations; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: lockfile proposal for the Decision 249 pin (needs approval); E3d equations; Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP106 on device; then fix whatever it shows, or move to the next open item.
+Next session start point: E3d equations (read Word equation markup, draw it), in a fresh session; or another open item on the owner's word.
 
 ---
 
