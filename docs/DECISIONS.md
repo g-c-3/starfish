@@ -2874,3 +2874,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/vault.js`, `src/js/app.js`.
 - Checks: 36 Node checks against the real schema (cached unlock reads no entry and decrypts only the blob; a re-encrypted entry is the only one rebuilt; schedule change read from the row; accent-folded and ranked name search; body search from the blob; trash and restore; label from the stored index with no decryption; change flushed at lock; wrong key and damaged blob; bulk rebuild with progress; blobs hold no plaintext); `vite build` passes.
 - Risks: not run through CI or on a device (DP108). Stale detection relies on every write to an encrypted field re-encrypting it; no path writes otherwise. The first body search of a large Vault reads every note once. No change to credentials, backup format, restore or network use.
+
+**254. Encrypted Vault thumbnails (Phase 17, stage N, second part).** Carries out the thumbnail item of stage N in Decision 195; supersedes Decision 162's "thumbnails are memory only" for the Vault. Home thumbnails are unchanged.
+- One small file per Vault image in `vthumbs/`, named by the SHA-256 of the entry id (no table of names, no id in the name). Content: `{ p, d }` (the image's `file_path`, a JPEG data URL), AES-GCM under the Vault key, the same call as entry fields.
+- Read: `getVaultThumb` returns the data URL only when the file opens under the current key and `p` equals the row's `file_path`; otherwise the thumbnail is made again from the full image and written (`putVaultThumb`). A replaced image, a new key or a damaged file therefore only cost one decode.
+- Made when a tile first needs it, not at capture: the capture and Move paths are untouched. `thumbMem` still holds data URLs while unlocked and is emptied at lock.
+- Sweep: after the index build at unlock, off the unlock path, `sweepVaultThumbs` removes every file in `vthumbs/` that no Vault image row (trashed ones included) maps to. This covers delete, purge, Move to Home and a restore that wipes rows, so no delete path changed.
+- Index entries now carry `filePath`, read from the row at unlock.
+- Not in backups: the export names its categories and does not read `vthumbs/`; after a restore the thumbnails are made again on view. The orphan sweep of `files/` does not look in `vthumbs/`.
+- `files.js` gains `writeText`, `readText`, `removePath`, `listPaths` (text by path, folder listing); the caller encrypts.
+- Not in this part: field encryption bound to entry id and field name (goes with O); timings.
+- Files: `src/js/files.js`, `src/js/vault.js`, `src/js/app.js`.
+- Checks: 12 Node checks (path on entries; hash file names; stored text is ciphertext; round trip; wrong key gives none; replaced image ignored; filePath on a cached unlock; sweep keeps trashed, removes deleted and stray, repeat removes none) plus the 36 of Decision 253; `vite build` passes.
+- Risks: not run through CI or on a device (DP109). Thumbnail files are visible on disk as count and size (a few tens of KB each, ciphertext), like Vault files. No change to credentials, backup format, restore or network use.

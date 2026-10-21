@@ -217,7 +217,7 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; wired, Session 104, Decision 162; not device-tested |
 | E | Backup and restore adapted at every stage | built with D, Session 104, Decision 162; not device-tested |
 | F | One-time migration of existing plain Home files | built, Session 104, Decision 163; runs at start; not device-tested |
-| N | Persisted encrypted Vault index, name search, lazy body search, Trash from the index (Decisions 195, 253) | first part built, Session 149; thumbnails and field binding not built; not device-tested |
+| N | Persisted encrypted Vault index, name search, lazy body search, Trash from the index (Decisions 195, 253) | first part and encrypted thumbnails built, Session 149 (Decisions 253, 254); field binding not built; not device-tested |
 
 Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
@@ -957,4 +957,5 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Writes: debounced, serialised (`writeBlob`), flushed at `clearVaultIndex()` before the key is dropped. Failure ignored.
 - `searchVaultIndex(term)`: sync; label, then tag and extension, then description and Money or Location details; accents folded. `searchVaultBodies(db, key, term, exclude)`: lazy, loads `vaultTexts` once per unlock.
 - Entries carry no note text; the note editor reads it from the row (`vaultNoteText` in `app.js`). `vaultTrashLabel` serves Vault Trash labels from the stored index.
-- Not built: encrypted thumbnails; field encryption bound to entry id and field name.
+- Thumbnails (Decision 254): Vault images only, `vthumbs/<sha256(id)>`, `{ p: file_path, d: data URL }` under the Vault key; read by `getVaultThumb`, made on first view by `app.js` `thumbFor`, written by `putVaultThumb`; stale when `p` differs from the row. `sweepVaultThumbs` runs after the index build at unlock and removes files no Vault image row maps to. Not in backups; `files/` orphan sweep does not look in `vthumbs/`. Home thumbnails stay memory only.
+- Not built: field encryption bound to entry id and field name.
