@@ -36,7 +36,7 @@ import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js'
 import { openExplorer } from './explorer.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
-import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, vaultLabelSuggestions } from './vault.js';
+import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
 
 
 const CATEGORY_LABELS = {
@@ -1205,7 +1205,8 @@ async function finishVaultUnlock(vmk) {
   const vaultText = await commitNoteDrafts(key), vaultForms = await commitFormDrafts(key); // before the index build, so they are listed
   if (vaultForms.length) toast(formDraftToast(vaultForms, true));
   else if (vaultText) toast('Unsaved Vault note was saved as Autosave');
-  await buildVaultIndexWithNotice(); // in-memory only — see vault.js
+  await buildVaultIndexWithNotice(); // in memory, stored encrypted — see vault.js
+  sweepVaultThumbs(db).catch(() => {}); // after the index, off the unlock path
   if (vaultText || vaultForms.length) window.dispatchEvent(new Event('arkly-drafts-committed')); // after the index: the redraw reads it
   await loadCurrencySymbol(); // Vault Money rows and search results format with the app symbol (Decision 135)
   armVaultAutoLock();
@@ -2362,8 +2363,9 @@ function openTextEditor({ title = 'New note', text = '', isVault = false, persis
 }
 
 // ---- Image thumbnails and zoom/pan (Phase 16 D, Decision 105) ----
-// Thumbnails: longest side THUMB_PX, JPEG. Held only in this map, Home and Vault alike; nothing is written to disk
-// (Decision 162: a cached thumbnail would be a plain copy of an encrypted image). lockVault() empties the Vault ones.
+// Thumbnails: longest side THUMB_PX, JPEG. Home ones are held only in this map; nothing is written to disk
+// (Decision 162: a cached thumbnail would be a plain copy of an encrypted image). Vault ones are also kept as small files
+// encrypted under the Vault key (Decision 254). lockVault() empties the Vault ones from this map.
 const THUMB_PX = 320;
 const thumbMem = new Map(); // 'h:<id>' | 'v:<id>' -> data URL
 function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k.startsWith('v:')) thumbMem.delete(k); }
@@ -2404,10 +2406,16 @@ async function thumbFor(item, isVault) {
   const key = `${isVault ? 'v' : 'h'}:${item.id}`;
   if (thumbMem.has(key)) return thumbMem.get(key);
   let dataUrl;
+  const ref = isVault ? { id: item.id, filePath: ((getVaultIndex() || []).find((e) => e.id === item.id) || item).filePath || null } : null;
+  if (isVault && privateSessionKey) { // stored thumbnail: no decode of the full image
+    dataUrl = await getVaultThumb(db, privateSessionKey, ref);
+    if (dataUrl && privateSessionKey) { thumbMem.set(key, dataUrl); return dataUrl; }
+  }
   const url = await imageBlobUrl(item, isVault);
   try { dataUrl = await downscaleToDataUrl(url, THUMB_PX); } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
+  if (isVault) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
   return dataUrl;
 }
 let thumbObserver = null;

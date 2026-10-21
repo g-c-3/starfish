@@ -102,6 +102,12 @@ const readVaultBytes = (vmk, row) => vaultStore(vmk).read(row);
 const readVaultBase64 = async (vmk, row) => toBase64(await readVaultBytes(vmk, row));
 async function vaultFileSize(vmk, row) { return vaultStore(vmk).size(row); } // throws when the file is missing
 
+// Small text files by path (Vault thumbnails, Decision 254). The caller encrypts; these only move text and list a folder.
+async function writeText(path, text) { need(); await io.write(path, new TextEncoder().encode(text)); }
+async function readText(path) { need(); return new TextDecoder().decode(await io.read(path)); }
+async function removePath(path) { need(); try { await io.remove(path); } catch { /* already gone */ } }
+async function listPaths(dir) { need(); return io.list(dir); }
+
 // Move: the file stays where it is; only its key is wrapped again, for the other key. Both need the file's path.
 async function rewrapForVault(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, await homeKey(), vmk); }
 async function rewrapForHome(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, vmk, await homeKey()); }
@@ -170,5 +176,5 @@ async function migratePlainFiles({ onProgress } = {}) {
 
 export {
   migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile,
-  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath
+  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths
 };

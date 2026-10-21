@@ -11,7 +11,7 @@
 import { insertEntry, VAULT_PLACEHOLDER_LABEL } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import * as Money from './money.js';
-import { initFiles, saveVaultBase64, readVaultBase64, vaultFileSize, removeFile } from './files.js';
+import { initFiles, saveVaultBase64, readVaultBase64, vaultFileSize, removeFile, writeText, readText, removePath, listPaths } from './files.js';
 
 const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // mirrors the Home capture cards, in card order
 
@@ -192,7 +192,7 @@ const INDEX_BLOB_KEY = 'vault_index_blob', TEXT_BLOB_KEY = 'vault_text_blob'; //
 const FP_TAIL = 20, SAVE_DELAY_MS = 1500, REBUILD_BULK_MIN = 50, NOTICE_MIN = 10;
 const FP_SQL = `substr(CAST(IFNULL(encrypted_label,'') AS TEXT),-${FP_TAIL}) || '|' || substr(CAST(IFNULL(encrypted_description,'') AS TEXT),-${FP_TAIL}) || '|' ||
   CASE WHEN type IN ('voice','image','pdf','file') THEN substr(CAST(IFNULL(encrypted_meta,'') AS TEXT),-${FP_TAIL}) ELSE substr(CAST(IFNULL(encrypted_body,'') AS TEXT),-${FP_TAIL}) END`;
-const VAULT_LIGHT_SQL = `SELECT rowid AS rid, id, type, extension, created_at, fire_at, repeat_rule, completed_at, snoozed_until, deleted_at, ${FP_SQL} AS fp FROM entries`;
+const VAULT_LIGHT_SQL = `SELECT rowid AS rid, id, type, extension, file_path, created_at, fire_at, repeat_rule, completed_at, snoozed_until, deleted_at, ${FP_SQL} AS fp FROM entries`;
 const tail = (v) => String(v ?? '').slice(-FP_TAIL);
 const labelFp = (row) => tail(row.encrypted_label); // the Vault Trash list has no other encrypted column
 function rowFp(row) {
@@ -315,14 +315,14 @@ async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null)
     }
   }
   if (row.type === 'note' || isFile) vaultTexts.set(row.id, { fp, t: text });
-  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, tags, description, sizeBytes, money, location, createdAt: row.created_at,
+  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, filePath: row.file_path || null, tags, description, sizeBytes, money, location, createdAt: row.created_at,
     fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp };
 }
 
 // An entry from the stored index and the light row: no decryption. The schedule columns always come from the row, as a
 // notification action can change them while the Vault is locked.
 function indexEntryFromCache(row, c, tags) {
-  return { id: row.id, rid: row.rid, type: row.type, label: c.l, extension: row.extension || null, tags, description: c.d || '', sizeBytes: c.s || 0,
+  return { id: row.id, rid: row.rid, type: row.type, label: c.l, extension: row.extension || null, filePath: row.file_path || null, tags, description: c.d || '', sizeBytes: c.s || 0,
     money: c.m || null, location: c.loc || null, createdAt: row.created_at,
     fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp: row.fp };
 }
@@ -523,6 +523,44 @@ async function searchVaultBodies(db, key, term, exclude = new Set()) {
   return index.filter((e) => !exclude.has(e.id) && norm((vaultTexts.get(e.id) || {}).t).includes(t));
 }
 
+// ---------------------------------------------------------------------------
+// Encrypted thumbnails (Decision 254). One small file per Vault image in `vthumbs/`, named by the SHA-256 of the entry id, holding
+// { p: the image's file_path, d: JPEG data URL } under the Vault key. A thumbnail whose `p` differs from the row's is stale (the image
+// was replaced) and is made again. Not in backups. Names are not kept in a table: the sweep removes any file no Vault image maps to.
+// ---------------------------------------------------------------------------
+const THUMB_DIR = 'vthumbs';
+async function thumbPath(id) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id)));
+  return `${THUMB_DIR}/${[...h].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+// -> data URL, or null when there is none, it is stale, or it does not open under this key.
+async function getVaultThumb(db, key, entry) {
+  try {
+    initFiles(db);
+    const t = JSON.parse(await decryptPrivateNote(key, await readText(await thumbPath(entry.id))));
+    return t && t.p === (entry.filePath || null) && typeof t.d === 'string' ? t.d : null;
+  } catch { return null; }
+}
+async function putVaultThumb(db, key, entry, dataUrl) {
+  try {
+    initFiles(db);
+    await writeText(await thumbPath(entry.id), await encryptPrivateNote(key, JSON.stringify({ p: entry.filePath || null, d: dataUrl })));
+  } catch { /* a thumbnail is a cache; it is made again when missing */ }
+}
+// Removes thumbnails of images that no longer exist (deleted, purged, moved to Home, wiped by a restore). Trashed images keep theirs.
+async function sweepVaultThumbs(db) {
+  try {
+    initFiles(db);
+    const names = await listPaths(THUMB_DIR);
+    if (!names.length) return 0;
+    const ids = ((await db.query(`SELECT id FROM entries WHERE is_private=1 AND type='image'`)).values || []).map((r) => r.id);
+    const keep = new Set(await Promise.all(ids.map(async (id) => (await thumbPath(id)).slice(THUMB_DIR.length + 1))));
+    let removed = 0;
+    for (const n of names) if (!keep.has(n)) { await removePath(`${THUMB_DIR}/${n}`); removed++; }
+    return removed;
+  } catch { return 0; }
+}
+
 function vaultLabelSuggestions(type, partial) {
   if (!vaultIndexCache) return [];
   const p = partial.toLowerCase();
@@ -536,5 +574,5 @@ function vaultLabelSuggestions(type, partial) {
 export {
   VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
   saveVaultEntry, loadVaultEntryContent, updateVaultFileContent, base64ToBlobUrl,
-  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, vaultLabelSuggestions
+  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions
 };
