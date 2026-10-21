@@ -12,11 +12,11 @@ Start: Tier 1 docs read; Decisions 241 to 250 read, ARCHITECTURE section heading
 - `src/css/style.css`: `.eo-m*` rules.
 - ARCHITECTURE.md: one bullet. ROADMAP.md: equations row, DP107 added.
 - Decision 251.
-- Bug fixed: Word text box drawn as a solid black rectangle (Decision 252): shape fill ignored alpha and brightness settings.
+- Bugs fixed (Decision 252), with the owner's file: table frame drawn as a solid black box (groups read as their first shape; free-form outlines drawn as rectangles); picture drawn 400 px right of its place (page-relative left measured from the column, not the indented paragraph).
 
 Decisions made: 251, 252.
 
-Verified: read check on a generated Word file (inline and display, fraction, power, sum with limits, radical, matrix, delimiters, function); draw check on a sample tree (3 stretched SVG parts, italic and operator classes, linear text `x=(-b)/(2a)x^2(a/b)∑_(i=1)^n i√(y)[1, 2; 3, 4]sin θ`); `vite build` passes. Bug 252 is inferred from two screenshots; the file was not available. Not verified: layout on a device or in a browser (DP107), CI.
+Verified: read check on a generated Word file (inline and display, fraction, power, sum with limits, radical, matrix, delimiters, function); draw check on a sample tree (3 stretched SVG parts, italic and operator classes, linear text `x=(-b)/(2a)x^2(a/b)∑_(i=1)^n i√(y)[1, 2; 3, 4]sin θ`); `vite build` passes. Bug 252 reproduced on the owner's file by reading it (87 floats; no large black fill left). Not verified: layout on a device or in a browser (DP107), CI.
 
 Open: lockfile proposal for the Decision 249 pin (needs approval); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 

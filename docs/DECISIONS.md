@@ -2850,9 +2850,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Approximations: limits of tall integrals sit beside the symbol, not at its ends; `&` alignment marks in equation arrays are dropped, rows are left aligned; no equation spacing rules beyond operators; equations in slides (`a14:m`) are not read.
 - Files: `src/js/office-read.js`, `src/js/office-render.js`, `src/css/style.css`.
 
-**252. Word shape fill keeps its colour transforms (Phase 22, stage E3d).** Bug in Decision 250. A text box in a banking syllabus file drew as a solid black rectangle over the page; the other reader showed it as an empty outlined box.
-- Cause: `floatOf` read a shape fill through `clrOf`, which returns the base colour only, so a transparent (alpha 0) or tinted fill became opaque. Cause inferred from the screenshots; the file itself was not available.
-- Fix: new `clrA` applies alpha, lumMod, lumOff, tint and shade, like the slide reader; a fill with alpha 0 is no fill.
-- Why correct: the fill now equals what the file states. Line colours still use `clrOf` (no transforms); not changed.
-- Not fixed: the fill from a shape style reference when the shape has no `solidFill` of its own.
-- Files: `src/js/office-read.js`.
+**252. Word groups, free-form shapes and float placement (Phase 22, stage E3d).** Bugs in Decision 250, found with the owner's file (a table frame drawn as a solid black box; a picture drawn 400 px to the right of its place).
+- Cause 1: a group anchor (`wpg:wgp`) was read as its first shape only, and a free-form outline (`a:custGeom`, here the table borders as thin filled polygons) was drawn as a plain rectangle, so the borders became a solid fill.
+- Fix 1: `readDocx` reads a group into a `group` item (children placed by the group's child offset and extent scale: shapes, text boxes, pictures); `custOf` reads `custGeom` paths (move, line, cubic and quadratic curve, close) into one SVG path; `slideItem` draws a `group` and a `cust` shape (SVG, viewBox in the path's units). Arcs are not read.
+- Cause 2: an overlay float is absolutely placed in its paragraph, but a page-relative left was measured from the column, so the paragraph's indent shifted it.
+- Fix 2: `floatNode` stores the float's page x (`data-hpage`); `placeFloats` sets `left` against the paragraph's actual left. Wrapped floats and aligned floats are unchanged.
+- Shape fill and line colours now keep alpha, lumMod, lumOff, tint and shade (`clrA`); a fill with alpha 0 is no fill.
+- Not done: a fill taken from a shape style reference; nested groups (their shapes are skipped); text in a free-form shape.
+- Checked on the owner's file: 87 floats read (23 groups, 36 pictures, 28 shapes), 27 free-form shapes; no large solid black fill remains. Layout not seen on a device.
+- Files: `src/js/office-read.js`, `src/js/office-render.js`.
