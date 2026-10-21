@@ -165,9 +165,9 @@ function moneySearchText(d) {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory search index — built fresh on vault unlock, updated per entry afterwards, discarded on vault lock. Never persisted,
-// never written to disk even encrypted (Decision: simplicity + zero index-drift risk beats the
-// performance a persistent index would buy at this scale — see conversation/DECISIONS.md).
+// In-memory index — built on unlock, updated per entry afterwards, dropped on lock. Persisted only as two blobs encrypted
+// under the Vault key (Decision 253): the index (labels, descriptions, sizes, Money and Location details) and the text of notes
+// and file OCR. Rows stay the source of truth: an entry whose stored fingerprint differs from its row is rebuilt from the row.
 // Also powers: vault-only label autocomplete (deliberately not the shared label_history table,
 // which would leak vault labels into the main app's non-vault suggestions) and per-item size for
 // the multi-select screen.
@@ -184,6 +184,64 @@ const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, file_path, file_k
   fire_at, repeat_rule, completed_at, snoozed_until, is_private, deleted_at, encrypted_meta, LENGTH(encrypted_body) AS body_len,
   CASE WHEN type IN ('voice','image','pdf','file') THEN NULL ELSE encrypted_body END AS encrypted_body
   FROM entries`;
+
+// Persisted index (Decision 253). Fingerprint of a row's encrypted fields: the last 20 characters of each stored value, which hold
+// the random IV of its AES-GCM call, so any re-encryption changes it. The same string is made in SQL (no bodies cross the
+// bridge) and in JS (rowFp); the two must stay equal.
+const INDEX_BLOB_KEY = 'vault_index_blob', TEXT_BLOB_KEY = 'vault_text_blob'; // meta rows; not in APP_SETTINGS_KEYS, so never in a backup
+const FP_TAIL = 20, SAVE_DELAY_MS = 1500, REBUILD_BULK_MIN = 50, NOTICE_MIN = 10;
+const FP_SQL = `substr(CAST(IFNULL(encrypted_label,'') AS TEXT),-${FP_TAIL}) || '|' || substr(CAST(IFNULL(encrypted_description,'') AS TEXT),-${FP_TAIL}) || '|' ||
+  CASE WHEN type IN ('voice','image','pdf','file') THEN substr(CAST(IFNULL(encrypted_meta,'') AS TEXT),-${FP_TAIL}) ELSE substr(CAST(IFNULL(encrypted_body,'') AS TEXT),-${FP_TAIL}) END`;
+const VAULT_LIGHT_SQL = `SELECT rowid AS rid, id, type, extension, created_at, fire_at, repeat_rule, completed_at, snoozed_until, deleted_at, ${FP_SQL} AS fp FROM entries`;
+const tail = (v) => String(v ?? '').slice(-FP_TAIL);
+const labelFp = (row) => tail(row.encrypted_label); // the Vault Trash list has no other encrypted column
+function rowFp(row) {
+  return `${tail(row.encrypted_label)}|${tail(row.encrypted_description)}|${tail(VAULT_FILE_TYPES.includes(row.type) ? row.encrypted_meta : row.encrypted_body)}`;
+}
+
+let indexKey = null, indexDb = null;       // the Vault key and database the blobs are written with; cleared on lock
+let vaultTexts = new Map();                // id -> { fp, t }: note text and file OCR text, filled lazily
+let textsLoaded = false, textsLoading = null;
+let trashLabels = new Map();               // id -> { fp, l }: labels of trashed Vault rows, so the Vault Trash lists without decrypting
+let indexDirty = false, textsDirty = false, saveTimer = null, writeChain = Promise.resolve();
+
+async function readBlob(db, key, metaKey) {
+  try {
+    const r = ((await db.query(`SELECT value FROM meta WHERE key=?`, [metaKey])).values || [])[0];
+    if (!r || !r.value) return null;
+    const b = JSON.parse(await decryptPrivateNote(key, r.value));
+    return b && b.v === 1 ? b : null;
+  } catch { return null; } // missing, wrong key or damaged: rebuilt from the rows
+}
+function writeBlob(db, key, metaKey, json) { // serialised: the last write wins, none overlaps
+  writeChain = writeChain.then(async () => {
+    try {
+      await db.run(`INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [metaKey, await encryptPrivateNote(key, json)]);
+    } catch { /* the blob is a cache; the next unlock rebuilds it */ }
+  });
+  return writeChain;
+}
+function indexBlobJson() {
+  const e = {}, t = {};
+  for (const x of vaultIndexCache || []) e[x.id] = { fp: x.fp, l: x.label, d: x.description || '', s: x.sizeBytes || 0, m: x.money || undefined, loc: x.location || undefined };
+  for (const [id, v] of trashLabels) t[id] = v;
+  return JSON.stringify({ v: 1, e, t });
+}
+function textBlobJson() {
+  const e = {};
+  for (const [id, v] of vaultTexts) e[id] = v.t ? { fp: v.fp, t: v.t } : { fp: v.fp };
+  return JSON.stringify({ v: 1, e });
+}
+function scheduleSave() {
+  if (!indexKey || saveTimer) return;
+  saveTimer = setTimeout(() => { saveTimer = null; flushBlobs(); }, SAVE_DELAY_MS);
+}
+function flushBlobs() { // serialises now, so a lock right after cannot lose a change; encryption and the write finish after
+  if (!indexKey || !indexDb) return;
+  if (indexDirty && vaultIndexCache) { indexDirty = false; writeBlob(indexDb, indexKey, INDEX_BLOB_KEY, indexBlobJson()); }
+  if (textsDirty && textsLoaded) { textsDirty = false; writeBlob(indexDb, indexKey, TEXT_BLOB_KEY, textBlobJson()); }
+}
+function markIndexDirty() { indexDirty = true; scheduleSave(); }
 
 // Size and OCR text of a file entry without decrypting the file. Valid only while it decrypts under the current key and
 // its recorded body length still matches; otherwise it is rebuilt from the body and written back. Never throws.
@@ -221,47 +279,65 @@ async function fileEntryMeta(db, privateSessionKey, row) {
   }
 }
 
+// One index entry from a full row (VAULT_INDEX_SQL). Notes and file OCR text go to `vaultTexts`, not into the entry (Decision 253).
 async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null) {
   const tags = tagsByEntry ? (tagsByEntry.get(row.id) || []) : ((await db.query(
     `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
   )).values || []).map((t) => t.name);
-  let searchableText = '', sizeBytes = 0, description = '', money = null, location = null;
+  let text = '', sizeBytes = 0, description = '', money = null, location = null;
   const label = await vaultRowLabel(privateSessionKey, row);
   try {
     if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
   } catch { description = ''; }
-  if (VAULT_FILE_TYPES.includes(row.type)) {
+  const isFile = VAULT_FILE_TYPES.includes(row.type);
+  let fp = rowFp(row);
+  if (isFile) {
     const meta = await fileEntryMeta(db, privateSessionKey, row);
-    if (meta) { searchableText = meta.o || ''; sizeBytes = meta.s || 0; }
+    if (meta) { text = meta.o || ''; sizeBytes = meta.s || 0; }
+    if (!row.encrypted_meta) { // the meta was just made: the fingerprint is read again, as the row now holds it
+      try { fp = ((await db.query(`SELECT ${FP_SQL} AS fp FROM entries WHERE id=?`, [row.id])).values || [])[0]?.fp ?? fp; } catch { /* a later unlock rebuilds this entry once */ }
+    }
   } else {
     try {
       const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
       if (row.type === 'note') {
-        searchableText = plaintext;
+        text = plaintext;
         sizeBytes = new Blob([plaintext]).size;
       } else if (row.type === 'money') {
         money = parseVaultPlaintext('money', plaintext).money;
-        searchableText = money ? moneySearchText(money) : '';
         sizeBytes = new Blob([plaintext]).size;
       } else if (row.type === 'location') {
         location = parseVaultPlaintext('location', plaintext).location;
-        searchableText = location ? `${location.latitude.toFixed(6)} ${location.longitude.toFixed(6)}` : '';
         sizeBytes = new Blob([plaintext]).size;
       }
     } catch {
-      searchableText = ''; // corrupted/undecryptable entry: still listed, just not searchable
+      text = ''; // corrupted/undecryptable entry: still listed, just not searchable
     }
   }
-  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, tags, description, searchableText, sizeBytes, money, location, createdAt: row.created_at,
-    fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until };
+  if (row.type === 'note' || isFile) vaultTexts.set(row.id, { fp, t: text });
+  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, tags, description, sizeBytes, money, location, createdAt: row.created_at,
+    fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp };
 }
 
-// Full build: on unlock (and after a restore or a reminder change that names no entry). Also runs the label migration.
-// Tags for every Vault row come from one query, not one per entry.
-// onProgress({ done, total }) is called only while records are being built (entries with none yet), so the caller can say so.
+// An entry from the stored index and the light row: no decryption. The schedule columns always come from the row, as a
+// notification action can change them while the Vault is locked.
+function indexEntryFromCache(row, c, tags) {
+  return { id: row.id, rid: row.rid, type: row.type, label: c.l, extension: row.extension || null, tags, description: c.d || '', sizeBytes: c.s || 0,
+    money: c.m || null, location: c.loc || null, createdAt: row.created_at,
+    fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp: row.fp };
+}
+
+// Build on unlock (and after a restore or a reminder change that names no entry). Also runs the label migration.
+// Reads the light rows (no bodies), then the stored index: an entry whose fingerprint matches is taken from it, any other is rebuilt
+// from its row (Decision 253). Rows are the truth; a missing, unreadable or stale index only costs the rebuild.
+// onProgress({ done, total }) is called only while NOTICE_MIN or more entries are being rebuilt, so the caller can say so.
 async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
   await migrateVaultLabels(db, privateSessionKey);
-  const rows = (await db.query(`${VAULT_INDEX_SQL} WHERE is_private=1 AND deleted_at IS NULL ORDER BY rowid`)).values || [];
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  indexKey = privateSessionKey; indexDb = db;
+  vaultTexts = new Map(); textsLoaded = false; textsLoading = null; textsDirty = false;
+  const rows = (await db.query(`${VAULT_LIGHT_SQL} WHERE is_private=1 ORDER BY rowid`)).values || [];
+  const live = rows.filter((r) => !r.deleted_at), trashed = rows.filter((r) => r.deleted_at);
   const tagsByEntry = new Map();
   const tagRows = (await db.query(
     `SELECT et.entry_id AS entry_id, t.name AS name FROM entry_tags et JOIN tags t ON t.id=et.tag_id
@@ -271,16 +347,37 @@ async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
     if (!tagsByEntry.has(t.entry_id)) tagsByEntry.set(t.entry_id, []);
     tagsByEntry.get(t.entry_id).push(t.name);
   }
-  const total = onProgress ? rows.filter((r) => VAULT_FILE_TYPES.includes(r.type) && !r.encrypted_meta).length : 0;
+  const stored = await readBlob(db, privateSessionKey, INDEX_BLOB_KEY);
+  const cached = (stored && stored.e) || {}, cachedTrash = (stored && stored.t) || {};
+  const stale = live.filter((r) => !(cached[r.id] && cached[r.id].fp === r.fp));
+  const staleIds = new Set(stale.map((r) => r.id));
+  let full = null; // one bulk read when many entries are rebuilt, one read each otherwise
+  if (stale.length > REBUILD_BULK_MIN) full = new Map(((await db.query(`${VAULT_INDEX_SQL} WHERE is_private=1 AND deleted_at IS NULL`)).values || []).map((r) => [r.id, r]));
+  const total = onProgress && stale.length >= NOTICE_MIN ? stale.length : 0;
   let done = 0;
   if (total) onProgress({ done, total });
   const index = [];
-  for (const row of rows) {
-    const building = total && VAULT_FILE_TYPES.includes(row.type) && !row.encrypted_meta;
+  for (const r of live) {
+    if (!staleIds.has(r.id)) { index.push(indexEntryFromCache(r, cached[r.id], tagsByEntry.get(r.id) || [])); continue; }
+    const row = full ? full.get(r.id) : ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [r.id])).values || [])[0];
+    if (!row) continue; // removed since the light read
     index.push(await indexEntryFromRow(db, privateSessionKey, row, tagsByEntry));
-    if (building) onProgress({ done: ++done, total });
+    if (total) onProgress({ done: ++done, total });
   }
+  const labels = new Map();
+  let trashChanged = Object.keys(cachedTrash).length !== trashed.length;
+  for (const r of trashed) {
+    const c = cachedTrash[r.id];
+    const lfp = r.fp.split('|')[0];
+    if (c && c.fp === lfp) { labels.set(r.id, c); continue; }
+    trashChanged = true;
+    const row = ((await db.query(`SELECT id, label, encrypted_label FROM entries WHERE id=?`, [r.id])).values || [])[0];
+    if (row) labels.set(r.id, { fp: lfp, l: await vaultRowLabel(privateSessionKey, row) });
+  }
+  trashLabels = labels;
   vaultIndexCache = index;
+  const liveIds = new Set(live.map((r) => r.id));
+  if (!stored || stale.length || trashChanged || Object.keys(cached).some((id) => !liveIds.has(id))) markIndexDirty();
   return index;
 }
 
@@ -296,6 +393,7 @@ function upsertIndexEntry(index, entry) {
 function removeIndexEntry(index, id) {
   const at = index.findIndex((e) => e.id === id);
   if (at >= 0) index.splice(at, 1);
+  if (vaultTexts.delete(id)) textsDirty = true;
   return index;
 }
 
@@ -306,33 +404,123 @@ async function refreshVaultIndexEntries(db, privateSessionKey, ids) {
   if (!vaultIndexCache) return buildVaultIndex(db, privateSessionKey);
   for (const id of ids) {
     const row = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [id])).values || [])[0];
+    const before = vaultIndexCache.find((e) => e.id === id);
     if (row && row.is_private === 1 && !row.deleted_at) {
       upsertIndexEntry(vaultIndexCache, await indexEntryFromRow(db, privateSessionKey, row));
+      trashLabels.delete(id);
+      if (vaultTexts.has(id)) textsDirty = true;
     } else {
+      if (row && row.is_private === 1) trashLabels.set(id, { fp: labelFp(row), l: before ? before.label : await vaultRowLabel(privateSessionKey, row) }); // trashed: kept for the Vault Trash
+      else trashLabels.delete(id);
       removeIndexEntry(vaultIndexCache, id);
     }
   }
+  markIndexDirty();
   return vaultIndexCache;
+}
+
+// Label of a trashed Vault row for the Vault Trash list: from the stored labels when the row is unchanged, else decrypted (and kept).
+async function vaultTrashLabel(privateSessionKey, row) {
+  const fp = labelFp(row), c = trashLabels.get(row.id);
+  if (c && c.fp === fp) return c.l;
+  const l = await vaultRowLabel(privateSessionKey, row);
+  trashLabels.set(row.id, { fp, l });
+  markIndexDirty();
+  return l;
 }
 
 function getVaultIndex() {
   return vaultIndexCache;
 }
 
-// Called on vault lock (auto-lock timeout or manual) — mirrors privateSessionKey's own clearing.
+// Called on vault lock (auto-lock timeout or manual) — mirrors privateSessionKey's own clearing. Pending changes are serialised
+// first; their encryption and write finish after the key is dropped from here.
 function clearVaultIndex() {
-  vaultIndexCache = null;
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  flushBlobs();
+  vaultIndexCache = null; vaultTexts = new Map(); trashLabels = new Map();
+  textsLoaded = false; textsLoading = null; indexDirty = false; textsDirty = false;
+  indexKey = null; indexDb = null;
+}
+
+// ---------------------------------------------------------------------------
+// Search (Decision 253). Name search is synchronous and runs over strings held in memory: lower case, accents folded.
+// Ranked: label, then tags and extension, then description and Money or Location details. Body search (note text, file OCR text)
+// is separate and lazy: the text is loaded on the first body search of an unlock.
+// ---------------------------------------------------------------------------
+const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const searchKeys = new WeakMap(); // entry object -> its normalised strings; a replaced entry drops its keys
+function keysOf(e) {
+  let k = searchKeys.get(e);
+  if (!k) {
+    const fields = e.money ? moneySearchText(e.money) : e.location ? `${e.location.latitude.toFixed(6)} ${e.location.longitude.toFixed(6)}` : '';
+    k = { l: norm(e.label), t: `${e.tags.map(norm).join('\n')}\n${norm(e.extension)}`, d: norm(`${e.description || ''} ${fields}`) };
+    searchKeys.set(e, k);
+  }
+  return k;
 }
 
 function searchVaultIndex(term) {
   if (!vaultIndexCache) return [];
-  const t = term.toLowerCase();
-  return vaultIndexCache.filter((e) =>
-    e.label.toLowerCase().includes(t) ||
-    e.tags.some((tag) => tag.toLowerCase().includes(t)) ||
-    (e.description || '').toLowerCase().includes(t) ||
-    e.searchableText.toLowerCase().includes(t)
-  );
+  const t = norm(term);
+  if (!t) return [];
+  const byLabel = [], byTag = [], byField = [];
+  for (const e of vaultIndexCache) {
+    const k = keysOf(e);
+    if (k.l.includes(t)) byLabel.push(e);
+    else if (k.t.includes(t)) byTag.push(e);
+    else if (k.d.includes(t)) byField.push(e);
+  }
+  return [...byLabel, ...byTag, ...byField];
+}
+
+// Notes and file OCR text for body search: from the stored text blob where the fingerprint matches, else read from the row.
+// Written back when anything changed. Never blocks unlock.
+async function ensureVaultTexts(db, key) {
+  if (textsLoaded) return;
+  if (textsLoading) return textsLoading;
+  const index = vaultIndexCache;
+  textsLoading = (async () => {
+    const stored = await readBlob(db, key, TEXT_BLOB_KEY);
+    const cached = (stored && stored.e) || {};
+    let changed = !stored;
+    for (const e of index) {
+      if (e.type !== 'note' && !VAULT_FILE_TYPES.includes(e.type)) continue;
+      const have = vaultTexts.get(e.id);
+      if (have && have.fp === e.fp) continue;
+      const c = cached[e.id];
+      if (c && c.fp === e.fp) { vaultTexts.set(e.id, { fp: e.fp, t: c.t || '' }); continue; }
+      changed = true;
+      let t = '';
+      try {
+        if (e.type === 'note') {
+          const r = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [e.id])).values || [])[0];
+          t = r ? await decryptPrivateNote(key, r.encrypted_body) : '';
+        } else {
+          const r = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [e.id])).values || [])[0];
+          const m = r ? await fileEntryMeta(db, key, r) : null;
+          t = (m && m.o) || '';
+        }
+      } catch { t = ''; }
+      vaultTexts.set(e.id, { fp: e.fp, t });
+    }
+    if (Object.keys(cached).some((id) => !vaultTexts.has(id))) changed = true;
+    if (indexKey !== key || vaultIndexCache !== index) return; // locked or rebuilt while reading: nothing is kept
+    textsLoaded = true;
+    if (changed) { textsDirty = true; scheduleSave(); }
+  })();
+  try { await textsLoading; } finally { textsLoading = null; }
+}
+
+// Entries whose note text or file OCR text holds the term, not already in `exclude` (a Set of ids from the name search).
+async function searchVaultBodies(db, key, term, exclude = new Set()) {
+  if (!vaultIndexCache) return [];
+  const t = norm(term);
+  if (!t) return [];
+  const index = vaultIndexCache;
+  await ensureVaultTexts(db, key);
+  if (vaultIndexCache !== index) return [];
+  return index.filter((e) => !exclude.has(e.id) && norm((vaultTexts.get(e.id) || {}).t).includes(t));
 }
 
 function vaultLabelSuggestions(type, partial) {
@@ -348,5 +536,5 @@ function vaultLabelSuggestions(type, partial) {
 export {
   VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
   saveVaultEntry, loadVaultEntryContent, updateVaultFileContent, base64ToBlobUrl,
-  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions
+  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, vaultLabelSuggestions
 };

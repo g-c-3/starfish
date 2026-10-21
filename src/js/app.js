@@ -36,7 +36,7 @@ import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js'
 import { openExplorer } from './explorer.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
-import { VAULT_TYPES, vaultRowLabel, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, vaultLabelSuggestions } from './vault.js';
+import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, vaultLabelSuggestions } from './vault.js';
 
 
 const CATEGORY_LABELS = {
@@ -1362,6 +1362,12 @@ function searchVault(term) {
   return searchVaultIndex(term);
 }
 
+// Text of a Vault note, read from its row (the index holds no note text, Decision 253). Empty when it cannot be read.
+async function vaultNoteText(entryId) {
+  if (!privateSessionKey) return '';
+  try { return (await loadVaultEntryContent(db, privateSessionKey, entryId)).content.text || ''; } catch { return ''; }
+}
+
 async function openVaultEntry(entryId) {
   if (!privateSessionKey) throw new Error('Vault locked');
   armVaultAutoLock();
@@ -1387,7 +1393,7 @@ async function showTrash() { return listTrash(db, { isPrivate: false }); }
 async function showVaultTrash() {
   if (!privateSessionKey) throw new Error('Vault locked');
   const rows = await listTrash(db, { isPrivate: true });
-  return Promise.all(rows.map(async (r) => ({ ...r, label: await vaultRowLabel(privateSessionKey, r) }))); // stored label is a placeholder (Decision 145)
+  return Promise.all(rows.map(async (r) => ({ ...r, label: await vaultTrashLabel(privateSessionKey, r) }))); // stored label is a placeholder (Decision 145); kept in the stored index, so no decryption per row (Decision 253)
 }
 async function restoreEntry(id) {
   await restoreFromTrash(db, id);
@@ -3620,10 +3626,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ---- Vault Search: the shared search layer reading the in-memory index (Decision 147) ----
-  function runVaultSearch() {
-    const term = document.getElementById('search-input').value;
+  // Name matches draw at once; note text and OCR matches follow once their text is loaded (Decision 253).
+  let vaultSearchSeq = 0;
+  async function runVaultSearch() {
+    const term = document.getElementById('search-input').value, seq = ++vaultSearchSeq;
     searchRows = term && privateSessionKey ? searchVault(term) : [];
     drawSearch();
+    if (!term || !privateSessionKey) return;
+    try {
+      const more = await searchVaultBodies(db, privateSessionKey, term, new Set(searchRows.map((r) => r.id)));
+      if (seq !== vaultSearchSeq || !privateSessionKey || !searchOpen || searchMode !== 'vault' || !more.length) return; // a newer search, a lock or a close came first
+      searchRows = [...searchRows, ...more];
+      drawSearch();
+    } catch { /* body matches are skipped; name matches stay */ }
   }
   document.getElementById('vault-open-search-btn').addEventListener('click', (e) => {
     if (!privateSessionKey) return;
@@ -4584,10 +4599,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Shared Edit prompt flow (Phase 7's Edit action — had no UI anywhere until now).
   // isVault: main-timeline rows carry real columns (amount, expense_category, fire_at, body_text);
-  // vault items only ever carry {id,label,tags,searchableText,...} from the in-memory index — but
+  // vault items only ever carry {id,label,tags,description,...} from the in-memory index — but
   // vault scope is Text/Voice/Image/PDF/Files only, so the expense/reminder branches below simply
-  // never apply to a vault item, not a data gap. Text content for a vault note comes from
-  // searchableText, which vault.js's index already stores as the note's own decrypted text. ----
+  // never apply to a vault item, not a data gap. Text content for a vault note is read from its row
+  // when it is opened (Decision 253); the index does not hold it. ----
   // Edit button: details dialog (name, tags, description) for every type; text notes go through the editor.
   async function editEntryUI(item, isVault) {
     if (item.type === 'note') return openNote(item, isVault);
@@ -4638,7 +4653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Text note: editor, then the Save dialog prefilled with name, tags and description.
   async function openNote(item, isVault) {
     const tags = item.tags || await getEntryTags(item.id);
-    let text = isVault ? (item.searchableText || '') : (item.body_text || ''), d = null;
+    let text = isVault ? await vaultNoteText(item.id) : (item.body_text || ''), d = null;
     const draft = noteDraftHandlers({ isVault, entryId: item.id });
     const mark = overlayAbortCount;
     while (!d) {
