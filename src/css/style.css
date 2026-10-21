@@ -1306,3 +1306,48 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .eo-p { position: relative; }
 .eo-float { display: block; }
 .eo-sheet, .eo-paper { isolation: isolate; }
+
+/* Word equations (Decision 251) */
+.eo-math { font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Cambria, 'Times New Roman', serif; line-height: 1.25; }
+.eo-mdisp { display: block; text-align: center; margin: 0.35em 0; }
+.eo-mi { font-style: italic; }
+.eo-mb { font-weight: 700; }
+.eo-mrel { margin: 0 0.28em; }
+.eo-mbin { margin: 0 0.22em; }
+.eo-mf { display: inline-block; vertical-align: middle; text-align: center; margin: 0 0.12em; }
+.eo-mfn, .eo-mfd { display: block; padding: 0 0.2em; }
+.eo-mfn { border-bottom: 0.06em solid currentColor; }
+.eo-mfn.eo-mnb { border-bottom: 0; }
+.eo-msup, .eo-msub { font-size: 0.7em; line-height: 0; position: relative; }
+.eo-msup { top: -0.6em; }
+.eo-msub { top: 0.35em; }
+.eo-mss { display: inline-block; vertical-align: -0.36em; font-size: 0.7em; line-height: 1.1; text-align: left; }
+.eo-mssu, .eo-mssb { display: block; }
+.eo-mrad { display: inline-flex; align-items: stretch; vertical-align: middle; }
+.eo-mrs { width: 0.8em; height: auto; flex: none; }
+.eo-mrb { border-top: 0.06em solid currentColor; padding: 0.05em 0.1em 0; }
+.eo-mdeg { font-size: 0.55em; align-self: flex-start; margin: 0 -0.5em 0 0.1em; }
+.eo-mnop { font-size: 1.15em; }
+.eo-mnop.eo-mbig { font-size: 1.6em; }
+.eo-mund { display: inline-block; vertical-align: middle; text-align: center; }
+.eo-mul { display: block; font-size: 0.7em; line-height: 1.1; }
+.eo-mnb2 { margin-left: 0.15em; }
+.eo-mdt { display: inline-flex; align-items: stretch; vertical-align: middle; }
+.eo-mdi { display: inline; }
+.eo-mdt .eo-mdi { display: flex; align-items: center; }
+.eo-mbr { width: 0.35em; height: auto; flex: none; }
+.eo-msep { margin: 0 0.25em; }
+.eo-mbar { display: inline-block; }
+.eo-mtop { border-top: 0.06em solid currentColor; }
+.eo-mbot { border-bottom: 0.06em solid currentColor; }
+.eo-macc { position: relative; display: inline-block; }
+.eo-mac { position: absolute; left: 0; right: 0; top: -0.45em; text-align: center; line-height: 1; }
+.eo-mlim { display: inline-block; text-align: center; }
+.eo-mlow { display: inline-flex; flex-direction: column; align-items: center; }
+.eo-mlb, .eo-mll, .eo-mgc { display: block; }
+.eo-mll { font-size: 0.7em; line-height: 1.1; }
+.eo-mmat { display: inline-table; vertical-align: middle; border-spacing: 0; }
+.eo-mmr { display: table-row; }
+.eo-mmc { display: table-cell; padding: 0.1em 0.45em; text-align: center; }
+.eo-marr .eo-mmc { text-align: left; }
+.eo-mbb { display: inline-block; border: 1px solid currentColor; padding: 0.1em 0.2em; }
