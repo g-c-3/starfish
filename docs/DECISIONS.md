@@ -2841,3 +2841,18 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Approximations: a wrapped float sits at its paragraph, not at its vertical offset; text wraps by the box, not the outline of a tight wrap; grouped shapes, connectors with arrowheads, gradients, shadows and shape styles without an explicit fill or outline are not drawn; text-box text is not read by Copy or Info (Find sees it on screen).
 - Equations are not started.
 - Files: `src/js/office-read.js`, `src/js/office-render.js`, `src/css/style.css`.
+
+**251. Word equations (Phase 22, stage E3d).** Last row of Decision 241's stage 3. No change to credentials, backups or network use.
+- `office-read.js` `readMath`: `m:oMath` (inline) and `m:oMathPara` (display, one run per `m:oMath`) become `{ math, disp, size, color }` runs. Tree nodes: text run (upright for `m:sty` p or b, bold, colour), fraction (bar, no bar, linear, skewed), superscript, subscript, both, prescripts, radical, big operator with limits, delimiters with separators, function, accent, bar, group character, lower and upper limit, matrix, equation array, border box; `box` and `phant` pass their content through; tracked insertions are read, deletions skipped. Capped at 600 nodes and 24 levels.
+- `office-render.js` `mathNode`: spans and CSS, Cambria Math with serif fallbacks (no bundled math font, so no font notice). Latin and lower-case Greek letters italic unless plain; relations and binary operators spaced; a leading minus is unary. Delimiters are stretched SVG paths only when the content holds a fraction, radical, operator, matrix, limit or group; otherwise the plain character. Display equations are centred blocks; in inline equations a big operator puts its limits at the side.
+- Copy and Info: the root carries `data-lin`; while text is read, the drawing is swapped for it, so a fraction reads `(a)/(b)`, not stacked lines. Find works on the drawn text.
+- Page measuring: the cut walker skips `.eo-math` text, so offsets match the model's text runs; a math run is placed like a picture.
+- Approximations: limits of tall integrals sit beside the symbol, not at its ends; `&` alignment marks in equation arrays are dropped, rows are left aligned; no equation spacing rules beyond operators; equations in slides (`a14:m`) are not read.
+- Files: `src/js/office-read.js`, `src/js/office-render.js`, `src/css/style.css`.
+
+**252. Word shape fill keeps its colour transforms (Phase 22, stage E3d).** Bug in Decision 250. A text box in a banking syllabus file drew as a solid black rectangle over the page; the other reader showed it as an empty outlined box.
+- Cause: `floatOf` read a shape fill through `clrOf`, which returns the base colour only, so a transparent (alpha 0) or tinted fill became opaque. Cause inferred from the screenshots; the file itself was not available.
+- Fix: new `clrA` applies alpha, lumMod, lumOff, tint and shade, like the slide reader; a fill with alpha 0 is no fill.
+- Why correct: the fill now equals what the file states. Line colours still use `clrOf` (no transforms); not changed.
+- Not fixed: the fill from a shape style reference when the shape has no `solidFill` of its own.
+- Files: `src/js/office-read.js`.

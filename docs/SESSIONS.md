@@ -4,6 +4,26 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 148**
+
+Start: Tier 1 docs read; Decisions 241 to 250 read, ARCHITECTURE section headings. Next item: E3d equations.
+- `src/js/office-read.js`: `readMath` reads Office Math into a tree; `oMath` and `oMathPara` become `{ math, disp }` runs.
+- `src/js/office-render.js`: `mathNode` draws the tree; `appendRuns` calls it; Copy and Info read the linear form; the measuring walker skips equation text.
+- `src/css/style.css`: `.eo-m*` rules.
+- ARCHITECTURE.md: one bullet. ROADMAP.md: equations row, DP107 added.
+- Decision 251.
+- Bug fixed: Word text box drawn as a solid black rectangle (Decision 252): shape fill ignored alpha and brightness settings.
+
+Decisions made: 251, 252.
+
+Verified: read check on a generated Word file (inline and display, fraction, power, sum with limits, radical, matrix, delimiters, function); draw check on a sample tree (3 stretched SVG parts, italic and operator classes, linear text `x=(-b)/(2a)x^2(a/b)∑_(i=1)^n i√(y)[1, 2; 3, 4]sin θ`); `vite build` passes. Bug 252 is inferred from two screenshots; the file was not available. Not verified: layout on a device or in a browser (DP107), CI.
+
+Open: lockfile proposal for the Decision 249 pin (needs approval); Phase 17 stages N and O; Phase 21 P4 (needs approval of the stored automatic-backup passkey); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; Phase 5 noise toggle and sound asset; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: device pass DP107 after CI; then another open item on the owner's word.
+
+---
+
 **Session 147**
 
 Start: Tier 1 docs read; Decisions 241 and 249 read, ARCHITECTURE section headings. Release v0.1.0+621 exists after the Decision 249 pin. Next item: E3d stage 3, Word floating objects.
