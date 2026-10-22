@@ -710,7 +710,7 @@ Flow on first open each day:
 
 ## 11. Build pipeline (GitHub Actions, no local machine needed)
 See `.github/workflows/build-android.yml`. On push to `main`, it:
-1. Installs Node deps (`npm install`).
+1. Installs Node deps (`npm ci`, from the committed `package-lock.json`; Decision 258).
 2. **Builds the web assets** (`npm run build` → Vite bundles `src/` into `www/`). Required, not
    optional: browsers cannot resolve bare npm-package specifiers
    (`import { X } from '@capacitor/filesystem'`) on their own — only a bundler or a hand-authored

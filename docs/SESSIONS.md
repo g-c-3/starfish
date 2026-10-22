@@ -6,7 +6,7 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 **Session 151**
 
-Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. First task, timings; then, on "Do next", field binding.
+Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. Tasks in order: timings; field binding (DP112 confirmed on device); committed lockfile.
 - Timings (Decision 256): Node harness, real crypto, in-memory SQLite with the real schema, `vault.js` unchanged. Mix of 60% notes, 20% Money, 20% Images on disk.
   - 0 items: cold 0.6 ms, warm 0.4 ms.
   - 500 items: cold 77 ms, warm 6 ms, name search 0.2 ms each, single refresh 0.7 ms.
@@ -18,14 +18,15 @@ Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c 
   - `backup.js` (`insertRestoredEntry`): re-binds on rekey and on a new id; an unmarked field under the same key is kept and the flag cleared.
   - `fileactions.js`, `move.js`: edit, label, description and move reads pass the id.
 - Not bound: thumbnails, wrapped file keys, stored Vault settings.
+- Lockfile (Decision 258): `package-lock.json` generated, clean `npm ci` and `vite build` pass; `build-android.yml` runs `npm ci`.
 
-Decisions made: 256, 257.
+Decisions made: 256, 257, 258.
 
-Verified: 33 Node checks (see Decision 257); benchmark at 500 and 5000 items after the change (warm unchanged, forced pass 0.24 s and 1.8 s in Node); `vite build` passes. Not verified: CI, a phone (DP111, DP112), restore through the whole engine, a Vault file entry from before Decision 212.
+Verified: 33 Node checks (see Decision 257); benchmark at 500 and 5000 items after the change (warm unchanged, forced pass 0.24 s and 1.8 s in Node); `vite build` passes. Not verified: CI (lockfile and `npm ci`, DP113), DP111 timings on the phone, restore through the whole engine, a Vault file entry from before Decision 212.
 
-Open: DP111 and DP112 on the phone; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+Open: DP111 and DP113; Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP112 result (and DP111), then the next approved item; fresh session with "Go".
+Next session start point: CI result for the lockfile (DP113), then the next approved item; fresh session with "Go".
 
 ---
 

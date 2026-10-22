@@ -2922,3 +2922,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/crypto.js`, `vault.js`, `backup.js`, `fileactions.js`, `move.js`.
 - Checks: 33 Node checks against the real schema and real crypto (bound round trip, wrong id or field, missing data, removed mark, wrong key, legacy opens both ways, IV in the fingerprint tail, forced pass over 120 legacy entries with trashed and unmigrated rows, warm build rewrites nothing, swapped label and body refused, new entry bound, restore same id, new id, no key, legacy kept with flag cleared, rekey from bound and unmarked sources, pre-label backup); `vite build` passes.
 - Risks: not run through CI or on a device (DP112). The forced pass writes up to four fields per entry on the phone. Restore was exercised on the extracted insert function, not through the whole engine.
+
+**258. Committed lockfile and `npm ci` in CI (Phase 1, CI).** Carries out the lockfile proposed in Decision 249.
+- Cause: with no lockfile every CI run took the newest release of every package, so one bad release (Decision 249) fails the build.
+- Rule: `package-lock.json` is committed and `build-android.yml` runs `npm ci` instead of `npm install`. The run installs exactly what the lockfile names, from `https://registry.npmjs.org`, and fails if `package.json` and the lockfile disagree.
+- The `overrides` pin from Decision 249 stays; the lockfile records `@trapezedev/project` at 7.1.10.
+- Updating a dependency now means regenerating the lockfile and committing it together with `package.json`.
+- Checked: a clean `npm ci` then `vite build` passes (427 packages, all from the registry above, no credential in the file).
+- Risks: not run through CI. CI uses Node 20 and the lockfile was made with Node 22 and npm 10 (format supported by both).
+- Not changed: application code, credentials, backups, network use of the app.
+- Files: `package-lock.json` (new), `.github/workflows/build-android.yml`.
