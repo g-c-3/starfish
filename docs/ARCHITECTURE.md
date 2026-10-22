@@ -130,7 +130,7 @@ If no backup exists, only option is full local wipe.
 
 ### What restore actually asks for (important distinction)
 A normal restore (not the forgot-password recovery flow above) **only ever prompts for the backup passkey** —
-never the app-open password or the Vault PIN. Those two credentials live inside the restored database
+never the app-open password. The one exception: an Append of Vault items made under another Vault key asks for the Vault PIN set when the backup was made (§4, Decision 255). Those two credentials live inside the restored database
 itself as hashes/derived keys, so they come back automatically at whatever they were on the source device at
 backup time, and the app shows its normal lock screen afterward using that restored app-open password (or skips
 straight in, if quick access was what the source device had). If the
@@ -217,7 +217,8 @@ Goal: nothing readable by reading the database file or the files on disk, and st
 | D | Per-file encryption: random name, no extension, random per-file key wrapped under the master key | core module built, Session 103, Decision 161; wired, Session 104, Decision 162; not device-tested |
 | E | Backup and restore adapted at every stage | built with D, Session 104, Decision 162; not device-tested |
 | F | One-time migration of existing plain Home files | built, Session 104, Decision 163; runs at start; not device-tested |
-| N | Persisted encrypted Vault index, name search, lazy body search, Trash from the index (Decisions 195, 253) | first part and encrypted thumbnails built, Session 149 (Decisions 253, 254); field binding not built; not device-tested |
+| N | Persisted encrypted Vault index, name search, lazy body search, Trash from the index (Decisions 195, 253) | first part and encrypted thumbnails built, Session 149 (Decisions 253, 254); device-confirmed; field binding not built |
+| O | Backup and restore for the new Vault format (Decisions 195, 255) | first part built, Session 150 (Decision 255): restore under another Vault key; field binding not built; not device-tested |
 
 Vault entries stay under the Vault PIN on top of any database layer. The three credentials stay independent. The database key is random, generated on the device and held in the plugin's Keystore-backed storage (Decision 158); it is not derived from any of the three credentials and is never in a backup. New installs start encrypted; an existing plain file converts at the next start after the owner opts in, one attempt per request, with row counts compared. `allowBackup` is false so an OS backup cannot restore the file without its key.
 
@@ -317,19 +318,13 @@ written with them anymore.
 - **Post-restore summary, always shown:** *"X entries added, Y skipped as exact duplicates (restore anyway?),
   Z labeled (Restored) due to matching labels."*
 
-### Private notes across devices/PIN changes (append mode)
-Each private note is encrypted under the Vault key of the device that created it; that key is stored wrapped under that device's PIN (`credentials.vault_wrap`, carried in the backup as `privateVaultWrap`).
-Appending a backup containing private notes encrypted under a *different* PIN requires:
-1. Prompt: *"This backup contains private notes encrypted with a different PIN. Enter the PIN used on the
-   source device to bring them in."*
-2. Unwrap the source Vault key with that PIN, decrypt each entry with it, then **immediately re-encrypt under the current device's
-   active private-notes key** before inserting — so every private note in the live DB ends up consistently
-   encrypted under one key: whichever PIN is active on this device right now.
-   The same decrypt-and-re-encrypt applies to a Vault entry's `encrypted_description` (Decision 91).
-3. If the source PIN is unknown/forgotten, only the private notes are skipped (same "unrecoverable" logic as a
-   normal forgotten-PIN case) — everything else in the backup still imports normally.
-The app-open password is unaffected either way: it lives in the `credentials` table, untouched by append mode,
-which only ever touches `entries`.
+### Vault items across devices and PIN changes (Decision 255)
+The archive carries the wrapped Vault key (`credentials.vault_wrap`, in the archive as `privateVaultWrap`) once, for every Vault entry in it. `vaultrestore.js` compares it with this device's wrapper by the check value inside, after the backup passkey opens the archive and before anything is changed.
+- **Same key:** entries are inserted as they are. No PIN is asked, also when the PIN was changed after the backup.
+- **Append, other key:** the PIN set when the backup was made is asked (checked against the archive's wrapper); this device's Vault must be unlocked. The source key is opened once; every entry field (body, label, description, metadata) is decrypted with it and encrypted under this device's key, and a Vault file's key is re-wrapped under this device's key with a new path (bytes untouched). A wrong or forgotten PIN skips nothing silently: the restore does not start, and Cancel changes nothing.
+- **Overwrite, other key:** this device's wrapper is replaced by the archive's after the old rows are removed and before the first entry is written; the Vault locks, the fingerprint copy is turned off, and the Vault PIN is the one set when the backup was made. The backup passkey is the proof; the earlier PIN no longer opens the Vault. The PIN hint is not in the archive and stays.
+- **Append with no Vault set up here:** refused. **Vault entries with no wrapper (made before stage L):** refused with a plain message, before any change.
+The app-open password is unaffected either way: it lives in the `credentials` table, untouched by append mode, which only ever touches `entries`.
 
 ## 4b. Google Drive backup (optional, opt-in — Decisions 25–29)
 

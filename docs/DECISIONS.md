@@ -2887,3 +2887,18 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/files.js`, `src/js/vault.js`, `src/js/app.js`.
 - Checks: 12 Node checks (path on entries; hash file names; stored text is ciphertext; round trip; wrong key gives none; replaced image ignored; filePath on a cached unlock; sweep keeps trashed, removes deleted and stray, repeat removes none) plus the 36 of Decision 253; `vite build` passes.
 - Risks: not run through CI or on a device (DP109). Thumbnail files are visible on disk as count and size (a few tens of KB each, ciphertext), like Vault files. No change to credentials, backup format, restore or network use.
+
+**255. Restore of Vault items under another Vault key (Phase 17, stage O, first part).** Carries out stage O of Decision 195. Owner approved. Cause: the restore screen passed neither a source PIN nor this device's Vault key, and Overwrite never replaced the wrapper, so Vault entries made under another key (another phone, or a Vault reset since the backup) were inserted but could not be opened.
+- `src/js/vaultrestore.js`, `planVaultRestore`: runs once the backup passkey has opened the archive, before anything is changed. It compares the archive's wrapped key with this device's by the check value stored in the wrapper (no PBKDF2). Both formats use it.
+  - No Vault entries in the restore, or the category not chosen: nothing.
+  - Same key (also when the PIN was changed after the backup): entries are inserted as they are.
+  - Append, other key: the PIN set when the backup was made is asked; it is checked against the archive's wrapper in the window; the source key is opened once (it was one PBKDF2 per entry) and every entry field is re-encrypted under this device's key; file keys are re-wrapped and file bytes are not touched. This device's Vault must be unlocked; the window unlocks it first.
+  - Overwrite, other key: after the old rows are removed and before the first entry is written, this device's wrapper is replaced by the archive's. No PIN is asked: the backup passkey is the proof, as for the rest of the restore. The Vault locks, the fingerprint copy is turned off, and the status line says the Vault PIN is now the one set when the backup was made. The earlier PIN no longer opens the Vault. This replaces the Vault; it does not recover a forgotten PIN (Decision 195 keeps the PIN as the only way to the key).
+  - Append with no Vault on this device: refused, set up the Vault first.
+  - Vault entries with no wrapper in the archive (made before stage L): refused before any change.
+- The engine returns `vault_pin_needed`, `vault_pin_wrong`, `vault_locked`, `vault_not_set_up` or `vault_old_format` before touching anything; the first two carry `vaultWrap`. Cancel at the unlock or the PIN window changes nothing.
+- Not changed: the three credentials stay independent; the safety backup, Append default and the Overwrite warning; the archive format; no network use. The Vault PIN hint is not in the archive and stays as it was after Overwrite.
+- Not in this part: field encryption bound to entry id and field name (still open under O: it changes the stored form of every Vault entry, the index blobs and the archive).
+- Files: `src/js/vaultrestore.js` (new), `src/js/backup.js`, `src/js/app.js`.
+- Checks: 18 Node checks on real crypto (no entries, category off, no wrapper, same key under another wrapper, PIN needed, wrong PIN, locked, no Vault here, rekey round trip, replace and flag, same changes nothing, unreadable wrapper); `vite build` passes.
+- Risks: not run through CI or on a device (DP110). Re-keyed Vault files, the format 1 path and a restore stopped part-way were not exercised in Node. The Drive restore calls the same engine and has no screen yet.

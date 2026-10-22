@@ -4,6 +4,25 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 150**
+
+Start: "Go". Tier 1 docs read; Decisions 195 and 254 read; ARCHITECTURE sections 3, 3b, 3c and 4 read. Owner-approved task: Phase 17 stage O.
+- Found: `handleLocalRestore` passed no `sourcePin` and no `currentPrivateKey` to the engine, and Overwrite never replaced the wrapper. Vault entries made under another Vault key were inserted and could not be opened. `insertRestoredEntry` also unwrapped the source key once per entry (one PBKDF2 each).
+- `src/js/vaultrestore.js` (new): `planVaultRestore` (none, same, rekey, replace, or a reason), `applyVaultPlan` (wrapper replaced on Overwrite).
+- `src/js/backup.js`: both formats run the plan once the passkey opens the archive and before any change; the source key is opened once; Vault file keys and entry fields use it; Overwrite replaces the wrapper after the wipe.
+- `src/js/app.js`: `restoreWithSourcePin` (unlock, then the PIN of the backup checked in the window, then one restore); cancel message; Overwrite under another key locks the Vault and turns the fingerprint copy off; status line names the PIN change.
+- ARCHITECTURE.md: §3 restore prompts, §3c table row O, §4 Vault section rewritten. ROADMAP.md: O row, DP110. DECISIONS.md: Decision 255. TRACK.md: row.
+
+Decisions made: 255.
+
+Verified: 18 Node checks on `planVaultRestore` and the re-key round trip, real crypto, stubbed database. `vite build` passes. Not verified: CI, device (DP110), a Vault file restored with a re-wrapped key, format 1 path, a restore stopped part-way.
+
+Open: O field encryption bound to entry id and field name (needs its own plan and approval); N timings at 0, 500 and 5000 items; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details. Earlier Vault restore checks (DP71 item on another PIN, DP82 item 7) are re-covered by DP110, since the screen had no PIN window before this session.
+
+Next session start point: DP110 on the owner's phone, then the O field-binding plan; fresh session with "Go".
+
+---
+
 **Session 149**
 
 Start: "Go". Tier 1 docs read; Decisions 144, 151, 156 to 158, 195, 196, 212 and 251, 252 read; ARCHITECTURE sections 3b, 3c and headings read. Owner approved Phase 17 stage N.
