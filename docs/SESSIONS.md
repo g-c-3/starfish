@@ -4,6 +4,31 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 151**
+
+Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. First task, timings; then, on "Do next", field binding.
+- Timings (Decision 256): Node harness, real crypto, in-memory SQLite with the real schema, `vault.js` unchanged. Mix of 60% notes, 20% Money, 20% Images on disk.
+  - 0 items: cold 0.6 ms, warm 0.4 ms.
+  - 500 items: cold 77 ms, warm 6 ms, name search 0.2 ms each, single refresh 0.7 ms.
+  - 5000 items: cold 633 ms, warm 72 ms, name search 1.1 ms each, single refresh 0.2 ms.
+  - Rebuilding 16 entries at a time: 539 ms at 5000 items. Not kept.
+- Field binding (Decision 257):
+  - `crypto.js`: `fieldAad`, `isBoundField`; `encryptPrivateNote` and `decryptPrivateNote` take optional additional data; bound blobs carry `v: 2` first.
+  - `vault.js`: every entry field and both index blobs bound; `saveVaultEntry` picks the id first; `upgradeRow` and a forced pass at the first unlock (`vault_bound_v2`), trashed rows included.
+  - `backup.js` (`insertRestoredEntry`): re-binds on rekey and on a new id; an unmarked field under the same key is kept and the flag cleared.
+  - `fileactions.js`, `move.js`: edit, label, description and move reads pass the id.
+- Not bound: thumbnails, wrapped file keys, stored Vault settings.
+
+Decisions made: 256, 257.
+
+Verified: 33 Node checks (see Decision 257); benchmark at 500 and 5000 items after the change (warm unchanged, forced pass 0.24 s and 1.8 s in Node); `vite build` passes. Not verified: CI, a phone (DP111, DP112), restore through the whole engine, a Vault file entry from before Decision 212.
+
+Open: DP111 and DP112 on the phone; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
+
+Next session start point: DP112 result (and DP111), then the next approved item; fresh session with "Go".
+
+---
+
 **Session 150**
 
 Start: "Go". Tier 1 docs read; Decisions 195 and 254 read; ARCHITECTURE sections 3, 3b, 3c and 4 read. Owner-approved task: Phase 17 stage O.

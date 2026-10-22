@@ -2902,3 +2902,23 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/vaultrestore.js` (new), `src/js/backup.js`, `src/js/app.js`.
 - Checks: 18 Node checks on real crypto (no entries, category off, no wrapper, same key under another wrapper, PIN needed, wrong PIN, locked, no Vault here, rekey round trip, replace and flag, same changes nothing, unreadable wrapper); `vite build` passes.
 - Risks: not run through CI or on a device (DP110). Re-keyed Vault files, the format 1 path and a restore stopped part-way were not exercised in Node. The Drive restore calls the same engine and has no screen yet.
+
+**256. Vault index rebuild stays sequential (Phase 17, stage N, timings).**
+- Rule: `buildVaultIndex` rebuilds stale entries one at a time. Warm unlock reads the stored index and decrypts one blob; only a stale entry is decrypted.
+- Cause: measured in Node at 5000 items, cold 633 ms and warm 72 ms. Rebuilding 16 at a time gave 539 ms cold, a gain inside run-to-run spread, for a change to green code.
+- Revisit only if an on-device cold build (DP111) is slow enough to show; the batch size is the single change to try.
+- Not changed: index and blob formats, fingerprints, search, the three credentials, network use.
+
+**257. Vault fields bound to entry id and field name (Phase 17, stages N and O, last open item).** Carries out the binding named in Decision 195 and left open in 172, 253, 254 and 255.
+- Cause: AES-GCM with no additional data opens a ciphertext copied from another entry or field.
+- Rule: a Vault field is encrypted with `id|field` as additional data (`fieldAad`; fields `label`, `desc`, `body`, `meta`) and stored as `{"v":2,"cipher","iv"}`. The mark comes first so the random IV stays in the last 20 characters (Decision 253 fingerprint). The two index blobs use `blob|<meta key>`.
+- Reading: a marked field opens only with the same additional data; a missing one throws. An unmarked field opens as before. Removing the mark makes it fail.
+- Writing: every write binds. New entries pick the id before any field is encrypted. Edit, label, description, meta and blob writes pass the id they are stored under.
+- Existing data: one forced pass at the first unlock after the update (`vault_bound_v2` in `meta`, not in a backup). Every entry, trashed ones included, is rebuilt once and its unmarked fields are re-encrypted bound; the rebuild notice shows when 10 or more. A field that does not open is left as it is. The body of a file entry from before Decision 212 is not read by the pass and is bound when the entry is edited.
+- Restore: Append under another key opens each field with the source key and binds it to the stored id. Same key and a new id (a trashed row owns the old id): a marked field is opened and bound to the new id; an unmarked one is kept and the flag is cleared so the next unlock binds it. A marked field that needs a key while the Vault is locked stops that entry with a message.
+- Not bound: thumbnails (`vthumbs/`), file keys wrapped under the Vault key, stored Vault settings. Wrong thumbnail or setting content is cosmetic or unreadable, not another entry's data.
+- Cost: warm unlock unchanged (57 to 72 ms at 5000 items in Node). The forced pass costs once: 1.8 s at 5000 items in Node, 0.24 s at 500; more on a phone.
+- Not changed: the three credentials, Append as the default restore path, the safety backup, the archive format, no network use.
+- Files: `src/js/crypto.js`, `vault.js`, `backup.js`, `fileactions.js`, `move.js`.
+- Checks: 33 Node checks against the real schema and real crypto (bound round trip, wrong id or field, missing data, removed mark, wrong key, legacy opens both ways, IV in the fingerprint tail, forced pass over 120 legacy entries with trashed and unmigrated rows, warm build rewrites nothing, swapped label and body refused, new entry bound, restore same id, new id, no key, legacy kept with flag cleared, rekey from bound and unmarked sources, pre-label backup); `vite build` passes.
+- Risks: not run through CI or on a device (DP112). The forced pass writes up to four fields per entry on the phone. Restore was exercised on the extracted insert function, not through the whole engine.
