@@ -15,11 +15,13 @@ Start: "Go". Tier 1 docs read; Decisions 195 and 254 read; ARCHITECTURE sections
 
 Decisions made: 255.
 
-Verified: 18 Node checks on `planVaultRestore` and the re-key round trip, real crypto, stubbed database. `vite build` passes. Not verified: CI, device (DP110), a Vault file restored with a re-wrapped key, format 1 path, a restore stopped part-way.
+Verified: 18 Node checks on `planVaultRestore` and the re-key round trip, real crypto, stubbed database. `vite build` passes. Not verified: CI, a Vault file restored with a re-wrapped key, format 1 path, a restore stopped part-way.
 
 Open: O field encryption bound to entry id and field name (needs its own plan and approval); N timings at 0, 500 and 5000 items; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details. Earlier Vault restore checks (DP71 item on another PIN, DP82 item 7) are re-covered by DP110, since the screen had no PIN window before this session.
 
-Next session start point: DP110 on the owner's phone, then the O field-binding plan; fresh session with "Go".
+DP110 confirmed on the owner's phone, all checks. Field-binding plan drafted (version marker, legacy fields read without binding, upgrade one entry at a time, every id-changing path re-encrypts); awaiting approval.
+
+Next session start point: approval of the O field-binding plan, then build; fresh session with "Go".
 
 ---
 
