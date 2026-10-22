@@ -19,7 +19,7 @@ Verified: 36 Node checks (schema taken from `db.js`, real encryption, stubbed fi
 
 Open: N field binding; O; lockfile proposal for the Decision 249 pin (needs approval); Phase 21 P4 (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details; DP107 item 5.
 
-Next session start point: CI green; DP108 and DP109 on the owner's phone; then "Go".
+Owner approved Phase 17 O, Session 149. CI green; DP107 item 5, DP108 and DP109 confirmed on the owner's phone. Next session start point: Phase 17 O (approved); fresh session with "Go".
 
 ---
 
