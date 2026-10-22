@@ -526,24 +526,32 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, summary) {
   let encryptedMeta = entry.encrypted_meta || null; // set for a Vault file only: size and OCR text
   let encryptedDescription = entry.encrypted_description || null;
   let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
-  if (entry._category === 'private_vault' && opts._vault?.kind === 'rekey') {
-    // Append under another Vault key: decrypt under the source key (opened once, by the PIN, before the first entry), re-encrypt under
-    // this device's key so every Vault entry in the live database is under one key (see ARCHITECTURE §4).
-    const { decryptPrivateNote, encryptPrivateNote } = await import('./crypto.js');
-    const sourceKey = opts._vault.sourceKey;
-    if (entry.encrypted_body) { // a file on disk has none (Decision 212)
-      encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_body));
-    }
-    if (entry.encrypted_meta) encryptedMeta = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_meta));
-    if (entry.encrypted_description) {
-      encryptedDescription = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_description));
-    }
+  if (entry._category === 'private_vault') {
+    // Vault fields are bound to the entry id and field name (Decision 257). A field is opened and re-encrypted bound to the id it is
+    // stored under when (a) the archive's key is not this device's (append, `rekey`: opened by the source key, so every Vault entry in
+    // the live database is under one key, see ARCHITECTURE §4) or (b) the entry takes a new id and the field is bound. An unmarked
+    // field under the same key and id is kept as it is; the forced pass at the next unlock binds it.
+    const { decryptPrivateNote, encryptPrivateNote, fieldAad, isBoundField } = await import('./crypto.js');
+    const rekey = opts._vault?.kind === 'rekey';
+    const openKey = rekey ? opts._vault.sourceKey : opts.currentPrivateKey;
+    const bind = async (blob, name) => {
+      if (!blob) return blob;
+      if (!rekey && !(targetId !== entry.id && isBoundField(blob))) return blob;
+      if (!openKey) throw new Error('The Vault must be unlocked to restore this entry under a new id.');
+      return encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(openKey, blob, fieldAad(entry.id, name)), fieldAad(targetId, name));
+    };
+    encryptedBody = await bind(entry.encrypted_body, 'body'); // a file on disk has none (Decision 212)
+    encryptedMeta = await bind(entry.encrypted_meta, 'meta') || null;
+    encryptedDescription = await bind(entry.encrypted_description, 'desc') || null;
     if (entry.encrypted_label) {
-      encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_label));
+      encryptedLabel = await bind(entry.encrypted_label, 'label');
+      if (rekey) label = VAULT_PLACEHOLDER_LABEL;
+    } else if (rekey) {
+      encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, entry.label, fieldAad(targetId, 'label')); // pre-change backup: encrypt on the way in
       label = VAULT_PLACEHOLDER_LABEL;
-    } else {
-      encryptedLabel = await encryptPrivateNote(opts.currentPrivateKey, entry.label); // pre-change backup: encrypt on the way in
-      label = VAULT_PLACEHOLDER_LABEL;
+    }
+    if (!rekey && [encryptedBody, encryptedMeta, encryptedDescription, encryptedLabel].some((f) => f && !isBoundField(f))) {
+      try { await db.run(`DELETE FROM meta WHERE key='vault_bound_v2'`); } catch { /* the pass then waits for the next restore */ }
     }
   }
 

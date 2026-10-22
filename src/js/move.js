@@ -8,7 +8,7 @@
 
 import { insertEntry, permanentlyDeleteEntry } from './db.js';
 import { saveVaultEntry, loadVaultEntryContent, vaultRowLabel } from './vault.js';
-import { decryptPrivateNote, toBase64, fromBase64 } from './crypto.js';
+import { decryptPrivateNote, fieldAad, toBase64, fromBase64 } from './crypto.js';
 import { initFiles, readBytes, saveBase64, removeFile, rewrapForVault, rewrapForHome, keysMatch } from './files.js';
 import * as Money from './money.js';
 
@@ -117,7 +117,7 @@ export async function moveToVault(db, key, id) {
       ? { row: await vaultCopyRow(db, key, copyId), content: {} }
       : await loadVaultEntryContent(db, key, copyId);
     const wantDescription = row.description || '';
-    const gotDescription = back.row.encrypted_description ? await decryptPrivateNote(key, back.row.encrypted_description) : '';
+    const gotDescription = back.row.encrypted_description ? await decryptPrivateNote(key, back.row.encrypted_description, fieldAad(back.row.id, 'desc')) : '';
     let sameContent;
     if (row.type === 'note' || row.type === 'reminder') sameContent = back.content.text === content.text;
     else if (isFile && shared) sameContent = back.row.file_path === row.file_path && await keysMatch(key, row.file_path, back.row.file_key, row.file_key);
@@ -147,8 +147,8 @@ export async function moveToHome(db, key, id) {
   let { row, content } = await loadVaultEntryContent(db, key, id, { withFile: false });
   if (row.deleted_at) throw new Error('Entry not found');
   if (!canMove(row.type)) throw new Error('This type cannot be moved yet.');
-  const label = row.encrypted_label ? await decryptPrivateNote(key, row.encrypted_label) : row.label; // throws when unreadable: nothing is moved
-  const description = row.encrypted_description ? await decryptPrivateNote(key, row.encrypted_description) : '';
+  const label = row.encrypted_label ? await decryptPrivateNote(key, row.encrypted_label, fieldAad(row.id, 'label')) : row.label; // throws when unreadable: nothing is moved
+  const description = row.encrypted_description ? await decryptPrivateNote(key, row.encrypted_description, fieldAad(row.id, 'desc')) : '';
   const tags = await tagNames(db, id);
 
   const fields = {};

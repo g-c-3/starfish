@@ -101,14 +101,29 @@ async function decryptChunk(key, ivB64, cB64, aad) {
 }
 
 // ---- Private note helpers ----
-async function encryptPrivateNote(pinDerivedKey, text) {
-  const { cipher, iv } = await encryptBytes(pinDerivedKey, text);
-  return JSON.stringify({ cipher, iv });
+// A stored field can be bound to its entry id and field name (Decision 257): `aad` goes in as AES-GCM additional data and the blob
+// is marked `v: 2`, written first so the random IV stays the last characters (the fingerprint of Decision 253 reads them). A bound
+// blob opens only with the same `aad`; one copied to another entry or field, or stripped of its mark, fails. A blob with no mark
+// (made before this) opens without `aad`, as before.
+const fieldAad = (id, field) => `${id}|${field}`;
+const isBoundField = (blob) => typeof blob === 'string' && blob.startsWith('{"v":2,');
+async function encryptPrivateNote(pinDerivedKey, text, aad = null) {
+  if (aad == null) {
+    const { cipher, iv } = await encryptBytes(pinDerivedKey, text);
+    return JSON.stringify({ cipher, iv });
+  }
+  const iv = randomBytes(12);
+  const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: ENC.encode(String(aad)) }, pinDerivedKey, ENC.encode(text));
+  return JSON.stringify({ v: 2, cipher: toBase64(cipher), iv: toBase64(iv) });
 }
-async function decryptPrivateNote(pinDerivedKey, blobJson) {
-  const { cipher, iv } = JSON.parse(blobJson);
-  const plain = await decryptBytes(pinDerivedKey, cipher, iv);
-  return DEC.decode(plain);
+async function decryptPrivateNote(pinDerivedKey, blobJson, aad = null) {
+  const o = JSON.parse(blobJson);
+  if (o.v === 2) {
+    if (aad == null) throw new Error('A bound field needs its entry id and field name.');
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(o.iv), additionalData: ENC.encode(String(aad)) }, pinDerivedKey, fromBase64(o.cipher));
+    return DEC.decode(plain);
+  }
+  return DEC.decode(await decryptBytes(pinDerivedKey, o.cipher, o.iv));
 }
 
 // ---- Backup helpers ----
@@ -183,7 +198,7 @@ export {
   VAULT_WRAP_ITERATIONS, wrapVmk, createVaultWrap, unwrapVault, vmkMatchesWrap, vmkToKey,
   hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, LEGACY_HASH_ITERATIONS, deriveAesKey,
   encryptBytes, decryptBytes,
-  encryptPrivateNote, decryptPrivateNote,
+  encryptPrivateNote, decryptPrivateNote, fieldAad, isBoundField,
   encryptBackup, decryptBackup,
   encryptChunk, decryptChunk, toBase64, fromBase64, BACKUP_KDF_ITERATIONS
 };

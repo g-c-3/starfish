@@ -9,7 +9,7 @@
 // only what gets encrypted differs by type.
 
 import { insertEntry, VAULT_PLACEHOLDER_LABEL } from './db.js';
-import { encryptPrivateNote, decryptPrivateNote } from './crypto.js';
+import { encryptPrivateNote, decryptPrivateNote, fieldAad, isBoundField } from './crypto.js';
 import * as Money from './money.js';
 import { initFiles, saveVaultBase64, readVaultBase64, vaultFileSize, removeFile, writeText, readText, removePath, listPaths } from './files.js';
 
@@ -67,8 +67,8 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
     else if (content.fileData) file = await saveVaultBase64(privateSessionKey, content.fileData);
     else throw new Error('This entry has no file.');
   }
-  const encryptedBody = onDisk ? null : await encryptPrivateNote(privateSessionKey, buildVaultPlaintext(type, content));
-  const id = crypto.randomUUID();
+  const id = crypto.randomUUID(); // before any field is encrypted: each is bound to it (Decision 257)
+  const encryptedBody = onDisk ? null : await encryptPrivateNote(privateSessionKey, buildVaultPlaintext(type, content), fieldAad(id, 'body'));
 
   // insertEntry() already skips entries_fts/label_history for is_private=1 (db.js) — that's the
   // point: a vault item's existence/label must never surface in ordinary, no-PIN search or
@@ -76,11 +76,11 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
   try {
   await insertEntry(db, {
     id, type, label: VAULT_PLACEHOLDER_LABEL, body_text: null, is_private: 1, encrypted_body: encryptedBody,
-    encrypted_label: await encryptPrivateNote(privateSessionKey, label), // Decision 145: the label is encrypted like the body
+    encrypted_label: await encryptPrivateNote(privateSessionKey, label, fieldAad(id, 'label')), // Decision 145: the label is encrypted like the body
     file_path: file ? file.path : null, file_key: file ? file.fileKey : null, extension, auto_category: autoCategory,
     fire_at: fireAt, repeat_rule: repeatRule, // reminders: schedule columns are plaintext, the notification needs them while locked (Decision 140)
     // Description is encrypted like the body: label is the only plaintext a Vault row carries.
-    encrypted_description: description ? await encryptPrivateNote(privateSessionKey, description) : null
+    encrypted_description: description ? await encryptPrivateNote(privateSessionKey, description, fieldAad(id, 'desc')) : null
   });
   if (file) await writeFileMeta(db, privateSessionKey, id, { file_path: file.path, file_key: file.fileKey }, content.ocrText || '');
   } catch (err) {
@@ -104,14 +104,14 @@ const UNREADABLE_LABEL = 'Unreadable item';
 
 async function vaultRowLabel(privateSessionKey, row) {
   if (!row.encrypted_label) return row.label; // not migrated yet
-  try { return await decryptPrivateNote(privateSessionKey, row.encrypted_label); } catch { return UNREADABLE_LABEL; }
+  try { return await decryptPrivateNote(privateSessionKey, row.encrypted_label, fieldAad(row.id, 'label')); } catch { return UNREADABLE_LABEL; }
 }
 
 // Encrypts every Vault label still in plaintext, trashed rows included. Safe to repeat or to be cut short.
 async function migrateVaultLabels(db, privateSessionKey) {
   const rows = (await db.query(`SELECT id, label FROM entries WHERE is_private=1 AND encrypted_label IS NULL`)).values || [];
   for (const row of rows) {
-    const enc = await encryptPrivateNote(privateSessionKey, row.label);
+    const enc = await encryptPrivateNote(privateSessionKey, row.label, fieldAad(row.id, 'label'));
     await db.run(`UPDATE entries SET encrypted_label=?, label=? WHERE id=? AND encrypted_label IS NULL`, [enc, VAULT_PLACEHOLDER_LABEL, row.id]);
   }
   return rows.length;
@@ -129,7 +129,7 @@ async function loadVaultEntryContent(db, privateSessionKey, entryId, { withFile 
     const fileData = withFile ? await readVaultBase64(privateSessionKey, row) : null;
     return { row: { ...row, label: await vaultRowLabel(privateSessionKey, row) }, content: { fileData, ocrText: (meta && meta.o) || '' } };
   }
-  const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
+  const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body, fieldAad(row.id, 'body'));
   return { row: { ...row, label: await vaultRowLabel(privateSessionKey, row) }, content: parseVaultPlaintext(row.type, plaintext) };
 }
 
@@ -205,18 +205,19 @@ let textsLoaded = false, textsLoading = null;
 let trashLabels = new Map();               // id -> { fp, l }: labels of trashed Vault rows, so the Vault Trash lists without decrypting
 let indexDirty = false, textsDirty = false, saveTimer = null, writeChain = Promise.resolve();
 
+const blobAad = (metaKey) => `blob|${metaKey}`; // the two index blobs are bound to their meta key (Decision 257)
 async function readBlob(db, key, metaKey) {
   try {
     const r = ((await db.query(`SELECT value FROM meta WHERE key=?`, [metaKey])).values || [])[0];
     if (!r || !r.value) return null;
-    const b = JSON.parse(await decryptPrivateNote(key, r.value));
+    const b = JSON.parse(await decryptPrivateNote(key, r.value, blobAad(metaKey)));
     return b && b.v === 1 ? b : null;
   } catch { return null; } // missing, wrong key or damaged: rebuilt from the rows
 }
 function writeBlob(db, key, metaKey, json) { // serialised: the last write wins, none overlaps
   writeChain = writeChain.then(async () => {
     try {
-      await db.run(`INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [metaKey, await encryptPrivateNote(key, json)]);
+      await db.run(`INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [metaKey, await encryptPrivateNote(key, json, blobAad(metaKey))]);
     } catch { /* the blob is a cache; the next unlock rebuilds it */ }
   });
   return writeChain;
@@ -249,29 +250,29 @@ function markIndexDirty() { indexDirty = true; scheduleSave(); }
 // with the size and no OCR text.
 async function writeFileMeta(db, key, id, row, ocrText) {
   const meta = { v: 2, s: await vaultFileSize(key, row), o: ocrText || '' };
-  await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(key, JSON.stringify(meta)), id]);
+  await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(key, JSON.stringify(meta), fieldAad(id, 'meta')), id]);
   return meta;
 }
 async function fileEntryMeta(db, privateSessionKey, row) {
   if (row.file_path) {
     if (row.encrypted_meta) { // never rewritten when it fails to open: it holds the OCR text and a wrong key must not replace it
-      try { const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta)); if (m && m.v === 2) return m; } catch { /* unreadable */ }
+      try { const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta, fieldAad(row.id, 'meta'))); if (m && m.v === 2) return m; } catch { /* unreadable */ }
       return null;
     }
     try { initFiles(db); return await writeFileMeta(db, privateSessionKey, row.id, row, ''); } catch { return null; } // no meta yet: made now; missing file: listed, no size
   }
   if (row.encrypted_meta) {
     try {
-      const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta));
+      const m = JSON.parse(await decryptPrivateNote(privateSessionKey, row.encrypted_meta, fieldAad(row.id, 'meta')));
       if (m && m.v === 1 && m.bl === row.body_len) return m;
     } catch { /* wrong key or damaged: rebuild below */ }
   }
   try {
     const full = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [row.id])).values || [])[0];
-    const content = parseVaultPlaintext(row.type, await decryptPrivateNote(privateSessionKey, full.encrypted_body));
+    const content = parseVaultPlaintext(row.type, await decryptPrivateNote(privateSessionKey, full.encrypted_body, fieldAad(row.id, 'body')));
     const meta = { v: 1, bl: row.body_len, o: content.ocrText || '', s: content.fileData ? Math.ceil(content.fileData.length * 0.75) : 0 }; // base64 → raw byte estimate
     try {
-      await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(privateSessionKey, JSON.stringify(meta)), row.id]);
+      await db.run(`UPDATE entries SET encrypted_meta=? WHERE id=?`, [await encryptPrivateNote(privateSessionKey, JSON.stringify(meta), fieldAad(row.id, 'meta')), row.id]);
     } catch { /* the index still works without the cache */ }
     return meta;
   } catch {
@@ -279,15 +280,36 @@ async function fileEntryMeta(db, privateSessionKey, row) {
   }
 }
 
+// Field binding (Decision 257). A field with no mark is re-encrypted bound to its row id and field name; the row keeps its
+// timestamps. A file row's body is not in this read and stays as it is until the entry is edited. A field that does not open
+// is left untouched. Returns the row as it now stands, so its fingerprint is taken from the new values.
+const BOUND_FLAG_KEY = 'vault_bound_v2'; // meta row: the forced pass at unlock has run; not in APP_SETTINGS_KEYS, so never in a backup
+const BOUND_FIELDS = [['encrypted_label', 'label'], ['encrypted_description', 'desc'], ['encrypted_meta', 'meta'], ['encrypted_body', 'body']];
+async function upgradeRow(db, key, row) {
+  const set = {};
+  for (const [col, name] of BOUND_FIELDS) {
+    const v = row[col];
+    if (!v || isBoundField(v) || (col === 'encrypted_body' && VAULT_FILE_TYPES.includes(row.type))) continue;
+    try { set[col] = await encryptPrivateNote(key, await decryptPrivateNote(key, v), fieldAad(row.id, name)); } catch { /* unreadable: left as it is */ }
+  }
+  const cols = Object.keys(set);
+  if (!cols.length) return row;
+  try {
+    await db.run(`UPDATE entries SET ${cols.map((c) => `${c}=?`).join(',')} WHERE id=?`, [...cols.map((c) => set[c]), row.id]);
+  } catch { return row; }
+  return { ...row, ...set };
+}
+
 // One index entry from a full row (VAULT_INDEX_SQL). Notes and file OCR text go to `vaultTexts`, not into the entry (Decision 253).
 async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null) {
+  row = await upgradeRow(db, privateSessionKey, row);
   const tags = tagsByEntry ? (tagsByEntry.get(row.id) || []) : ((await db.query(
     `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id=t.id WHERE et.entry_id=?`, [row.id]
   )).values || []).map((t) => t.name);
   let text = '', sizeBytes = 0, description = '', money = null, location = null;
   const label = await vaultRowLabel(privateSessionKey, row);
   try {
-    if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description);
+    if (row.encrypted_description) description = await decryptPrivateNote(privateSessionKey, row.encrypted_description, fieldAad(row.id, 'desc'));
   } catch { description = ''; }
   const isFile = VAULT_FILE_TYPES.includes(row.type);
   let fp = rowFp(row);
@@ -299,7 +321,7 @@ async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null)
     }
   } else {
     try {
-      const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body);
+      const plaintext = await decryptPrivateNote(privateSessionKey, row.encrypted_body, fieldAad(row.id, 'body'));
       if (row.type === 'note') {
         text = plaintext;
         sizeBytes = new Blob([plaintext]).size;
@@ -349,7 +371,8 @@ async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
   }
   const stored = await readBlob(db, privateSessionKey, INDEX_BLOB_KEY);
   const cached = (stored && stored.e) || {}, cachedTrash = (stored && stored.t) || {};
-  const stale = live.filter((r) => !(cached[r.id] && cached[r.id].fp === r.fp));
+  const boundDone = ((await db.query(`SELECT value FROM meta WHERE key=?`, [BOUND_FLAG_KEY])).values || [])[0]?.value === '1';
+  const stale = live.filter((r) => !boundDone || !(cached[r.id] && cached[r.id].fp === r.fp)); // until the forced pass has run, every entry is rebuilt (and bound) once
   const staleIds = new Set(stale.map((r) => r.id));
   let full = null; // one bulk read when many entries are rebuilt, one read each otherwise
   if (stale.length > REBUILD_BULK_MIN) full = new Map(((await db.query(`${VAULT_INDEX_SQL} WHERE is_private=1 AND deleted_at IS NULL`)).values || []).map((r) => [r.id, r]));
@@ -368,7 +391,11 @@ async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
   let trashChanged = Object.keys(cachedTrash).length !== trashed.length;
   for (const r of trashed) {
     const c = cachedTrash[r.id];
-    const lfp = r.fp.split('|')[0];
+    let lfp = r.fp.split('|')[0];
+    if (!boundDone) { // a trashed row is bound too
+      const fr = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [r.id])).values || [])[0];
+      if (fr) lfp = labelFp(await upgradeRow(db, privateSessionKey, fr));
+    }
     if (c && c.fp === lfp) { labels.set(r.id, c); continue; }
     trashChanged = true;
     const row = ((await db.query(`SELECT id, label, encrypted_label FROM entries WHERE id=?`, [r.id])).values || [])[0];
@@ -376,6 +403,7 @@ async function buildVaultIndex(db, privateSessionKey, onProgress = null) {
   }
   trashLabels = labels;
   vaultIndexCache = index;
+  if (!boundDone) { try { await db.run(`INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [BOUND_FLAG_KEY, '1']); } catch { /* the pass runs again at the next unlock */ } }
   const liveIds = new Set(live.map((r) => r.id));
   if (!stored || stale.length || trashChanged || Object.keys(cached).some((id) => !liveIds.has(id))) markIndexDirty();
   return index;
@@ -495,7 +523,7 @@ async function ensureVaultTexts(db, key) {
       try {
         if (e.type === 'note') {
           const r = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [e.id])).values || [])[0];
-          t = r ? await decryptPrivateNote(key, r.encrypted_body) : '';
+          t = r ? await decryptPrivateNote(key, r.encrypted_body, fieldAad(e.id, 'body')) : '';
         } else {
           const r = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [e.id])).values || [])[0];
           const m = r ? await fileEntryMeta(db, key, r) : null;

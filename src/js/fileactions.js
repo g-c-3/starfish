@@ -61,8 +61,8 @@ function moneyRowPlainText(row) {
 // A Vault entry's note is encrypted in its own column; decrypted here for Share and Download so they match Home (Decision 143).
 async function vaultNote(row, key) {
   if (!row.encrypted_description) return '';
-  const { decryptPrivateNote } = await import('./crypto.js');
-  try { return await decryptPrivateNote(key, row.encrypted_description); } catch { return ''; }
+  const { decryptPrivateNote, fieldAad } = await import('./crypto.js');
+  try { return await decryptPrivateNote(key, row.encrypted_description, fieldAad(row.id, 'desc')); } catch { return ''; }
 }
 const withNote = (text, note) => (note ? `${text}\nNote: ${note}` : text);
 const TEXT_EXPORT_TYPES = new Set(['note', 'location', 'reminder', 'money', 'expense']); // 'expense': legacy rows from before Decision 131
@@ -218,8 +218,8 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
       const { content: existing } = await loadVaultEntryContent(db, privateSessionKey, entryId);
       const merged = { ...existing, ...fields }; // partial edits (e.g. just a corrected OCR text) keep the rest
       const plaintext = buildVaultPlaintext(row.type, merged);
-      const { encryptPrivateNote } = await import('./crypto.js');
-      const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext);
+      const { encryptPrivateNote, fieldAad } = await import('./crypto.js');
+      const encryptedBody = await encryptPrivateNote(privateSessionKey, plaintext, fieldAad(entryId, 'body'));
       await db.run(`UPDATE entries SET encrypted_body=?, encrypted_meta=NULL, updated_at=? WHERE id=?`, [encryptedBody, Date.now(), entryId]); // meta is derived from the body (Decision 156)
     }
   }
@@ -228,8 +228,8 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   if (fields.label !== undefined) {
     if (row.is_private) { // the label is encrypted in the Vault; `label` keeps the placeholder (Decision 145)
       if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
-      const { encryptPrivateNote } = await import('./crypto.js');
-      updates.encrypted_label = await encryptPrivateNote(privateSessionKey, fields.label);
+      const { encryptPrivateNote, fieldAad } = await import('./crypto.js');
+      updates.encrypted_label = await encryptPrivateNote(privateSessionKey, fields.label, fieldAad(entryId, 'label'));
       updates.label = VAULT_PLACEHOLDER_LABEL;
     } else {
       updates.label = fields.label;
@@ -238,8 +238,8 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   if (fields.description !== undefined) {
     if (row.is_private) {
       if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before editing');
-      const { encryptPrivateNote } = await import('./crypto.js');
-      updates.encrypted_description = fields.description ? await encryptPrivateNote(privateSessionKey, fields.description) : null;
+      const { encryptPrivateNote, fieldAad } = await import('./crypto.js');
+      updates.encrypted_description = fields.description ? await encryptPrivateNote(privateSessionKey, fields.description, fieldAad(entryId, 'desc')) : null;
     } else {
       updates.description = fields.description || null;
     }
