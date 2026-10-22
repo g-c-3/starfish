@@ -82,6 +82,11 @@ jobs:
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
+      # Decision 259 — R8 code shrinking and renaming for the release build, with keep rules for what is reached by name.
+      # Remove this step to build without it.
+      - name: Enable R8 for the release build
+        run: node scripts/patch-r8.js
+
       - name: Generate app icons from resources/icon.png
         run: npx @capacitor/assets generate --android
 
