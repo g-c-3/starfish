@@ -17,6 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, toBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
+import { planVaultRestore, applyVaultPlan } from './vaultrestore.js';
 
 const SCHEMA_VERSION = 1;
 // Home file bytes live in Directory.Data/files/ as files/<32 hex> (Decision 161), read and written through files.js.
@@ -509,38 +510,27 @@ function prepareRestoredFile(entry) {
   if (!entry.extension && /\.[A-Za-z0-9]+$/.test(entry.file_path || '')) entry.extension = entry.file_path.split('.').pop();
 }
 
-// Where a Vault file is written on restore and the key wrapped for it (Decision 212). Same Vault key (overwrite, or no source PIN):
-// the path and wrapped key stay. Another key (append with the source PIN): a new path, the file key unwrapped with the source
-// key and wrapped under this device's key; the file's bytes are not touched.
-async function vaultFileTarget(entry, opts, privateVaultWrap) {
-  if (!(opts.sourcePin && opts.currentPrivateKey)) return { path: entry.file_path, fileKey: entry.file_key };
-  if (!privateVaultWrap) throw new Error('This backup holds Vault items in an earlier format and cannot be restored.');
-  if (!opts._vaultSourceKey) {
-    const { unwrapVault, vmkToKey } = await import('./crypto.js');
-    const unwrapped = await unwrapVault(opts.sourcePin, privateVaultWrap);
-    if (!unwrapped) throw new Error('The Vault PIN does not match this backup.');
-    opts._vaultSourceKey = await vmkToKey(unwrapped.vmk);
-  }
+// Where a Vault file is written on restore and the key wrapped for it (Decision 212). Same Vault key (overwrite, or the archive's
+// key is this device's): the path and wrapped key stay. Another key (append with the source PIN, `opts._vault.kind` rekey): a new
+// path, the file key unwrapped with the source key and wrapped under this device's key; the file's bytes are not touched.
+async function vaultFileTarget(entry, opts) {
+  if (opts._vault?.kind !== 'rekey') return { path: entry.file_path, fileKey: entry.file_key };
   const path = newFilePath();
-  return { path, fileKey: await rewrapFileKey(entry.file_key, entry.file_path, path, opts._vaultSourceKey, opts.currentPrivateKey) };
+  return { path, fileKey: await rewrapFileKey(entry.file_key, entry.file_path, path, opts._vault.sourceKey, opts.currentPrivateKey) };
 }
 
 // Insert one entry whose file (if any) is already written and whose file_path and file_key are set.
-async function insertRestoredEntry(db, entry, targetId, label, opts, privateVaultWrap, summary) {
+async function insertRestoredEntry(db, entry, targetId, label, opts, summary) {
   let bodyText = entry.body_text;
   let encryptedBody = entry.encrypted_body;
   let encryptedMeta = entry.encrypted_meta || null; // set for a Vault file only: size and OCR text
   let encryptedDescription = entry.encrypted_description || null;
   let encryptedLabel = entry.encrypted_label || null; // a backup from before Decision 145 has none: its plaintext label is encrypted at the next unlock
-  if (entry._category === 'private_vault' && opts.sourcePin && opts.currentPrivateKey) {
-    // Cross-device/PIN append: decrypt under the source PIN, re-encrypt under this device's active key
-    // so every private note in the live DB ends up under one consistent key (see ARCHITECTURE §4).
-    // privateVaultWrap is the ONE wrapped Vault key for every Private Vault entry in the backup (Decision 195).
-    if (!privateVaultWrap) throw new Error('This backup holds Vault items in an earlier format and cannot be restored.');
-    const { decryptPrivateNote, encryptPrivateNote, unwrapVault, vmkToKey } = await import('./crypto.js');
-    const unwrapped = await unwrapVault(opts.sourcePin, privateVaultWrap);
-    if (!unwrapped) throw new Error('The Vault PIN does not match this backup.');
-    const sourceKey = await vmkToKey(unwrapped.vmk);
+  if (entry._category === 'private_vault' && opts._vault?.kind === 'rekey') {
+    // Append under another Vault key: decrypt under the source key (opened once, by the PIN, before the first entry), re-encrypt under
+    // this device's key so every Vault entry in the live database is under one key (see ARCHITECTURE §4).
+    const { decryptPrivateNote, encryptPrivateNote } = await import('./crypto.js');
+    const sourceKey = opts._vault.sourceKey;
     if (entry.encrypted_body) { // a file on disk has none (Decision 212)
       encryptedBody = await encryptPrivateNote(opts.currentPrivateKey, await decryptPrivateNote(sourceKey, entry.encrypted_body));
     }
@@ -608,8 +598,10 @@ async function restoreTagsAndSettings(db, src, categories, summary) {
 // opts: {
 //   passphrase, mode: 'append' | 'overwrite', categories,
 //   takeSafetyBackup: bool, confirmedDestructive: bool (required if mode='overwrite' && !takeSafetyBackup),
-//   sourcePin: string|null (only if private_vault selected and encrypted under a different PIN),
-//   currentPrivateKey: CryptoKey|null (this device's active PIN-derived key, for re-encrypting),
+//   sourcePin: string|null (append, when the archive's Vault key is not this device's: the PIN that was set when it was made),
+//   currentPrivateKey: CryptoKey|null (this device's Vault key while unlocked, for re-encrypting),
+//   Vault part (Decision 255): a result { ok: false, reason: vault_pin_needed | vault_pin_wrong | vault_locked | vault_not_set_up | vault_old_format }
+//   comes back before anything is changed; vault_pin_* carries `vaultWrap` so a typed PIN can be checked.
 //   format 1: archiveObj          format 2: file (the picked File) + header (from readBackupHeader) + onProgress({done,total}) + onPhase(text)
 // }
 async function restoreBackup(db, opts) {
@@ -618,6 +610,13 @@ async function restoreBackup(db, opts) {
   const { passphrase, archiveObj, mode, categories, takeSafetyBackup, confirmedDestructive } = opts;
 
   const payload = await decryptBackupPayload(passphrase, archiveObj); // proves validity before anything destructive
+
+  const plan = await planVaultRestore(db, {
+    mode, categories, hasEntries: payload.entries.some((e) => e._category === 'private_vault'),
+    wrap: payload.privateVaultWrap, sourcePin: opts.sourcePin, currentKey: opts.currentPrivateKey
+  });
+  if (!plan.ok) return { ok: false, reason: plan.reason, vaultWrap: plan.wrap };
+  opts._vault = plan;
 
   if (mode === 'overwrite') {
     if (!takeSafetyBackup && !confirmedDestructive) {
@@ -637,14 +636,14 @@ async function restoreBackup(db, opts) {
 
   const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false };
 
-  if (mode === 'overwrite') await wipeCategories(db, categories);
+  if (mode === 'overwrite') { await wipeCategories(db, categories); await applyVaultPlan(db, plan, summary); }
 
   for (const entry of payload.entries.filter((e) => categories.includes(e._category))) {
     const target = await planEntryTarget(db, entry, mode, summary);
     if (!target) continue;
     prepareRestoredFile(entry);
     if (entry.fileData && entry.is_private && entry.rawFile) { // Vault file: written as stored (Decision 212)
-      const t = await vaultFileTarget(entry, opts, payload.privateVaultWrap);
+      const t = await vaultFileTarget(entry, opts);
       await writeRawBase64(t.path, entry.fileData);
       entry.file_path = t.path;
       entry.file_key = t.fileKey;
@@ -653,7 +652,7 @@ async function restoreBackup(db, opts) {
       entry.file_path = saved.path;
       entry.file_key = saved.fileKey;
     }
-    await insertRestoredEntry(db, entry, target.targetId, target.label, opts, payload.privateVaultWrap, summary);
+    await insertRestoredEntry(db, entry, target.targetId, target.label, opts, summary);
   }
 
   await restoreTagsAndSettings(db, payload, categories, summary);
@@ -676,6 +675,13 @@ async function restoreFormat2(db, opts) {
   } catch {
     return { ok: false, reason: 'wrong_passkey_or_damaged_file' };
   }
+
+  const plan = await planVaultRestore(db, {
+    mode, categories, hasEntries: (head.sizeByCategory?.private_vault || 0) > 0,
+    wrap: head.privateVaultWrap, sourcePin: opts.sourcePin, currentKey: opts.currentPrivateKey
+  });
+  if (!plan.ok) return { ok: false, reason: plan.reason, vaultWrap: plan.wrap }; // nothing has been touched
+  opts._vault = plan;
 
   if (mode === 'overwrite') {
     if (!takeSafetyBackup && !confirmedDestructive) return { ok: false, reason: 'destructive_confirmation_required' };
@@ -702,6 +708,7 @@ async function restoreFormat2(db, opts) {
   if (mode === 'overwrite') {
     onPhase?.('Replacing current data…');
     await wipeCategories(db, categories, ({ done, total }) => onPhase?.(`Replacing current data, ${done} of ${total}…`));
+    await applyVaultPlan(db, plan, summary);
   }
 
   let seen = 0;
@@ -727,7 +734,7 @@ async function restoreFormat2(db, opts) {
       }
       prepareRestoredFile(entry);
       if (rec.hasFile && entry.is_private) { // Vault file: written as stored, its key re-wrapped when the Vault key differs (Decision 212)
-        const t = await vaultFileTarget(entry, opts, head.privateVaultWrap);
+        const t = await vaultFileTarget(entry, opts);
         const w = await beginRawFile(t.path);
         try {
           for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());
@@ -744,7 +751,7 @@ async function restoreFormat2(db, opts) {
           entry.file_key = saved.fileKey;
         } catch (err) { await w.abort(); throw err; }
       }
-      await insertRestoredEntry(db, entry, target.targetId, target.label, opts, head.privateVaultWrap, summary);
+      await insertRestoredEntry(db, entry, target.targetId, target.label, opts, summary);
     }
   } catch (err) {
     return { ok: false, reason: 'backup_damaged', detail: String(err?.message || err), summary };

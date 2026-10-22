@@ -1794,6 +1794,26 @@ function confirmOverwriteIfNeeded(mode) {
   });
 }
 
+// Append of Vault items made under another Vault key (Decision 255): this device's Vault is unlocked, the PIN of the backup is
+// checked against its wrapper in the window, and the restore then runs once with it. Cancel at either step changes nothing.
+async function restoreWithSourcePin(wrap, attempt) {
+  if (!privateSessionKey && !(await unlockVaultInPlace('Enter your Vault PIN to restore Vault items.'))) return { ok: false, reason: 'vault_cancelled' };
+  let pin = null;
+  const done = await openSecretForm({
+    title: 'Vault PIN of this backup',
+    text: 'This backup holds Vault items under a different Vault key. Enter the Vault PIN that was set when it was made. Your Vault PIN does not change.',
+    fields: [{ key: 'pin', label: 'Vault PIN of the backup' }], ok: 'Restore', isVault: true,
+    onSubmit: async (v) => {
+      if (!v.pin) return 'Enter the Vault PIN.';
+      if (!(await unwrapVault(v.pin, wrap))) return 'Wrong PIN for this backup.';
+      pin = v.pin;
+      return null;
+    },
+  });
+  if (!done || !pin) return { ok: false, reason: 'vault_cancelled' };
+  return attempt({ sourcePin: pin });
+}
+
 async function handleLocalRestore() {
   const statusEl = document.getElementById('restore-status');
   const fileInput = document.getElementById('restore-file-input');
@@ -1817,19 +1837,28 @@ async function handleLocalRestore() {
 
   statusEl.textContent = 'Restoring…';
   const common = { passphrase, mode, categories, takeSafetyBackup, confirmedDestructive: true };
+  const base = info.version === 2
+    ? {
+      ...common, file, header: info.header,
+      onPhase: (text) => { statusEl.textContent = text; },
+      onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; }
+    }
+    : { ...common, archiveObj: info.archiveObj };
+  const attempt = (extra = {}) => withoutIdleLock(() => restoreBackup(db, { ...base, currentPrivateKey: privateSessionKey, ...extra }));
   let result;
   try {
-    result = await withoutIdleLock(() => restoreBackup(db, info.version === 2
-      ? {
-        ...common, file, header: info.header,
-        onPhase: (text) => { statusEl.textContent = text; },
-        onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; }
-      }
-      : { ...common, archiveObj: info.archiveObj }));
+    result = await attempt();
+    // Vault items under another Vault key (Decision 255): the engine stops before changing anything and asks for the PIN of the backup.
+    if (!result.ok && (result.reason === 'vault_pin_needed' || result.reason === 'vault_pin_wrong' || result.reason === 'vault_locked')) {
+      result = await restoreWithSourcePin(result.vaultWrap, attempt);
+    }
   } catch {
     result = { ok: false, reason: 'wrong_passkey_or_damaged_file' }; // format 1: a wrong passkey throws on decrypt
   }
+  if (result.reason === 'vault_cancelled') { statusEl.textContent = 'Restore cancelled. Nothing was changed.'; return; }
   const REASONS = {
+    vault_old_format: 'this backup holds Vault items in an earlier format, which this version cannot restore',
+    vault_not_set_up: 'set up the Vault first (Vault tab), then restore again',
     wrong_passkey_or_damaged_file: 'wrong passkey, or the file is damaged',
     backup_damaged: 'the file is damaged',
     backup_incomplete: 'the file ends early; entries restored so far were kept',
@@ -1837,8 +1866,13 @@ async function handleLocalRestore() {
   };
   statusEl.textContent = result.ok
     ? `Done — added ${result.summary.added}, skipped ${result.summary.skippedExactDup} exact duplicates, ` +
-      `${result.summary.restoredLabeled} restored under "(Restored)".`
+      `${result.summary.restoredLabeled} restored under "(Restored)".` +
+      (result.summary.vaultKeyReplaced ? ' The Vault PIN is now the one set when this backup was made.' : '')
     : `Restore failed: ${REASONS[result.reason] || result.reason || 'unknown error'}.`;
+  if (result.summary?.vaultKeyReplaced) { // the key held in memory and the fingerprint copy belong to the replaced Vault
+    lockVault();
+    await disableVaultBiometric();
+  }
   if (result.ok) {
     document.getElementById('restore-passphrase').value = '';
     fileInput.value = '';
