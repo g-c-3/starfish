@@ -272,3 +272,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-23 | Session 151 (Phase 17 N and O, field binding) | Decision 257 | Vault fields bound to entry id and field name: marked format, forced pass at first unlock, restore re-binding, index blobs bound; DP112 added; 33 Node checks, vite build passes; not run through CI or on a device |
 | 2026-10-23 | Session 151 (device pass) | Decision 257 | DP112 confirmed on device; Phase 17 O field binding done |
 | 2026-10-23 | Session 151 (CI, lockfile) | Decision 258 | package-lock.json committed and `npm ci` in build-android.yml; clean `npm ci` and vite build pass; DP113 added; not run through CI |
+| 2026-10-23 | Session 151 (device pass) | Decisions 256, 258 | DP111 and DP113 confirmed on device (timings and CI with the lockfile) |
+| 2026-10-23 | Session 151 (Phase 10, R8) | Decisions 259, 260 | R8 shrinking with keep rules added through patch-r8.js and a workflow step; JS obfuscation not applied; DP114 added; script run on a generated project, not run through CI or on a device |

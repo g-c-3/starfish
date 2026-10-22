@@ -682,9 +682,8 @@ No network, no new permission.
 
 ## 8. Security hardening decisions (recorded, implemented in `android-notes/native-setup.md`)
 
-- **JS minification/obfuscation** of the web bundle before `cap sync`, so the shipped code isn't trivially
-  readable by unzipping the APK.
-- **ProGuard/R8** (`minifyEnabled true`) for the native Android/Kotlin-Java layer on release builds.
+- **JS minification** of the web bundle (Vite default). Obfuscation is not applied: the source is public and it would only slow the app (Decision 260).
+- **R8** (`minifyEnabled true`, resource shrinking off) on release builds, set by `scripts/patch-r8.js` with keep rules for plugins, `Arkly*` bridges and the database engine (Decision 259).
 - **Basic signature/tamper check** at app startup, comparing the running app's signing certificate against the
   expected release cert hash, to raise the bar against resigned/repackaged "mod APK" copies.
 - Explicitly **not** pursuing NDK-level native obfuscation — judged not worth the added build complexity given
@@ -717,7 +716,7 @@ See `.github/workflows/build-android.yml`. On push to `main`, it:
    import map can. Every file that imports a Capacitor plugin needs this step to have run first, or
    the app fails to load at all (see the note below — this was the actual cause of the first two
    device-test failures).
-3. Adds the Android platform if `android/` isn't committed yet, generates app icons, runs
+3. Adds the Android platform if `android/` isn't committed yet, applies the `scripts/patch-*.js` steps (R8: Decision 259), generates app icons, runs
    `npx cap sync android` (copies the now-bundled `www/` into the native project).
 4. Builds a signed release APK using a keystore stored in GitHub Secrets.
 5. Uploads the APK as a workflow artifact.

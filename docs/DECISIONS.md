@@ -2932,3 +2932,18 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Risks: not run through CI. CI uses Node 20 and the lockfile was made with Node 22 and npm 10 (format supported by both).
 - Not changed: application code, credentials, backups, network use of the app.
 - Files: `package-lock.json` (new), `.github/workflows/build-android.yml`.
+
+**259. R8 code shrinking and renaming for the release build (Phase 10).** Carries out the ProGuard/R8 item of Decision 13.
+- `scripts/patch-r8.js` (new, run by `build-android.yml` after the version step): sets `minifyEnabled true` in the release buildType and writes `android/app/proguard-rules.pro` once (marker line). Idempotent; aborts if the template has no release buildType with `minifyEnabled false`.
+- Resource shrinking stays off: notification icons and tones are looked up by name and the resource shrinker cannot see that.
+- Kept by rule: annotations and signatures; Capacitor core, the Cordova layer and every `CapacitorPlugin` class with its `PluginMethod` methods; `@JavascriptInterface` methods and every `Arkly*` bridge class; broadcast receivers; the encrypted database engine (`net.zetetic`, `net.sqlcipher`, the sqlite plugin); the plugin packages loaded by class name (`ee.forgr`, `com.codetrixstudio`, `com.xitronix`, `com.ryltsov`, `com.capacitorjs`). Warnings about optional classes of the archive libraries are silenced (`-dontwarn`, `-ignorewarnings`). Stack traces keep file and line.
+- Not changed: web bundle, credentials, backups, network use. The app makes no new call.
+- Checked: the script ran on a freshly generated Android project, once and twice (one change in `build.gradle`, rules file written once); package names in the rules checked against the installed plugins. The rules were not run through R8 and the build was not run.
+- Risks: not run through CI or on a device (DP114). A class reached by name that the rules miss shows as a crash or a missing feature in the release build only. To go back, remove the step from `build-android.yml`.
+- Files: `scripts/patch-r8.js` (new), `.github/workflows/build-android.yml`.
+
+**260. No obfuscation of the web bundle (Phase 10).** Replaces the JavaScript obfuscation item of Decision 13 and ARCHITECTURE section 8.
+- Rule: the web bundle is minified by Vite (default) and not obfuscated.
+- Cause: the source is public in the repository, so obfuscated output hides nothing a reader cannot already open, and obfuscation slows start-up and run time and enlarges the bundle, against the speed goal.
+- `javascript-obfuscator` stays in `devDependencies` unused; removing it changes the lockfile and is left for a later change.
+- Not changed: the startup signature check of Decision 13 (next in Phase 10).
