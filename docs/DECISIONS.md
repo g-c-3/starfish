@@ -3033,3 +3033,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Contrast computed for all nine types: 4.3 to 6.1 in the light theme, 5.0 to 7.6 in the dark theme at the mixes first tried; the light mix was lowered to 14% to raise it.
 - Files: `src/css/style.css`. `vite build` passes.
 
+**271. Access check on the automatic backup (Phase 21 P4). Not run through CI, not run on a device (DP120).** The owner chose to add the check after the review in Session 152.
+- Finding: the automatic backup is a Drive upload that runs on app open when due and asks the backup passkey through a banner. No passkey is stored, so the stored passkey planned in Decision 199 is not needed and is not built; the rule that the backup passkey is never stored stands.
+- Built: `confirmBackupAccess(categories, purpose)` (Decision 202) now runs before turning automatic backup on, before changing its frequency, before the banner's Back up now (after the passkey and its strength check) and before Connect Google Drive. Same asking as a manual backup: the app password if set, the Vault PIN if the Vault is set up (all categories are included), or one fingerprint. `purpose` only changes the sentence in the window.
+- Not asked: turning automatic backup off, Disconnect, Skip, restore, the safety backup, extract to device storage.
+- A refusal puts the switch or the frequency back and shows a notice; the banner stays open.
+- Still a gate on the in-app action, not a key. Nothing is stored or recovered; the three credentials stay independent.
+- Files: `src/js/app.js`. `vite build` passes.
+- Left to the owner: DP120.
+

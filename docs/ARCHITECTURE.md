@@ -917,7 +917,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ## Backup access gate (Decisions 202, 204)
 - Before Back up now and Back up to Drive: one window with App lock password if one is set and Vault PIN if the Vault is set up and included, one Submit; or the fingerprint button, when offered, which covers both. Then the backup passkey as before.
 - A gate on the in-app action, not a key. The archive is still encrypted under the backup passkey only. No credential is changed, stored or recovered.
-- Not gated: restore, safety backup, automatic backup, extract to device storage. Typed attempts have no counter or delay.
+- Gated (Decisions 202, 271): Back up now, Drive backup now, turning automatic backup on, changing its frequency, its banner run, connecting Drive. Not gated: restore, safety backup, turning automatic backup off, extract to device storage. Typed attempts have no counter or delay.
 
 ## Card grids and File explorer (Decisions 206, 207, 211, 213, 219, 220, 221, 222, 226, 227, 228, 229, 230, 231, 232)
 - Home (`#capture-bar`) and Vault (`#vault-capture-bar`): nine cards, three per row, icon above label. The first eight open folders through `data-type` and `data-vault-type`. The ninth, File explorer, carries `data-tool` and `data-vault-tool`, so counts, folders, the New chooser, search and Move never see it.

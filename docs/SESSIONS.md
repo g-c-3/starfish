@@ -18,8 +18,10 @@ Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; 
 - Owner decisions on the next-step options: ads dropped for good (Decision 269); Phase 17 checked, nothing necessary (field binding for N was already built under O in Decision 257, the roadmap text was stale); Phase 21 P4 waits; Phase 22 checked, no unbuilt stage exists ("stage 3 not started" was stale text, E3d stage 3 and equations are built); obfuscation left as is; light-theme: card number colours fixed (Decision 270, DP119, `src/css/style.css`).
 - Verified: Node harness for the inbox (transfer, repeat, failed row kept, clear); `patch-widget.js` on a stand-in tree, run twice; `vite build` passes. Not run through CI, not run on a device.
 - Bug fixed after the first device look: Money asked for the fingerprint. Cause: `open()` awaited the currency read before `arklyWidgetActive` was set, so the offer started first. Fix: the flag is set on the first line of `open()`. Correct because the offer checks the flag and the flag can no longer be late.
-Open: DP118, DP119; DP107 item 5 (equations in dark theme, not reported); Phase 21 P4 (waits for the owner); any further light-theme item (needs screenshots).
-Next session start point: DP118 and DP119 results; then whatever the owner names.
+- Owner: all device passes confirmed (DP107, DP115 to DP119). Phase 21 P4 checked: the saved passkey is not needed (the automatic backup asks through a banner on open); the one gap is that the backup check of Decision 202 is not applied to the automatic backup's toggle, frequency, banner run or Drive connect.
+- Decision 271: the owner chose to add the check; built in `src/js/app.js` (toggle on, frequency, banner run, Drive connect). Phase 21 complete. Not run through CI.
+Open: DP120; any further light-theme item (needs screenshots).
+Next session start point: DP120 result, then whatever the owner names.
 
 ---
 
