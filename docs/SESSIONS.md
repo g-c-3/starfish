@@ -12,7 +12,7 @@ Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; 
   - REPLACE `.github/workflows/build-android.yml` (widget step), `src/js/db.js` (`widget_inbox`, `insertEntry` keeps a given `created_at`), `src/js/files.js` (sweep keeps inbox files), `src/js/backup.js` (flush before a backup, clear on Overwrite), `src/js/gdrive.js` (flush before a Drive backup), `src/js/app.js` (transfer at unlock, Back, lock closes the layer, link wiring, fingerprint offer skipped while open).
 - Decision 266 added; 264 and 265 marked built.
 - Verified: Node harness for the inbox (transfer, repeat, failed row kept, clear); `patch-widget.js` on a stand-in tree, run twice; `vite build` passes. Not run through CI, not run on a device.
-- Bugs fixed: none.
+- Bug fixed after the first device look: Money asked for the fingerprint. Cause: `open()` awaited the currency read before `arklyWidgetActive` was set, so the offer started first. Fix: the flag is set on the first line of `open()`. Correct because the offer checks the flag and the flag can no longer be late.
 Open: DP117; Phase 9 confidence-confirmation chip; Phase 21 P4 (needs the intended behaviour); light-theme tuning (needs screens); Autosave of Voice, Image, PDF and Files Edit details (needs approval).
 Next session start point: DP117 result; then the confidence-confirmation chip, or the owner's choice.
 
