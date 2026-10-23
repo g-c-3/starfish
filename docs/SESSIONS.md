@@ -6,7 +6,7 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 **Session 151**
 
-Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. Tasks in order: timings; field binding; committed lockfile (DP111, DP112, DP113 confirmed on device); Phase 10 R8 (DP114 confirmed on device: app fast); Phase 10 signature check; Phase 9 expense charts ("Start").
+Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. Tasks in order: timings; field binding; committed lockfile (DP111, DP112, DP113 confirmed on device); Phase 10 R8 (DP114 confirmed on device: app fast); Phase 10 signature check; Phase 9 expense charts ("Start"); Phase 9 quick-capture widget ("Start", design only).
 - Timings (Decision 256): Node harness, real crypto, in-memory SQLite with the real schema, `vault.js` unchanged. Mix of 60% notes, 20% Money, 20% Images on disk.
   - 0 items: cold 0.6 ms, warm 0.4 ms.
   - 500 items: cold 77 ms, warm 6 ms, name search 0.2 ms each, single refresh 0.7 ms.
@@ -20,15 +20,17 @@ Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c 
 - Not bound: thumbnails, wrapped file keys, stored Vault settings.
 - Lockfile (Decision 258): `package-lock.json` generated, clean `npm ci` and `vite build` pass; `build-android.yml` runs `npm ci`.
 - Phase 10, first part (Decisions 259, 260): `scripts/patch-r8.js` and a workflow step turn on R8 with keep rules; JS obfuscation not applied (public source). Signature check built (Decision 261): native bridge, fingerprint read from the keystore in CI, notice on mismatch, never blocks. Map view dropped (Decision 262).
+- Quick-capture widget (Decision 264): design recorded, not built. `startCapture` and its dialogs expose stored data (drafts, label, tag, category and method suggestions, timeline render) that a capture-only mode over the lock screen must switch off first.
+- Owner's idea checked and recorded (Decision 265): widget captures go to a separate inbox table and move to Home at unlock. Feasible; closes the leaks of Decision 264 by construction; the one risk found, the start-up file sweep, is covered.
 - Phase 9 expense charts (Decision 263): `trendBuckets` in `money.js`, new `moneychart.js`, chart inside the shared Money summary (Home and Vault), styles in `style.css`.
 
-Decisions made: 256, 257, 258, 259, 260, 261, 262, 263.
+Decisions made: 256, 257, 258, 259, 260, 261, 262, 263, 264, 265.
 
 Verified: 33 Node checks (see Decision 257); benchmark at 500 and 5000 items after the change (warm unchanged, forced pass 0.24 s and 1.8 s in Node); `vite build` passes. Verified: bridge compiled and run against Android class stubs; patch script on a generated project; keytool extraction against the certificate's SHA-256; `vite build`. Charts: 22 Node checks, 2.3 ms per redraw at 20000 items, rendered and viewed in both themes, `vite build`. Not verified: CI and a phone for the signature check (DP115) and the charts (DP116), restore through the whole engine, a Vault file entry from before Decision 212.
 
 Open: DP115, DP116; Phase 9 quick-capture widget and confidence-confirmation chip; Phase 21 P4 (needs the intended behaviour); light-theme tuning (needs screens); Autosave of Voice, Image, PDF and Files Edit details (needs approval); Phase 9 quick-capture widget, expense charts, map view; Phase 10 obfuscation, R8 and signature check; light-theme tuning; Autosave of Voice, Image, PDF and Files Edit details.
 
-Next session start point: DP115 and DP116 results, then the Phase 9 quick-capture widget; fresh session with "Go".
+Next session start point: DP115 and DP116 results; owner's approval of Decision 265 (widget inbox, replaces the capture-only mode of 264); then build the widget; fresh session with "Go".
 
 ---
 

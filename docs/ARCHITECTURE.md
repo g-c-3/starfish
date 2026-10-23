@@ -790,7 +790,7 @@ dismissible nudge on Home when 30+ days have passed since the more recent local/
 of this has been run on an actual device or through CI yet** — that remains the standing risk
 flagged at the end of every session since Phase 1.
 
-Specified in this doc but not yet coded: the quick-capture home-screen widget (expense charts are built, Decision 263; the
+Specified in this doc but not yet coded: the quick-capture home-screen widget (design in Decisions 264 and 265; expense charts are built, Decision 263; the
 map view is dropped, Decision 262). These are the next
 implementation milestones. Native plugin wiring (voice recorder, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after

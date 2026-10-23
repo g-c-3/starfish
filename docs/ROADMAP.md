@@ -250,7 +250,7 @@
   Home when 30+ days have passed since the more recent of the local/Google Drive backup timestamps
   (`credentials.last_backup_at`/`last_drive_backup_at`) — suppressed on an essentially-empty
   install so a fresh setup isn't nagged immediately; dismiss is in-memory only, reappears next cold
-  launch. Remaining items (quick-capture widget, confidence-confirmation
+  launch. Remaining items (quick-capture widget — designed with a separate inbox moved to Home at unlock, Decision 265, awaiting approval to build; confidence-confirmation
   chip) not started; expense charts built — Session 151, Decision 263 (DP116 open); map view dropped (Decision 262).
 - [~] **10 — Security hardening.** **Biometric unlock done** (Session 26, `@capgo/capacitor-native-biometric`,
   Decision 50) — fingerprint/face as an alternative to the app-open password or Vault PIN, off by
