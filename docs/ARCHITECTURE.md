@@ -454,7 +454,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   straight into capture mode, skipping the app-open password for *creation only* (not for viewing existing
   data). Treated as the highest-leverage retention feature discussed — reduces the friction that normally kills
   daily use of note-taking apps.
-- **Expense charts** — simple bar/line charts (weekly/monthly) built on the same aggregation used for the digest.
+- **Expense charts** — built (Decision 263): Spent and Received bars under the Money month header, six months or the weeks of the shown month, from the same details as the month totals, in `src/js/moneychart.js` (local SVG, no library); Home and Vault share the painter, the Vault reads its in-memory index only.
 - **Recurring backup reminder — done (Session 40).** A soft, dismissible in-app banner (not a push
   notification — simpler, and "soft" only requires never blocking anything) shown on Home when it's been
   30+ days since the more recent of `credentials.last_backup_at`/`last_drive_backup_at` — either backup path
@@ -790,7 +790,7 @@ dismissible nudge on Home when 30+ days have passed since the more recent local/
 of this has been run on an actual device or through CI yet** — that remains the standing risk
 flagged at the end of every session since Phase 1.
 
-Specified in this doc but not yet coded: the quick-capture home-screen widget and expense charts (the
+Specified in this doc but not yet coded: the quick-capture home-screen widget (expense charts are built, Decision 263; the
 map view is dropped, Decision 262). These are the next
 implementation milestones. Native plugin wiring (voice recorder, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after

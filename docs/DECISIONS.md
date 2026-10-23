@@ -2959,3 +2959,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The bridge class matches the `**.Arkly*` keep rule of Decision 259.
 
 **262. Map view not built (Phase 9).** No map that loads tiles from the network: it would be a third network call. Offline map data bundled in the app is not planned. The item is dropped until that changes; saved locations stay on the timeline and open in the device's map app as before.
+
+**263. Money chart under the month header (Phase 9, expense charts).** Carries out the expense charts of ARCHITECTURE section 3.
+- Rule: the Money summary (Home and Vault, one shared painter, Decisions 129 and 135) shows Spent and Received bars under the month totals. Mode `6 months`: the six months ending at the shown month. Mode `This month by week`: the weeks of the shown month, Monday to Sunday, the first and last cut at the month edges.
+- Data: the same details objects as `monthTotals`; loans never count; each bar is the sum of `monthTotals` for that period (checked). One pass over the items, no new query. Home reads the database as before; the Vault reads only its unlocked in-memory index and the chart is cleared with the box when the folder closes or the Vault locks.
+- Reading: Spent is the solid bar and Received the outlined one (distinct without colour), with a legend. Tapping a bar pair, or Enter on it, writes that period's two amounts into a line under the chart. An empty range shows a message and keeps the mode switch.
+- The mode is per folder, in memory only; nothing is stored.
+- Not changed: money data and formats, backups, credentials, network use (the chart is local SVG, no library).
+- Checked: 22 Node checks (six-month range and year wrap, week boundaries, month starting Monday, leap day, loans and empty items excluded, sums equal `monthTotals`, markup free of NaN, empty state); 2.3 ms per redraw at 20000 items; rendered in light and dark themes and viewed; `vite build` passes. Not run on a device (DP116).
+- Files: `src/js/money.js` (`trendBuckets`), `src/js/moneychart.js` (new), `src/js/app.js`, `src/css/style.css`.
