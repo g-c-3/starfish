@@ -1063,6 +1063,25 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .rep-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .rep-item span { min-width: 0; overflow-wrap: anywhere; }
 .rep-item .rep-del { width: 32px; height: 32px; flex: none; margin: 0; padding: 0; border-radius: 10px; font-size: 18px; line-height: 1; background: var(--surface-2); color: var(--danger); }
+/* Money chart (Decision 263) */
+.money-summary .mc { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.money-summary .mc-modes { display: flex; gap: 6px; margin-bottom: 8px; }
+.money-summary .mc-mode { flex: 1; margin: 0; padding: 7px 8px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.money-summary .mc-mode.on { color: var(--ink-money); border-color: var(--ink-money); }
+.money-summary .mc-svg { display: block; width: 100%; height: auto; color: var(--muted); }
+.money-summary .mc-axis { stroke: var(--border); stroke-width: 1; }
+.money-summary .mc-lab { fill: currentColor; font-size: 9.5px; }
+.money-summary .mc-hit { fill: transparent; }
+.money-summary .mc-g { cursor: pointer; outline: none; }
+.money-summary .mc-g:focus-visible .mc-hit { fill: var(--border); }
+.money-summary .mc-spent { fill: var(--ink-money); }
+.money-summary .mc-recv { fill: none; stroke: var(--ink-file); stroke-width: 2; }
+.money-summary .mc-legend { display: flex; gap: 14px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.money-summary .mc-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.money-summary .mc-key { display: inline-block; width: 12px; height: 10px; border-radius: 3px; }
+.money-summary .mc-key.mc-recv { fill: none; border: 2px solid var(--ink-file); background: transparent; box-sizing: border-box; }
+.money-summary .mc-key.mc-spent { background: var(--ink-money); }
+.money-summary .mc-readout { margin-top: 6px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
 .money-summary .ms-year-input { margin: 0 0 8px; padding: 10px 12px; font-size: 15px; }
 
 /* ---- File explorer (Decisions 206, 207) ---- */
