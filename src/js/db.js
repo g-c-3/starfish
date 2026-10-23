@@ -113,9 +113,13 @@ CREATE TABLE IF NOT EXISTS widget_inbox (
   description TEXT,
   body_text TEXT,
   money_json TEXT,
-  extension TEXT,                    -- voice/image file type
+  extension TEXT,                    -- voice/image/pdf/file type
   file_path TEXT,                    -- files/<random name>, encrypted like any Home file
   file_key TEXT,
+  fire_at INTEGER,                   -- reminder (scheduled when saved, Decision 267)
+  repeat_rule TEXT,
+  latitude REAL,                     -- location
+  longitude REAL,
   created_at INTEGER NOT NULL
 );
 
@@ -240,6 +244,11 @@ async function initDb(sqlite) {
   await ensureColumn(db, 'entries', 'file_key', 'TEXT');
   // Money details as JSON text (Decision 124). Home only; Vault Money keeps the same JSON inside encrypted_body.
   await ensureColumn(db, 'entries', 'money_json', 'TEXT');
+  // Widget "More" captures (Decision 267): the table already exists on installs from Decision 266.
+  await ensureColumn(db, 'widget_inbox', 'fire_at', 'INTEGER');
+  await ensureColumn(db, 'widget_inbox', 'repeat_rule', 'TEXT');
+  await ensureColumn(db, 'widget_inbox', 'latitude', 'REAL');
+  await ensureColumn(db, 'widget_inbox', 'longitude', 'REAL');
   // PBKDF2 count each credential hash was made with (Decision 172). NULL = 210000, the count before it was stored.
   await ensureColumn(db, 'credentials', 'app_password_iter', 'INTEGER');
   await ensureColumn(db, 'credentials', 'private_pin_iter', 'INTEGER');

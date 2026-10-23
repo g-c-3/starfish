@@ -6,10 +6,11 @@ import { removeFile } from './files.js';
 async function addToInbox(db, item) {
   const id = item.id || crypto.randomUUID();
   await db.run(
-    `INSERT INTO widget_inbox (id, type, label, description, body_text, money_json, extension, file_path, file_key, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO widget_inbox (id, type, label, description, body_text, money_json, extension, file_path, file_key, fire_at, repeat_rule, latitude, longitude, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, item.type, item.label, item.description || null, item.body_text ?? null, item.money_json ?? null,
-     item.extension || null, item.file_path || null, item.file_key || null, item.created_at || Date.now()]
+     item.extension || null, item.file_path || null, item.file_key || null, item.fire_at ?? null, item.repeat_rule || null,
+     item.latitude ?? null, item.longitude ?? null, item.created_at || Date.now()]
   );
   return id;
 }
@@ -35,7 +36,8 @@ async function moveRows(db) {
       if (!has) {
         await insertEntry(db, {
           id: r.id, type: r.type, label: r.label, description: r.description, body_text: r.body_text, money_json: r.money_json,
-          extension: r.extension, file_path: r.file_path, file_key: r.file_key, created_at: r.created_at
+          extension: r.extension, file_path: r.file_path, file_key: r.file_key, fire_at: r.fire_at, repeat_rule: r.repeat_rule,
+          latitude: r.latitude, longitude: r.longitude, created_at: r.created_at
         });
       }
       await db.run(`DELETE FROM widget_inbox WHERE id = ?`, [r.id]);

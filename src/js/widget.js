@@ -1,15 +1,21 @@
-// Capture-only screen for the home-screen widget (Decisions 264-266). Its own layer above every screen: it reads no Home table,
+// Capture-only screen for the home-screen widget (Decisions 264-267). Its own layer above every screen: it reads no Home table,
 // renders no timeline and shows no stored entry. Each capture is written to widget_inbox (widget-inbox.js) with a default name;
 // there is no Save dialog, no tags, no suggestions and no drafts. The Vault is not reachable from here.
 import { App } from '@capacitor/app';
 import { VoiceRecorder } from 'cap-voice-rec';
+import { Geolocation } from '@capacitor/geolocation';
+import { scheduleReminder, cancelReminder } from './notifications.js';
 import { saveBase64, removeFile } from './files.js';
 import { addToInbox, inboxCount, transferInbox } from './widget-inbox.js';
 import * as Money from './money.js';
 import '../css/widget.css';
 
-const LINK = /^arkly:\/\/capture\/(note|voice|image|money)\/?$/;
-const TITLES = { note: 'Note', voice: 'Voice', image: 'Image', money: 'Money' };
+const LINK = /^arkly:\/\/capture\/(note|voice|image|money|more)\/?$/;
+const TITLES = { note: 'Note', voice: 'Voice', image: 'Image', money: 'Money', more: 'More', reminder: 'Reminder', location: 'Location', pdf: 'PDF', file: 'File' };
+const ICONS = { note: 'i-note', voice: 'i-voice', image: 'i-image', money: 'i-money', more: 'i-plus', reminder: 'i-reminder', location: 'i-location', pdf: 'i-pdf', file: 'i-file' };
+const MORE_KINDS = ['reminder', 'location', 'pdf', 'file'];
+const REPEATS = [['', 'Does not repeat'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
+const icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#${ICONS[k]}"/></svg>`;
 const LEAVE_DELAY_MS = 900;
 
 let root = null;
@@ -58,7 +64,7 @@ function show(kind, locked, bodyHtml) {
   const el = ensureRoot();
   el.innerHTML = `
     <div class="widget-head">
-      <h2>${esc(TITLES[kind])}</h2>
+      <div class="widget-title"><span class="widget-disc" data-type="${kind === 'more' ? 'file' : kind}" ${kind === 'more' ? 'data-more="1"' : ''}>${icon(kind)}</span><h2>${esc(TITLES[kind])}</h2></div>
       <button type="button" id="widget-cancel" class="secondary-btn">Cancel</button>
     </div>
     ${locked ? '<p class="widget-note">Arkly is locked. This is added to Home when you unlock.</p>' : ''}
@@ -212,10 +218,132 @@ function buildImage(el, ctx) {
   };
 }
 
+
+const localInput = (ms) => new Date(ms - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+function buildReminder(el) {
+  const what = el.querySelector('#widget-what');
+  const when = el.querySelector('#widget-when');
+  const repeat = el.querySelector('#widget-repeat');
+  setTimeout(() => what.focus(), 50);
+  return {
+    dirty: () => !!what.value.trim(),
+    dispose() {},
+    async save(fail) {
+      const label = what.value.trim();
+      const at = new Date(when.value).getTime();
+      if (!label) { fail('Say what to be reminded of.'); return null; }
+      if (!Number.isFinite(at) || at < Date.now() + 5000) { fail('Pick a time in the future.'); return null; }
+      const item = { id: crypto.randomUUID(), type: 'reminder', label, fire_at: at, repeat_rule: repeat.value || null };
+      // Scheduled now, so it rings on time even if the app stays locked; the entry itself appears at unlock.
+      try { await scheduleReminder({ id: item.id, label, fire_at: at, repeat_rule: item.repeat_rule }); }
+      catch (err) { fail(`Could not set the reminder: ${err.message || err}`); return null; }
+      return item;
+    }
+  };
+}
+
+function buildLocation(el, ctx) {
+  const stage = el.querySelector('#widget-fix');
+  const name = el.querySelector('#widget-loc-name');
+  const saveBtn = el.querySelector('#widget-save');
+  let fix = null, busy = false, gone = false;
+  const fail = (m) => { const e = el.querySelector('#widget-error'); if (e) e.textContent = m; };
+  const draw = () => {
+    saveBtn.disabled = !fix;
+    stage.innerHTML = fix
+      ? `<p class="widget-fixline">${fix.lat.toFixed(5)}, ${fix.lng.toFixed(5)}</p><button type="button" id="widget-locate" class="secondary-btn">Update</button>`
+      : `<button type="button" id="widget-locate">${busy ? 'Finding…' : 'Use my location'}</button>`;
+    stage.querySelector('#widget-locate').addEventListener('click', locate);
+  };
+  async function locate() {
+    if (busy) return;
+    busy = true; fail(''); draw();
+    try {
+      ctx.beginPickerLaunch(); // the permission prompt pauses the page; that must not count as leaving
+      await Geolocation.requestPermissions();
+      const c = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
+      if (!gone) fix = { lat: c.latitude, lng: c.longitude };
+    } catch (err) { if (!gone) fail(`Could not get your location: ${err.message || err}`); }
+    busy = false;
+    if (!gone) draw();
+  }
+  draw();
+  return {
+    dirty: () => !!fix,
+    dispose() { gone = true; },
+    async save(failFn) {
+      if (!fix) { failFn('Get your location first.'); return null; }
+      return { type: 'location', label: name.value.trim() || `Location ${stamp()}`, latitude: fix.lat, longitude: fix.lng };
+    }
+  };
+}
+
+function buildPick(kind) {
+  return (el, ctx) => {
+    const stage = el.querySelector('#widget-pick');
+    const saveBtn = el.querySelector('#widget-save');
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (kind === 'pdf') input.accept = 'application/pdf,.pdf';
+    let picked = null;
+    const fail = (m) => { const e = el.querySelector('#widget-error'); if (e) e.textContent = m; };
+    const draw = () => {
+      saveBtn.disabled = !picked;
+      stage.innerHTML = picked
+        ? `<p class="widget-fixline">${esc(picked.name)}</p><button type="button" id="widget-choose" class="secondary-btn">Choose another</button>`
+        : `<button type="button" id="widget-choose">${kind === 'pdf' ? 'Choose a PDF' : 'Choose a file'}</button>`;
+      stage.querySelector('#widget-choose').addEventListener('click', () => { ctx.beginPickerLaunch(); input.click(); });
+    };
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      try {
+        const base64 = await readAsBase64(file);
+        const dot = file.name.lastIndexOf('.');
+        const ext = kind === 'pdf' ? 'pdf' : (dot > 0 ? file.name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) : '') || 'bin';
+        picked = { base64, ext, name: file.name, label: (dot > 0 ? file.name.slice(0, dot) : file.name).slice(0, 80) };
+        draw();
+      } catch (err) { fail(String(err.message || err)); }
+    });
+    draw();
+    return {
+      dirty: () => !!picked,
+      dispose() { picked = null; },
+      async save(failFn) {
+        if (!picked) { failFn(kind === 'pdf' ? 'Choose a PDF first.' : 'Choose a file first.'); return null; }
+        const saved = await saveBase64(picked.base64);
+        return { type: kind, label: picked.label || (kind === 'pdf' ? 'PDF' : 'File'), extension: picked.ext, file_path: saved.path, file_key: saved.fileKey };
+      }
+    };
+  };
+}
+
+function buildMore(el, ctx) {
+  el.querySelectorAll('[data-more-kind]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.moreKind;
+    if (!MORE_KINDS.includes(k)) return;
+    hide();
+    open(k, ctx).catch(() => hide());
+  }));
+  return { dirty: () => false, dispose() {}, async save() { return null; } };
+}
+
 const BODIES = {
   note: '<textarea id="widget-text" placeholder="Write a note" aria-label="Note"></textarea>',
   voice: '<div id="widget-voice"></div>',
   image: '<div id="widget-image"></div>',
+  reminder: () => `
+    <input id="widget-what" type="text" placeholder="Remind me to…" aria-label="Reminder" autocomplete="off">
+    <input id="widget-when" type="datetime-local" value="${localInput(Math.ceil((Date.now() + 3600000) / 60000) * 60000)}" aria-label="When">
+    <select id="widget-repeat" aria-label="Repeat">${REPEATS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`,
+  location: `
+    <div id="widget-fix"></div>
+    <input id="widget-loc-name" type="text" placeholder="Name (optional)" aria-label="Name" autocomplete="off">`,
+  pdf: '<div id="widget-pick"></div>',
+  file: '<div id="widget-pick"></div>',
+  more: `<div class="widget-tiles">${MORE_KINDS.map((k) => `<button type="button" class="widget-tile" data-type="${k}" data-more-kind="${k}"><span class="widget-disc">${icon(k)}</span><span>${esc(TITLES[k])}</span></button>`).join('')}</div>`,
   money: (symbol) => `
     <div class="widget-chips">${Money.KINDS.map((k) => `<button type="button" class="secondary-btn" data-kind="${k}" aria-pressed="false">${esc(Money.KIND_LABELS[k])}</button>`).join('')}</div>
     <div class="widget-amount"><span>${esc(symbol)}</span><input id="widget-amount" type="text" inputmode="decimal" placeholder="Amount" aria-label="Amount" autocomplete="off"></div>
@@ -231,18 +359,18 @@ async function open(kind, ctx) {
     try { symbol = Money.cleanSymbol(((await ctx.db.query(`SELECT value FROM meta WHERE key = 'currency_symbol'`)).values || [])[0]?.value); } catch { /* default */ }
   }
   const locked = !ctx.isUnlocked();
-  const body = (kind === 'money' ? BODIES.money(symbol) : BODIES[kind]) + '<div class="widget-actions"><button type="button" id="widget-save">Save</button></div>';
+  const body = (typeof BODIES[kind] === 'function' ? BODIES[kind](symbol) : BODIES[kind]) + (kind === 'more' ? '' : '<div class="widget-actions"><button type="button" id="widget-save">Save</button></div>');
   const el = show(kind, locked, body);
   opening = false;
   const failMsg = (m) => { const e = el.querySelector('#widget-error'); if (e) e.textContent = m; };
-  const view = ({ note: buildNote, money: buildMoney, voice: buildVoice, image: buildImage })[kind](el, ctx, symbol);
+  const view = ({ note: buildNote, money: buildMoney, voice: buildVoice, image: buildImage, reminder: buildReminder, location: buildLocation, pdf: buildPick('pdf'), file: buildPick('file'), more: buildMore })[kind](el, ctx, symbol);
   let busy = false;
 
   const close = () => { view.dispose(); hide(); };
   current = { kind, dispose: close, cancel: close };
   el.querySelector('#widget-cancel').addEventListener('click', close);
 
-  el.querySelector('#widget-save').addEventListener('click', async () => {
+  el.querySelector('#widget-save')?.addEventListener('click', async () => {
     if (busy) return;
     busy = true; failMsg('');
     let item = null;
@@ -252,6 +380,7 @@ async function open(kind, ctx) {
       await addToInbox(ctx.db, item);
     } catch (err) {
       if (item?.file_path) await removeFile(item); // the file would have no row
+      if (item?.type === 'reminder') await cancelReminder(item.id).catch(() => {}); // the alarm would have no row
       failMsg(`Could not save: ${err.message || err}`); busy = false; return;
     }
     view.dispose();
