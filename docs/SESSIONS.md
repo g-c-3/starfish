@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 152**
+
+Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; `app.js` (bootstrap, lock, unlock, back), `db.js`, `backup.js`, `files.js`, `money.js`, `intents.js`, `patch-manifest.js`, `patch-signature.js` and the workflow read. DP115 and DP116 confirmed on device by the owner.
+- Phase 9 quick-capture widget built (Decision 266), per Decisions 264 and 265:
+  - NEW `scripts/java/ArklyWidgetProvider.java`, `scripts/patch-widget.js`, `src/js/widget.js`, `src/js/widget-inbox.js`, `src/css/widget.css`.
+  - REPLACE `.github/workflows/build-android.yml` (widget step), `src/js/db.js` (`widget_inbox`, `insertEntry` keeps a given `created_at`), `src/js/files.js` (sweep keeps inbox files), `src/js/backup.js` (flush before a backup, clear on Overwrite), `src/js/gdrive.js` (flush before a Drive backup), `src/js/app.js` (transfer at unlock, Back, lock closes the layer, link wiring, fingerprint offer skipped while open).
+- Decision 266 added; 264 and 265 marked built.
+- Verified: Node harness for the inbox (transfer, repeat, failed row kept, clear); `patch-widget.js` on a stand-in tree, run twice; `vite build` passes. Not run through CI, not run on a device.
+- Bugs fixed: none.
+Open: DP117; Phase 9 confidence-confirmation chip; Phase 21 P4 (needs the intended behaviour); light-theme tuning (needs screens); Autosave of Voice, Image, PDF and Files Edit details (needs approval).
+Next session start point: DP117 result; then the confidence-confirmation chip, or the owner's choice.
+
+---
+
 **Session 151**
 
 Start: "Go". Tier 1 docs read; Decisions 195, 255 read; ARCHITECTURE section 3c read; `crypto.js`, `vault.js`, `vaultrestore.js` read. Tasks in order: timings; field binding; committed lockfile (DP111, DP112, DP113 confirmed on device); Phase 10 R8 (DP114 confirmed on device: app fast); Phase 10 signature check; Phase 9 expense charts ("Start"); Phase 9 quick-capture widget ("Start", design only).

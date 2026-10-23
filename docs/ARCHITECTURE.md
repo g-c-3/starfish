@@ -742,6 +742,7 @@ arkly/
   src/                  -> the REAL source (HTML/JS/CSS) — edit here, not www/
     index.html
     css/style.css
+    css/widget.css
     js/
       db.js             -> SQLite schema + FTS5 setup
       crypto.js         -> KDF + AES helpers for private notes & backups
@@ -759,6 +760,8 @@ arkly/
       pdfviewer.js      -> in-app PDF viewer on bundled pdf.js (lazy-loaded; pages drawn on demand)
       pdfmath.js        -> pure helpers for the PDF viewer: fit scale, pixel budget, page-at-scroll, zoom steps
       pdfopen.js        -> opens a PDF, asking for a password only when needed (memory only; testable in Node)
+      widget.js         -> capture-only screen for the home-screen widget (Decision 266)
+      widget-inbox.js   -> widget_inbox table: add, count, move to Home, clear (Decision 266)
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.
@@ -955,3 +958,11 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Field binding (Decision 257): each Vault field (`label`, `desc`, `body`, `meta`) is encrypted with `id|field` as AES-GCM additional data, stored `{"v":2,"cipher","iv"}` (mark first, IV last). The two index blobs use `blob|<meta key>`. `encryptPrivateNote(key, text, aad)` and `decryptPrivateNote(key, blob, aad)` in `crypto.js`; a marked blob needs its `aad`, an unmarked one opens without it. Every write binds; `upgradeRow` binds unmarked fields, run once for all rows at the first unlock after the update (`vault_bound_v2` in `meta`, not in a backup).
 - Restore (`insertRestoredEntry`): rekey opens each field with the source key and binds it to the stored id; same key and a new id re-binds marked fields; an unmarked field under the same key is kept and `vault_bound_v2` is cleared.
 - Not bound: thumbnails, wrapped file keys, stored Vault settings. A file entry's body from before Decision 212 is bound when the entry is edited.
+
+## Quick-capture widget (Decisions 264, 265, 266)
+- Entry: home-screen widget, four buttons (Note, Voice, Image, Money). Each opens the app on `arkly://capture/<kind>` through an explicit, immutable `PendingIntent`; no intent filter. Written into `android/` by `scripts/patch-widget.js`; provider in `scripts/java/ArklyWidgetProvider.java`.
+- Page: `widget.js` accepts only the four exact links (`getLaunchUrl`, `appUrlOpen`) and opens its own layer over the current screen. It reads no Home table, renders no timeline, offers no Save dialog, tags, suggestions or drafts. The Vault is not reachable.
+- Storage: a capture goes to `widget_inbox` (id, type, label, description, body_text, money_json, extension, file_path, file_key, created_at), never to `entries`. Files are written as any Home file (encrypted, `files/<name>`).
+- Transfer (`widget-inbox.js`): each row is inserted into `entries` through `insertEntry` with its id and original time, then deleted. Runs at unlock, after a widget save while unlocked, and before a backup (local and Drive).
+- Lock: the database key is independent of the app-open password (Decision 158), so a locked capture needs no unlock; the lock gates screens only. Creation only: nothing stored is shown. A lock or backgrounding closes the layer and drops an unsaved capture.
+- Restore: Overwrite clears the inbox and its files; Append never reads it. The orphan sweep keeps inbox files.
