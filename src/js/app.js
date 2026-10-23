@@ -1586,7 +1586,7 @@ async function commitNoteDrafts(vaultKey = null) {
 // resolveFormDraft: a complete form becomes its entry, an incomplete one an Autosave note. A reminder is not scheduled.
 // Rows: form_draft_<kind> (encrypted database) and vault_form_draft_<kind> (encrypted under the Vault key). Not in backups.
 // Edits of an existing entry (Decision 190) use form_edit_draft_<kind> and vault_form_edit_draft_<kind>, and carry the entry's id and name. ----
-const FORM_DRAFT_KEYS = { reminder: 'form_draft_reminder', location: 'form_draft_location', money: 'form_draft_money' };
+const FORM_DRAFT_KEYS = { reminder: 'form_draft_reminder', location: 'form_draft_location', money: 'form_draft_money', voice: 'form_draft_voice', image: 'form_draft_image', pdf: 'form_draft_pdf', file: 'form_draft_file' }; // the last four are edits only (Decision 268)
 const formDraftKey = (kind, isVault, edit) => (isVault ? 'vault_' : '') + (edit ? FORM_DRAFT_KEYS[kind].replace('form_draft_', 'form_edit_draft_') : FORM_DRAFT_KEYS[kind]);
 const draftSources = new Set(); // flows with an open dialog; flushed on hide and on lock
 document.addEventListener('visibilitychange', () => { if (document.hidden) for (const s of draftSources) s.flush().catch(() => {}); });
@@ -4674,7 +4674,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const tags = item.tags || await getEntryTags(item.id);
     const isReminder = item.type === 'reminder'; // Home and Vault
-    const draft = isReminder || item.type === 'location' ? formDraft(item.type, isVault, { id: item.id, label: item.label }) : null; // Decision 190
+    const draft = FORM_DRAFT_KEYS[item.type] ? formDraft(item.type, isVault, { id: item.id, label: item.label }) : null; // Decisions 190, 268
     let d;
     try {
       d = await openSaveDialog({

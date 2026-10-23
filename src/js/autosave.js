@@ -1,4 +1,4 @@
-// Autosave of Reminder, Location and Money forms (Decisions 189, 190). Pure: no DOM, no database.
+// Autosave of Reminder, Location and Money forms (Decisions 189, 190) and of the details edit of Voice, Image, PDF and File (Decision 268). Pure: no DOM, no database.
 // A draft is { v, kind, parts, entry? }; parts hold the raw fields of each dialog the form passed through; entry
 // ({ id, label }) marks the edit of an existing entry. resolveFormDraft turns a draft into a complete entry (or, for an
 // edit, the fields to write onto the entry) when its required fields are valid, else into an Autosave note listing what
@@ -37,6 +37,7 @@ const commonRows = (c) => [['Name', c.name], ['Note', c.description], ['Tags', c
 
 // The filled-in fields of a draft as listed rows. Only fields the person filled in appear.
 function rowsOf(kind, parts, c, edit) {
+  if (DETAIL_KINDS[kind]) return commonRows(c);
   if (kind === 'reminder') return [...commonRows(c), ['When', parts.save && parts.save.when], ['Repeat', parts.save && parts.save.repeat]];
   if (kind === 'location') return [...(edit ? [] : [['Pasted', parts.coords && parts.coords.text]]), ...commonRows(c)];
   const f = parts.form || {};
@@ -44,7 +45,9 @@ function rowsOf(kind, parts, c, edit) {
   return [['Kind', KIND_LABELS[f.kind] || f.kind], ['Amount', f.amount], ['Category', f.category], ['Method', f.method],
     ['When', f.when], ['Person', f.person], ['Due', f.due], ['Repayments', reps ? String(reps) : ''], ...commonRows(c)];
 }
-const TITLES = { reminder: 'Reminder', location: 'Location', money: 'Money entry' };
+// Voice, Image, PDF and File have no form of their own: only the details dialog of an edit (name, note, tags).
+const DETAIL_KINDS = { voice: 'Voice', image: 'Image', pdf: 'PDF', file: 'File' };
+const TITLES = { reminder: 'Reminder', location: 'Location', money: 'Money entry', ...DETAIL_KINDS };
 function noteOf(kind, parts, o, why) {
   const c = common(parts.save);
   const title = `${TITLES[kind]}${o.edit ? ' edit' : ''} (${why})`;
@@ -81,6 +84,12 @@ function location(parts, o) {
   return noteOf('location', parts, o, 'not finished');
 }
 
+function details(kind, parts, o) {
+  if (!o.edit || !parts.save) return null;
+  const c = common(parts.save);
+  return { type: kind, edit: true, label: c.name || o.fallbackName, description: c.description, tags: c.tags };
+}
+
 function money(parts, o) {
   const f = parts.form;
   if (!f) return null;
@@ -113,5 +122,6 @@ export function resolveFormDraft(kind, parts, { fallbackName = 'Autosave', noteN
   if (kind === 'reminder') return reminder(parts, o);
   if (kind === 'location') return location(parts, o);
   if (kind === 'money') return money(parts, o);
+  if (DETAIL_KINDS[kind]) return details(kind, parts, o);
   return null;
 }
