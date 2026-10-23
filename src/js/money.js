@@ -187,6 +187,36 @@ export function monthTotals(items, year, month) {
   return { spent, received, net: received - spent };
 }
 
+// Bars for the chart under the month header, from the same details objects as monthTotals. Loans never count. One pass.
+// mode 'month': the 6 months ending at the shown one. mode 'week': the weeks of the shown month, Monday to Sunday, the first
+// and last cut at the month edges.
+export function trendBuckets(items, year, month, mode = 'month') {
+  const buckets = [];
+  if (mode === 'week') {
+    const last = new Date(year, month + 1, 0).getDate();
+    for (let day = 1; day <= last;) {
+      const dow = (new Date(year, month, day).getDay() + 6) % 7; // Monday = 0
+      const to = Math.min(last, day + (6 - dow));
+      buckets.push({ start: new Date(year, month, day).getTime(), end: new Date(year, month, to + 1).getTime(), from: day, to, spent: 0, received: 0 });
+      day = to + 1;
+    }
+  } else {
+    for (let i = 5; i >= 0; i--) {
+      const r = monthRange(year, month - i);
+      const first = new Date(r.start);
+      buckets.push({ start: r.start, end: r.end, y: first.getFullYear(), m: first.getMonth(), spent: 0, received: 0 });
+    }
+  }
+  const lo = buckets[0].start;
+  const hi = buckets[buckets.length - 1].end;
+  for (const d of items) {
+    if (!d || (d.kind !== 'spent' && d.kind !== 'received') || d.at < lo || d.at >= hi) continue;
+    const b = buckets.find((x) => d.at >= x.start && d.at < x.end);
+    if (b) b[d.kind] += d.amount;
+  }
+  return buckets;
+}
+
 // All time. owedToYou: remaining on Lent. youOwe: remaining on Borrowed.
 export function loanTotals(items) {
   let owedToYou = 0;

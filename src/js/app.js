@@ -16,6 +16,7 @@ import {
 } from './gdrive.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import * as Money from './money.js';
+import { chartHtml, bucketReadout } from './moneychart.js';
 import { canMove, moveToVault, moveToHome } from './move.js';
 import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { parseFormDraft, resolveFormDraft } from './autosave.js';
@@ -170,6 +171,8 @@ function switchMainTab(tab) {
 
 let moneyMonth = null; // { y, m } month shown in the Money folder header; null means the current month
 let vaultMoneyMonth = null; // same for the Vault Money folder (Decision 135)
+let moneyChartMode = 'month'; // chart under the month header: 'month' (6 months) or 'week' (weeks of the shown month); per folder, in memory (Decision 263)
+let vaultMoneyChartMode = 'month';
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
@@ -4780,7 +4783,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Month header and loan totals (Decision 129). Home reads the database; the Vault reads only its unlocked in-memory
   // index and is never mixed with Home (Decision 135). Element ids carry a prefix so the two never collide.
-  function paintMoneySummary({ box, items, month, setMonth, rerender, idp }) {
+  function paintMoneySummary({ box, items, month, setMonth, rerender, idp, chart }) {
     const t = Money.monthTotals(items, month.y, month.m);
     const l = Money.loanTotals(items);
     const fmt = (n) => Money.formatAmount(n, currencySymbol);
@@ -4801,6 +4804,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div><span>Received</span><b>${escapeHtml(fmt(t.received))}</b></div>
         <div><span>Net</span><b class="${t.net < 0 ? 'neg' : ''}">${escapeHtml(fmt(t.net))}</b></div>
       </div>
+      ${chartHtml(Money.trendBuckets(items, month.y, month.m, chart.mode), chart.mode, fmt, idp)}
       <div class="ms-loans">
         <div><span>Owed to you</span><b>${escapeHtml(fmt(l.owedToYou))}</b></div>
         <div><span>You owe</span><b>${escapeHtml(fmt(l.youOwe))}</b></div>
@@ -4827,13 +4831,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     el('prev').onclick = step(-1);
     el('next').onclick = step(1);
+    // Chart (Decision 263): the mode switch redraws; a bar pair writes its two amounts into the readout.
+    ['month', 'week'].forEach((m) => { el(`chart-${m}`).onclick = async () => { chart.setMode(m); await rerender(); }; });
+    const buckets = Money.trendBuckets(items, month.y, month.m, chart.mode);
+    const readout = el('chart-readout');
+    box.querySelectorAll('.mc-g').forEach((g) => {
+      const show = () => { readout.textContent = bucketReadout(buckets[Number(g.dataset.i)], chart.mode, fmt); };
+      g.onclick = show;
+      g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); } };
+    });
   }
 
   async function renderMoneySummary() {
     const box = document.getElementById('money-summary');
     if (openFolderType !== 'money') { box.classList.add('hidden'); box.innerHTML = ''; return; }
     if (!moneyMonth) { const n = new Date(); moneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
-    paintMoneySummary({ box, items: await moneyItems(), month: moneyMonth, setMonth: (v) => { moneyMonth = v; }, rerender: renderMoneySummary, idp: 'ms' });
+    paintMoneySummary({ box, items: await moneyItems(), month: moneyMonth, setMonth: (v) => { moneyMonth = v; }, rerender: renderMoneySummary, idp: 'ms', chart: { mode: moneyChartMode, setMode: (v) => { moneyChartMode = v; } } });
   }
 
   // Vault Money: details come from the unlocked index only (Decision 135).
@@ -4845,7 +4858,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!box) return;
     if (openVaultFolderType !== 'money' || !privateSessionKey) { box.classList.add('hidden'); box.innerHTML = ''; return; }
     if (!vaultMoneyMonth) { const n = new Date(); vaultMoneyMonth = { y: n.getFullYear(), m: n.getMonth() }; }
-    paintMoneySummary({ box, items: vaultMoneyItems(), month: vaultMoneyMonth, setMonth: (v) => { vaultMoneyMonth = v; }, rerender: renderVaultMoneySummary, idp: 'vms' });
+    paintMoneySummary({ box, items: vaultMoneyItems(), month: vaultMoneyMonth, setMonth: (v) => { vaultMoneyMonth = v; }, rerender: renderVaultMoneySummary, idp: 'vms', chart: { mode: vaultMoneyChartMode, setMode: (v) => { vaultMoneyChartMode = v; } } });
   }
 
   async function saveMoneyEntry(details, d) {
