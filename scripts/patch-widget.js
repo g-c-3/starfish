@@ -2,7 +2,7 @@
 // Adds the quick-capture widget (Decisions 264-266). android/ is never committed, so CI writes it here.
 //
 // Writes into android/: ArklyWidgetProvider.java (from scripts/java, package filled in, next to MainActivity.java), the widget
-// layout, its provider info, a background shape and a label string, and registers the receiver in AndroidManifest.xml (not exported).
+// layout, its provider info, shape drawables and the app's four line icons as vector drawables, and registers the receiver in AndroidManifest.xml (not exported).
 // No intent filter: the buttons use explicit intents. No permission, no Gradle change, no network. Runs after "cap add android".
 // Idempotent.
 const fs = require('fs');
@@ -47,28 +47,62 @@ fs.writeFileSync(providerPath, src, 'utf8');
 // 2. Resources
 write('drawable/arkly_widget_bg.xml', `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#E61A1730" />
-    <corners android:radius="22dp" />
+    <gradient android:angle="135" android:startColor="#FF1E1A3F" android:endColor="#FF2F2670" />
+    <stroke android:width="1dp" android:color="#33FFFFFF" />
+    <corners android:radius="26dp" />
 </shape>
 `);
 write('drawable/arkly_widget_btn.xml', `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#33FFFFFF" />
-    <corners android:radius="16dp" />
+    <solid android:color="#1FFFFFFF" />
+    <corners android:radius="20dp" />
 </shape>
 `);
-const button = (id, label) => `    <TextView
-        android:id="@+id/${id}"
+write('drawable/arkly_widget_dot.xml', `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:angle="45" android:startColor="#FF7C6CFF" android:endColor="#FF5B47E0" />
+</shape>
+`);
+// The app's own line icons (24 x 24, round white strokes).
+const ICONS = {
+  note: ['M4,20h4L19,9a2.1,2.1 0 0 0 -3,-3L5,17v3z', 'M14,7l3,3'],
+  voice: ['M12,3a3,3 0 0 1 3,3v5a3,3 0 0 1 -6,0V6a3,3 0 0 1 3,-3z', 'M5,11a7,7 0 0 0 14,0M12,18v3'],
+  image: ['M6,4h12a3,3 0 0 1 3,3v10a3,3 0 0 1 -3,3H6a3,3 0 0 1 -3,-3V7a3,3 0 0 1 3,-3z', 'M9,10m-1.6,0a1.6,1.6 0 1 1 3.2,0a1.6,1.6 0 1 1 -3.2,0', 'M21,16l-5,-5 -8,8'],
+  money: ['M4,7.5A2.5,2.5 0 0 1 6.5,5H18v3', 'M4,7.5V17a2,2 0 0 0 2,2h13a1,1 0 0 0 1,-1V9a1,1 0 0 0 -1,-1H6.5A2.5,2.5 0 0 1 4,7.5z', 'M16,13.5m-1.1,0a1.1,1.1 0 1 1 2.2,0a1.1,1.1 0 1 1 -2.2,0']
+};
+for (const [name, paths] of Object.entries(ICONS)) {
+  write(`drawable/arkly_widget_ic_${name}.xml`, `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+${paths.map((d) => `    <path android:pathData="${d}" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" />`).join('\n')}
+</vector>
+`);
+}
+const button = (name, label) => `    <LinearLayout
+        android:id="@+id/arkly_w_${name}"
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:layout_margin="4dp"
         android:background="@drawable/arkly_widget_btn"
         android:gravity="center"
-        android:text="${label}"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold" />
+        android:orientation="vertical">
+        <ImageView
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/arkly_widget_dot"
+            android:contentDescription="${label}"
+            android:padding="8dp"
+            android:src="@drawable/arkly_widget_ic_${name}" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="${label}"
+            android:textColor="#F2FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 `;
 write('layout/arkly_widget.xml', `<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -77,12 +111,12 @@ write('layout/arkly_widget.xml', `<?xml version="1.0" encoding="utf-8"?>
     android:background="@drawable/arkly_widget_bg"
     android:orientation="horizontal"
     android:padding="6dp">
-${button('arkly_w_note', 'Note')}${button('arkly_w_voice', 'Voice')}${button('arkly_w_image', 'Image')}${button('arkly_w_money', 'Money')}</LinearLayout>
+${button('note', 'Note')}${button('voice', 'Voice')}${button('image', 'Image')}${button('money', 'Money')}</LinearLayout>
 `);
 write('xml/arkly_widget_info.xml', `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
-    android:minHeight="56dp"
+    android:minHeight="80dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
