@@ -3014,3 +3014,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not verified: the logo and vector icons inside the widget host, geolocation and the file picker while locked, Done or Snooze before unlock.
 - Left to the owner: DP117, extended.
 
+**268. Autosave of the details edit of Voice, Image, PDF and File (Phase 19). Not run through CI, not run on a device (DP118).** The gap left in Decision 190.
+- Rule: the Edit details dialog (name, note, tags) of a Voice, Image, PDF or File entry, Home and Vault, keeps its fields like the Location details edit. Committed at the next unlock (Home) or Vault unlock (Vault) onto the entry as a normal Save would. When the entry is gone, an Autosave text entry lists the fields.
+- Scope: edits only. The files themselves are not touched, and there is no draft for a new Voice, Image, PDF or File (Decisions 179 and the capture flows own those).
+- Code: `autosave.js` adds the four kinds (`details`, details-only, edit-only); `app.js` adds them to `FORM_DRAFT_KEYS` and `editEntryUI` creates the draft for any kind listed there. Rows: `form_edit_draft_<kind>` and `vault_form_edit_draft_<kind>`. No new commit code.
+- Checked: Node checks on `resolveFormDraft` for the four kinds (complete edit, empty draft, new entry returns nothing, entry gone gives a note); `vite build` passes.
+- Phase 9 closed: the confidence-confirmation item is the reminder offer sheet of Decision 175; no second confirmation is built.
+- Network, credentials, backup: unchanged. Draft rows stay out of backups as before.
+
