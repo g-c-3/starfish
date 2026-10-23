@@ -2947,3 +2947,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause: the source is public in the repository, so obfuscated output hides nothing a reader cannot already open, and obfuscation slows start-up and run time and enlarges the bundle, against the speed goal.
 - `javascript-obfuscator` stays in `devDependencies` unused; removing it changes the lockfile and is left for a later change.
 - Not changed: the startup signature check of Decision 13 (next in Phase 10).
+
+**261. Startup signature check (Phase 10).** Carries out the signature check of Decision 13.
+- Rule: at open the page asks `window.ArklySignature.check()`. The answer is `match`, `mismatch` or `unknown`; only `mismatch` shows a sticky notice ("not signed with the original release key"). Nothing is blocked and no data is touched; `unknown` (no bridge, nothing readable, any error) shows nothing.
+- Build: the workflow reads the release certificate's SHA-256 fingerprint from the keystore (`keytool`, password through the environment, never the command line) into `ARKLY_CERT_SHA256`; `scripts/patch-signature.js` writes it into `ArklySignatureBridge.java`, copied next to `MainActivity.java` and registered in `onCreate` like the other bridges. A fingerprint that is missing or not 64 hex characters stops the build, so the check is never silently left off. A fingerprint is public; no secret is written anywhere.
+- A build signed by someone else's keystore (a fork) carries that keystore's fingerprint and matches itself.
+- Limit: the expected value lives in the APK. Someone who repackages the app and edits it removes the check. It raises the cost of a plainly re-signed copy and no more (Decision 13).
+- Not changed: credentials, backups, network use (the check is local).
+- Checked: the Java bridge compiled and run against stubs of the Android classes (match, mismatch, unknown, both API paths); the patch script run on a generated project (registered once, rerun safe, refuses a missing fingerprint); the `keytool` extraction equal to the certificate's SHA-256; `vite build` passes. Not run through CI or on a device (DP115).
+- Files: `scripts/java/ArklySignatureBridge.java` (new), `scripts/patch-signature.js` (new), `.github/workflows/build-android.yml`, `src/js/app.js`.
+- The bridge class matches the `**.Arkly*` keep rule of Decision 259.
+
+**262. Map view not built (Phase 9).** No map that loads tiles from the network: it would be a third network call. Offline map data bundled in the app is not planned. The item is dropped until that changes; saved locations stay on the timeline and open in the device's map app as before.

@@ -523,8 +523,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 - **Offer, not silent action (Decisions 175, 178)** — typed note text is always saved as a note. When it reads as a
   reminder with a time still ahead, a Yes/No sheet after the Save dialog offers a reminder in addition (parsed label and
   time; Set reminder too / Note only). Back or No keeps the note only. Every action traces to a visible rule.
-- **Map view for saved locations** — entries with a lat/long get a lightweight map view (in addition to the flat
-  timeline), since location was otherwise dead metadata on a card.
+- **Map view for saved locations** — dropped (Decision 262): a map that loads tiles would be a third network call.
 - **Label autocomplete from history** — implemented via the `label_history` table in `db.js` (also what powers
   batch-numbering, above). Previously used labels for a given entry type surface as tap-to-select suggestions at
   capture time ("Invoice", "Payment Screenshot", "Receipt"...), so a personal taxonomy builds up naturally
@@ -684,8 +683,9 @@ No network, no new permission.
 
 - **JS minification** of the web bundle (Vite default). Obfuscation is not applied: the source is public and it would only slow the app (Decision 260).
 - **R8** (`minifyEnabled true`, resource shrinking off) on release builds, set by `scripts/patch-r8.js` with keep rules for plugins, `Arkly*` bridges and the database engine (Decision 259).
-- **Basic signature/tamper check** at app startup, comparing the running app's signing certificate against the
-  expected release cert hash, to raise the bar against resigned/repackaged "mod APK" copies.
+- **Basic signature/tamper check** at app startup (built, Decision 261): `window.ArklySignature.check()` compares the running app's signing certificate
+  with the release certificate's SHA-256, written into the app at build time from the keystore (`scripts/patch-signature.js`). A mismatch shows a
+  notice; nothing is blocked. It raises the bar against re-signed copies only: the expected value is inside the APK.
 - Explicitly **not** pursuing NDK-level native obfuscation — judged not worth the added build complexity given
   the GitHub-Actions-only, no-local-machine build pipeline, and the fact that client-side checks can only ever
   raise the cost of tampering, never eliminate it (the app's own ad-gate logic runs on the attacker's device by
@@ -716,7 +716,7 @@ See `.github/workflows/build-android.yml`. On push to `main`, it:
    import map can. Every file that imports a Capacitor plugin needs this step to have run first, or
    the app fails to load at all (see the note below — this was the actual cause of the first two
    device-test failures).
-3. Adds the Android platform if `android/` isn't committed yet, applies the `scripts/patch-*.js` steps (R8: Decision 259), generates app icons, runs
+3. Adds the Android platform if `android/` isn't committed yet, applies the `scripts/patch-*.js` steps (R8: Decision 259; signature check: Decision 261, after the keystore is decoded), generates app icons, runs
    `npx cap sync android` (copies the now-bundled `www/` into the native project).
 4. Builds a signed release APK using a keystore stored in GitHub Secrets.
 5. Uploads the APK as a workflow artifact.
@@ -790,8 +790,8 @@ dismissible nudge on Home when 30+ days have passed since the more recent local/
 of this has been run on an actual device or through CI yet** — that remains the standing risk
 flagged at the end of every session since Phase 1.
 
-Specified in this doc but not yet coded: the quick-capture home-screen widget, expense charts, the
-map view. These are the next
+Specified in this doc but not yet coded: the quick-capture home-screen widget and expense charts (the
+map view is dropped, Decision 262). These are the next
 implementation milestones. Native plugin wiring (voice recorder, exact permissions, signature check)
 is documented in `android-notes/` since it requires editing the generated `android/` project after
 `npx cap add android`, which should be run once and committed.

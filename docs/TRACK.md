@@ -274,3 +274,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-23 | Session 151 (CI, lockfile) | Decision 258 | package-lock.json committed and `npm ci` in build-android.yml; clean `npm ci` and vite build pass; DP113 added; not run through CI |
 | 2026-10-23 | Session 151 (device pass) | Decisions 256, 258 | DP111 and DP113 confirmed on device (timings and CI with the lockfile) |
 | 2026-10-23 | Session 151 (Phase 10, R8) | Decisions 259, 260 | R8 shrinking with keep rules added through patch-r8.js and a workflow step; JS obfuscation not applied; DP114 added; script run on a generated project, not run through CI or on a device |
+| 2026-10-23 | Session 151 (device pass) | Decision 259 | DP114 confirmed on device (owner report: release build runs fast) |
+| 2026-10-23 | Session 151 (Phase 10, signature check) | Decisions 261, 262 | Startup signature check: native bridge, fingerprint from the keystore in CI, notice only; map view dropped; DP115 added; bridge and scripts checked in the sandbox, not run through CI or on a device |
