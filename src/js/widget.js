@@ -14,6 +14,7 @@ const LEAVE_DELAY_MS = 900;
 
 let root = null;
 let current = null; // { kind, cancel(), dispose() } while a capture is open
+let opening = false; // set before the first await in open(), so the flag below is never late
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clock = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -71,6 +72,7 @@ function show(kind, locked, bodyHtml) {
 function hide() {
   if (root) { root.classList.add('hidden'); root.innerHTML = ''; }
   window.arklyWidgetActive = false;
+  opening = false;
   current = null;
 }
 
@@ -221,7 +223,9 @@ const BODIES = {
 };
 
 async function open(kind, ctx) {
-  if (current) return; // one capture at a time
+  if (current || opening) return; // one capture at a time
+  opening = true;
+  window.arklyWidgetActive = true; // at once: the fingerprint offer checks it and must not start during the awaits below
   let symbol = Money.DEFAULT_SYMBOL;
   if (kind === 'money') {
     try { symbol = Money.cleanSymbol(((await ctx.db.query(`SELECT value FROM meta WHERE key = 'currency_symbol'`)).values || [])[0]?.value); } catch { /* default */ }
@@ -229,6 +233,7 @@ async function open(kind, ctx) {
   const locked = !ctx.isUnlocked();
   const body = (kind === 'money' ? BODIES.money(symbol) : BODIES[kind]) + '<div class="widget-actions"><button type="button" id="widget-save">Save</button></div>';
   const el = show(kind, locked, body);
+  opening = false;
   const failMsg = (m) => { const e = el.querySelector('#widget-error'); if (e) e.textContent = m; };
   const view = ({ note: buildNote, money: buildMoney, voice: buildVoice, image: buildImage })[kind](el, ctx, symbol);
   let busy = false;
