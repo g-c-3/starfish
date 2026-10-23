@@ -1990,6 +1990,15 @@ function toast(message, sticky = false, action = null) {
   clearTimeout(toastTimer);
   if (!sticky) toastTimer = setTimeout(hideToast, action ? UNDO_MS : 3200);
 }
+// Startup signature check (Decision 261): the build wrote in the fingerprint of its release certificate; the page only informs and
+// blocks nothing. No bridge (a build without it, or a browser) or an unreadable answer shows nothing.
+function checkSignature() {
+  try {
+    if (window.ArklySignature && window.ArklySignature.check() === 'mismatch') {
+      toast('This copy of Arkly is not signed with the original release key. Install it only from the project’s releases.', true);
+    }
+  } catch { /* advisory only */ }
+}
 function hideToast() {
   clearTimeout(toastTimer);
   undoState = null;
@@ -2904,6 +2913,7 @@ window.Arkly = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await bootstrap();
+  checkSignature();
   purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
   purgeUpdateDownload(); // the downloaded APK from an earlier update (Decision 164)
   import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
