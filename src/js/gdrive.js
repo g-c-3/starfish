@@ -20,6 +20,7 @@ import {
   buildBackupPayload, estimateBackupSize, decryptBackupPayload, restoreBackup, backupFileName
 } from './backup.js';
 import { encryptBackup } from './crypto.js';
+import { transferInbox } from './widget-inbox.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
@@ -99,6 +100,7 @@ async function backupToDrive(db, { passphrase, hint = '', categories, fileName, 
   const auth = await ensureSignedIn({ silent });
   if (!auth.ok) return { ok: false, reason: auth.reason };
 
+  await transferInbox(db).catch(() => 0); // waiting widget captures become Home items first (Decision 266)
   const required = await estimateBackupSize(db, categories);
   const { availableBytes } = await getDriveStorageEstimate(auth.accessToken);
   if (availableBytes !== null && required > availableBytes) {

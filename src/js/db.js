@@ -105,6 +105,20 @@ CREATE TABLE IF NOT EXISTS label_history (
   UNIQUE(type, label)
 );
 
+-- ===== Widget inbox (Decision 266): captures made from the home-screen widget wait here until the app is unlocked =====
+CREATE TABLE IF NOT EXISTS widget_inbox (
+  id TEXT PRIMARY KEY,               -- becomes the entry id
+  type TEXT NOT NULL,                -- 'note' | 'voice' | 'image' | 'money'
+  label TEXT NOT NULL,
+  description TEXT,
+  body_text TEXT,
+  money_json TEXT,
+  extension TEXT,                    -- voice/image file type
+  file_path TEXT,                    -- files/<random name>, encrypted like any Home file
+  file_key TEXT,
+  created_at INTEGER NOT NULL
+);
+
 -- ===== App meta (schema version, ad state, digest cache, etc.) =====
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
@@ -268,9 +282,10 @@ async function insertEntry(db, entry) {
     id, type, label, body_text = null, is_private = 0, encrypted_body = null,
     file_path = null, file_key = null, extension = null, auto_category = null, noise_reduction = null,
     latitude = null, longitude = null, amount = null, expense_category = null,
-    replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null, encrypted_label = null, money_json = null
+    replied = 1, fire_at = null, repeat_rule = null, description = null, encrypted_description = null, encrypted_label = null, money_json = null,
+    created_at = null // kept when a widget capture moves to Home (Decision 266)
   } = entry;
-  const now = Date.now();
+  const now = created_at || Date.now();
 
   await db.run(
     `INSERT INTO entries (id, type, label, body_text, is_private, encrypted_body, file_path, file_key,

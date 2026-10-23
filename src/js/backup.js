@@ -11,6 +11,7 @@
 //   then an end record with the counts. Memory grows with one chunk, not the total.
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { transferInbox, clearInbox } from './widget-inbox.js';
 import { initFiles, withKey, readBase64 as readStoredBase64, readBytes as readStoredBytes, fileSize, saveBase64, beginFile, removeFile, beginRawFile, writeRawBase64 } from './files.js';
 import { rewrapFileKey, newFilePath } from './filestore.js';
 import { Capacitor } from '@capacitor/core';
@@ -267,6 +268,7 @@ function makeSink(path, directory) {
 // onProgress({ done, total }) after each entry. Peak memory is one entry's row plus one 3 MB chunk (and a Vault entry's
 // stored body, which is already one string in the database).
 async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGORIES, fileName, onProgress }) {
+  await transferInbox(db).catch(() => 0); // waiting widget captures are Home items before they are counted (Decision 266)
   const plan = await planBackup(db, categories);
   const { availableBytes } = await getStorageEstimate();
   if (availableBytes !== null && plan.requiredBytes > availableBytes) {
@@ -488,6 +490,7 @@ async function wipeCategories(db, categories, onStep) {
   initFiles(db);
   const preds = categories.filter((c) => ENTRY_CATEGORIES[c]).map((c) => ENTRY_CATEGORIES[c]);
   if (!preds.length) return;
+  await clearInbox(db); // Overwrite clears waiting widget captures (Decision 266)
   const rows = (await db.query(`SELECT id FROM entries WHERE deleted_at IS NULL`)).values || [];
   let done = 0;
   for (const row of rows) {

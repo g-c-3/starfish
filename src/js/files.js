@@ -163,7 +163,7 @@ async function migratePlainFiles({ onProgress } = {}) {
     try { await io.remove(row.file_path); } catch { /* swept below or at the next start */ }
   }
   if (out.failed === 0 && out.missing === 0) {
-    const kept = new Set(((await boundDb.query(`SELECT file_path FROM entries WHERE file_path IS NOT NULL`)).values || []).map((r) => r.file_path));
+    const kept = new Set(((await boundDb.query(`SELECT file_path FROM entries WHERE file_path IS NOT NULL UNION SELECT file_path FROM widget_inbox WHERE file_path IS NOT NULL`)).values || []).map((r) => r.file_path)); // inbox files wait for the next unlock (Decision 266)
     for (const name of await io.list('files')) {
       const path = `files/${name}`;
       if (kept.has(path)) continue;

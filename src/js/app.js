@@ -10,6 +10,8 @@ import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from '
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader } from './backup.js';
+import { initWidgetCapture, handleWidgetBack, closeWidgetCapture } from './widget.js';
+import { transferInbox } from './widget-inbox.js';
 import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
   restoreFromDrive, checkAndRunAutoBackupIfDue
@@ -100,7 +102,7 @@ function showScreen(id, { tab } = {}) {
   }
   exitSelection();
   if (id === 'main-screen' && tab !== 'settings') refreshHome();
-  if (id === 'lock-screen') { currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
+  if (id === 'lock-screen') { closeWidgetCapture(); currentLocation = 'home'; dismissOverlays(false); closeStaticModals(); clearSecretInputs(); document.getElementById('password-hint').textContent = ''; } // an open editor/dialog must never sit above the lock screen; no typed password may remain
   if (id !== 'main-screen' || searchMode === 'vault') closeSearchScreen({ instant: true }); // the layer must not sit over the Vault, the lock screen or Settings
   if (id === 'lock-screen') closeTrash();
   document.querySelectorAll('.screen').forEach((el) => el.classList.add('hidden'));
@@ -899,6 +901,7 @@ async function tryBiometricUnlockApp() {
 // Back in front with the app lock screen showing (screen turned on, or returning from another app): offer the fingerprint again.
 // At start-up the same offer is made once from the load handler.
 async function offerLockBiometric() {
+  if (window.arklyWidgetActive) return; // a widget capture is open over the lock screen (Decision 266)
   if (lockBioBusy || Date.now() < lockBioCooldownUntil) return;
   await syncLockBiometric(); // also fixes the button
   if (!window.biometricUnlockAvailable) return;
@@ -943,6 +946,7 @@ window.tryBiometricUnlockApp = tryBiometricUnlockApp;
 window.tryBiometricUnlockVault = tryBiometricUnlockVault;
 
 async function onUnlocked() {
+  const widgetAdded = await transferInbox(db).catch(() => 0); // widget captures wait in their own table until now (Decision 266)
   if (returnToVaultAfterUnlock) {
     returnToVaultAfterUnlock = false;
     showScreen('vault-screen');
@@ -952,6 +956,7 @@ async function onUnlocked() {
   if (homeForms.length) toast(formDraftToast(homeForms, false));
   else if (homeText) toast('Unsaved note was saved as Autosave');
   if (homeText || homeForms.length) window.dispatchEvent(new Event('arkly-drafts-committed'));
+  if (widgetAdded) toast(`${widgetAdded} widget item${widgetAdded === 1 ? '' : 's'} added`);
   if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
@@ -3338,6 +3343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Android Back button and back gesture: the same action as the on-screen Back button, with the same glow. Where that
   // button is disabled (a section's landing page, the lock gate) the app goes to the background, which locks it (Decision 45).
   App.addListener('backButton', () => {
+    if (handleWidgetBack()) return; // an open widget capture closes first (Decision 266)
     if (!backAction()) { App.minimizeApp(); return; }
     navBackBtn.classList.remove('glow');
     void navBackBtn.offsetWidth;
@@ -5447,5 +5453,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // done by the time this line runs, so there is no remaining DOMContentLoaded work left for the
   // biometric flow's own database calls to race against. The short delay on top is a buffer for
   // Android's window-focus timing (the original concern) — an estimate, not a measured value.
-  if (window.biometricUnlockAvailable) setTimeout(() => window.tryBiometricUnlockApp(), 300);
+  // Home-screen widget links (Decision 266): read before the fingerprint offer, so an open capture is not covered by it.
+  await initWidgetCapture({
+    db,
+    isUnlocked: () => !appLockShowing() && document.getElementById('first-run-setup')?.classList.contains('hidden'),
+    beginPickerLaunch,
+    toast: (m) => toast(m),
+    afterSave: () => { renderMainTimeline().catch(() => {}); }
+  });
+  if (window.biometricUnlockAvailable && !window.arklyWidgetActive) setTimeout(() => window.tryBiometricUnlockApp(), 300);
 });
