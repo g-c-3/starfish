@@ -22,3 +22,21 @@
 .widget-body img { max-width: 100%; max-height: 50vh; object-fit: contain; border-radius: 14px; align-self: center; }
 .widget-error { margin: 0; font-size: 13px; color: var(--danger); min-height: 1em; }
 .widget-done { margin: auto; text-align: center; font-size: 18px; }
+
+.widget-title { display: flex; align-items: center; gap: 10px; }
+.widget-disc {
+  display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; color: #fff; flex: none;
+  background: linear-gradient(135deg, rgba(var(--tc-rgb, 108, 92, 231), .78), rgb(var(--tc-rgb, 108, 92, 231)));
+  box-shadow: 0 4px 12px rgba(var(--tc-rgb, 108, 92, 231), .35);
+}
+.widget-disc[data-more] { --tc-rgb: 108, 92, 231; }
+.widget-disc svg { width: 20px; height: 20px; }
+.widget-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.widget-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 140px; border-radius: 22px;
+  font-size: 16px; font-weight: 600; color: var(--tc-ink); border: 1px solid rgba(var(--tc-rgb), .35); background: rgba(var(--tc-rgb), .14);
+}
+.widget-tile .widget-disc { width: 54px; height: 54px; }
+.widget-tile .widget-disc svg { width: 28px; height: 28px; }
+.widget-fixline { margin: 0; text-align: center; font-size: 18px; word-break: break-all; }
+#widget-pick, #widget-fix { display: flex; flex-direction: column; gap: 12px; }
