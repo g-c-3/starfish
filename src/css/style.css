@@ -458,9 +458,12 @@ input[type="search"], #search-input, #vault-search-input {
 .capture-cards .card-count { /* notification-style badge on the icon chip's corner: costs the label no width */
   position: absolute; top: 6px; left: 39px; box-sizing: border-box;
   min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
-  display: grid; place-items: center; font-size: 10.5px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums;
-  background: rgb(var(--tc-rgb, 139, 124, 246)); color: #0f0d1c; border: 2px solid var(--surface);
+  display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums;
+  /* Tint of the type colour with the type's own ink: readable on both themes (near-black on the solid colour was heavy and dull) */
+  background: var(--surface-2); color: var(--tc-ink, var(--brand-ink)); border: 2px solid var(--surface);
+  background: color-mix(in srgb, rgb(var(--tc-rgb, 139, 124, 246)) 14%, var(--surface));
 }
+[data-theme="dark"] .capture-cards .card-count { background: color-mix(in srgb, rgb(var(--tc-rgb, 139, 124, 246)) 24%, var(--surface)); }
 .capture-cards .card-count:empty { display: none; }
 
 /* Home and Vault card grids: nine cards, three per row (Decision 206). Icon above the label so a third-width card still reads. */
