@@ -3002,3 +3002,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Checked in a Node harness (in-memory SQLite): transfer, repeat after a crash between insert and delete, failed row kept, clear. `patch-widget.js` run twice on a stand-in `android/` tree: second run adds nothing. `vite build` passes.
 - Not verified: camera `capture` input in this WebView, widget layout on a device, `getLaunchUrl` on a cold start from the widget. Relaunch from recents may deliver the old link and open an empty capture screen; nothing stored is shown.
 - Left to the owner: DP117.
+
+**267. Widget: compact look, type colours, More (Phase 9). Not run through CI, not run on a device (DP117).** The owner's request after the first look at Decision 266.
+- Look: a 60dp panel centred in the one-cell area. At the left the app logo (`@mipmap/ic_launcher`) and "Arkly" (a tap opens the app); then Note, Voice, Image, Money, More. Each disc uses that type's colour from the app (note amber, voice teal, image pink, money red, More violet) with the app's line icon. Shapes and icons are written by `patch-widget.js`.
+- More: `arkly://capture/more` opens four coloured tiles: Reminder, Location, PDF, File. Same rules as Decision 265 (creation only, nothing stored shown, no drafts); a tile opens its capture in the same layer.
+- Reminder: text, date and time, repeat (none, daily, weekly, monthly). The notification is scheduled at Save, not at unlock, so it rings on time while the app stays locked; the entry appears at unlock under the same id. Save fails if scheduling fails; a failed inbox write cancels the notification. Done or Snooze tapped before unlock finds no entry (not verified).
+- Location: one GPS fix (permission asked when needed) and an optional name. No pasted coordinates, no map.
+- PDF, File: one file from the system picker; the file name is the label and its extension is kept. No text extraction, no tags, no category.
+- Inbox: `widget_inbox` gains `fire_at`, `repeat_rule`, `latitude`, `longitude`; `ensureColumn` adds them on installs from Decision 266.
+- Network: unchanged. Credentials: none touched. The Vault is still not reachable.
+- Not verified: the logo and vector icons inside the widget host, geolocation and the file picker while locked, Done or Snooze before unlock.
+- Left to the owner: DP117, extended.
+
