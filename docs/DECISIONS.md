@@ -3022,3 +3022,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Phase 9 closed: the confidence-confirmation item is the reminder offer sheet of Decision 175; no second confirmation is built.
 - Network, credentials, backup: unchanged. Draft rows stay out of backups as before.
 
+**269. Ads dropped (Phase 12).** The owner decided the app will not show any ad.
+- Phase 12 is closed as dropped. No AdMob plugin, rewarded unit, daily gate or ad-related network call will be added.
+- Supersedes Decision 58 (deferred) and the daily-gate design in ARCHITECTURE. `src/js/ads.js` is unused and is not imported anywhere; it stays until the owner asks for its removal.
+- The app's only network call is now the tap-only update check, plus the optional Drive backup.
+
+**270. Category card numbers: tint with the type's ink (Phase 15, light-theme tuning). Not run through CI, not run on a device (DP119).** The owner: the numbers on the category cards look odd and are hard to read.
+- Cause: the count badge used near-black text on the solid type colour, heavy and dull in both themes.
+- Fix: badge background is the type colour mixed into the card surface (14% light, 24% dark), the number uses the type's own ink colour (`--tc-ink`, already tuned per theme), 11px bold. A plain surface colour is the fallback where `color-mix` is missing.
+- Contrast computed for all nine types: 4.3 to 6.1 in the light theme, 5.0 to 7.6 in the dark theme at the mixes first tried; the light mix was lowered to 14% to raise it.
+- Files: `src/css/style.css`. `vite build` passes.
+

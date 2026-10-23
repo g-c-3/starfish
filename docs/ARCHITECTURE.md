@@ -24,12 +24,8 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - **Every entry requires a user-supplied label before save completes** (blocking, not optional) — across voice,
   image, PDF, generic file, and note types alike. Labels are what make voice notes and generic files searchable
   at all, since neither gets transcription/parsing.
-- **Ads are deliberately not part of this build (Decision 58)** — Phase 12 stays unstarted; no
-  AdMob plugin is installed, `ads.js`'s gate logic is written but never called from anywhere. The
-  design decision for whenever ads *do* ship is still: a rewarded, non-skippable unit shown once
-  per day **only if one successfully loads**; if it fails to load or there's no internet, the gate
-  is skipped silently, and it never blocks access to local data. Not notifications either — no ad
-  format of any kind ships in this build.
+- **No ad of any kind (Decisions 58, 269)** — Phase 12 is dropped. No AdMob plugin is installed and
+  `ads.js` is not imported anywhere. Nothing gates access to local data.
 
 ## 2. Entry types
 | Type | Body content | Searchable by | Extra fields |
