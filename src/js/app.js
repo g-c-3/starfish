@@ -800,7 +800,7 @@ async function runChangeVaultPin() {
 // Gate before a manual backup (Decision 202): one window with the app lock password if one is set and the Vault PIN if the Vault
 // is included and set up, one Submit, and fingerprint as a choice that covers both. It stops use of the open app to export. It is
 // not a key: the archive stays encrypted under the backup passkey, and nothing here changes or recovers any credential.
-async function confirmBackupAccess(categories) {
+async function confirmBackupAccess(categories, purpose = 'back up') { // purpose: the end of "Enter … to <purpose>" (Decisions 202, 271)
   const row = { ...(await appCredRow()), ...((await db.query(`SELECT vault_wrap, biometric_vault_enabled FROM credentials WHERE id=1`)).values?.[0] || {}) };
   const needApp = !!row.app_password_hash;
   const needVault = !!row.vault_wrap && categories.includes('private_vault');
@@ -812,7 +812,7 @@ async function confirmBackupAccess(categories) {
   if (needApp) fields.push({ key: 'app', label: 'App lock password', group: 'current' });
   if (needVault) fields.push({ key: 'vault', label: 'Vault PIN', group: 'current' });
   return openSecretForm({
-    title: 'Confirm it is you', text: `Enter ${needApp && needVault ? 'both' : needApp ? 'your app lock password' : 'your Vault PIN'} to back up, or use your fingerprint.`,
+    title: 'Confirm it is you', text: `Enter ${needApp && needVault ? 'both' : needApp ? 'your app lock password' : 'your Vault PIN'} to ${purpose}, or use your fingerprint.`,
     fields, ok: 'Submit', bioLabel: bio ? 'Use fingerprint instead' : null,
     onBio: bio ? async () => {
       const stored = await readStoredSecret(bioKind);
@@ -2873,7 +2873,12 @@ async function checkAutoBackupOnOpen() {
         runBtn.removeEventListener('click', onRun);
         skipBtn.removeEventListener('click', onSkip);
       };
-      const onRun = async () => { const v = input.value; if (v && !(await confirmStrength('passkey', v))) return; cleanup(); resolve(v || null); }; // a declined weak passkey keeps the banner open
+      const onRun = async () => { // a declined weak passkey, or an access check not passed, keeps the banner open
+        const v = input.value;
+        if (v && !(await confirmStrength('passkey', v))) return;
+        if (v && !(await confirmBackupAccess(ALL_CATEGORIES, 'run the automatic backup'))) return; // Decision 271
+        cleanup(); resolve(v || null);
+      };
       const onSkip = () => { cleanup(); resolve(null); };
       runBtn.addEventListener('click', onRun);
       skipBtn.addEventListener('click', onSkip);
@@ -3017,6 +3022,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Google Drive backup wiring — off by default, nothing here runs until the person opts in
   document.getElementById('drive-connect-btn').addEventListener('click', async () => {
     try {
+      if (!(await confirmBackupAccess(ALL_CATEGORIES, 'connect Google Drive'))) { toast('Not connected: access not confirmed.'); return; } // Decision 271
       await ensureSignedIn({ silent: false }); // shows Google's own sign-in UI on first connect
       await refreshDriveConnectionView();
     } catch (err) {
@@ -3030,8 +3036,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshDriveConnectionView();
   });
   document.getElementById('drive-backup-now-btn').addEventListener('click', handleDriveBackupNow);
-  document.getElementById('auto-backup-toggle').addEventListener('change', (e) => metaSet('auto_backup_enabled', e.target.checked ? 'true' : 'false'));
-  document.getElementById('auto-backup-frequency').addEventListener('change', (e) => metaSet('auto_backup_frequency', e.target.value));
+  // Turning automatic backup on and changing its frequency need the same access check as a manual backup (Decision 271).
+  // Turning it off needs none. A refused change is put back.
+  document.getElementById('auto-backup-toggle').addEventListener('change', async (e) => {
+    const box = e.target;
+    if (box.checked && !(await confirmBackupAccess(ALL_CATEGORIES, 'turn on automatic backup'))) { box.checked = false; toast('Not turned on: access not confirmed.'); return; }
+    await metaSet('auto_backup_enabled', box.checked ? 'true' : 'false');
+  });
+  document.getElementById('auto-backup-frequency').addEventListener('change', async (e) => {
+    const sel = e.target;
+    const before = await metaGet('auto_backup_frequency', 'weekly');
+    if (sel.value !== before && !(await confirmBackupAccess(ALL_CATEGORIES, 'change the backup schedule'))) { sel.value = before; toast('Not changed: access not confirmed.'); return; }
+    await metaSet('auto_backup_frequency', sel.value);
+  });
   await refreshDriveConnectionView(); // silent — reflects existing connection state, never prompts on load
 
 
