@@ -107,6 +107,20 @@ jobs:
             exit 1
           fi
 
+      # Decision 261 — startup signature check. The release certificate's SHA-256 fingerprint (public) is read from the keystore
+      # and written into the app, which compares it with the certificate it is installed under. The password is read from the
+      # environment, never from the command line.
+      - name: Read release certificate fingerprint
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          FP=$(keytool -list -v -keystore android/app/release.keystore -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | grep -m1 "SHA256:" | sed 's/.*SHA256: *//' | tr -d ':')
+          echo "ARKLY_CERT_SHA256=$FP" >> "$GITHUB_ENV"
+
+      - name: Add the signature check (native bridge)
+        run: node scripts/patch-signature.js
+
       - name: Build signed release APK
         working-directory: android
         env:
