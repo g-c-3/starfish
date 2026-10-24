@@ -33,6 +33,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      # Decision 272 — Google Drive on/off. With the repository variable GDRIVE_WEB_CLIENT_ID set (a client ID, not a secret), the
+      # Drive sign-in block is written into capacitor.config.json here (workspace only) and the web build turns the guard on.
+      # Without it nothing changes and Drive stays off.
+      - name: Google Drive client (optional)
+        env:
+          GDRIVE_WEB_CLIENT_ID: ${{ vars.GDRIVE_WEB_CLIENT_ID }}
+        run: node scripts/patch-gdrive.js
+
       - name: Build web assets (Vite bundles src/ into www/)
         run: npm run build
 
@@ -120,8 +128,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          FP=$(keytool -list -v -keystore android/app/release.keystore -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | grep -m1 "SHA256:" | sed 's/.*SHA256: *//' | tr -d ':')
+          CERT=$(keytool -list -v -keystore android/app/release.keystore -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS")
+          FP=$(echo "$CERT" | grep -m1 "SHA256:" | sed 's/.*SHA256: *//' | tr -d ':')
           echo "ARKLY_CERT_SHA256=$FP" >> "$GITHUB_ENV"
+          # Decision 272 — the two public values the Google Cloud Android client asks for, shown on the run's Summary page.
+          SHA1=$(echo "$CERT" | grep -m1 "SHA1:" | sed 's/.*SHA1: *//')
+          { echo "### Google Drive setup values (public)"; echo "- Package name: $(node -p "require('./capacitor.config.json').appId")"; echo "- SHA-1 certificate fingerprint: $SHA1"; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Add the signature check (native bridge)
         run: node scripts/patch-signature.js
