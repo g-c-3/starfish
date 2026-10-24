@@ -292,3 +292,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-24 | Session 152 (continued: Drive prompt on first open) | Decision 277 | Google account screen now opens only when the person taps Connect; start-up check is quiet; not run through CI |
 | 2026-10-24 | Session 152 (continued: backup storage and schedules) | Decision 278 | New backup file name, phone folder and list, Downloads for exports, automatic backup for the phone, time settings; DP121 confirmed; DP123 open; not run through CI |
 | 2026-10-24 | Session 152 (continued: backup folder) | Decision 279 | Backups and extraction in Documents/Arkly, downloads in Downloads; not run through CI |
+| 2026-10-25 | Session 153 | none | DP122 and DP123 confirmed on device; Phases 4, 10 and 15 closed (Phase 5 voice recorder and Phase 10 device items confirmed); Phase 5 noise toggle and Phase 13 in-app copy remain; docs only |
+| 2026-10-25 | Session 153 (continued: Phase 13 copy) | none | Settings subtitle names the Drive backup exception; Phase 13 closed; not run through CI |

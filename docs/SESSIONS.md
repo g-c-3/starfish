@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 153**
+
+Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-check part read; Decisions 155, 278, 279 read. Release list not read (hourly API limit); CI status left to the owner.
+- Owner confirmed on device: DP122 (move to the Arkly package) and DP123 (backup storage and schedules). DP120 and DP121 recorded as confirmed (Session 152 text and the TRACK row of Decision 278); the roadmap detail still showed them open.
+- Owner confirmed on device: Phases 4, 5 (voice recorder and permissions) and 10 (biometric unlock, reminder delivery items of Decisions 94 to 97, signature check DP115).
+- Owner reviewed the light theme: Phase 15 closed, no screenshots needed.
+- ROADMAP: Phases 4, 10 and 15 checked complete; Phase 5 stays open for the noise toggle only; Phase 13 stays open for one item (in-app copy still saying "fully offline"); DP120 to DP123 and the Phase 13 owner setup ticked; stale entrance-motion text in the checklist corrected (DP40 was confirmed in Session 100).
+- Phase 13 in-app copy: the only "stays on this device" claim was the Settings subtitle in `src/index.html`; it now names export, share and Drive backup as the exceptions. Phase 13 checked complete. Copy only, no decision. Not run through CI.
+- No decisions added.
+Open: Phase 5 noise toggle (the plugin has no audio-source parameter; needs an owner decision to drop or replace); Phases 1 to 3 show unchecked although built (needs approval to close); ARCHITECTURE section 10 still describes the dropped ad flow.
+Next session start point: the owner's choice on the Phase 5 noise toggle and on closing Phases 1 to 3; then the open checks of Phases 6, 7, 8, 14, 18 and 22.
+
+---
+
 **Session 152**
 
 Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; `app.js` (bootstrap, lock, unlock, back), `db.js`, `backup.js`, `files.js`, `money.js`, `intents.js`, `patch-manifest.js`, `patch-signature.js` and the workflow read. DP115 and DP116 confirmed on device by the owner.
