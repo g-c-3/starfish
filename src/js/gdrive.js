@@ -32,10 +32,18 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // ---------------------------------------------------------------------------
 // True only in a build made with a Drive client ID (scripts/patch-gdrive.js sets it through vite's define; Decision 272). The guard
 // exists because of a confirmed crash (Session 21, real device crash log): the plugin's native signIn() has no null-check on its
-// internal GoogleSignInClient, so with no client ID configured it throws an uncaught NullPointerException inside the plugin's own
-// compiled Java code, a native crash that kills the app process before anything reaches JS. Never call GoogleAuth.signIn() while
-// this is false.
+// internal GoogleSignInClient. Its load() is empty: the client is built only by initialize(), so signIn() or signOut() before
+// initialize() throws an uncaught NullPointerException in the plugin's own Java code, a native crash that kills the app process
+// before anything reaches JS (seen again in Session 152 with Drive on). Never call GoogleAuth.signIn() or signOut() while this is
+// false, and always through initGoogleAuth() below. Client ID and scopes come from the GoogleAuth block that patch-gdrive.js writes.
 const GOOGLE_DRIVE_CONFIGURED = typeof __GDRIVE_CONFIGURED__ !== 'undefined' && __GDRIVE_CONFIGURED__;
+
+// initialize() builds the plugin's native sign-in client from capacitor.config.json; once per process (Decision 276).
+let googleAuthReady = null;
+function initGoogleAuth() {
+  if (!googleAuthReady) googleAuthReady = GoogleAuth.initialize().catch((err) => { googleAuthReady = null; throw err; });
+  return googleAuthReady;
+}
 
 async function ensureSignedIn({ silent = false } = {}) {
   if (!GOOGLE_DRIVE_CONFIGURED) {
@@ -43,6 +51,7 @@ async function ensureSignedIn({ silent = false } = {}) {
     throw new Error('Google Drive isn\'t set up in this build — see android-notes/native-setup.md §11.');
   }
   try {
+    await initGoogleAuth();
     const user = await GoogleAuth.signIn(); // native SDK returns cached consent without UI if valid
     return { ok: true, accessToken: user.authentication.accessToken, email: user.email };
   } catch (err) {
@@ -52,6 +61,8 @@ async function ensureSignedIn({ silent = false } = {}) {
 }
 
 async function signOut() {
+  if (!GOOGLE_DRIVE_CONFIGURED) return;
+  await initGoogleAuth();
   await GoogleAuth.signOut();
 }
 
