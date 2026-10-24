@@ -9,6 +9,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: 'src',
+  // Set by CI (scripts/patch-gdrive.js) only when a Drive client ID is configured; gdrive.js reads it as its guard (Decision 272).
+  define: { __GDRIVE_CONFIGURED__: JSON.stringify(process.env.ARKLY_GDRIVE_CONFIGURED === 'true') },
   base: '', // relative asset paths — this loads from a file:// -style WebView root, not a web server path
   build: {
     outDir: '../www',
