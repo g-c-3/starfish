@@ -3066,3 +3066,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A docs-only push does not start a build (Decision 165 `paths-ignore` covers `docs/**`).
 - If Google still keeps Publish disabled, the cause is not in these fields and the next step is a screenshot of what the console shows.
 
+**275. Release step made safe for a re-run (CI).** A build log showed every step green and the APK uploaded, then "Create GitHub Release" failing because the tag `v<version>` already existed: a re-run keeps its run number, so the tag is the same.
+- Fix: the step looks for the release; when it exists it replaces the APK on it (`gh release upload --clobber`), otherwise it creates it as before.
+- Effect: a re-run ends green. A release keeps one APK per version.
+
