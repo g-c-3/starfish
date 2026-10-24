@@ -323,6 +323,7 @@ The archive carries the wrapped Vault key (`credentials.vault_wrap`, in the arch
 The app-open password is unaffected either way: it lives in the `credentials` table, untouched by append mode, which only ever touches `entries`.
 
 ## 4b. Google Drive backup (optional, opt-in — Decisions 25–29)
+- Build switch (Decision 272): Drive is on only in a build made with the repository variable `GDRIVE_WEB_CLIENT_ID` (an OAuth Web application client ID; not a secret). `scripts/patch-gdrive.js` writes the `GoogleAuth` block into `capacitor.config.json` in the CI workspace and exports `ARKLY_GDRIVE_CONFIGURED`; vite turns that into `__GDRIVE_CONFIGURED__`, the guard in `gdrive.js`. Without the variable the guard is false and `signIn()` is never called. The Android OAuth client (package and release SHA-1, shown on the run Summary) is created in Google Cloud and has no ID in the repo.
 
 Everything above (§4) is the local backup/restore engine and remains the default; nothing here
 changes it or depends on it being used. This section is an **additional** destination for the same
@@ -775,7 +776,7 @@ columns), FTS5 search (main app only — Vault search is a separate in-memory in
 credential hashing/KDF/AES helpers, the intent engine (reminders, expenses), notification
 scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
 plus the expense follow-up timeout) including the optional-password/first-run-setup path, the core backup/restore
-engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — blocked on manual OAuth setup for
+engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — on when `GDRIVE_WEB_CLIENT_ID` is set, Decision 272; manual Google Cloud setup for
 device testing), all four per-file actions (`fileactions.js`) including the "Select files" multi-select, and
 the Private Vault (`vault.js` + its `app.js`/`index.html` wiring — capture/browse/search across all five types,
 its own trash bin, its own auto-lock). Screen show/hide wiring (`showScreen()`) was itself missing until the

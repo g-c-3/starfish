@@ -15,7 +15,7 @@
 - [~] 10 — Security hardening (biometric unlock done, needs device confirm; Privacy Screen done as a real Settings toggle — Decision 64; R8 built and confirmed on device — Session 151, Decision 259 (DP114); JS obfuscation not applied — Decision 260; startup signature check built — Session 151, Decision 261 (DP115 open))
 - [x] 11 — CI/CD (build workflow committed; live green runs confirmed — Session 107: releases v0.1.0+494, +498 and +499 exist, each created by the workflow's last step after the signed build; auto-release added Session 49, update check changed to manual Settings button Session 50)
 - [x] 12 — Ads integration, dropped — Decision 269
-- [ ] 13 — Google Drive backup (optional, opt-in, core logic done, no UI, blocked on manual OAuth setup)
+- [~] 13 — Google Drive backup (optional, opt-in; built; CI on/off switch built Session 152, Decision 272; waits for the owner's Google Cloud setup and DP121)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [~] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish: Home tools row, Trash folder, Search layer, sort and filter built — Session 94, confirmed on device — Session 97; 4c Vault parity built — Session 95, confirmed on device — Session 97; 4d Trash Undo, PDF pinch zoom and viewer switch built — Session 96, confirmed on device — Session 97; 3 native dialogs replaced with in-app sheets built — Session 97, confirmed on device — Session 97; 4 polish: entrance motion built — Session 100, not device-tested; haptics dropped — Session 107, Decision 173; light-theme tuning not)
 - [x] 16-pre — Snooze and Done from the notification without opening the app (confirmed on device — Session 81)
@@ -303,11 +303,9 @@
   untouched, left as scaffolding for whenever this phase is actually picked up.
 - [~] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement
   (Decision 25). Sub-items, roughly in dependency order:
-  - [ ] Manual: Google Cloud project, enable Drive API, OAuth consent screen scoped to `drive.file`
-    only (Decision 26), **published to Production** before relying on auto-backup (Decision 27) —
-    walkthrough in `android-notes/native-setup.md` §11. **Still blocking** — nothing below can be
-    device-tested until the real OAuth client ID replaces the placeholder in `capacitor.config.json`.
-  - [ ] Manual: Android-type OAuth client (package `com.dumpzone.app` + release keystore's SHA-1).
+  - [ ] Manual (owner): Google Cloud project, Drive API, OAuth consent screen scoped to `drive.file` only (Decision 26), published to Production before relying on automatic backup (Decision 27); then a Web application OAuth client and an Android OAuth client (package `com.dumpzone.app`, the release SHA-1 shown on the build run's Summary). Steps in `android-notes/native-setup.md` section 11, rewritten Session 152: the sign-in plugin needs the Web client ID (Decision 272), not the Android one.
+  - [x] CI switch (Session 152, Decision 272): the repository variable `GDRIVE_WEB_CLIENT_ID` turns Drive on (`scripts/patch-gdrive.js`, vite define, guard in `gdrive.js`); the run Summary shows the package name and SHA-1. No repo file is edited to enable Drive; without the variable Drive stays off.
+    - [ ] DP121 (open after the owner's setup) — Drive connect on a device. Settings > Google Drive > Connect: the access check, then Google's account picker; pick the account; the screen shows it as connected. Back up now to Drive: the passkey, then a success message; the folder with the encrypted file is in that Drive (drive.google.com, My Drive). Restore from Drive: the file is listed and restores (append). Disconnect: the account is dropped. If sign-in fails with a number such as 10, the Web client ID, the Android client's SHA-1 or the consent screen is wrong; report the number.
   - [x] Google Sign-In plugin wired (`@codetrix-studio/capacitor-google-auth`, Capacitor 6
     compatible). No `grantOfflineAccess`/token store of our own (Decision 30) — relies on the native
     SDK's silent cached-consent sign-in instead.

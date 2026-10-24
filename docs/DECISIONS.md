@@ -3042,3 +3042,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/app.js`. `vite build` passes.
 - Left to the owner: DP120.
 
+**272. Google Drive connect: CI on/off switch, Web client ID (Phase 13). Not run through CI, not run on a device (DP121).** The owner asked for Drive connect to be built.
+- Finding: `gdrive.js`, the Settings UI and the sign-in plugin were already built; the only blocker was the manual Google Cloud setup and the guard held at `false` in code. The sign-in plugin requests an ID token with the configured client ID, which Google Sign-In accepts only for a Web application client; the Android-client ID written in the older setup notes would fail with error 10.
+- Switch: the repository variable `GDRIVE_WEB_CLIENT_ID` (not a secret; the ID is inside the APK). `scripts/patch-gdrive.js`, a workflow step before the web build, validates it, writes `plugins.GoogleAuth` (scope `drive.file` only, no offline access, `androidClientId` set to that ID) into `capacitor.config.json` in the CI workspace, never committed, and exports `ARKLY_GDRIVE_CONFIGURED`. `vite.config.js` defines `__GDRIVE_CONFIGURED__` from it and `gdrive.js` uses that as `GOOGLE_DRIVE_CONFIGURED`. A malformed value fails the build; no variable leaves Drive off, which keeps the Session 21 crash guard.
+- Setup values: the signature step now also writes the package name and the release SHA-1 (public) to the run Summary, so no keytool command is needed. `android-notes/native-setup.md` section 11 rewritten: Web client, Android client, variable, rebuild.
+- Network: the Drive calls already existed and run only when the person connects, backs up, restores or an automatic backup is due; this adds none. Credentials: none touched; the access check of Decisions 202 and 271 still precedes connecting and the automatic backup.
+- Checked: `patch-gdrive.js` with no value, a malformed value and a valid value; `vite build` with the flag; the SHA-1 line extracted from a test keystore; the workflow file parses. Not run against a real Google account.
+- Left to the owner: the Google Cloud setup and the variable (section 11), then DP121.
+
