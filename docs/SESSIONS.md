@@ -25,6 +25,7 @@ Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; 
 - Decision 274: homepage and privacy policy pages (`docs/index.html`, `docs/privacy.html`) for Google's consent screen, after Publish app stayed disabled. Google Cloud project `Arkly` created, Drive API enabled, consent screen and Web client created; Android client and publishing wait for the first build with the new package.
 - Decision 275: the release step no longer fails on a re-run (tag already exists). Build log from the first Arkly package run read: all steps green, Drive switch on, widget patched, APK uploaded; only the release step failed.
 - Decision 276: crash on Connect Google Drive (native NullPointerException in `GoogleAuth.signIn`). Cause: the plugin is never initialised; fixed in `src/js/gdrive.js`. Not run through CI.
+- Decision 277: Google's account chooser appeared on first open (the start-up Drive check used `signIn()`). Quiet path now `refresh()`; the chooser only on Connect. `src/js/gdrive.js`, `src/js/app.js`. Not run through CI.
 Open: DP122; the owner's Google Cloud setup (Android client with `com.arkly.app`) and variable, then DP121; any further light-theme item (needs screenshots).
 Next session start point: DP122 result, then DP121 once Drive is set up.
 

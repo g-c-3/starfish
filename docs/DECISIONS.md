@@ -3077,3 +3077,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Still needed on the Google side: the Android OAuth client with package `com.arkly.app` and the release SHA-1. Without it sign-in now fails with a normal error (such as 10) shown in the app, not a crash.
 - Files: `src/js/gdrive.js`. `vite build` passes.
 
+**277. Google's account screen only on a tap (Phase 13). Not run through CI, not run on a device (DP121).** The owner: the Google account chooser appeared on the first open of the app, before anything about Drive was asked.
+- Cause: Settings checked the Drive state at start-up through `GoogleAuth.signIn()`, which always opens the account chooser (the plugin has no quiet mode in it). It was never reached before because the guard kept Drive off; Decision 276 made the call run.
+- Fix: `ensureSignedIn` first calls `GoogleAuth.refresh()`, which uses the account this app signed in earlier, shows nothing, and fails when there is none. With `silent: true` (the start-up check, the Settings view, the automatic backup) it stops there. The chooser opens only from `signIn()`, which runs only when a person taps Connect Google Drive, or starts a manual Drive backup or restore with no account connected. The account address shown in Settings is read from the ID token the plugin returns.
+- Effect: a person who never touches Drive never sees a Google screen and the app contacts Google for nothing; a connected person is not asked to choose an account again for each manual backup. Disconnect (`signOut`) clears the account, after which the quiet path fails again.
+- Files: `src/js/gdrive.js`, `src/js/app.js` (account label fallback). `vite build` passes.
+
