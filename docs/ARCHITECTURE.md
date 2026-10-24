@@ -324,6 +324,7 @@ The app-open password is unaffected either way: it lives in the `credentials` ta
 
 ## 4b. Google Drive backup (optional, opt-in — Decisions 25–29)
 - Build switch (Decision 272): Drive is on only in a build made with the repository variable `GDRIVE_WEB_CLIENT_ID` (an OAuth Web application client ID; not a secret). `scripts/patch-gdrive.js` writes the `GoogleAuth` block into `capacitor.config.json` in the CI workspace and exports `ARKLY_GDRIVE_CONFIGURED`; vite turns that into `__GDRIVE_CONFIGURED__`, the guard in `gdrive.js`. Without the variable the guard is false and `signIn()` is never called. The Android OAuth client (package and release SHA-1, shown on the run Summary) is created in Google Cloud and has no ID in the repo.
+- Sign-in (Decision 277): `GoogleAuth.refresh()` is the quiet call (this app's earlier account, no screen, fails when none) and is the only one used at start-up, in Settings and by the automatic backup. `GoogleAuth.signIn()` opens Google's account chooser and runs only from a tap on Connect, or a manual Drive action with no account connected. The plugin must be initialised first (Decision 276).
 
 Everything above (§4) is the local backup/restore engine and remains the default; nothing here
 changes it or depends on it being used. This section is an **additional** destination for the same
