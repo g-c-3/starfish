@@ -170,24 +170,7 @@ neither blocking, since manual password/PIN entry remains the real security boun
 This is the manual, one-time setup this feature needs before any code can talk to Drive. Everything
 here is web-UI on console.cloud.google.com — no terminal.
 
-**`capacitor.config.json`'s `GoogleAuth` plugin block was removed (Session 20)** as a hedge while
-investigating a device crash — turned out not to be that crash's cause (see below), but confirmed by
-a real crash log (Session 21) to be a genuine, separate crash risk: the plugin's native `signIn()`
-method has no null-check on its internal sign-in client, so calling it with no client ID configured
-throws an uncaught `NullPointerException` inside the plugin's own compiled Java code, killing the
-whole app process — not something any JS-side try/catch can intercept, since it never reaches JS.
-`gdrive.js` now has a `GOOGLE_DRIVE_CONFIGURED` guard (currently `false`) that prevents the app from
-ever calling `GoogleAuth.signIn()` while unconfigured. **Once the steps below are done, do both:**
-1. Add the config block back to `capacitor.config.json`:
-```json
-"GoogleAuth": {
-  "scopes": ["https://www.googleapis.com/auth/drive.file"],
-  "grantOfflineAccess": false,
-  "androidClientId": "<your real client ID>.apps.googleusercontent.com"
-}
-```
-2. Flip `GOOGLE_DRIVE_CONFIGURED` to `true` in `src/js/gdrive.js` — without this, Drive stays
-   guarded off even with a real client ID configured.
+**Nothing in the repo is edited for this (Decision 272).** CI turns Drive on when the repository variable `GDRIVE_WEB_CLIENT_ID` holds an OAuth *Web application* client ID: it writes the `GoogleAuth` block into `capacitor.config.json` in the build workspace only and switches the `GOOGLE_DRIVE_CONFIGURED` guard in `gdrive.js` on. Without the variable the build keeps Drive off. The guard exists because the sign-in plugin crashes the whole app process when `signIn()` runs with no client ID (Session 21).
 
 1. **Create a Google Cloud project** (or reuse one) at console.cloud.google.com. Free tier is enough.
 2. **Enable the Google Drive API**: APIs & Services → Library → search "Google Drive API" → Enable.
@@ -201,15 +184,10 @@ ever calling `GoogleAuth.signIn()` while unconfigured. **Once the steps below ar
      Skipping this means your refresh token silently expires after 7 days (Decision 27) — auto-backup
      would just stop working with no error message pointing at the cause. Because the only scope
      requested is non-sensitive, publishing does not trigger Google's full manual review queue.
-4. **Create an Android OAuth client**: APIs & Services → Credentials → Create Credentials → OAuth
-   client ID → Application type: Android.
-   - Package name: `com.dumpzone.app`.
-   - SHA-1 certificate fingerprint: from the release keystore generated in §1. One extra command run
-     the same way that keystore was generated: `keytool -list -v -keystore release.keystore -alias
-     dumpzone` — the output includes a line starting `SHA1:`. Paste that value in.
-5. **Copy the generated client ID** (ends `.apps.googleusercontent.com`) into
-   `capacitor.config.json`'s `plugins.GoogleAuth.androidClientId` — this file already has the field,
-   just replace the placeholder value.
+4. **Create a Web application OAuth client**: APIs & Services > Credentials > Create Credentials > OAuth client ID > Application type: Web application. No redirect URI is needed. Copy its client ID (ends `.apps.googleusercontent.com`). The plugin hands this ID to Google Sign-In's ID-token request, which needs the Web client; an Android-type ID there fails with error 10.
+5. **Create an Android OAuth client** in the same project: Application type: Android. Package name: `com.dumpzone.app`. SHA-1: open the latest run of the build workflow on GitHub > Summary > "Google Drive setup values" and copy the SHA-1 line (no command to run). This client has no ID to copy; Google matches the app by package name and SHA-1. The SHA-1 changes only if the release keystore changes.
+6. **Set the variable** on GitHub: repository Settings > Secrets and variables > Actions > Variables tab > New repository variable. Name `GDRIVE_WEB_CLIENT_ID`, value the Web client ID from step 4. It is a variable, not a secret: the ID is inside the APK anyway.
+7. **Run the build workflow again**, install the APK, then Settings > Google Drive > Connect. A malformed value fails the build with a clear message; deleting the variable turns Drive off again.
 
 Nothing else in Phase 13 can be wired up (`gdrive.js`, sign-in button, auto-backup scheduler) until
 this exists, the same way Phase 1's AdMob unit and signing secrets blocked their own downstream work.
