@@ -9,12 +9,13 @@ import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelRem
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
-import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader } from './backup.js';
+import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, savePhoneBackupToDownloads, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
+import { isDue, DEFAULT_TIME } from './autoschedule.js';
 import { initWidgetCapture, handleWidgetBack, closeWidgetCapture } from './widget.js';
 import { transferInbox } from './widget-inbox.js';
 import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
-  restoreFromDrive, checkAndRunAutoBackupIfDue
+  restoreFromDrive
 } from './gdrive.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import * as Money from './money.js';
@@ -1775,9 +1776,9 @@ async function handleBackupNow() {
     return;
   }
   statusEl.textContent = result.ok
-    ? `Saved as ${result.path}.${result.skippedFiles ? ` ${result.skippedFiles} missing file(s) were not included.` : ''}`
+    ? `Saved to Android/data/com.arkly.app/files/${result.path}.${result.skippedFiles ? ` ${result.skippedFiles} missing file(s) were not included.` : ''}`
     : `Backup failed: ${result.reason || 'unknown error'}${result.detail ? ` (${result.detail})` : ''}.`;
-  if (result.ok) { document.getElementById('backup-passphrase').value = ''; document.getElementById('backup-hint').value = ''; }
+  if (result.ok) { document.getElementById('backup-passphrase').value = ''; document.getElementById('backup-hint').value = ''; renderPhoneBackupList().catch(() => {}); }
 }
 
 // Shared by both local restore and Drive restore — shows the overwrite warning dialog when needed,
@@ -2744,6 +2745,7 @@ async function refreshDriveConnectionView() {
   document.getElementById('drive-account-email').textContent = auth.email || 'Google account';
   document.getElementById('auto-backup-toggle').checked = (await metaGet('auto_backup_enabled', 'false')) === 'true';
   document.getElementById('auto-backup-frequency').value = await metaGet('auto_backup_frequency', 'weekly');
+  document.getElementById('auto-backup-time').value = await metaGet('auto_backup_time', DEFAULT_TIME);
   await renderDriveBackupList(auth.accessToken);
 }
 
@@ -2859,37 +2861,129 @@ async function handleCheckForUpdateClick() {
 // Runs once per app open/resume, after unlock. Never silent about needing the passkey (Decision 32) —
 // the passkey is never stored, so a due auto-backup shows a one-tap banner instead of failing quietly
 // or trying to cache the passkey across sessions.
-async function checkAutoBackupOnOpen() {
+// Automatic backups (Decision 278): two independent schedules, phone and Drive, each with a frequency and a time of day. They
+// run on app open, never in the background, because the backup passkey is never stored. One passkey entry runs every target due.
+async function dueAutoBackups() {
+  const due = [];
+  const cred = (await db.query(`SELECT last_backup_at, last_drive_backup_at FROM credentials WHERE id=1`)).values?.[0] || {};
+  if ((await metaGet('auto_phone_enabled', 'false')) === 'true'
+    && isDue(cred.last_backup_at || 0, await metaGet('auto_phone_frequency', 'weekly'), await metaGet('auto_phone_time', DEFAULT_TIME))) due.push('phone');
+  if ((await metaGet('auto_backup_enabled', 'false')) === 'true'
+    && isDue(cred.last_drive_backup_at || 0, await metaGet('auto_backup_frequency', 'weekly'), await metaGet('auto_backup_time', DEFAULT_TIME))) due.push('drive');
+  return due;
+}
+
+function askAutoBackupPasskey(due) {
   const banner = document.getElementById('auto-backup-due-banner');
-  const result = await checkAndRunAutoBackupIfDue(db, {
-    categories: ALL_CATEGORIES,
-    passphraseGetter: () => new Promise((resolve) => {
-      banner.classList.remove('hidden');
-      const input = document.getElementById('auto-backup-passphrase-input');
-      const runBtn = document.getElementById('auto-backup-run-btn');
-      const skipBtn = document.getElementById('auto-backup-skip-btn');
-      const cleanup = () => {
-        banner.classList.add('hidden');
-        runBtn.removeEventListener('click', onRun);
-        skipBtn.removeEventListener('click', onSkip);
-      };
-      const onRun = async () => { // a declined weak passkey, or an access check not passed, keeps the banner open
-        const v = input.value;
-        if (v && !(await confirmStrength('passkey', v))) return;
-        if (v && !(await confirmBackupAccess(ALL_CATEGORIES, 'run the automatic backup'))) return; // Decision 271
-        cleanup(); resolve(v || null);
-      };
-      const onSkip = () => { cleanup(); resolve(null); };
-      runBtn.addEventListener('click', onRun);
-      skipBtn.addEventListener('click', onSkip);
-    })
+  document.getElementById('auto-backup-due-targets').textContent =
+    `Due: ${due.map((t) => (t === 'phone' ? 'this phone' : 'Google Drive')).join(' and ')}. Your backup passkey is never stored, so it needs entering once to run.`;
+  return new Promise((resolve) => {
+    banner.classList.remove('hidden');
+    const input = document.getElementById('auto-backup-passphrase-input');
+    const runBtn = document.getElementById('auto-backup-run-btn');
+    const skipBtn = document.getElementById('auto-backup-skip-btn');
+    const cleanup = () => {
+      banner.classList.add('hidden');
+      runBtn.removeEventListener('click', onRun);
+      skipBtn.removeEventListener('click', onSkip);
+    };
+    const onRun = async () => { // a declined weak passkey, or an access check not passed, keeps the banner open
+      const v = input.value;
+      if (!v) return;
+      if (!(await confirmStrength('passkey', v))) return;
+      if (!(await confirmBackupAccess(ALL_CATEGORIES, 'run the automatic backup'))) return; // Decision 271
+      cleanup(); input.value = ''; resolve(v);
+    };
+    const onSkip = () => { cleanup(); resolve(null); };
+    runBtn.addEventListener('click', onRun);
+    skipBtn.addEventListener('click', onSkip);
   });
-  // Surface anything other than a clean run or an expected skip in drive-backup-status, even though
-  // that panel likely isn't open right now — better found later than lost entirely.
-  if (!result.ok || (result.ok && !result.skipped)) {
-    const statusEl = document.getElementById('drive-backup-status');
-    if (!result.ok) statusEl.textContent = `Auto-backup failed: ${result.reason || 'unknown error'}.`;
-    else if (result.fileId) statusEl.textContent = `Auto-backup uploaded ${result.name}.`;
+}
+
+async function checkAutoBackupOnOpen() {
+  const due = await dueAutoBackups();
+  if (due.length === 0) return;
+  const passphrase = await askAutoBackupPasskey(due);
+  if (!passphrase) return;
+  const phoneStatus = document.getElementById('backup-status');
+  const driveStatus = document.getElementById('drive-backup-status');
+  if (due.includes('phone')) {
+    const r = await withoutIdleLock(() => createBackup(db, { passphrase, categories: ALL_CATEGORIES, hint: 'auto-backup' })).catch((err) => ({ ok: false, reason: err.message || String(err) }));
+    phoneStatus.textContent = r.ok ? `Automatic backup saved: ${r.path}.` : `Automatic backup to this phone failed: ${r.reason || 'unknown error'}.`;
+    if (r.ok) renderPhoneBackupList().catch(() => {});
+  }
+  if (due.includes('drive')) {
+    // Drive backs up only through an account this app already signed in; with none, it says so and nothing opens.
+    const r = await backupToDrive(db, { passphrase, categories: ALL_CATEGORIES, hint: 'auto-backup', silent: true }).catch((err) => ({ ok: false, reason: err.message || String(err) }));
+    driveStatus.textContent = r.ok ? `Automatic backup uploaded ${r.name}.` : `Automatic backup to Drive failed: ${r.reason || 'unknown error'}.`;
+  }
+}
+
+// ---- Backups on this phone, and the automatic backup controls (Decision 278) ----
+async function refreshPhoneBackupView() {
+  document.getElementById('auto-phone-toggle').checked = (await metaGet('auto_phone_enabled', 'false')) === 'true';
+  document.getElementById('auto-phone-frequency').value = await metaGet('auto_phone_frequency', 'weekly');
+  document.getElementById('auto-phone-time').value = await metaGet('auto_phone_time', DEFAULT_TIME);
+  await renderPhoneBackupList();
+}
+
+async function renderPhoneBackupList() {
+  const el = document.getElementById('phone-backup-list');
+  const list = await listPhoneBackups();
+  if (list.length === 0) { el.innerHTML = '<p class="mode-description">No backups here yet.</p>'; return; }
+  el.innerHTML = list.map((b) => `
+    <div class="drive-backup-row">
+      <span>${escapeHtml(b.name)} · ${escapeHtml(formatBytes(b.size))}</span>
+      <button class="link-btn" data-act="use" data-name="${escapeHtml(b.name)}">Restore from this</button>
+      <button class="link-btn" data-act="save" data-name="${escapeHtml(b.name)}">Save to Downloads</button>
+      <button class="link-btn" data-act="delete" data-name="${escapeHtml(b.name)}">Delete</button>
+    </div>`).join('');
+}
+
+async function handlePhoneBackupAction(e) {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const { act, name } = btn.dataset;
+  const statusEl = document.getElementById('backup-status');
+  try {
+    if (act === 'save') {
+      const path = await savePhoneBackupToDownloads(name);
+      toast(`Saved to ${path}`);
+    } else if (act === 'delete') {
+      if (!(await askYesNo({ title: 'Delete this backup?', text: `${name} will be removed from this phone. A copy saved to Downloads is not touched.`, yes: 'Delete', no: 'Keep' }))) return;
+      await deletePhoneBackup(name);
+      await renderPhoneBackupList();
+    } else if (act === 'use') {
+      const probe = (await listPhoneBackups()).find((b) => b.name === name);
+      if (probe && probe.size > RESTORE_FROM_LIST_MAX) { statusEl.textContent = 'This backup is too large to open from this list. Save it to Downloads, then choose that copy in Restore.'; return; }
+      statusEl.textContent = 'Opening…';
+      const file = await getPhoneBackupFile(name);
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('restore-file-input').files = dt.files;
+      statusEl.textContent = '';
+      document.getElementById('restore-status').textContent = `Selected ${name}. Enter its passkey and restore below.`;
+      document.getElementById('restore-passphrase').focus();
+    }
+  } catch (err) { statusEl.textContent = `Could not do that: ${err.message || err}`; }
+}
+
+// Toggle, frequency and time of one automatic backup. Turning it on or changing the schedule needs the same access check as a
+// manual backup (Decision 271); turning it off needs none. A refused change is put back.
+function bindAutoBackup({ toggle, frequency, time, keys, what }) {
+  const box = document.getElementById(toggle);
+  box.addEventListener('change', async () => {
+    if (box.checked && !(await confirmBackupAccess(ALL_CATEGORIES, `turn on ${what}`))) { box.checked = false; toast('Not turned on: access not confirmed.'); return; }
+    await metaSet(keys.enabled, box.checked ? 'true' : 'false');
+  });
+  for (const [id, key, fallback] of [[frequency, keys.frequency, 'weekly'], [time, keys.time, DEFAULT_TIME]]) {
+    const el = document.getElementById(id);
+    el.addEventListener('change', async () => {
+      const before = await metaGet(key, fallback);
+      if (!el.value) { el.value = before; return; }
+      if (el.value !== before && !(await confirmBackupAccess(ALL_CATEGORIES, 'change the backup schedule'))) { el.value = before; toast('Not changed: access not confirmed.'); return; }
+      await metaSet(key, el.value);
+    });
   }
 }
 
@@ -2915,7 +3009,7 @@ window.Arkly = {
   downloadPlain: async (id) => {
     try {
       const path = await downloadPlain(db, id, { privateSessionKey });
-      toast(`Downloaded to Documents/${path}`);
+      toast(`Downloaded to ${path}`);
     } catch (err) { toast(`Could not download: ${err.message || err}`); }
   },
   editEntry: (id, fields, opts) => editEntry(db, id, fields, { ...opts, privateSessionKey }),
@@ -3036,19 +3130,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshDriveConnectionView();
   });
   document.getElementById('drive-backup-now-btn').addEventListener('click', handleDriveBackupNow);
-  // Turning automatic backup on and changing its frequency need the same access check as a manual backup (Decision 271).
-  // Turning it off needs none. A refused change is put back.
-  document.getElementById('auto-backup-toggle').addEventListener('change', async (e) => {
-    const box = e.target;
-    if (box.checked && !(await confirmBackupAccess(ALL_CATEGORIES, 'turn on automatic backup'))) { box.checked = false; toast('Not turned on: access not confirmed.'); return; }
-    await metaSet('auto_backup_enabled', box.checked ? 'true' : 'false');
-  });
-  document.getElementById('auto-backup-frequency').addEventListener('change', async (e) => {
-    const sel = e.target;
-    const before = await metaGet('auto_backup_frequency', 'weekly');
-    if (sel.value !== before && !(await confirmBackupAccess(ALL_CATEGORIES, 'change the backup schedule'))) { sel.value = before; toast('Not changed: access not confirmed.'); return; }
-    await metaSet('auto_backup_frequency', sel.value);
-  });
+  bindAutoBackup({ toggle: 'auto-backup-toggle', frequency: 'auto-backup-frequency', time: 'auto-backup-time', what: 'automatic backup to Google Drive',
+    keys: { enabled: 'auto_backup_enabled', frequency: 'auto_backup_frequency', time: 'auto_backup_time' } });
+  bindAutoBackup({ toggle: 'auto-phone-toggle', frequency: 'auto-phone-frequency', time: 'auto-phone-time', what: 'automatic backup to this phone',
+    keys: { enabled: 'auto_phone_enabled', frequency: 'auto_phone_frequency', time: 'auto_phone_time' } });
+  document.getElementById('phone-backup-list').addEventListener('click', handlePhoneBackupAction);
+  document.getElementById('backup-settings').addEventListener('toggle', (e) => { if (e.target.open) refreshPhoneBackupView().catch(() => {}); });
+  refreshPhoneBackupView().catch(() => {});
   await refreshDriveConnectionView(); // silent — reflects existing connection state, never prompts on load
 
 

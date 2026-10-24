@@ -66,30 +66,17 @@ const APP_SETTINGS_KEYS = ['dark_mode', 'currency_symbol', 'pdf_inapp_viewer']; 
 // those keys restores them as harmless, unread meta rows, same as explained in app.js.
 
 // ---------------------------------------------------------------------------
-// Filenames — backup_<letters>_<timestamp>.dz (Decision 55, letters extended in Decision 57 when
-// Reminder and Location joined the card set; the append_ prefix was removed in Decision 83).
-// <letters> is a fixed-order subset of "tviprlmf" (Text/Voice/Image/PDF/Reminder/Location/Money/
-// Files) — only the letters for categories actually included, in that order regardless of the
-// order they were selected in. Categories with no letter (private_vault/expenses/tags/
-// app_settings) don't contribute one; if none of the eight lettered categories are present at
-// all, "x" is used so the filename is never left with an empty, malformed segment.
+// Filenames — backup_ddmmyyyy_hhmmss.dz for every backup, local and Drive (Decision 278). Which categories a file holds is
+// in its header, not its name. (Earlier files named backup_<letters>_<yyyymmdd>_<hhmmss>.dz still restore: the name is never read.)
 // ---------------------------------------------------------------------------
-const CATEGORY_LETTERS = { notes: 't', voice: 'v', images: 'i', pdfs: 'p', reminders: 'r', locations: 'l', money: 'm', files: 'f' };
-const LETTER_ORDER = ['notes', 'voice', 'images', 'pdfs', 'reminders', 'locations', 'money', 'files'];
-
-function categoryLetters(categories) {
-  const letters = LETTER_ORDER.filter((c) => categories.includes(c)).map((c) => CATEGORY_LETTERS[c]).join('');
-  return letters || 'x';
-}
-
 function backupTimestamp(date = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
+  return `${p(date.getDate())}${p(date.getMonth() + 1)}${date.getFullYear()}_${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
 }
 
-// prefix: always 'backup' today (Backup & Restore and Drive backups).
-function backupFileName(prefix, categories) {
-  return `${prefix}_${categoryLetters(categories)}_${backupTimestamp()}.dz`;
+// prefix: always 'backup'. The categories argument is kept for the callers' sake and is not used.
+function backupFileName(prefix) {
+  return `${prefix}_${backupTimestamp()}.dz`;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +250,51 @@ function makeSink(path, directory) {
 }
 
 // ---------------------------------------------------------------------------
+// Backups kept on the phone live in the app's own folder, Android/data/com.arkly.app/files (Decision 278). Android does not
+// show that folder in file pickers, so the app lists them itself: restore from one, save a copy to Downloads, or delete.
+// Uninstalling the app removes the folder and its backups.
+// ---------------------------------------------------------------------------
+const PHONE_BACKUP_DIR = Directory.External;
+const COPY_DIR = 'Download/Arkly';
+
+async function listPhoneBackups() {
+  let files = [];
+  try { files = (await Filesystem.readdir({ path: '', directory: PHONE_BACKUP_DIR })).files || []; } catch { return []; }
+  return files
+    .filter((f) => f.type !== 'directory' && /\.dz$/i.test(f.name))
+    .map((f) => ({ name: f.name, size: f.size || 0, mtime: f.mtime || 0 }))
+    .sort((a, b) => b.mtime - a.mtime || (a.name < b.name ? 1 : -1));
+}
+
+async function deletePhoneBackup(name) {
+  await Filesystem.deleteFile({ path: name, directory: PHONE_BACKUP_DIR });
+}
+
+// Copies one backup into Download/Arkly; an existing name gets " (2)", " (3)" so nothing is overwritten. Returns the path.
+async function savePhoneBackupToDownloads(name) {
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  let to = `${COPY_DIR}/${name}`;
+  for (let n = 2; n < 100; n++) {
+    try { await Filesystem.stat({ path: to, directory: Directory.ExternalStorage }); } catch { break; }
+    to = `${COPY_DIR}/${stem} (${n})${ext}`;
+  }
+  await Filesystem.mkdir({ path: COPY_DIR, directory: Directory.ExternalStorage, recursive: true }).catch(() => {});
+  await Filesystem.copy({ from: name, directory: PHONE_BACKUP_DIR, to, toDirectory: Directory.ExternalStorage });
+  return to;
+}
+
+// A File for the existing restore form. The file is read through the app's local server, so a very large backup is held in
+// memory: the caller warns above RESTORE_FROM_LIST_MAX and points to the Downloads copy.
+const RESTORE_FROM_LIST_MAX = 300 * 1024 * 1024;
+async function getPhoneBackupFile(name) {
+  const { uri } = await Filesystem.getUri({ path: name, directory: PHONE_BACKUP_DIR });
+  const blob = await (await fetch(Capacitor.convertFileSrc(uri))).blob();
+  return new File([blob], name, { type: 'application/octet-stream' });
+}
+
+// ---------------------------------------------------------------------------
 // Create + write a backup file (format 2)
 // ---------------------------------------------------------------------------
 // onProgress({ done, total }) after each entry. Peak memory is one entry's row plus one 3 MB chunk (and a Vault entry's
@@ -277,7 +309,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
 
   const { key, salt } = await deriveAesKey(passphrase, null, KDF_ITERATIONS);
   const name = fileName || backupFileName('backup', categories);
-  const sink = makeSink(name, Directory.Documents);
+  const sink = makeSink(name, PHONE_BACKUP_DIR);
   let n = 0, count = 0, files = 0, skippedFiles = 0;
   const put = async (data) => { n += 1; await sink.push(JSON.stringify(await encryptChunk(key, data, n)) + '\n'); };
 
@@ -340,7 +372,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
 // ---------------------------------------------------------------------------
 // Reading + decrypting a backup file (does not touch the DB)
 // ---------------------------------------------------------------------------
-async function openBackupFile(path, directory = Directory.Documents) {
+async function openBackupFile(path, directory = PHONE_BACKUP_DIR) {
   const res = await Filesystem.readFile({ path, directory, encoding: 'utf8' });
   return JSON.parse(res.data); // the encrypted archive object — hint is readable before decrypt
 }
@@ -776,16 +808,16 @@ async function restoreFormat2(db, opts) {
 // ---------------------------------------------------------------------------
 // Extract to device storage — no DB import, raw files + sidecar only.
 // ---------------------------------------------------------------------------
-async function extractCategoryToStorage(payload, category, destDir = 'Arkly-Restore') {
+async function extractCategoryToStorage(payload, category, destDir = 'Download/Arkly-Restore') {
   const entries = payload.entries.filter((e) => e._category === category && e.fileData);
   const written = [];
   for (const e of entries) {
     const ext = e.extension || (e.file_path || '').split('.').pop() || 'bin';
     const fileName = `${destDir}/${e.id}.${ext}`;
-    await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: e.fileData, recursive: true });
+    await Filesystem.writeFile({ path: fileName, directory: Directory.ExternalStorage, data: e.fileData, recursive: true });
     const sidecar = { id: e.id, label: e.label, type: e.type, tags: e.tags || [], created_at: e.created_at, category };
     await Filesystem.writeFile({
-      path: `${destDir}/${e.id}.json`, directory: Directory.Documents,
+      path: `${destDir}/${e.id}.json`, directory: Directory.ExternalStorage,
       data: JSON.stringify(sidecar), encoding: 'utf8'
     });
     written.push(fileName);
@@ -796,6 +828,7 @@ async function extractCategoryToStorage(payload, category, destDir = 'Arkly-Rest
 export {
   ALL_CATEGORIES, ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
   buildBackupPayload, estimateBackupSize, createBackup,
+  listPhoneBackups, deletePhoneBackup, savePhoneBackupToDownloads, getPhoneBackupFile, RESTORE_FROM_LIST_MAX,
   openBackupFile, readBackupHeader, decryptBackupPayload, estimateRestoreSize, restoreBackup,
   extractCategoryToStorage, getStorageEstimate, backupFileName
 };

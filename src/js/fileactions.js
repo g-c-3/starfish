@@ -25,15 +25,16 @@ function sanitizeFilename(label) {
   return (label || 'untitled').replace(/[^a-z0-9\-_ ]/gi, '_').slice(0, 80);
 }
 
-// Every download lands in Documents/Arkly. An existing name gets " (2)", " (3)" … so an earlier copy is never overwritten.
-const DOWNLOAD_DIR = 'Arkly';
+// Every download lands in Download/Arkly on the phone (Decision 278). An existing name gets " (2)", " (3)" … so an earlier copy is never overwritten.
+const DOWNLOAD_DIR = 'Download/Arkly';
+const DOWNLOAD_ROOT = Directory.ExternalStorage;
 async function freeDownloadPath(fileName) {
   const dot = fileName.lastIndexOf('.');
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const ext = dot > 0 ? fileName.slice(dot) : '';
   for (let n = 1; n < 100; n++) {
     const path = `${DOWNLOAD_DIR}/${n === 1 ? stem : `${stem} (${n})`}${ext}`;
-    try { await Filesystem.stat({ path, directory: Directory.Documents }); } // throws when the file does not exist
+    try { await Filesystem.stat({ path, directory: DOWNLOAD_ROOT }); } // throws when the file does not exist
     catch { return path; }
   }
   return `${DOWNLOAD_DIR}/${stem} (${Date.now()})${ext}`;
@@ -161,7 +162,7 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   const { row, cat } = await getEntryCategory(db, entryId);
   const ext = row.extension ? `.${row.extension}` : (TEXT_EXPORT_TYPES.has(row.type) ? '.txt' : '');
   let base = `${sanitizeFilename(row.label)}${ext}`;
-  const text = (path, data) => Filesystem.writeFile({ path, directory: Directory.Documents, data, encoding: 'utf8', recursive: true });
+  const text = (path, data) => Filesystem.writeFile({ path, directory: DOWNLOAD_ROOT, data, encoding: 'utf8', recursive: true });
 
   if (row.is_private) {
     if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before downloading');
@@ -181,14 +182,14 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
       if (!content.location) throw new Error('This entry has no readable coordinates.');
       await text(path, locationPlainText({ ...row, ...content.location, description: await vaultNote(row, privateSessionKey) }));
     } else {
-      await Filesystem.writeFile({ path, directory: Directory.Documents, data: content.fileData, recursive: true });
+      await Filesystem.writeFile({ path, directory: DOWNLOAD_ROOT, data: content.fileData, recursive: true });
     }
     return path;
   }
 
   const path = await freeDownloadPath(base);
   if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
-    await Filesystem.writeFile({ path, directory: Directory.Documents, data: await readBase64(row), recursive: true });
+    await Filesystem.writeFile({ path, directory: DOWNLOAD_ROOT, data: await readBase64(row), recursive: true });
   } else if (row.type === 'location') {
     await text(path, locationPlainText(row));
   } else if (row.type === 'reminder') {

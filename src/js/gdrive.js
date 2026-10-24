@@ -188,34 +188,10 @@ async function restoreFromDrive(db, { accessToken, fileId, ...restoreOpts }) {
   return restoreBackup(db, { ...restoreOpts, archiveObj });
 }
 
-// ---------------------------------------------------------------------------
-// Auto-backup — checked on app open/resume, not via OS-level background scheduling (see file header).
-// Settings (enabled/frequency) live in the meta table alongside dark_mode etc. (App Settings category);
-// last_drive_backup_at lives on credentials, same place last_backup_at (local) already does.
-// ---------------------------------------------------------------------------
-const FREQUENCY_MS = { daily: 24 * 60 * 60 * 1000, weekly: 7 * 24 * 60 * 60 * 1000 };
-
-async function checkAndRunAutoBackupIfDue(db, { passphraseGetter, categories }) {
-  const enabledRow = (await db.query(`SELECT value FROM meta WHERE key='auto_backup_enabled'`)).values || [];
-  if (enabledRow.length === 0 || enabledRow[0].value !== 'true') return { ok: true, skipped: 'disabled' };
-
-  const freqRow = (await db.query(`SELECT value FROM meta WHERE key='auto_backup_frequency'`)).values || [];
-  const frequency = freqRow[0]?.value || 'weekly';
-  const interval = FREQUENCY_MS[frequency] || FREQUENCY_MS.weekly;
-
-  const cred = (await db.query(`SELECT last_drive_backup_at FROM credentials WHERE id=1`)).values[0];
-  const last = cred?.last_drive_backup_at || 0;
-  if (Date.now() - last < interval) return { ok: true, skipped: 'not_due' };
-
-  const passphrase = await passphraseGetter(); // caller supplies the backup passkey from wherever it's held
-  if (!passphrase) return { ok: true, skipped: 'no_passphrase' }; // never prompt mid-flow on a passive check
-
-  return backupToDrive(db, { passphrase, categories, hint: 'auto-backup', silent: true });
-}
+// Automatic backup scheduling and the passkey prompt live in app.js and autoschedule.js (Decision 278); this module only uploads.
 
 export {
   ensureSignedIn, signOut,
   getDriveStorageEstimate, backupToDrive,
-  listDriveBackups, downloadBackupFromDrive, previewDriveBackup, restoreFromDrive,
-  checkAndRunAutoBackupIfDue
+  listDriveBackups, downloadBackupFromDrive, previewDriveBackup, restoreFromDrive
 };
