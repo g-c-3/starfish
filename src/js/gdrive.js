@@ -2,10 +2,11 @@
 // format as backup.js (Decision 28); Drive is a second destination, never a replacement for it.
 //
 // Auth model: drive.file scope only (Decision 26) via @codetrix-studio/capacitor-google-auth.
-// No serverAuthCode/refresh-token exchange is implemented here — GoogleAuth.signIn() is called
-// fresh, in the foreground, whenever Drive access is needed; the native Android SDK returns
-// cached consent silently (no UI) if the user already granted it and their device Google session
-// is still valid, so there is no token-store of our own to manage or secure.
+// No serverAuthCode/refresh-token exchange is implemented here. Access is asked in two ways (Decision 277):
+// GoogleAuth.refresh() is the quiet one: it uses the account this app signed in earlier, shows no screen, and fails
+// when there is none, so it is safe at start-up and for the automatic backup. GoogleAuth.signIn() is the only call that
+// opens Google's account chooser, and it runs only from a person's tap on Connect (or a manual Drive action when no account
+// is connected). There is no token-store of our own to manage or secure.
 //
 // Auto-backup is deliberately NOT built on @capacitor/background-runner: that plugin's headless
 // JS environment exposes only console/fetch/crypto/timers plus CapacitorDevice, CapacitorKV
@@ -45,6 +46,15 @@ function initGoogleAuth() {
   return googleAuthReady;
 }
 
+// The account's address from the ID token the plugin returns (payload only; nothing is verified or stored here).
+function emailFromIdToken(idToken) {
+  try {
+    const p = String(idToken).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(p + '='.repeat((4 - (p.length % 4)) % 4))).email || '';
+  } catch { return ''; }
+}
+
+// silent: true never opens a screen. silent: false first tries the quiet path, then opens Google's account chooser.
 async function ensureSignedIn({ silent = false } = {}) {
   if (!GOOGLE_DRIVE_CONFIGURED) {
     if (silent) return { ok: false, reason: 'not_configured' };
@@ -52,11 +62,17 @@ async function ensureSignedIn({ silent = false } = {}) {
   }
   try {
     await initGoogleAuth();
-    const user = await GoogleAuth.signIn(); // native SDK returns cached consent without UI if valid
+    try {
+      const quiet = await GoogleAuth.refresh(); // no screen; rejects when this app has no signed-in account
+      return { ok: true, accessToken: quiet.accessToken, email: emailFromIdToken(quiet.idToken) };
+    } catch (quietErr) {
+      if (silent) return { ok: false, reason: 'not_signed_in' };
+    }
+    const user = await GoogleAuth.signIn(); // opens Google's account chooser; only from a person's tap
     return { ok: true, accessToken: user.authentication.accessToken, email: user.email };
   } catch (err) {
-    if (silent) return { ok: false, reason: 'not_signed_in' }; // auto-backup path — never surface a prompt
-    throw err; // manual "Connect Google Drive" button — let the caller's UI show the real error
+    if (silent) return { ok: false, reason: 'not_signed_in' }; // never surface a prompt on the quiet path
+    throw err; // the Connect button lets the caller's UI show the real error
   }
 }
 

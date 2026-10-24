@@ -2741,7 +2741,7 @@ async function refreshDriveConnectionView() {
   connectedView.classList.toggle('hidden', !auth.ok);
   if (!auth.ok) return;
 
-  document.getElementById('drive-account-email').textContent = auth.email;
+  document.getElementById('drive-account-email').textContent = auth.email || 'Google account';
   document.getElementById('auto-backup-toggle').checked = (await metaGet('auto_backup_enabled', 'false')) === 'true';
   document.getElementById('auto-backup-frequency').value = await metaGet('auto_backup_frequency', 'weekly');
   await renderDriveBackupList(auth.accessToken);
