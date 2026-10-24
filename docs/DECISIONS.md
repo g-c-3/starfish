@@ -3083,3 +3083,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Effect: a person who never touches Drive never sees a Google screen and the app contacts Google for nothing; a connected person is not asked to choose an account again for each manual backup. Disconnect (`signOut`) clears the account, after which the quiet path fails again.
 - Files: `src/js/gdrive.js`, `src/js/app.js` (account label fallback). `vite build` passes.
 
+**278. Backup naming, phone storage and automatic backup schedules (Phases 6, 13). Not run through CI, not run on a device (DP123).** The owner's request.
+- Name: every backup, local and Drive, is `backup_ddmmyyyy_hhmmss.dz`. The letters of Decision 55 are dropped; the categories are in the header. Older names restore as before.
+- Local location: `Android/data/com.arkly.app/files` (`Directory.External`). Trade-offs stated to the owner: Android 11 and later hide that folder from file pickers and most file managers, and uninstalling the app removes it. So the app lists its own backups (Restore from this, Save to Downloads, Delete). Restore from the list reads the file through the app's local server into the restore form; a file over 300 MB is refused there with a pointer to the Downloads copy. Backups made by earlier builds in Documents stay where they are and restore through the file chooser.
+- Downloads: per-entry Download and Extract to device storage now write to `Download/Arkly` and `Download/Arkly-Restore` (`Directory.ExternalStorage`), not Documents. The toast shows the path. Needs the same storage access as before.
+- Automatic backup: new for the phone, with the same controls as Drive: toggle, frequency (daily, weekly, monthly) and a time of day ("not before"). Drive gets the time and the monthly option. Both run on app open, never in the background, because the backup passkey is never stored; one passkey entry runs every target that is due. The schedule is in `autoschedule.js`: the next occurrence of the time after the last backup, plus 6 days (weekly) or 29 (monthly); a backup that has never run is due at once. A manual backup to the phone counts as the last phone backup.
+- Access check: turning either automatic backup on, changing its frequency or time, and running it from the banner use `confirmBackupAccess` (Decisions 202, 271). Turning one off does not.
+- Removed: `checkAndRunAutoBackupIfDue` in `gdrive.js` (replaced by the shared flow in `app.js`).
+- Files: `src/js/backup.js`, `src/js/fileactions.js`, `src/js/gdrive.js`, `src/js/app.js`, `src/js/autoschedule.js` (new), `src/index.html`. `vite build` passes; the schedule arithmetic was checked in Node.
+- Network, credentials, backup format: unchanged.
+

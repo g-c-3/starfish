@@ -234,8 +234,8 @@ Open: Vault PIN minimum length; an optional app-password wrapper around the data
 - Restore reads the picked file with `File.slice`. Overwrite reads and decrypts the whole file once, and checks the end record, before the safety backup and before any deletion; append has no first pass.
 - A format 2 file is detected by its header text; anything else is read as format 1.
 
-### Filenames (Decision 55, letters extended in Decision 57)
-`backup_<letters>_<yyyymmdd_hhmmss>.dz` (the `append_` prefix was removed in Decision 83); `letters` is a fixed-order subset of
+### Filenames (Decision 278)
+`backup_ddmmyyyy_hhmmss.dz` for every backup, local and Drive. The categories a file holds are in its header, not its name. Older files named `backup_<letters>_<yyyymmdd_hhmmss>.dz` restore unchanged: the name is never read.
 `tviprlmf` (Text/Voice/Image/PDF/Reminder/Location/Money/Files — only the letters for categories
 actually included, regardless of the order they were selected in; a backup with only Text and PDF
 is `tp`, not `pt`). Categories with no letter of their own (Private Vault, Expenses, Tags, App
@@ -399,7 +399,7 @@ requires Capacitor 8, a separate, larger upgrade not undertaken for this alone.
 
 Order is fixed everywhere (Decision 134, Move added by Decision 181): Edit, Share, Download, Move, Delete. Move shows only for the types it supports (Decisions 182 to 184). The Select files bar order is Share, Download, Make a PDF, Move, Delete (Decision 185). Delete is a red bin icon. Row buttons, the image viewer header and the Select files screen follow it; bulk bars omit Edit. A tapped row button glows alone; the row does not react (Decision 136). The Money, Reminder, Location and Voice viewers carry Share, Download and Delete after Edit too (Decision 141).
 
-Downloads: `Documents/Arkly/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
+Downloads: `Download/Arkly/<label>.<ext>`, existing names get a ` (n)` suffix; Location, Reminder, Money (and legacy Expense) are `.txt`; a toast confirms the path (Decision 136).
 
 Download for append, its per-entry encrypted zip and the "Append files from download" import screen were
 removed in Decision 83. The only way to move data between devices or installs is a full or selective backup
@@ -965,3 +965,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Transfer (`widget-inbox.js`): each row is inserted into `entries` through `insertEntry` with its id and original time, then deleted. Runs at unlock, after a widget save while unlocked, and before a backup (local and Drive).
 - Lock: the database key is independent of the app-open password (Decision 158), so a locked capture needs no unlock; the lock gates screens only. Creation only: nothing stored is shown. A lock or backgrounding closes the layer and drops an unsaved capture.
 - Restore: Overwrite clears the inbox and its files; Append never reads it. The orphan sweep keeps inbox files.
+
+## Backups on the phone and the automatic backup schedule (Decision 278)
+- Local backups are written to the app's own folder, `Android/data/com.arkly.app/files` (`Directory.External`). Android hides that folder from file pickers and removes it on uninstall, so Settings > Backup & Restore (local) lists the files itself: Restore from this (loads the file into the restore form; above 300 MB the list asks for the Downloads copy), Save to Downloads (a copy in `Download/Arkly`, an existing name gets ` (n)`), Delete.
+- Extract to device storage and per-entry Download write under `Download/` (`Directory.ExternalStorage`), not Documents.
+- Two independent automatic backups, phone and Drive, each with a frequency (daily, weekly, monthly) and a time of day; meta keys `auto_phone_*` and `auto_backup_*` (enabled, frequency, time). `autoschedule.js` decides when one is due: the next occurrence of the time after the last backup, plus 6 days for weekly and 29 for monthly; due at once when there has been none. The last time is `credentials.last_backup_at` (any backup to the phone, manual too) and `last_drive_backup_at`.
+- They run when the app is open and a banner asks the backup passkey once for every target due; the passkey is never stored. Enabling, changing the schedule and running from the banner need the access check of Decisions 202 and 271.
+
