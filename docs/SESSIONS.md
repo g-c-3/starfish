@@ -21,8 +21,9 @@ Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; 
 - Owner: all device passes confirmed (DP107, DP115 to DP119). Phase 21 P4 checked: the saved passkey is not needed (the automatic backup asks through a banner on open); the one gap is that the backup check of Decision 202 is not applied to the automatic backup's toggle, frequency, banner run or Drive connect.
 - Decision 271: the owner chose to add the check; built in `src/js/app.js` (toggle on, frequency, banner run, Drive connect). Phase 21 complete. Not run through CI.
 - Owner: DP120 and all earlier passes confirmed. Decision 272: Google Drive connect. Code was already built behind a guard; added a CI switch (`GDRIVE_WEB_CLIENT_ID` repository variable), `scripts/patch-gdrive.js`, vite define, workflow steps (Drive client, SHA-1 on the run Summary), rewrote native-setup section 11 (the plugin needs the Web client ID). Not run through CI.
-Open: the owner's Google Cloud setup and variable, then DP121; any further light-theme item (needs screenshots).
-Next session start point: DP121 result once Drive is set up.
+- Decision 273: package id and internal names renamed to Arkly (`capacitor.config.json`, `db.js`, `notifications.js`, `biometric.js`, `gdrive.js`, setup notes, ARCHITECTURE, ROADMAP). New package installs as a separate app; data moves by backup and restore (DP122). Kept: keystore alias, `.dz` extension and magic bytes. Not run through CI.
+Open: DP122; the owner's Google Cloud setup (Android client with `com.arkly.app`) and variable, then DP121; any further light-theme item (needs screenshots).
+Next session start point: DP122 result, then DP121 once Drive is set up.
 
 ---
 

@@ -34,7 +34,7 @@
   `package.json`, `.github/workflows/build-android.yml`, `android-notes/native-setup.md`) both
   confirmed committed on `main`.
 - [ ] **1 — Infra & secrets (manual).**
-  - [x] Package name: `com.dumpzone.app` (set in `capacitor.config.json`).
+  - [x] Package name: `com.arkly.app` (set in `capacitor.config.json`; was `com.dumpzone.app` until Session 152, Decision 273).
   - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. CI
     run against the live secrets not yet confirmed green — pending manual check.
   - [ ] AdMob account, one Rewarded ad unit (not Interstitial). **Deliberately not doing this yet
@@ -303,9 +303,10 @@
   untouched, left as scaffolding for whenever this phase is actually picked up.
 - [~] **13 — Google Drive backup (optional, opt-in).** Additive to Phase 6, never a replacement
   (Decision 25). Sub-items, roughly in dependency order:
-  - [ ] Manual (owner): Google Cloud project, Drive API, OAuth consent screen scoped to `drive.file` only (Decision 26), published to Production before relying on automatic backup (Decision 27); then a Web application OAuth client and an Android OAuth client (package `com.dumpzone.app`, the release SHA-1 shown on the build run's Summary). Steps in `android-notes/native-setup.md` section 11, rewritten Session 152: the sign-in plugin needs the Web client ID (Decision 272), not the Android one.
+  - [ ] Manual (owner): Google Cloud project, Drive API, OAuth consent screen scoped to `drive.file` only (Decision 26), published to Production before relying on automatic backup (Decision 27); then a Web application OAuth client and an Android OAuth client (package `com.arkly.app`, the release SHA-1 shown on the build run's Summary). Steps in `android-notes/native-setup.md` section 11, rewritten Session 152: the sign-in plugin needs the Web client ID (Decision 272), not the Android one.
   - [x] CI switch (Session 152, Decision 272): the repository variable `GDRIVE_WEB_CLIENT_ID` turns Drive on (`scripts/patch-gdrive.js`, vite define, guard in `gdrive.js`); the run Summary shows the package name and SHA-1. No repo file is edited to enable Drive; without the variable Drive stays off.
     - [ ] DP121 (open after the owner's setup) — Drive connect on a device. Settings > Google Drive > Connect: the access check, then Google's account picker; pick the account; the screen shows it as connected. Back up now to Drive: the passkey, then a success message; the folder with the encrypted file is in that Drive (drive.google.com, My Drive). Restore from Drive: the file is listed and restores (append). Disconnect: the account is dropped. If sign-in fails with a number such as 10, the Web client ID, the Android client's SHA-1 or the consent screen is wrong; report the number.
+    - [ ] DP122 (open — Session 152) — Move to the Arkly package (Decision 273). Before installing the new build: in the OLD app, Settings > Backup & Restore (local), make a full backup (all categories) and keep the file. Install the new build: it appears as a second Arkly app, empty. Set it up (app password, Vault PIN if used), then Restore the backup (Append, or Overwrite on a fresh install). Check: notes, voice and image playback, PDFs, files, money, locations, Vault entries (Vault PIN), tags, currency symbol, and that reminders are scheduled again (a future one rings). Turn on fingerprint unlock again (it starts clean). Check the widget can be added from the new app (remove the old widget first). When satisfied, uninstall the OLD app. Report what is missing after the restore.
   - [x] Google Sign-In plugin wired (`@codetrix-studio/capacitor-google-auth`, Capacitor 6
     compatible). No `grantOfflineAccess`/token store of our own (Decision 30) — relies on the native
     SDK's silent cached-consent sign-in instead.

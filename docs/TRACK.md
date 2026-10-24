@@ -285,3 +285,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-24 | Session 152 (continued: P4 check) | none | All device passes confirmed; Phase 21 P4 checked, awaiting the owner's choice on the automatic-backup check |
 | 2026-10-24 | Session 152 (continued: P4 built) | Decision 271 | Access check on automatic backup (toggle, frequency, banner run, Drive connect); Phase 21 complete; DP120 open; not run through CI |
 | 2026-10-24 | Session 152 (continued: Drive connect) | Decision 272 | CI switch for Google Drive (repository variable), SHA-1 on the run Summary, setup notes corrected; DP120 confirmed; DP121 open after the owner's setup |
+| 2026-10-24 | Session 152 (continued: rename to Arkly) | Decision 273 | Package id com.arkly.app and internal names renamed; migration by backup and restore, DP122 open; not run through CI |

@@ -546,7 +546,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 - **Expense follow-up flow** — removed (Decision 131). Expenses are no longer detected from text; see Money.
 - **Reminder notifications, not alarms** — implemented via `@capacitor/local-notifications` (`notifications.js`),
   deliberately not `AlarmManager`/full-screen intents, for reliability and simplicity reasons recorded in
-  `android-notes/native-setup.md`. Includes a high-importance banner channel (`dumpzone_reminders_v2`, system default sound, Decision 96)
+  `android-notes/native-setup.md`. Includes a high-importance banner channel (`arkly_reminders_v2`, system default sound, Decisions 96, 273)
   and Snooze (10 min) / Done action buttons. Schedules use `allowWhileIdle: true`, and the manifest carries
   `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` so the plugin sets an exact alarm that wakes the phone in Doze
   (Decisions 97, 101). Snooze/Done run in a native receiver with no app launch (Decision 102, see the section below);
@@ -844,7 +844,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - A token saved by an earlier build (`meta.update_token`) is deleted at start-up.
 
 ## Name and identifiers (Decision 165)
-- The app is Arkly. Pre-rename identifiers kept: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
+- The app is Arkly (Decisions 165, 273). Package id `com.arkly.app`, database file `arkly.db`, channel ids `arkly_reminders*`, biometric entry names `arkly.app-password` and `arkly.vault-pin`, Drive folder `Arkly Backups`. Kept: keystore alias `dumpzone` (only inside the keystore and the `KEY_ALIAS` secret), the `.dz` backup extension and the format magic bytes (existing backups must keep restoring). The old package `com.dumpzone.app` is a different app to Android: it keeps its own data and is replaced by restoring a backup into the new one.
 - CI (`build-android.yml`) does not run for pushes that change only `docs/**`, `**/*.md` or `android-notes/**`.
 
 ## PDF mark-up (Decision 166)
