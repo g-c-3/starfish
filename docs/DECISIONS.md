@@ -3059,3 +3059,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Checked: no `dumpzone` text remains in `src/`, `scripts/`, the workflow or `capacitor.config.json`; `vite build` passes. Not run through CI.
 - Left to the owner: DP122, and the Google Cloud Android client with the new package name when Drive is set up.
 
+**274. Public homepage and privacy policy for the Google consent screen (Phase 13).** Added because Publish app stayed disabled in Google Cloud with every required Branding field filled and no verification required.
+- Files: `docs/index.html` (homepage) and `docs/privacy.html` (privacy policy), plain static pages with no script and no outside request. Served by GitHub Pages from the `docs` folder of `main` at `https://g-c-3.github.io/starfish/`.
+- Content: data stays on the device, no account, server or analytics; the permissions and why; Drive backup opt-in with the `drive.file` scope, encrypted on the device with a passkey that is never stored; the tap-only update check as the only other network use; contact through the repository's issue page, no email address.
+- Google Cloud Branding: home page `https://g-c-3.github.io/starfish/`, privacy policy `https://g-c-3.github.io/starfish/privacy.html`, authorised domain `g-c-3.github.io`. No logo (a logo forces verification).
+- A docs-only push does not start a build (Decision 165 `paths-ignore` covers `docs/**`).
+- If Google still keeps Publish disabled, the cause is not in these fields and the next step is a screenshot of what the console shows.
+

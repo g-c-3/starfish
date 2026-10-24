@@ -22,6 +22,7 @@ Start: "Go", then "Start 1". Tier 1 docs read; Decisions and ARCHITECTURE read; 
 - Decision 271: the owner chose to add the check; built in `src/js/app.js` (toggle on, frequency, banner run, Drive connect). Phase 21 complete. Not run through CI.
 - Owner: DP120 and all earlier passes confirmed. Decision 272: Google Drive connect. Code was already built behind a guard; added a CI switch (`GDRIVE_WEB_CLIENT_ID` repository variable), `scripts/patch-gdrive.js`, vite define, workflow steps (Drive client, SHA-1 on the run Summary), rewrote native-setup section 11 (the plugin needs the Web client ID). Not run through CI.
 - Decision 273: package id and internal names renamed to Arkly (`capacitor.config.json`, `db.js`, `notifications.js`, `biometric.js`, `gdrive.js`, setup notes, ARCHITECTURE, ROADMAP). New package installs as a separate app; data moves by backup and restore (DP122). Kept: keystore alias, `.dz` extension and magic bytes. Not run through CI.
+- Decision 274: homepage and privacy policy pages (`docs/index.html`, `docs/privacy.html`) for Google's consent screen, after Publish app stayed disabled. Google Cloud project `Arkly` created, Drive API enabled, consent screen and Web client created; Android client and publishing wait for the first build with the new package.
 Open: DP122; the owner's Google Cloud setup (Android client with `com.arkly.app`) and variable, then DP121; any further light-theme item (needs screenshots).
 Next session start point: DP122 result, then DP121 once Drive is set up.
 
