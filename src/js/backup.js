@@ -239,7 +239,7 @@ function makeSink(path, directory) {
     if (parts.length === 0) return;
     const data = parts.join('');
     parts = []; size = 0;
-    if (!started) { await Filesystem.writeFile({ path, directory, data, encoding: 'utf8' }); started = true; }
+    if (!started) { await Filesystem.writeFile({ path, directory, data, encoding: 'utf8', recursive: true }); started = true; }
     else await Filesystem.appendFile({ path, directory, data, encoding: 'utf8' });
   };
   return {
@@ -250,16 +250,16 @@ function makeSink(path, directory) {
 }
 
 // ---------------------------------------------------------------------------
-// Backups kept on the phone live in the app's own folder, Android/data/com.arkly.app/files (Decision 278). Android does not
-// show that folder in file pickers, so the app lists them itself: restore from one, save a copy to Downloads, or delete.
-// Uninstalling the app removes the folder and its backups.
+// Backups kept on the phone live in Documents/Arkly (Decision 279). That folder is visible to file managers and file pickers
+// and survives uninstalling the app; the app's own folder under Android/data does not. The same list is shown in Settings.
 // ---------------------------------------------------------------------------
-const PHONE_BACKUP_DIR = Directory.External;
-const COPY_DIR = 'Download/Arkly';
+const PHONE_BACKUP_DIR = Directory.Documents;
+const PHONE_BACKUP_FOLDER = 'Arkly';
+const phoneBackupPath = (name) => `${PHONE_BACKUP_FOLDER}/${name}`;
 
 async function listPhoneBackups() {
   let files = [];
-  try { files = (await Filesystem.readdir({ path: '', directory: PHONE_BACKUP_DIR })).files || []; } catch { return []; }
+  try { files = (await Filesystem.readdir({ path: PHONE_BACKUP_FOLDER, directory: PHONE_BACKUP_DIR })).files || []; } catch { return []; }
   return files
     .filter((f) => f.type !== 'directory' && /\.dz$/i.test(f.name))
     .map((f) => ({ name: f.name, size: f.size || 0, mtime: f.mtime || 0 }))
@@ -267,29 +267,14 @@ async function listPhoneBackups() {
 }
 
 async function deletePhoneBackup(name) {
-  await Filesystem.deleteFile({ path: name, directory: PHONE_BACKUP_DIR });
-}
-
-// Copies one backup into Download/Arkly; an existing name gets " (2)", " (3)" so nothing is overwritten. Returns the path.
-async function savePhoneBackupToDownloads(name) {
-  const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : '';
-  let to = `${COPY_DIR}/${name}`;
-  for (let n = 2; n < 100; n++) {
-    try { await Filesystem.stat({ path: to, directory: Directory.ExternalStorage }); } catch { break; }
-    to = `${COPY_DIR}/${stem} (${n})${ext}`;
-  }
-  await Filesystem.mkdir({ path: COPY_DIR, directory: Directory.ExternalStorage, recursive: true }).catch(() => {});
-  await Filesystem.copy({ from: name, directory: PHONE_BACKUP_DIR, to, toDirectory: Directory.ExternalStorage });
-  return to;
+  await Filesystem.deleteFile({ path: phoneBackupPath(name), directory: PHONE_BACKUP_DIR });
 }
 
 // A File for the existing restore form. The file is read through the app's local server, so a very large backup is held in
-// memory: the caller warns above RESTORE_FROM_LIST_MAX and points to the Downloads copy.
+// memory: the caller refuses above RESTORE_FROM_LIST_MAX and points to the file chooser.
 const RESTORE_FROM_LIST_MAX = 300 * 1024 * 1024;
 async function getPhoneBackupFile(name) {
-  const { uri } = await Filesystem.getUri({ path: name, directory: PHONE_BACKUP_DIR });
+  const { uri } = await Filesystem.getUri({ path: phoneBackupPath(name), directory: PHONE_BACKUP_DIR });
   const blob = await (await fetch(Capacitor.convertFileSrc(uri))).blob();
   return new File([blob], name, { type: 'application/octet-stream' });
 }
@@ -309,7 +294,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
 
   const { key, salt } = await deriveAesKey(passphrase, null, KDF_ITERATIONS);
   const name = fileName || backupFileName('backup', categories);
-  const sink = makeSink(name, PHONE_BACKUP_DIR);
+  const sink = makeSink(phoneBackupPath(name), PHONE_BACKUP_DIR);
   let n = 0, count = 0, files = 0, skippedFiles = 0;
   const put = async (data) => { n += 1; await sink.push(JSON.stringify(await encryptChunk(key, data, n)) + '\n'); };
 
@@ -808,16 +793,16 @@ async function restoreFormat2(db, opts) {
 // ---------------------------------------------------------------------------
 // Extract to device storage — no DB import, raw files + sidecar only.
 // ---------------------------------------------------------------------------
-async function extractCategoryToStorage(payload, category, destDir = 'Download/Arkly-Restore') {
+async function extractCategoryToStorage(payload, category, destDir = 'Arkly/Restore') {
   const entries = payload.entries.filter((e) => e._category === category && e.fileData);
   const written = [];
   for (const e of entries) {
     const ext = e.extension || (e.file_path || '').split('.').pop() || 'bin';
     const fileName = `${destDir}/${e.id}.${ext}`;
-    await Filesystem.writeFile({ path: fileName, directory: Directory.ExternalStorage, data: e.fileData, recursive: true });
+    await Filesystem.writeFile({ path: fileName, directory: Directory.Documents, data: e.fileData, recursive: true });
     const sidecar = { id: e.id, label: e.label, type: e.type, tags: e.tags || [], created_at: e.created_at, category };
     await Filesystem.writeFile({
-      path: `${destDir}/${e.id}.json`, directory: Directory.ExternalStorage,
+      path: `${destDir}/${e.id}.json`, directory: Directory.Documents,
       data: JSON.stringify(sidecar), encoding: 'utf8'
     });
     written.push(fileName);
@@ -828,7 +813,7 @@ async function extractCategoryToStorage(payload, category, destDir = 'Download/A
 export {
   ALL_CATEGORIES, ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
   buildBackupPayload, estimateBackupSize, createBackup,
-  listPhoneBackups, deletePhoneBackup, savePhoneBackupToDownloads, getPhoneBackupFile, RESTORE_FROM_LIST_MAX,
+  listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX,
   openBackupFile, readBackupHeader, decryptBackupPayload, estimateRestoreSize, restoreBackup,
   extractCategoryToStorage, getStorageEstimate, backupFileName
 };

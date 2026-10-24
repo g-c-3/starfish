@@ -9,7 +9,7 @@ import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelRem
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
 // ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
 // itself is untouched, kept as Phase 12 scaffolding for a future build.
-import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, savePhoneBackupToDownloads, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
+import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
 import { initWidgetCapture, handleWidgetBack, closeWidgetCapture } from './widget.js';
 import { transferInbox } from './widget-inbox.js';
@@ -1776,7 +1776,7 @@ async function handleBackupNow() {
     return;
   }
   statusEl.textContent = result.ok
-    ? `Saved to Android/data/com.arkly.app/files/${result.path}.${result.skippedFiles ? ` ${result.skippedFiles} missing file(s) were not included.` : ''}`
+    ? `Saved to Documents/Arkly/${result.path}.${result.skippedFiles ? ` ${result.skippedFiles} missing file(s) were not included.` : ''}`
     : `Backup failed: ${result.reason || 'unknown error'}${result.detail ? ` (${result.detail})` : ''}.`;
   if (result.ok) { document.getElementById('backup-passphrase').value = ''; document.getElementById('backup-hint').value = ''; renderPhoneBackupList().catch(() => {}); }
 }
@@ -2935,7 +2935,6 @@ async function renderPhoneBackupList() {
     <div class="drive-backup-row">
       <span>${escapeHtml(b.name)} · ${escapeHtml(formatBytes(b.size))}</span>
       <button class="link-btn" data-act="use" data-name="${escapeHtml(b.name)}">Restore from this</button>
-      <button class="link-btn" data-act="save" data-name="${escapeHtml(b.name)}">Save to Downloads</button>
       <button class="link-btn" data-act="delete" data-name="${escapeHtml(b.name)}">Delete</button>
     </div>`).join('');
 }
@@ -2946,16 +2945,13 @@ async function handlePhoneBackupAction(e) {
   const { act, name } = btn.dataset;
   const statusEl = document.getElementById('backup-status');
   try {
-    if (act === 'save') {
-      const path = await savePhoneBackupToDownloads(name);
-      toast(`Saved to ${path}`);
-    } else if (act === 'delete') {
-      if (!(await askYesNo({ title: 'Delete this backup?', text: `${name} will be removed from this phone. A copy saved to Downloads is not touched.`, yes: 'Delete', no: 'Keep' }))) return;
+    if (act === 'delete') {
+      if (!(await askYesNo({ title: 'Delete this backup?', text: `${name} will be removed from Documents/Arkly on this phone.`, yes: 'Delete', no: 'Keep' }))) return;
       await deletePhoneBackup(name);
       await renderPhoneBackupList();
     } else if (act === 'use') {
       const probe = (await listPhoneBackups()).find((b) => b.name === name);
-      if (probe && probe.size > RESTORE_FROM_LIST_MAX) { statusEl.textContent = 'This backup is too large to open from this list. Save it to Downloads, then choose that copy in Restore.'; return; }
+      if (probe && probe.size > RESTORE_FROM_LIST_MAX) { statusEl.textContent = 'This backup is too large to open from this list. Choose it with the file chooser in Restore instead (Documents/Arkly).'; return; }
       statusEl.textContent = 'Opening…';
       const file = await getPhoneBackupFile(name);
       const dt = new DataTransfer();
