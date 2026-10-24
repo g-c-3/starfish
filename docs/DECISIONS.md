@@ -3070,3 +3070,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: the step looks for the release; when it exists it replaces the APK on it (`gh release upload --clobber`), otherwise it creates it as before.
 - Effect: a re-run ends green. A release keeps one APK per version.
 
+**276. Drive sign-in crash fixed: the plugin was never initialised. Not run through CI, not run on a device (DP121).** First tap on Connect Google Drive in the build with Drive on crashed the app: `NullPointerException` in `GoogleAuth.signIn`, native, uncatchable from JS.
+- Cause: the sign-in plugin's `load()` is empty and its native sign-in client is created only by `initialize()`. `gdrive.js` called `signIn()` without it. Decision 272 turned the guard on, so the call was reached for the first time. The earlier Session 21 crash had the same cause, wrongly attributed to a missing client ID.
+- Fix: `initGoogleAuth()` calls `GoogleAuth.initialize()` once per process, before `signIn()` and before `signOut()` (which also uses the client). Client ID, scopes and no offline access come from the `GoogleAuth` block written by `scripts/patch-gdrive.js`. `signOut()` does nothing while the guard is false.
+- Why correct: the plugin source shows `initialize()` as the only place the client is built; `signIn()` and `signOut()` both dereference it. A rejected `initialize()` clears the cached promise so the next tap retries.
+- Still needed on the Google side: the Android OAuth client with package `com.arkly.app` and the release SHA-1. Without it sign-in now fails with a normal error (such as 10) shown in the app, not a crash.
+- Files: `src/js/gdrive.js`. `vite build` passes.
+

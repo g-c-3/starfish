@@ -288,3 +288,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-24 | Session 152 (continued: rename to Arkly) | Decision 273 | Package id com.arkly.app and internal names renamed; migration by backup and restore, DP122 open; not run through CI |
 | 2026-10-24 | Session 152 (continued: Google Cloud setup) | Decision 274 | Homepage and privacy policy pages added; Google Cloud project, Drive API, consent screen and Web client created by the owner |
 | 2026-10-24 | Session 152 (continued: first Arkly build) | Decision 275 | First build with com.arkly.app and the Drive switch read from its log; release step made re-run safe |
+| 2026-10-24 | Session 152 (continued: Drive crash) | Decision 276 | Connect Google Drive crash fixed: plugin initialised before sign-in and sign-out; not run through CI |
