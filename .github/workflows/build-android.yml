@@ -168,7 +168,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ env.APP_VERSION_NAME }}" \
-            android/app/build/outputs/apk/release/app-release.apk \
-            --title "Arkly v${{ env.APP_VERSION_NAME }}" \
-            --notes "Automated build from commit ${{ github.sha }}."
+          # A re-run keeps the same run number, so the tag can already exist: replace the APK on that release instead of failing.
+          TAG="v${{ env.APP_VERSION_NAME }}"
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --title "Arkly $TAG" \
+              --notes "Automated build from commit ${{ github.sha }}."
+          fi
