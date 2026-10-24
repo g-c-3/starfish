@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
-const DB_NAME = 'dumpzone.db'; // persisted file name from before the rename to Arkly; changing it would orphan existing data (Decision 165)
+const DB_NAME = 'arkly.db'; // the package id changed with the rename (Decision 273), so this is a fresh install's database; data arrives by restoring a backup
 let _sqlite = null;
 
 // Decision 158: random 256-bit key, held by the plugin in Keystore-backed storage. Never derived from a password.

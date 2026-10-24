@@ -5,8 +5,8 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { nextOccurrences } from './reminders.js';
 
 // An Android channel's importance and sound are fixed once created, so a changed style needs a new id (Decision 96).
-const CHANNEL_ID = 'dumpzone_reminders_v2'; // persisted channel ids keep their pre-rename names (Decision 165)
-const OLD_CHANNEL_ID = 'dumpzone_reminders';
+const CHANNEL_ID = 'arkly_reminders_v2';
+const OLD_CHANNEL_ID = 'arkly_reminders'; // first-generation id; absent on a fresh install, deleting it is harmless
 
 // A Vault reminder shows only this text, on the shade and on the lock screen: what it is about is read inside the Vault (Decision 140).
 const VAULT_REMINDER_TEXT = 'Vault Reminder';

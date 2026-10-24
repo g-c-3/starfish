@@ -22,9 +22,9 @@
 
 import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
-// Keystore entry names keep their pre-rename form; renaming would drop saved biometric enrolment (Decision 165).
-const SERVER_APP = 'dumpzone.app-password';
-const SERVER_VAULT = 'dumpzone.vault-pin';
+// Keystore entry names. Saved fingerprint enrolment is per install, so the rename to Arkly (Decision 273) starts clean.
+const SERVER_APP = 'arkly.app-password';
+const SERVER_VAULT = 'arkly.vault-pin';
 
 // The system fingerprint screen is its own Activity, so showing it pauses this one and the app reports "went to background".
 // The app's lock-on-background must ignore that pause: it would lock the app, or the Vault, right after a successful unlock.

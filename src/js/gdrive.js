@@ -25,7 +25,6 @@ import { transferInbox } from './widget-inbox.js';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const BACKUP_FOLDER_NAME = 'Arkly Backups';
-const LEGACY_BACKUP_FOLDER_NAME = 'Dumpzone Backups'; // folder created before the rename; still used when it exists (Decision 165)
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
 // ---------------------------------------------------------------------------
@@ -69,11 +68,9 @@ async function driveFetch(accessToken, path, opts = {}) {
 }
 
 async function getOrCreateBackupFolder(accessToken) {
-  for (const name of [BACKUP_FOLDER_NAME, LEGACY_BACKUP_FOLDER_NAME]) {
-    const q = encodeURIComponent(`name='${name}' and mimeType='${FOLDER_MIME}' and trashed=false`);
-    const found = await driveFetch(accessToken, `/files?q=${q}&fields=files(id,name)`);
-    if (found.files && found.files.length > 0) return found.files[0].id;
-  }
+  const q = encodeURIComponent(`name='${BACKUP_FOLDER_NAME}' and mimeType='${FOLDER_MIME}' and trashed=false`);
+  const found = await driveFetch(accessToken, `/files?q=${q}&fields=files(id,name)`);
+  if (found.files && found.files.length > 0) return found.files[0].id;
 
   const created = await driveFetch(accessToken, '/files', {
     method: 'POST',
