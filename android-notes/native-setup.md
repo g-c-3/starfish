@@ -1,6 +1,6 @@
 # Native Android notes
 
-> Rename to Arkly (Decision 165): these pre-rename identifiers are kept on purpose, because changing them would break installs, signing or saved data: package id `com.dumpzone.app`, keystore alias `dumpzone`, database file `dumpzone.db`, notification channel ids `dumpzone_reminders*`, biometric entry names `dumpzone.app-password` and `dumpzone.vault-pin`.
+> Rename to Arkly (Decisions 165, 273): the package id is `com.arkly.app` and the database, notification channel, biometric entry and Drive folder names follow it. Kept on purpose: the keystore alias `dumpzone` (it lives only inside the keystore file and the `KEY_ALIAS` secret; changing it means a new keystore and new secrets, with no benefit to anyone using the app), the `.dz` backup extension and the backup format magic bytes (changing them would stop every existing backup from restoring).
 
 These are steps/edits needed inside the generated `android/` folder (created by `npx cap add android`).
 **`android/` has never actually been committed** (confirmed Session 25 — build-android.yml's `if [ ! -d
@@ -185,7 +185,7 @@ here is web-UI on console.cloud.google.com — no terminal.
      would just stop working with no error message pointing at the cause. Because the only scope
      requested is non-sensitive, publishing does not trigger Google's full manual review queue.
 4. **Create a Web application OAuth client**: APIs & Services > Credentials > Create Credentials > OAuth client ID > Application type: Web application. No redirect URI is needed. Copy its client ID (ends `.apps.googleusercontent.com`). The plugin hands this ID to Google Sign-In's ID-token request, which needs the Web client; an Android-type ID there fails with error 10.
-5. **Create an Android OAuth client** in the same project: Application type: Android. Package name: `com.dumpzone.app`. SHA-1: open the latest run of the build workflow on GitHub > Summary > "Google Drive setup values" and copy the SHA-1 line (no command to run). This client has no ID to copy; Google matches the app by package name and SHA-1. The SHA-1 changes only if the release keystore changes.
+5. **Create an Android OAuth client** in the same project: Application type: Android. Package name: `com.arkly.app`. SHA-1: open the latest run of the build workflow on GitHub > Summary > "Google Drive setup values" and copy the SHA-1 line (no command to run). This client has no ID to copy; Google matches the app by package name and SHA-1. The SHA-1 changes only if the release keystore changes.
 6. **Set the variable** on GitHub: repository Settings > Secrets and variables > Actions > Variables tab > New repository variable. Name `GDRIVE_WEB_CLIENT_ID`, value the Web client ID from step 4. It is a variable, not a secret: the ID is inside the APK anyway.
 7. **Run the build workflow again**, install the APK, then Settings > Google Drive > Connect. A malformed value fails the build with a clear message; deleting the variable turns Drive off again.
 
