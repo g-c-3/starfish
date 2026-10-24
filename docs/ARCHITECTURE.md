@@ -967,8 +967,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Restore: Overwrite clears the inbox and its files; Append never reads it. The orphan sweep keeps inbox files.
 
 ## Backups on the phone and the automatic backup schedule (Decision 278)
-- Local backups are written to the app's own folder, `Android/data/com.arkly.app/files` (`Directory.External`). Android hides that folder from file pickers and removes it on uninstall, so Settings > Backup & Restore (local) lists the files itself: Restore from this (loads the file into the restore form; above 300 MB the list asks for the Downloads copy), Save to Downloads (a copy in `Download/Arkly`, an existing name gets ` (n)`), Delete.
-- Extract to device storage and per-entry Download write under `Download/` (`Directory.ExternalStorage`), not Documents.
+- Local backups are written to `Documents/Arkly` (`Directory.Documents`), a folder file managers and file pickers can see and that survives uninstalling the app (Decision 279; Decision 278 had used the app's own Android/data folder, which uninstalling removes). Settings > Backup & Restore (local) also lists them: Restore from this (loads the file into the restore form; above 300 MB the list asks for the file chooser) and Delete.
+- Per-entry Download writes to `Download/Arkly` (`Directory.ExternalStorage`). Extract to device storage writes to `Documents/Arkly/Restore`.
 - Two independent automatic backups, phone and Drive, each with a frequency (daily, weekly, monthly) and a time of day; meta keys `auto_phone_*` and `auto_backup_*` (enabled, frequency, time). `autoschedule.js` decides when one is due: the next occurrence of the time after the last backup, plus 6 days for weekly and 29 for monthly; due at once when there has been none. The last time is `credentials.last_backup_at` (any backup to the phone, manual too) and `last_drive_backup_at`.
 - They run when the app is open and a banner asks the backup passkey once for every target due; the passkey is never stored. Enabling, changing the schedule and running from the banner need the access check of Decisions 202 and 271.
 

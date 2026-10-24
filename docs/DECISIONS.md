@@ -3093,3 +3093,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/backup.js`, `src/js/fileactions.js`, `src/js/gdrive.js`, `src/js/app.js`, `src/js/autoschedule.js` (new), `src/index.html`. `vite build` passes; the schedule arithmetic was checked in Node.
 - Network, credentials, backup format: unchanged.
 
+**279. Backups and extraction in Documents/Arkly; downloads stay in Downloads (Phase 6). Not run through CI, not run on a device (DP123).** Amends Decision 278 at the owner's request: files in the app's own Android/data folder are lost when the app is uninstalled.
+- Local backups, including the automatic and the safety backup, are written to `Documents/Arkly/backup_ddmmyyyy_hhmmss.dz`. The folder is created on the first write. The Settings list shows that folder only; backups from earlier builds in the Documents root stay there and restore through the file chooser.
+- Extract to device storage writes to `Documents/Arkly/Restore`.
+- Per-entry Download stays in `Download/Arkly`, as in Decision 278.
+- Removed: the Save to Downloads action of the list and its copy code; the file is already in a folder every file manager sees.
+- Unchanged from Decision 278: the file name, the 300 MB limit for Restore from this, the schedules and their access check.
+- Files: `src/js/backup.js`, `src/js/app.js`, `src/index.html`. `vite build` passes.
+

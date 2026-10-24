@@ -291,3 +291,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-24 | Session 152 (continued: Drive crash) | Decision 276 | Connect Google Drive crash fixed: plugin initialised before sign-in and sign-out; not run through CI |
 | 2026-10-24 | Session 152 (continued: Drive prompt on first open) | Decision 277 | Google account screen now opens only when the person taps Connect; start-up check is quiet; not run through CI |
 | 2026-10-24 | Session 152 (continued: backup storage and schedules) | Decision 278 | New backup file name, phone folder and list, Downloads for exports, automatic backup for the phone, time settings; DP121 confirmed; DP123 open; not run through CI |
+| 2026-10-24 | Session 152 (continued: backup folder) | Decision 279 | Backups and extraction in Documents/Arkly, downloads in Downloads; not run through CI |
