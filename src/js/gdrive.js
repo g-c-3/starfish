@@ -31,19 +31,17 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // ---------------------------------------------------------------------------
 // Auth — silent when already consented, prompts only the first time.
 // ---------------------------------------------------------------------------
-// Flip to true only once a real androidClientId is set in capacitor.config.json (see
-// android-notes/native-setup.md §10). This guard exists because of a confirmed crash (Session 21,
-// real device crash log): the plugin's native signIn() method has no null-check on its internal
-// GoogleSignInClient before calling it, so with no client ID configured, calling GoogleAuth.signIn()
-// throws an uncaught NullPointerException INSIDE the plugin's own compiled Java code — a native
-// crash that kills the whole app process before anything can reach JS, not something any amount of
-// JS-side try/catch can intercept. Never call GoogleAuth.signIn() while this is false.
-const GOOGLE_DRIVE_CONFIGURED = false;
+// True only in a build made with a Drive client ID (scripts/patch-gdrive.js sets it through vite's define; Decision 272). The guard
+// exists because of a confirmed crash (Session 21, real device crash log): the plugin's native signIn() has no null-check on its
+// internal GoogleSignInClient, so with no client ID configured it throws an uncaught NullPointerException inside the plugin's own
+// compiled Java code, a native crash that kills the app process before anything reaches JS. Never call GoogleAuth.signIn() while
+// this is false.
+const GOOGLE_DRIVE_CONFIGURED = typeof __GDRIVE_CONFIGURED__ !== 'undefined' && __GDRIVE_CONFIGURED__;
 
 async function ensureSignedIn({ silent = false } = {}) {
   if (!GOOGLE_DRIVE_CONFIGURED) {
     if (silent) return { ok: false, reason: 'not_configured' };
-    throw new Error('Google Drive isn\'t set up yet — see android-notes/native-setup.md §10.');
+    throw new Error('Google Drive isn\'t set up in this build — see android-notes/native-setup.md §11.');
   }
   try {
     const user = await GoogleAuth.signIn(); // native SDK returns cached consent without UI if valid
