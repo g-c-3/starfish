@@ -1159,12 +1159,13 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 /* Code editor of the text viewer (Decision 288). Syntax colours are tokens for both themes. */
 .ev-tools { display: flex; gap: 6px; padding: 6px 10px; overflow-x: auto; background: var(--surface); border-bottom: 1px solid var(--border); scrollbar-width: none; flex: none; }
 .ev-tools::-webkit-scrollbar { display: none; }
-.ev-tool { flex: none; min-height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: 600 13px/1 inherit; font-family: inherit; box-shadow: none; }
+.ev-tool { flex: none; width: auto; min-height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: 600 13px/1 inherit; font-family: inherit; box-shadow: none; }
 .ev-tool.on { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
 .ev-tool:disabled { opacity: .4; }
 .ev-code { position: relative; flex: 1; min-height: 0; }
 .ev-code .cm-editor { height: 100%; }
 .ev-code .cm-panels input, .ev-code .cm-panels button { font: 13px/1.2 inherit; font-family: inherit; min-height: 34px; margin: 2px 3px 2px 0; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg); box-shadow: none; }
+.ev-code .cm-panels button, .ev-code .cm-panels input[type="checkbox"] { width: auto; }
 .ev-code .cm-panels input[type="checkbox"] { min-height: 0; margin-right: 4px; }
 .ev-code .cm-panels label { font-size: 12.5px; margin-right: 8px; white-space: nowrap; }
 .ev-code .cm-panels button[name="close"] { position: absolute; top: 2px; right: 6px; background: transparent; border: none; font-size: 20px; }
