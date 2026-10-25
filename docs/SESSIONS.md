@@ -23,8 +23,12 @@ Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings re
 - Context reached the warning level before stage 3.
 - Owner confirmed DP130 (double Back worked). Phase 28 closed.
 - Phase 30 (owner request) and Decision 289: toasts fade and slide in and out; the exit notice is dismissed at once when the person leaves the landing page (`exitNoticeUp`, checked in `updateBackButtonState()`). `vite build` passes; not run through CI.
-Open: DP129, DP131, DP132; Phase 29 stage 3 (Home and Vault note editors).
-Next session start point: the DP129, DP131 and DP132 results, then Phase 29 stage 3 (read the note editor code and Decisions 133 and 177 first).
+- Test files (a 1.2 MB log stitched to 2.4, 4.8 and 9.7 MB; not committed) and an engine benchmark: open, edit and search stay fast to 18 MB on a desktop. Owner confirmed on device: the 2.4 MB file was refused under the 2 MB limit; after Decision 290 the 2.4, 4.8 and 9.7 MB files open read-only and scroll smoothly.
+- Decision 290: opening limit 10 MB, editing limit 2 MB, larger files read-only with a banner.
+- Owner confirmed DP129, DP131 and DP132. Phases 27 and 30 closed; Phase 29 stages 1 and 2 closed.
+- Bug: the code editor's toolbar showed one full-width Find button, the rest off-screen. Cause: the global `input, button` rule sets `width: 100%`. Fix: `width: auto` on `.ev-tool` and on the find panel's buttons and checkboxes. Correct because a rule with a class selector overrides the element rule for these buttons only. `vite build` passes; not device-tested.
+Open: Phase 29 stage 3 (Home and Vault note editors).
+Next session start point: Phase 29 stage 3 (read the note editor code and Decisions 133 and 177 first).
 
 ---
 

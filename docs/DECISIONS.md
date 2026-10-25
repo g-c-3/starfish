@@ -3159,7 +3159,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Owner request: a viewer and editor as capable as a file manager's (line numbers, syntax colours, undo, find, scroll handle). Engine: CodeMirror 6, MIT, installed from npm at build time with exact versions (`state` 6.7.6, `view` 6.43.14, `commands` 6.11.1, `language` 6.13.1, `search` 6.7.2, `@lezer/highlight` 1.2.5 and the language packages for JS/TS, JSON, HTML, CSS, Markdown, XML, YAML, Java, Python). Every version is at least 14 days old; `view` 6.43.14 was chosen over the newer 6.43.15. `package-lock.json` gained 33 packages and changed none.
 - Offline: the editor is code in the app's own bundle (`codeeditor-*.js`, about 660 kB, 238 kB gzipped, loaded only when a text file opens); the built chunk contains no `fetch`, `XMLHttpRequest` or `WebSocket`. The app's network calls stay two (ad unit, tap-only update check).
 - A file now opens for reading; Edit turns editing on (the keyboard stays down until then). Save, Undo and Redo show while editing. Find and replace uses the library's panel; Go to line asks for a number; Wrap and A-/A+ last until the app closes (not stored).
-- Unchanged: read-only for text with invalid bytes and for archive copies, CRLF written back (`restoreEol`), "Discard changes?" on Back, the 2 MB limit (to be raised only after a device test).
+- Unchanged: read-only for text with invalid bytes and for archive copies, CRLF written back (`restoreEol`), "Discard changes?" on Back. The size limits changed in Decision 290.
 - Not done: tabs for several files; the Home and Vault note editors (Phase 29, stage 3, own checks for Decisions 133 and 177).
 - Files: `src/js/codeeditor.js` (new), `src/js/explorer-view.js`, `src/css/style.css`, `package.json`, `package-lock.json`. `vite build` passes; the module ran under a DOM stand-in (open, edit, undo, redo, dirty, go to line, wrap); not run through CI, not device-tested (DP131). Mobile selection handles, the find panel and the scroll handle on the real WebView are the unproven parts.
 
@@ -3168,4 +3168,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Every toast now fades and slides in and out over 0.2 s (`.toast` is transparent until `.show`; `hideToast()` removes `show` and adds `hidden` after 220 ms). A newer toast cancels a pending hide. With reduced motion set on the phone, the slide is dropped.
 - The exit notice sets `exitNoticeUp`; `updateBackButtonState()` (run on every page class change) hides it, and resets the double-Back count, as soon as `backAction()` is no longer empty (a folder, sheet, viewer, Settings or the explorer is open). Any other toast clears the flag. Moving between the Home and Vault landing pages keeps the notice.
 - Files: `src/js/app.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP132).
+
+**290. Large text files open read-only.** Amends Decision 288's size limit.
+- Opening limit raised from 2 MB to 10 MB (`TEXT_MAX`); editing limit stays 2 MB (`TEXT_EDIT_MAX`). A file between them opens read-only with the banner "Larger than 2 MB: open for reading only." (no Edit, no Save). Above 10 MB: Open with app.
+- Cause: saving writes the whole text through the file plugin as one string, which is untested above 2 MB, and a failed save is worse than a failed open; reading is harmless. Device check with 2.4, 4.8 and 9.7 MB files: they open, scroll, wrap and search smoothly.
+- Further raising either limit needs its own device test (open time on a larger file; save of a file near the new editing limit).
+- Files: `src/js/explorer-view.js`.
 
