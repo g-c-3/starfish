@@ -761,7 +761,6 @@ input[type="radio"]:checked { border-color: var(--brand); border-width: 6px; }
 }
 @media (prefers-reduced-motion: no-preference) { .spinner { animation: spin 0.8s linear infinite; } }
 @keyframes spin { to { transform: rotate(360deg); } }
-#ad-gate-screen { text-align: center; }
 
 /* Settings: grouped, icon-led */
 #settings-tab > h2 { margin-bottom: 0; }
@@ -932,7 +931,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 @keyframes rec-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.5); } 50% { box-shadow: 0 0 0 12px rgba(217, 83, 79, 0); } }
 @media (prefers-reduced-motion: reduce) { .rec-hero.live .row-icon { animation: none; } }
 
-/* ---- Back stays visible everywhere (Decision 104). Back-only: lock, first-run, ad gate, and above any overlay. ---- */
+/* ---- Back stays visible everywhere (Decision 104). Back-only: lock, first-run, and above any overlay. ---- */
 #bottom-nav.back-only, body.overlay-open #bottom-nav {
   left: 50%; right: auto; transform: translateX(-50%); gap: 0; padding: 0; height: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
