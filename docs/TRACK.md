@@ -298,3 +298,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-25 | Session 153 (continued: DP124) | none | DP124 confirmed on device; Phase 5 closed; docs only |
 | 2026-10-25 | Session 153 (continued: roadmap closed) | none | Every open or partial roadmap item closed by the owner; cross-PIN restore confirmed; docs only |
 | 2026-10-25 | Session 153 (continued: CI) | none | CI green for the Session 153 changes; ads.js deleted; docs only |
+| 2026-10-25 | Session 153 (continued: version scheme) | Decision 282 | Version name from the build number (v1.0.675 style); update check reads both forms; DP125 added; checked in Node; not run through CI |

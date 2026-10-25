@@ -3114,3 +3114,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The effect varies by phone. If DP124 shows no audible difference, the switch and the patch are removed.
 - No network, no new permission.
 - Files: `scripts/patch-voice.js`, `.github/workflows/build-android.yml`, `src/js/app.js`. `vite build` passes; the patch was run twice on a copy of the plugin source and is idempotent; not run through CI, not device-tested.
+
+**282. Version name derived from the build number.** Replaces the `<package.json version>+<run number>` form of Decisions 51 and 72.
+- Rule, with N the CI run number: `major = 1 + N div 10000`, `minor = N div 1000 mod 10`, `patch = N mod 1000` as three digits. N 674 is 1.0.674; 999 is 1.0.999; 1000 is 1.1.000; 9999 is 1.9.999; 10000 is 2.0.000.
+- `versionCode` stays N. The release tag is `v<version>`. `package.json` "version" is no longer read.
+- `update-check.js` turns a tag or an installed version back into N, so the comparison is unchanged: highest N wins. The old form `<x.y.z>+<N>` is still read, so releases up to run 674 stay comparable.
+- Cost: an app installed before this change reads only the old form and cannot see a `v1.0.x` tag. The first build under this rule is installed by hand once; updates through the app work from then on.
+- No network change.
+- Files: `scripts/patch-version.js`, `src/js/update-check.js`, `.github/workflows/build-android.yml` (comment only). Mapping checked in Node for 13 values including every boundary; the update comparison checked for six cases; `patch-version.js` run end to end on a stand-in `build.gradle`. Not run through CI, not device-tested (DP125).

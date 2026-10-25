@@ -19,8 +19,10 @@ Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-
 - Owner confirmed DP124 on device: noise reduction works. Phase 5 closed.
 - Owner confirmed the cross-PIN restore path on device (device-confirmed earlier, Session 150, Decision 255; the Phase 6 text saying otherwise was stale). Owner then closed every remaining open or partial roadmap item: Phases 6, 7, 8, 14, 17 (sub-items), 18, 21 (stage text), 22 and the device pass backlog. 39 lines marked closed.
 - Closed on the owner's word without a device pass of their own: Phase 7 actions, the Phase 14 plain-UI and not-run notes, Phase 22 E1a, E3b, E3d stage 3 and equations, Phase 17 lock fixes and M, Phase 18 C.
-Open: nothing. No open roadmap item remains; further work needs new items from the owner.
-Next session start point: the owner's new roadmap items.
+- Owner reported CI green and `ads.js` deleted.
+- Phase 23 (new, owner request) and Decision 282: version name derived from the build number (1.0.674, 1.0.675 ... 1.0.999, 1.1.000 ... 1.9.999, 2.0.000). `patch-version.js` writes it, `update-check.js` reads it back and still reads the old form. Checked in Node (mapping at every boundary, six update cases, the script on a stand-in `build.gradle`). Not run through CI. An older install cannot see the new tags: the first new build is installed by hand once.
+Open: DP125 (version scheme); CI run of the Phase 23 files.
+Next session start point: the DP125 result and the CI run of the Phase 23 files, then the owner's new roadmap items.
 
 ---
 
