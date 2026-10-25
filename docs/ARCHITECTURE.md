@@ -614,7 +614,7 @@ Playback output (Decision 283): Speaker or Earpiece at the top of the Voice fold
 Noise reduction (Decision 281): a switch on the ready screen, kept in `meta.rec_noise`, off by default. `scripts/patch-voice.js` patches the plugin in CI so `startRecording({ noiseReduction: true })` records from `VOICE_COMMUNICATION` (the phone's own suppression, where it has one); otherwise `MIC`. The widget's recorder is unchanged, and the `noise_reduction` column stays NULL.
 
 ### Back button everywhere (Decision 104)
-The Android Back button and back gesture run this same action with the same glow; on a landing page or the lock gate they send the app to the background (Decision 138).
+The Android Back button and back gesture run this same action with the same glow; on the lock gate they send the app to the background at once (Decision 138); on a Home or Vault landing page the first Back shows "Press again to exit" (Back button) or "Swipe again to exit" (gesture), and a second within three seconds sends the app to the background (Decision 287). The wording comes from `window.ArklyNav` (`scripts/patch-nav.js`), which reads the phone's navigation settings; when they cannot be read the notice says "Back again to exit". Any Back that goes somewhere starts the count again.
 
 The nav's Back stays visible on every screen: alone on the lock and first-run screens, and alone above any open
 overlay (`body.overlay-open`). It dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
