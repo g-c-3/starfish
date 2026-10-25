@@ -9,13 +9,19 @@
 const REPO = 'g-c-3/starfish';
 const FETCH_TIMEOUT_MS = 5000;
 
-// build-android.yml tags every release "v<package.json version>+<CI run number>" and
-// scripts/patch-version.js stamps the same "+<run number>" suffix onto the installed app's own
-// version string. The run number is a strictly increasing integer, so comparing it directly is
-// exact and skips semver parsing entirely — a higher run number is a newer build, full stop.
+// build-android.yml tags every release "v<version>" and scripts/patch-version.js stamps the same <version>
+// onto the installed app (Decision 282). <version> is derived from the CI run number N:
+// "<1 + N div 10000>.<N div 1000 mod 10>.<N mod 1000, three digits>", so 674 is 1.0.674 and 10000 is 2.0.000.
+// The older form "<x.y.z>+<N>" (builds up to run 674) is still read. Both give back N, a strictly increasing
+// integer, so comparing it directly is exact and skips semver parsing — a higher N is a newer build, full stop.
 function extractRunNumber(versionOrTag) {
-  const match = /\+(\d+)$/.exec(versionOrTag || '');
-  return match ? parseInt(match[1], 10) : null;
+  const text = versionOrTag || '';
+  const old = /\+(\d+)$/.exec(text);
+  if (old) return parseInt(old[1], 10);
+  const cur = /^v?(\d+)\.(\d)\.(\d{3})$/.exec(text);
+  if (!cur) return null;
+  const major = parseInt(cur[1], 10);
+  return major < 1 ? null : (major - 1) * 10000 + parseInt(cur[2], 10) * 1000 + parseInt(cur[3], 10);
 }
 
 // Returns one of:
