@@ -404,6 +404,28 @@ function goBack() {
   updateBackButtonState();
 }
 
+// Back on a landing page (Decision 287): the first Back shows a notice, a second within the window sends the app to the
+// background. The wording follows how the phone gives Back (window.ArklyNav, scripts/patch-nav.js). The lock screen keeps the
+// single Back (Decision 215).
+const EXIT_BACK_WINDOW_MS = 3000;
+let lastLandingBackAt = 0;
+function exitNoticeText() {
+  let mode = 'unknown';
+  try { if (window.ArklyNav) mode = window.ArklyNav.mode(); } catch { /* wording only */ }
+  return mode === 'gesture' ? 'Swipe again to exit' : mode === 'buttons' ? 'Press again to exit' : 'Back again to exit';
+}
+function backFromLanding() {
+  const now = Date.now();
+  if (appLockShowing() || now - lastLandingBackAt <= EXIT_BACK_WINDOW_MS) {
+    lastLandingBackAt = 0;
+    hideToast();
+    App.minimizeApp();
+    return;
+  }
+  lastLandingBackAt = now;
+  toast(exitNoticeText());
+}
+
 function setActiveNavTab(tab) {
   document.querySelectorAll('#bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.nav === tab));
 }
@@ -3467,10 +3489,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   // Android Back button and back gesture: the same action as the on-screen Back button, with the same glow. Where that
-  // button is disabled (a section's landing page, the lock gate) the app goes to the background, which locks it (Decision 45).
+  // button is disabled (a section's landing page) the second Back in a row sends the app to the background, which locks it (Decision 45); the lock gate does so at once (Decision 287).
   App.addListener('backButton', () => {
     if (handleWidgetBack()) return; // an open widget capture closes first (Decision 266)
-    if (!backAction()) { App.minimizeApp(); return; }
+    if (!backAction()) { backFromLanding(); return; }
+    lastLandingBackAt = 0; // a Back that went somewhere starts the exit count again
     navBackBtn.classList.remove('glow');
     void navBackBtn.offsetWidth;
     navBackBtn.classList.add('glow');
