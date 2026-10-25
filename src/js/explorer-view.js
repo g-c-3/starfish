@@ -7,7 +7,8 @@ import { Capacitor } from '@capacitor/core';
 import { chromeOnScroll } from './chrome-scroll.js';
 
 export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
-export const TEXT_MAX = 2 * 1024 * 1024; // larger text goes to another app (limit kept from the plain text box; to be raised after a device test of the code editor)
+export const TEXT_MAX = 10 * 1024 * 1024; // larger text goes to another app; the whole file is read into memory
+export const TEXT_EDIT_MAX = 2 * 1024 * 1024; // above this a text file opens for reading only: the saved copy would travel whole through the file plugin, untested at that size
 export const PDF_MAX = 150 * 1024 * 1024; // the whole file is held in memory while it is open
 export const OFFICE_MAX = 50 * 1024 * 1024; // same reason; docx, xlsx and pptx are unpacked in memory
 
@@ -100,8 +101,10 @@ export function openFileViewer(file, ctx) {
     body.replaceChildren();
     const wrap = el('div', 'ev-text-wrap');
     if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text. It is open for reading only, so saving cannot damage it.'));
-    const editable = !info.lossy && !readOnly; // readOnly: a copy taken out of an archive; saving would be lost
+    const big = f.size > TEXT_EDIT_MAX;
+    const editable = !info.lossy && !readOnly && !big; // readOnly: a copy taken out of an archive; saving would be lost
     if (readOnly && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
+    else if (big && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Larger than 2 MB: open for reading only.'));
     const bar = el('div', 'ev-tools'); const host = el('div', 'ev-code');
     wrap.append(bar, host); body.appendChild(wrap);
     let ed, make;
