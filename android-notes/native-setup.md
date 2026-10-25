@@ -47,7 +47,7 @@ Required:
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.INTERNET" /> <!-- ad SDK only -->
+<uses-permission android:name="android.permission.INTERNET" /> <!-- update check, Google Drive backup, Verify link -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 ```
@@ -79,11 +79,7 @@ README, which had an inconsistency about its own return shape). Wired into both 
 capture bars — tap the voice button, a record/stop UI appears with a live timer, stopping saves the
 recording.**
 
-**Not yet done: the noise-reduction toggle.** This plugin's `startRecording()` takes no parameters —
-no way to choose `AudioSource.MIC` vs `AudioSource.VOICE_COMMUNICATION` (the latter is what would
-enable the device's built-in AEC/NS/AGC suppression at the hardware/OS level, per the original plan
-below). Getting that means either finding a plugin that exposes an audio-source option, or a small
-custom native plugin wrapping `MediaRecorder` directly.
+**Noise reduction (Session 153, Decision 281).** The plugin's `startRecording()` read no audio-source option and always used `AudioSource.MIC`. `scripts/patch-voice.js` (a CI step, run after `npm ci`) patches the plugin source in `node_modules`: `CustomMediaRecorder.java` gets a static flag and picks `VOICE_COMMUNICATION` when it is set, `VoiceRecorder.java` sets the flag from the call's `noiseReduction` boolean. Without the option the recorder behaves as before. `VOICE_COMMUNICATION` enables the phone's own noise suppression where the device has it; the effect varies by phone (DP124). Idempotent; fails the build if the plugin source changes.
 
 **Resolved (Session 25, Decision 49) — confirmed by downloading the actual package and reading its
 shipped `android/src/main/AndroidManifest.xml`, not by inference from its README:**
@@ -110,12 +106,6 @@ worth noting: `package.json` carries `@capawesome-team/capacitor-android-foregro
 dependency, but nothing in `src/js/` imports or references it — dead weight, likely left over from
 before `cap-voice-rec` was chosen. Safe to remove whenever convenient; not touched this session since
 removing a dependency isn't the fix for the bug at hand and doesn't need to block it.
-
-Original plan, still the reference for the eventual noise-reduction step:
-- Use a community plugin — check it supports choosing `MediaRecorder.AudioSource`.
-- Or write a ~40-line custom native plugin wrapping `MediaRecorder`, exposing a `noiseReduction: boolean` param
-  that switches `AudioSource.MIC` vs `AudioSource.VOICE_COMMUNICATION` (the latter enables the device's
-  built-in AEC/NS/AGC noise suppression at the hardware/OS level — no custom DSP needed).
 
 ## 6. OCR (images & PDFs)
 Dropped (Decision 192). Nothing to set up.
@@ -190,7 +180,7 @@ here is web-UI on console.cloud.google.com — no terminal.
 7. **Run the build workflow again**, install the APK, then Settings > Google Drive > Connect. A malformed value fails the build with a clear message; deleting the variable turns Drive off again.
 
 Nothing else in Phase 13 can be wired up (`gdrive.js`, sign-in button, auto-backup scheduler) until
-this exists, the same way Phase 1's AdMob unit and signing secrets blocked their own downstream work.
+this exists, the same way Phase 1's signing secrets blocked their own downstream work.
 
 ## 12. App version per build (Decision 51)
 Same root cause as §3 and §10: `android/app/build.gradle` comes from the Capacitor CLI's template
