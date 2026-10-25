@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Decision 286 — pinned to the Ubuntu 26.04 image; ubuntu-latest is moving there between October 19 and November 19, 2026.
+    runs-on: ubuntu-26.04
     steps:
       # Decision 285 — everything on Node 24: the action majors below run on the Node 24 runtime (the v4 majors ran on Node 20, which GitHub is retiring), and the app is built with Node 24.
       - uses: actions/checkout@v6
