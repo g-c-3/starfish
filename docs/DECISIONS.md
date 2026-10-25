@@ -3141,5 +3141,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `build-android.yml` pinned `actions/checkout`, `actions/setup-node`, `actions/setup-java` and `actions/upload-artifact` at v4, which run on the Node 20 runtime that GitHub is retiring. Bumped to `checkout@v6`, `setup-node@v6`, `setup-java@v5` and `upload-artifact@v7`; the `action.yml` of each declares `node24`.
 - `upload-artifact@v5` still declares `node20`, so v7 was chosen over it. The release step (`gh`) is unchanged.
 - `node-version` in the Set up Node step (the version the app is built with, separate from the action runtime) moved from 20 to 24, so the whole pipeline is on one Node line. Checked here on Node 22: `npm ci` and `vite build` pass. Vite 7 needs 20.19 or 22.12 and up; the Capacitor CLI needs 18 and up; `sharp` 0.32.6 (icon generation) needs 14.15 and up. Not run on Node 24 itself.
-- Files: `.github/workflows/build-android.yml`. Not run through CI (DP128). If the build breaks on Node 24, set `node-version` back to 20; nothing else depends on it.
+- Files: `.github/workflows/build-android.yml`. DP128 confirmed: the run is green and its annotations show no Node 20 warning. If the build breaks on Node 24, set `node-version` back to 20; nothing else depends on it.
+
+**286. Runner pinned to Ubuntu 26.04.** Extends Decision 285.
+- `build-android.yml` used `runs-on: ubuntu-latest`, which GitHub moves from Ubuntu 24.04 to 26.04 between 19 October and 19 November 2026 with no change to the workflow. Now `runs-on: ubuntu-26.04`: the move happens on a known commit, not on an unrelated build, and the label no longer shifts again.
+- Checked against the image lists of both versions: the Android SDK is the same (platforms 34 to 37, build-tools 34 to 37, platform-tools 37.0.1, NDK 27.3 default). JDK and Node come from `setup-java` and `setup-node`, so the image does not decide them.
+- Not checked on the image: the shell tools the workflow calls (`base64`, `sed`, `grep`, `tr`, `keytool` from the installed JDK). Fallback: set `runs-on: ubuntu-24.04`; nothing else depends on it.
+- Files: `.github/workflows/build-android.yml`. Not run through CI (DP129).
 

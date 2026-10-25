@@ -16,8 +16,10 @@ Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings re
   - Owner confirmed: signing material has only ever been supplied through Actions secrets; the Google Cloud Android client is restricted to the package name and SHA-1.
   - The workflow's actions (`checkout`, `setup-node`, `setup-java`, `upload-artifact`, all at v4) run on the Node 20 runtime, which GitHub is retiring.
 - Phase 26 (owner request) and Decision 285: the four actions bumped to `checkout@v6`, `setup-node@v6`, `setup-java@v5`, `upload-artifact@v7` after reading each `action.yml` (`node24`; `upload-artifact@v5` is still `node20`). The app's build Node moved from 20 to 24 on the owner's word ("everything to Node 24"); `npm ci` and `vite build` pass on Node 22 here, Node 24 itself not available. Not run through CI.
-Open: DP128 (CI run of the workflow change).
-Next session start point: the DP128 result, then the owner's new roadmap items.
+- Owner confirmed DP128: the run is green, the only annotation is the ubuntu-latest notice. Phase 26 closed.
+- Phase 27 (owner request) and Decision 286: `runs-on: ubuntu-26.04` instead of `ubuntu-latest`. The Android SDK lists of the 24.04 and 26.04 images match; the shell tools used by the workflow were not checked on the new image. Not run through CI.
+Open: DP129 (CI run of the runner change).
+Next session start point: the DP129 result, then the owner's new roadmap items.
 
 ---
 

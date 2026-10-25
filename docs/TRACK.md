@@ -303,3 +303,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-25 | Session 153 (continued: file view Move) | Decision 284 | DP126 confirmed, Phase 24 closed; Move added to the file view and image header; Make a PDF hidden for voice selection; DP127 added; vite build passes; not run through CI |
 | 2026-10-25 | Session 154 | none | CI green and DP127 confirmed, Phase 25 closed; repository checked against a build-security note (no secrets tracked; workflow actions still on Node 20, bump pending approval); docs only |
 | 2026-10-25 | Session 154 (continued: Node 24 actions) | Decision 285 | Pipeline on Node 24: action majors (checkout v6, setup-node v6, setup-java v5, upload-artifact v7) and the build Node 20 to 24; DP128 added; not run through CI |
+| 2026-10-25 | Session 154 (continued: Ubuntu 26.04) | Decision 286 | DP128 confirmed, Phase 26 closed; runner pinned to ubuntu-26.04; DP129 added; not run through CI |
