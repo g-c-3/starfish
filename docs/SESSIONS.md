@@ -12,9 +12,12 @@ Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-
 - Owner reviewed the light theme: Phase 15 closed, no screenshots needed.
 - ROADMAP: Phases 4, 10 and 15 checked complete; Phase 5 stays open for the noise toggle only; Phase 13 stays open for one item (in-app copy still saying "fully offline"); DP120 to DP123 and the Phase 13 owner setup ticked; stale entrance-motion text in the checklist corrected (DP40 was confirmed in Session 100).
 - Phase 13 in-app copy: the only "stays on this device" claim was the Settings subtitle in `src/index.html`; it now names export, share and Drive backup as the exceptions. Phase 13 checked complete. Copy only, no decision. Not run through CI.
-- No decisions added.
-Open: Phase 5 noise toggle (the plugin has no audio-source parameter; needs an owner decision to drop or replace); Phases 1 to 3 show unchecked although built (needs approval to close); ARCHITECTURE section 10 still describes the dropped ad flow.
-Next session start point: the owner's choice on the Phase 5 noise toggle and on closing Phases 1 to 3; then the open checks of Phases 6, 7, 8, 14, 18 and 22.
+- Phases 1, 2 and 3 closed by the owner (signing confirmed by live releases; Play Console not planned; Phases 2 and 3 exercised on device since).
+- Decision 280: ad remnants removed (ad-gate screen and style, ad comments, ad text in ROADMAP, ARCHITECTURE and native-setup). `src/js/ads.js` is deleted by hand in the repository.
+- Decision 281: noise reduction for the voice recorder, built as a CI patch of the plugin (`scripts/patch-voice.js`) plus a switch on the recorder screen. DP124 open. If it shows no effect, drop the feature.
+- `vite build` passes. Not run through CI, not device-tested.
+Open: DP124 (noise reduction); CI run of the Session 153 changes.
+Next session start point: DP124 result, then the open checks of Phases 6, 7, 8, 14, 18 and 22.
 
 ---
 

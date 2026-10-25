@@ -3,18 +3,18 @@
 ## Minimum (quick reference)
 
 - [x] 0 — Repo scaffold & docs
-- [ ] 1 — Infra & secrets
-- [ ] 2 — Core data layer
-- [ ] 3 — Capture & intent engine
+- [x] 1 — Infra & secrets (closed by the owner — Session 153; signing confirmed by live releases, Play Console not planned)
+- [x] 2 — Core data layer (closed by the owner — Session 153; exercised on device through every later phase)
+- [x] 3 — Capture & intent engine (closed by the owner — Session 153; exercised on device through every later phase)
 - [x] 4 — App shell & control flow (Money capture: model, schema and backup — Session 88; Home form, rows, month header, repayments and edit — Session 89 (steps 1 to 3 of Decision 124); Settings currency symbol — Session 91 (step 4); expense detection removed — Session 91 (step 5); Vault Money — Session 92 (step 6), not device-tested; 5 reported bugs fixed — Session 31; Vault Reminder — Session 92 (Decision 140); viewer header actions — Session 92 (Decision 141); both confirmed on device (DP27); Vault Location — Session 93 (Decision 142), Vault made to match Home (Decision 143), not device-tested; all 8 Vault capture cards now built; Reminder Session 56 and Location Session 57 built on Home; all device-confirmed — Session 153; Phase 4 complete)
-- [~] 5 — Native plugin wiring (voice recorder + permissions confirmed on device — Session 153; noise-toggle not built (plugin has no audio-source parameter); OCR dropped, Decision 192)
+- [~] 5 — Native plugin wiring (voice recorder + permissions confirmed on device — Session 153; noise reduction built as a CI patch of the plugin — Session 153, Decision 281, not device-tested (DP124); OCR dropped, Decision 192)
 - [~] 6 — Backup & restore engine (core logic done, UI wired; real free-space check confirmed on device — Session 97; format 2 chunked backup built after Export Now crashed on 109 MB and confirmed on device (Export Now, Restore append and overwrite) — Session 102, Decision 159)
 - [~] 7 — Per-file actions (all four built, attached to the Home folders and the Vault list; Download for append removed — Session 61)
 - [~] 8 — Tags & label UX (tag picker, label-history hint, main-capture batch add wired — Session 62; Vault batch add numbering continues — Session 107, Decision 174, confirmed on device (DP57); OCR label pre-fill dropped, Decision 192)
 - [x] 9 — Additional features, complete (auto-lock, digest, on-this-day, storage breakdown, Your Data screen, backup-reminder banner done; reminder offer instead of silent conversion built — Session 108, Decision 175, confirmed on device — Session 123 (DP58); expense charts built and confirmed — Session 151, Decision 263; quick-capture widget built and confirmed — Session 152, Decisions 264 to 267; the confidence-confirmation item is the offer sheet of Decision 175, closed — Session 152; map view dropped — Decision 262)
 - [x] 10 — Security hardening (biometric unlock confirmed on device — Session 153; Privacy Screen done as a real Settings toggle — Decision 64; R8 built and confirmed on device — Session 151, Decision 259 (DP114); JS obfuscation not applied — Decision 260; startup signature check built — Session 151, Decision 261 (DP115 open); remaining Phase 10 device items confirmed — Session 153; Phase 10 complete)
 - [x] 11 — CI/CD (build workflow committed; live green runs confirmed — Session 107: releases v0.1.0+494, +498 and +499 exist, each created by the workflow's last step after the signed build; auto-release added Session 49, update check changed to manual Settings button Session 50)
-- [x] 12 — Ads integration, dropped — Decision 269
+- [x] 12 — Ads, dropped — Decisions 269, 280 (ads.js, ad-gate screen and ad text removed — Session 153)
 - [x] 13 — Google Drive backup (optional, opt-in; built; CI on/off switch built Session 152, Decision 272; owner's Google Cloud setup done; DP121 confirmed — Session 152; Settings subtitle names the Drive exception — Session 153, not run through CI)
 - [~] 14 — Private Vault (Text/Voice/Image/PDF/Files, encrypted at rest, in-memory search, own trash/auto-lock)
 - [x] 15 — UI redesign (1 design system, 2 auth/Settings screens, background art done — Sessions 64–67; 3 folded into 16A, 4 polish: Home tools row, Trash folder, Search layer, sort and filter built — Session 94, confirmed on device — Session 97; 4c Vault parity built — Session 95, confirmed on device — Session 97; 4d Trash Undo, PDF pinch zoom and viewer switch built — Session 96, confirmed on device — Session 97; 3 native dialogs replaced with in-app sheets built — Session 97, confirmed on device — Session 97; 4 polish: entrance motion built — Session 100, confirmed on device (DP40); haptics dropped — Session 107, Decision 173; light-theme tuning confirmed by the owner — Session 153; Phase 15 complete)
@@ -33,18 +33,15 @@
 - [x] **0 — Repo scaffold & docs.** Docs and scaffold (`www/`, `capacitor.config.json`,
   `package.json`, `.github/workflows/build-android.yml`, `android-notes/native-setup.md`) both
   confirmed committed on `main`.
-- [ ] **1 — Infra & secrets (manual).**
+- [x] **1 — Infra & secrets (manual; closed by the owner — Session 153).**
   - [x] Package name: `com.arkly.app` (set in `capacitor.config.json`; was `com.dumpzone.app` until Session 152, Decision 273).
-  - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. CI
-    run against the live secrets not yet confirmed green — pending manual check.
-  - [ ] AdMob account, one Rewarded ad unit (not Interstitial). **Deliberately not doing this yet
-    (Decision 58)** — ads deferred to a future build, not this one.
+  - [x] Android signing — keystore generated (alias `dumpzone`) and 4 GitHub secrets set. Confirmed by live signed releases.
   - [x] App icon — source artwork at `resources/icon.png`; CI generates all densities via
     `@capacitor/assets`. Confirmed on-device (Session 7): initial version rendered visibly smaller
     than sibling icons (double safe-zone padding — see Decision 24); re-cropped full-bleed and fixed.
-  - [ ] Play Console account — deferred; revisit when the app is fully ready (Decision 98).
-- [ ] **2 — Core data layer.** `db.js` (schema, FTS5, tags, label history, soft-delete),
-  `crypto.js` (PBKDF2/AES-GCM). Committed; not device-tested. Stale pre-rebrand naming
+  - [x] Play Console account — not planned; distribution is manual APK sideload (Decision 98). Closed — Session 153.
+- [x] **2 — Core data layer (closed by the owner — Session 153).** `db.js` (schema, FTS5, tags, label history, soft-delete),
+  `crypto.js` (PBKDF2/AES-GCM). Committed; exercised on device through later phases. Stale pre-rebrand naming
   (`actioner.db`, header comment) fixed earlier. **Vault pivot:** `is_private` generalized from
   notes-only to any type; app-password columns now nullable (optional password); added
   `vault_auto_lock_minutes`, `restoreFromTrash`/`permanentlyDeleteEntry`/`listTrash`. Fixed a real
@@ -52,8 +49,8 @@
   `entries_fts` and `label_history` unconditionally — meaning a vault item's title was discoverable
   via ordinary, no-PIN search and could surface in the normal capture bar's autocomplete. Fixed in
   both `insertEntry()` here and `restoreBackup()` in backup.js (Decision 40).
-- [ ] **3 — Capture & intent engine.** `intents.js` (reminder/expense detection, label
-  suggestion, unused since Decision 192), `notifications.js`, `ads.js`. Committed; not device-tested. `notifications.js`'s
+- [x] **3 — Capture & intent engine (closed by the owner — Session 153).** `intents.js` (reminder/expense detection, label
+  suggestion, unused since Decision 192), `notifications.js`. Committed; exercised on device through later phases. `notifications.js`'s
   stale pre-rebrand naming (channel id, titles) fixed earlier.
 - [x] **4 — App shell & control flow (complete; device-confirmed — Session 153).** `app.js`, `index.html`, `style.css`. **Foundational gap
   found and fixed during the Vault pivot:** nothing anywhere ever toggled screen visibility —
@@ -123,7 +120,7 @@
   delay-based biometric mitigation was itself the cause of a worse bug (reported freeze, full
   second unlock needed) — the delay raced against `DOMContentLoaded`'s own setup. Fixed by moving
   the trigger to run only after that setup fully completes. Also removed the ad gate from the
-  unlock path entirely (ads deferred to a future build — see Phase 12). **Session 33 (Decision
+  unlock path entirely (ads dropped — see Phase 12). **Session 33 (Decision
   59):** found the real cause of a double biometric prompt on open and the Vault sometimes
   appearing already unlocked — an unconditional, redundant `refreshVaultGateView()` call at cold
   start that also fired the Vault's own auto-biometric attempt before the app itself was even
@@ -164,10 +161,10 @@
   permissions (including two newly-found foreground-service ones for this plugin's own recording
   service) now applied automatically by CI via `scripts/patch-manifest.js`, not just documented —
   see Decision 49; confirmed on device — Session 153.
-  Noise-reduction toggle still not done, this plugin has no audio-source parameter
-  (`android-notes/native-setup.md` §5). OCR dropped (Decision 192). Notification sound asset:
+  **Noise reduction built (Session 153, Decision 281):** the plugin has no audio-source option, so `scripts/patch-voice.js` patches its source in CI; a switch on the recorder screen passes `noiseReduction` to `startRecording()` (`android-notes/native-setup.md` §5). Not run through CI, not device-tested. OCR dropped (Decision 192). Notification sound asset:
   not needed; reminders use the system default sound (Decision 96), `notify_tone.wav` is only the
   pre-Android 8 fallback.
+  - [ ] DP124 (open — Session 153) — Noise reduction (Decision 281). Record screen (Home and Vault): the switch "Reduce background noise" is off by default. Record a take beside a fan or a TV with it off, then one with it on: the second has less background noise and still plays; switch it off and the next take is as before. The choice is kept after closing the app. If there is no audible difference on this phone, say so: the feature is then dropped.
 - [~] **6 — Backup & restore engine.** `backup.js` built: create/encrypt/write, open/decrypt/restore
   (append + overwrite, UUID dedup, `(Restored)` label-collision suffix), selective categories with
   storage sanity checks (real free space from `@capacitor/device` `realDiskFree` — Session 97, Decision 150; an unknown reading does not block; the backup file's real size is checked before writing), safety-backup-before-overwrite with its explicit-confirmation gate,
@@ -294,13 +291,7 @@
   unparseable). **Wrong build offered, fixed (Session 58, Decision 80):** the check now scans the
   release list for the highest run number instead of using `/releases/latest`. Still no auto-install — sideloaded APKs can't update themselves regardless of how the
   check is triggered or the file arrived. Not yet confirmed on device.
-- [x] **12 — Ads integration (dropped — Decision 269, Session 152).** Deliberately deferred (Decision 58) — not part of this build.** Logic
-  The owner decided against any ad. Nothing is built: no plugin, no unit, no daily gate. The text below is the earlier plan, kept for history only.
-  drafted in `ads.js`, never wired to a real AdMob plugin, no plugin ever added to `package.json`.
-  Session 32 removed the one call site that invoked it (`onUnlocked()`) — it was calling
-  `runDailyAdGateIfDue()` with `window.adSdk` always undefined (nothing had ever set it), adding
-  needless work to the unlock path for a gate with nothing behind it to open. `ads.js` itself is
-  untouched, left as scaffolding for whenever this phase is actually picked up.
+- [x] **12 — Ads, dropped (Decisions 269, 280).** No ad of any kind: no plugin, no unit, no daily gate. `src/js/ads.js`, the ad-gate screen and every ad reference in code, comments and docs were removed in Session 153.
 - [x] **13 — Google Drive backup (optional, opt-in; complete — Session 153).** Additive to Phase 6, never a replacement
   (Decision 25). Sub-items, roughly in dependency order:
   - [x] Manual (owner), done — Session 152: Google Cloud project, Drive API, OAuth consent screen scoped to `drive.file` only (Decision 26), published to Production before relying on automatic backup (Decision 27); then a Web application OAuth client and an Android OAuth client (package `com.arkly.app`, the release SHA-1 shown on the build run's Summary). Steps in `android-notes/native-setup.md` section 11, rewritten Session 152: the sign-in plugin needs the Web client ID (Decision 272), not the Android one.

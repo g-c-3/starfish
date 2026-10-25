@@ -3101,3 +3101,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Unchanged from Decision 278: the file name, the 300 MB limit for Restore from this, the schedules and their access check.
 - Files: `src/js/backup.js`, `src/js/app.js`, `src/index.html`. `vite build` passes.
 
+**280. Ad remnants removed.** Extends Decision 269; no behavior change.
+- Removed: the ad-gate screen markup and its style, the ad comments in `app.js`, the ad flow text in ARCHITECTURE §10, the ad entries in the file tree and the bootstrap description, the ad plan text of Phases 1 and 12.
+- `src/js/ads.js` is deleted by hand in the repository (nothing imports it).
+- `INTERNET` stays: Google Drive backup, Check for updates and Verify link need it. Network calls are unchanged.
+- Files: `src/index.html`, `src/css/style.css`, `src/js/app.js`, docs, `android-notes/native-setup.md`. `vite build` passes.
+
+**281. Noise reduction for the voice recorder (Phase 5).** Closes the open item of Decision 49 and Decision 2.
+- Cause: `cap-voice-rec` reads no audio-source option and always records from `MIC`.
+- Fix: `scripts/patch-voice.js`, a CI step after `npm ci`, patches the plugin source so `startRecording({ noiseReduction: true })` records from `VOICE_COMMUNICATION`, the phone's own noise suppression where it has one. No option, or false, records from `MIC` as before. Idempotent; fails the build if the plugin source changes.
+- Behavior: a switch "Reduce background noise" on the recorder's ready screen (Home and Vault), off by default, kept in `meta.rec_noise`, applied to the next take. The widget recorder is unchanged. The `noise_reduction` column stays NULL.
+- The effect varies by phone. If DP124 shows no audible difference, the switch and the patch are removed.
+- No network, no new permission.
+- Files: `scripts/patch-voice.js`, `.github/workflows/build-android.yml`, `src/js/app.js`. `vite build` passes; the patch was run twice on a copy of the plugin source and is idempotent; not run through CI, not device-tested.

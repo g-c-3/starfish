@@ -12,9 +12,8 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 ## 1. Core principles
 - 100% local storage (SQLite) by default. No account or server is required for capture, search,
   reminders, expenses, or local backup/restore.
-- The only network calls this app will ever make are the ad SDK (deferred — see below), only if
-  the person explicitly opts in, Google Drive backup (§4b), and two actions the person starts with a
-  tap: Check for updates (public repo, no token, Decision 214) and Verify link (short map link, Decision 117). None is reachable from, or
+- The only network calls this app will ever make are Google Drive backup (§4b, opt-in), and two actions
+  the person starts with a tap: Check for updates (public repo, no token, Decision 214) and Verify link (short map link, Decision 117). None is reachable from, or
   required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
@@ -24,8 +23,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - **Every entry requires a user-supplied label before save completes** (blocking, not optional) — across voice,
   image, PDF, generic file, and note types alike. Labels are what make voice notes and generic files searchable
   at all, since neither gets transcription/parsing.
-- **No ad of any kind (Decisions 58, 269)** — Phase 12 is dropped. No AdMob plugin is installed and
-  `ads.js` is not imported anywhere. Nothing gates access to local data.
+- **No ad of any kind (Decisions 58, 269, 280).** No ad plugin, no ad code, no gate. Nothing gates access to local data.
 
 ## 2. Entry types
 | Type | Body content | Searchable by | Extra fields |
@@ -445,7 +443,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   permanently early. **Two independent bins** (main + Vault — §3b), same rule, distinguished by `is_private`
   rather than a second table. A background job (`purgeOldTrash` in `db.js`) permanently removes anything older
   than 30 days from both.
-- **On-this-day resurfacing** — a simple date-diff query surfaced on app open (after the ad gate), e.g.
+- **On-this-day resurfacing** — a simple date-diff query surfaced on app open, e.g.
   "1 month ago you saved..." Pure rule-based recency query, no automated inference.
 - **Storage usage breakdown** — a Settings screen showing size used per category (Voice/Images/PDFs/Files),
   with a "clear items older than X days" action per category to help manage device storage proactively.- **Home-screen quick-capture widget** — a 4-button Android widget (voice/photo/note/expense) that jumps
@@ -469,7 +467,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
   A separate "Gradient mode" (full-screen blurred glow, user-picked colors) existed briefly and was removed
   (Decision 53) — dark mode is the only Appearance setting now.
 - **Layout: bottom nav, not one long page (Decision 53; reduced to two tabs in Decision 61)** — Home / Vault,
-  fixed at the bottom of the screen once the app is unlocked (hidden on first-run/lock-screen/the ad gate,
+  fixed at the bottom of the screen once the app is unlocked (hidden on first-run and the lock screen,
   which have nothing to navigate between). Home and Settings are two panels inside the same main screen,
   toggled together (no longer by the nav directly — Settings is reached via an "App Settings" tile inside
   Home, Decision 61) rather than requiring a scroll past the entire timeline to reach settings; Vault keeps
@@ -612,11 +610,12 @@ shows a notice and no actions.
 Both use the shared viewer shell. Recorder: ready, recording, review; review plays the take before the Save dialog, and a
 lock discards it. Saved voice opens in a viewer with the player (play/pause, scrub, speed). Vault audio is decrypted into
 an in-memory blob URL for the life of the viewer and revoked on close or lock. Playback re-arms the matching idle lock.
+Noise reduction (Decision 281): a switch on the ready screen, kept in `meta.rec_noise`, off by default. `scripts/patch-voice.js` patches the plugin in CI so `startRecording({ noiseReduction: true })` records from `VOICE_COMMUNICATION` (the phone's own suppression, where it has one); otherwise `MIC`. The widget's recorder is unchanged, and the `noise_reduction` column stays NULL.
 
 ### Back button everywhere (Decision 104)
 The Android Back button and back gesture run this same action with the same glow; on a landing page or the lock gate they send the app to the background (Decision 138).
 
-The nav's Back stays visible on every screen: alone on the lock, first-run and ad-gate screens, and alone above any open
+The nav's Back stays visible on every screen: alone on the lock and first-run screens, and alone above any open
 overlay (`body.overlay-open`). It dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
 
@@ -686,8 +685,8 @@ No network, no new permission.
   notice; nothing is blocked. It raises the bar against re-signed copies only: the expected value is inside the APK.
 - Explicitly **not** pursuing NDK-level native obfuscation — judged not worth the added build complexity given
   the GitHub-Actions-only, no-local-machine build pipeline, and the fact that client-side checks can only ever
-  raise the cost of tampering, never eliminate it (the app's own ad-gate logic runs on the attacker's device by
-  necessity, since there's no server to validate against — see Ads section).
+  raise the cost of tampering, never eliminate it (the app's own checks run on the attacker's device by
+  necessity, since there is no server to validate against).
 
 ## 9. Search
 SQLite FTS5 virtual table over `(label, body_text)` for all non-private, non-voice, non-generic-file entries.
@@ -699,11 +698,7 @@ Ranking: label match > body match, then recency.
   than just entry titles, so a search result is legible at a glance instead of requiring a tap to check relevance.
 
 ## 10. Ads
-Rewarded ad unit (not basic interstitial — must be non-skippable by policy).
-Flow on first open each day:
-1. Attempt to load rewarded ad in background (3–5s timeout).
-2. Loaded → show full-screen, non-skippable, must complete to proceed.
-3. Failed to load / no internet → skip gate entirely, no message shown.
+None (Decisions 269, 280). Nothing is built, installed or planned.
 
 ## 11. Build pipeline (GitHub Actions, no local machine needed)
 See `.github/workflows/build-android.yml`. On push to `main`, it:
@@ -746,7 +741,6 @@ arkly/
       crypto.js         -> KDF + AES helpers for private notes & backups
       intents.js         -> rule-based reminder/expense detector (label suggestion unused, Decision 192)
       notifications.js  -> local notification scheduling (banner channel, snooze/done actions)
-      ads.js            -> rewarded ad gate logic
       backup.js         -> backup/restore engine (build/encrypt/write, decrypt/restore, extract-only)
       gdrive.js         -> optional Google Drive backup (opt-in, additive to backup.js)
       vault.js          -> Private Vault: content bundling, save/load, search index (memory, stored encrypted)
@@ -775,7 +769,7 @@ arkly/
 Implemented in code already: schema (tags, label history, soft-delete columns, optional app-password/vault-PIN
 columns), FTS5 search (main app only — Vault search is a separate in-memory index, §3b),
 credential hashing/KDF/AES helpers, the intent engine (reminders, expenses), notification
-scheduling, the ad-gate decision logic, the app bootstrap control flow (auth → ad gate → digest → timeline,
+scheduling, the app bootstrap control flow (auth → digest → timeline,
 plus the expense follow-up timeout) including the optional-password/first-run-setup path, the core backup/restore
 engine (`backup.js`), optional Google Drive backup (`gdrive.js`, Phase 13 — on when `GDRIVE_WEB_CLIENT_ID` is set, Decision 272; manual Google Cloud setup for
 device testing), all four per-file actions (`fileactions.js`) including the "Select files" multi-select, and
