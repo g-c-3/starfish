@@ -2566,6 +2566,15 @@ function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
 // ---- Audio player (Phase 16 C, Decision 103). Shared by the voice viewer and the recorder's review step.
 // Plain <audio> on an in-memory blob URL: play/pause, scrub, speed. The caller owns the URL and revokes it.
 const PLAYER_SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+// Playback output (Decision 283): speaker (default) or earpiece, one saved default for Home and Vault, and a choice per player.
+// Earpiece goes through window.ArklyAudioRoute (scripts/patch-audioroute.js); the speaker needs no native call.
+let voiceOutDefault = 'speaker';
+function setAudioRoute(earpiece) {
+  try { return !!(window.ArklyAudioRoute && window.ArklyAudioRoute.set(!!earpiece)); } catch { return false; }
+}
+function paintOutSeg(seg, value) {
+  seg.querySelectorAll('button[data-out]').forEach((b) => b.classList.toggle('active', b.dataset.out === value));
+}
 const ICON_PLAY = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
 const ICON_PAUSE = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
 function formatClock(sec) {
@@ -2573,7 +2582,7 @@ function formatClock(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 // fallbackMs: known length for containers that report none. onActivity: called while playing (keeps idle locks armed).
-function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null } = {}) {
+function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, output = 'speaker' } = {}) {
   container.innerHTML = `<div class="audio-player">
     <button type="button" class="play-btn" aria-label="Play">${ICON_PLAY}</button>
     <div class="player-track">
@@ -2581,12 +2590,23 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
       <div class="player-times"><span class="p-cur">0:00</span><span class="p-dur">0:00</span></div>
     </div>
     <button type="button" class="speed-btn secondary-btn" aria-label="Playback speed">1×</button>
-  </div>`;
+  </div>
+  <div class="seg out-seg" role="group" aria-label="Play through"><button type="button" data-out="speaker" class="active">Speaker</button><button type="button" data-out="earpiece">Earpiece</button></div>`;
   const q = (sel) => container.querySelector(sel);
   const playBtn = q('.play-btn'), scrub = q('.scrub'), cur = q('.p-cur'), dur = q('.p-dur'), speedBtn = q('.speed-btn');
   const audio = new Audio();
   audio.preload = 'metadata';
   let scrubbing = false, speedIdx = 0, dead = false;
+  let out = output === 'earpiece' ? 'earpiece' : 'speaker', routed = false;
+  const outSeg = q('.out-seg');
+  paintOutSeg(outSeg, out);
+  const useEarpiece = () => {
+    if (setAudioRoute(true)) { routed = true; return; }
+    toast('Earpiece is not available on this phone');
+    out = 'speaker'; paintOutSeg(outSeg, out);
+  };
+  const leaveEarpiece = () => { if (routed) { setAudioRoute(false); routed = false; } };
+  const applyOutput = () => { if (out === 'earpiece') useEarpiece(); else leaveEarpiece(); };
   const length = () => (isFinite(audio.duration) && audio.duration > 0 ? audio.duration : fallbackMs / 1000);
   const paint = () => {
     const d = length();
@@ -2608,8 +2628,8 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
   audio.addEventListener('durationchange', paint);
   audio.addEventListener('timeupdate', () => { paint(); if (!audio.paused && onActivity) onActivity(); });
   audio.addEventListener('play', () => { playBtn.innerHTML = ICON_PAUSE; playBtn.setAttribute('aria-label', 'Pause'); });
-  audio.addEventListener('pause', showPlay);
-  audio.addEventListener('ended', () => { showPlay(); paint(); });
+  audio.addEventListener('pause', () => { showPlay(); leaveEarpiece(); });
+  audio.addEventListener('ended', () => { showPlay(); paint(); leaveEarpiece(); });
   audio.addEventListener('error', () => { if (!dead) toast('Could not play this recording'); });
   audio.src = url;
   paint();
@@ -2618,6 +2638,7 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
     if (!audio.paused) { audio.pause(); return; }
     const d = length();
     if (d && audio.currentTime >= d - 0.05) audio.currentTime = 0; // finished: play from the start
+    applyOutput();
     audio.play().catch(() => toast('Could not play this recording'));
   };
   scrub.addEventListener('pointerdown', () => { scrubbing = true; });
@@ -2629,6 +2650,13 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
     scrubbing = false;
     paint();
   });
+  outSeg.onclick = (e) => {
+    const b = e.target.closest('button[data-out]');
+    if (!b) return;
+    out = b.dataset.out === 'earpiece' ? 'earpiece' : 'speaker';
+    paintOutSeg(outSeg, out);
+    if (!audio.paused) applyOutput(); // switching during playback moves it at once
+  };
   speedBtn.onclick = () => {
     speedIdx = (speedIdx + 1) % PLAYER_SPEEDS.length;
     audio.defaultPlaybackRate = audio.playbackRate = PLAYER_SPEEDS[speedIdx];
@@ -2638,6 +2666,7 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null }
     destroy() {
       dead = true;
       try { audio.pause(); } catch { /* already stopped */ }
+      leaveEarpiece();
       audio.removeAttribute('src');
       audio.load();
     }
@@ -3690,6 +3719,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
+    await showVoiceSwitch('vault-voice-out-wrap', 'vault-voice-out-seg', type);
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -3963,6 +3993,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!isVault) bgOn = (await metaGet('rec_background', '0')) === '1';
     // Noise reduction (Decision 281): chosen before a take, applied by the patched plugin at start.
     let noiseOn = (await metaGet('rec_noise', '0')) === '1';
+    voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
 
     let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
     if (resume) { state = 'recording'; startedAt = resume.startedAt; }
@@ -4045,7 +4076,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="rec-again-btn" class="secondary-btn">Record again</button>
           </div>
           <div class="detail-actions rec-discard"><button id="rec-discard-btn" class="secondary-btn">Discard</button></div>`;
-        player = createAudioPlayer(body.querySelector('#rec-player'), url, { fallbackMs: taken.ms });
+        player = createAudioPlayer(body.querySelector('#rec-player'), url, { fallbackMs: taken.ms, output: voiceOutDefault });
         body.querySelector('#rec-save-btn').onclick = () => { saved = taken; closeFn(); };
         body.querySelector('#rec-again-btn').onclick = () => { dropReview(); taken = null; state = 'ready'; draw(); };
         body.querySelector('#rec-discard-btn').onclick = () => { discarded = true; toast('Recording discarded'); closeFn(); };
@@ -4407,6 +4438,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (id === 'vault-pdf-inapp-toggle') armVaultAutoLock();
     });
   }
+  // Playback output default (Decision 283): one choice for Home and Vault, shown at the top of the Voice folder.
+  async function showVoiceSwitch(wrapId, segId, type) {
+    document.getElementById(wrapId).classList.toggle('hidden', type !== 'voice');
+    if (type !== 'voice') return;
+    voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
+    paintOutSeg(document.getElementById(segId), voiceOutDefault);
+  }
+  for (const [id, vault] of [['voice-out-seg', false], ['vault-voice-out-seg', true]]) {
+    document.getElementById(id).addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-out]');
+      if (!b) return;
+      voiceOutDefault = b.dataset.out === 'earpiece' ? 'earpiece' : 'speaker';
+      paintOutSeg(document.getElementById(id), voiceOutDefault);
+      await metaSet('voice_output', voiceOutDefault);
+      if (vault) armVaultAutoLock();
+    });
+  }
   async function openFolder(type, btn) {
     openFolderType = type;
     if (type === 'money') moneyMonth = null; // the month header starts on the current month
@@ -4417,6 +4465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
+    await showVoiceSwitch('voice-out-wrap', 'voice-out-seg', type);
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
@@ -5210,7 +5259,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           </dl>`;
         if (player) { player.destroy(); player = null; }
         try {
-          player = createAudioPlayer(body.querySelector('#vv-player'), await source(), { onActivity: isVault ? armVaultAutoLock : armAppAutoLock });
+          voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
+          player = createAudioPlayer(body.querySelector('#vv-player'), await source(), { onActivity: isVault ? armVaultAutoLock : armAppAutoLock, output: voiceOutDefault });
         } catch (err) {
           body.querySelector('#vv-player').innerHTML = `<div class="hero-note">Could not open this recording: ${escapeHtml(String(err.message || err))}</div>`;
         }
