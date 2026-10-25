@@ -395,7 +395,9 @@ function backAction() {
 }
 
 function updateBackButtonState() {
-  document.getElementById('nav-back-btn')?.classList.toggle('disabled', !backAction());
+  const action = backAction();
+  document.getElementById('nav-back-btn')?.classList.toggle('disabled', !action);
+  if (exitNoticeUp && action) { lastLandingBackAt = 0; hideToast(); } // left the landing page: the "again to exit" notice goes at once (Decision 289)
 }
 
 function goBack() {
@@ -424,6 +426,7 @@ function backFromLanding() {
   }
   lastLandingBackAt = now;
   toast(exitNoticeText());
+  exitNoticeUp = true; // after toast(), which clears it
 }
 
 function setActiveNavTab(tab) {
@@ -1985,7 +1988,8 @@ function emptyStateHtml(kind = 'folder') {
 }
 
 // ---- Toast, Save dialog, text editor (Decision 91). Top-level so a lock can force-close them. ----
-let toastTimer = null;
+let toastTimer = null, toastHideT = 0;
+let exitNoticeUp = false; // the Back-again notice (Decision 287) is on screen
 // Save confirmation for a reminder: the chosen time plus how far away it is, so an AM/PM slip is visible at once (Decision 95).
 function reminderSetText(ms) {
   const mins = Math.max(0, Math.round((ms - Date.now()) / 60000));
@@ -2002,6 +2006,8 @@ const UNDO_MS = 6000;
 function toast(message, sticky = false, action = null) {
   const el = document.getElementById('toast');
   if (!el) return;
+  exitNoticeUp = false;
+  clearTimeout(toastHideT);
   el.textContent = message;
   el.classList.toggle('with-action', !!action);
   undoState = action ? { isVault: !!action.isVault } : null;
@@ -2014,6 +2020,8 @@ function toast(message, sticky = false, action = null) {
     el.appendChild(b);
   }
   el.classList.remove('hidden');
+  void el.offsetWidth; // a toast that was hidden starts its fade-in from the hidden state
+  el.classList.add('show');
   clearTimeout(toastTimer);
   if (!sticky) toastTimer = setTimeout(hideToast, action ? UNDO_MS : 3200);
 }
@@ -2029,7 +2037,12 @@ function checkSignature() {
 function hideToast() {
   clearTimeout(toastTimer);
   undoState = null;
-  document.getElementById('toast')?.classList.add('hidden');
+  exitNoticeUp = false;
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.classList.remove('show'); // fades out (Decision 289), then leaves the layout
+  clearTimeout(toastHideT);
+  toastHideT = setTimeout(() => el.classList.add('hidden'), 220);
 }
 
 // Deleting only moves entries to the 30-day trash, so Undo is a restore. Shown after every delete except "Delete permanently".
