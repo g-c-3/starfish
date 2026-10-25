@@ -102,6 +102,11 @@ jobs:
       - name: Add the playback output bridge (native)
         run: node scripts/patch-audioroute.js
 
+      # Decision 287 — window.ArklyNav: whether Back is a button or a swipe gesture, to word the "again to exit" notice. Needs the
+      # onCreate() that patch-screenlock.js guarantees. No permission, no Gradle change.
+      - name: Add the Back style bridge (native)
+        run: node scripts/patch-nav.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
