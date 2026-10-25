@@ -348,6 +348,11 @@ function paintSelection() {
   const count = document.getElementById('sel-count');
   if (count) count.textContent = ids ? `${ids.size} selected` : '';
   document.querySelectorAll('#select-bar .sel-act').forEach((b) => { b.disabled = !ids || ids.size === 0; });
+  const pdfBtn = document.getElementById('sel-pdf'); // Make a PDF has nothing to act on when only voice recordings are selected (Decision 284)
+  if (pdfBtn) {
+    const picked = [...document.querySelectorAll('.entry-row.is-selected')];
+    pdfBtn.classList.toggle('hidden', !!ids && picked.length > 0 && picked.every((el) => el.dataset.type === 'voice'));
+  }
   const mv = document.getElementById('sel-move'); // the direction follows the screen the selection started on (Decision 185)
   if (mv && selection) { const t = selection.isVault ? 'Move to Home' : 'Move to Vault'; mv.title = t; mv.setAttribute('aria-label', t); }
 }
@@ -1467,18 +1472,18 @@ async function vaultNeedsSetup(onOpen = null) {
 const LOCKED_NOTE = ' The Vault is locked, so you will unlock it next.';
 
 let moveBusy = false; // a second tap during a long file move must not start another
-async function moveEntryUI(id, toVault) {
-  if (moveBusy) return;
-  if (toVault && !privateSessionKey && await vaultNeedsSetup()) return;
+async function moveEntryUI(id, toVault) { // true when the item moved
+  if (moveBusy) return false;
+  if (toVault && !privateSessionKey && await vaultNeedsSetup()) return false;
   const locked = toVault && !privateSessionKey; // asked after the sheet, so cancelling it leaves the Vault locked (Decision 186)
   const kind = ((await db.query(`SELECT type FROM entries WHERE id=?`, [id])).values || [])[0]?.type;
   const ok = await askYesNo(toVault
     ? { title: 'Move to the Vault?', text: `It is encrypted under your Vault PIN and removed from Home, including Home search and label suggestions. It does not go to the trash.${kind === 'reminder' ? ' Its notification will read Vault Reminder.' : ''}${locked ? LOCKED_NOTE : ''}`, yes: locked ? 'Unlock and move' : 'Move', no: 'Cancel' }
     : { title: 'Move to Home?', text: `It leaves the Vault. Its name and text become searchable in Home, and it is no longer under the Vault PIN. It does not go to the trash.${kind === 'reminder' ? ' Its notification will show its name.' : ''}`, yes: 'Move', no: 'Cancel' });
-  if (!ok) return;
-  if (toVault && !privateSessionKey && !(await unlockVaultInPlace('Enter your Vault PIN to move this item.'))) return;
+  if (!ok) return false;
+  if (toVault && !privateSessionKey && !(await unlockVaultInPlace('Enter your Vault PIN to move this item.'))) return false;
   const key = privateSessionKey; // read after the sheet and the unlock: a Vault lock meanwhile clears it
-  if (!key) { toast('The Vault locked. Nothing was moved.'); return; }
+  if (!key) { toast('The Vault locked. Nothing was moved.'); return false; }
   armVaultAutoLock();
   moveBusy = true;
   if (['voice', 'image', 'pdf', 'file'].includes(kind)) toast('Moving…'); // a file is read and written whole, which can take a while
@@ -1487,8 +1492,10 @@ async function moveEntryUI(id, toVault) {
     if (privateSessionKey) await refreshVaultIndexEntries(db, privateSessionKey, [toVault ? newId : id]);
     const problem = kind === 'reminder' ? await rescheduleMovedReminder(id, newId) : null;
     toast(problem ? `${toVault ? 'Moved to the Vault' : 'Moved to Home'}, but its notification could not be updated: ${problem.message || problem}` : toVault ? 'Moved to the Vault' : 'Moved to Home');
+    return true;
   } catch (err) {
     toast(`Not moved: ${String(err.message || err).replace(/\.$/, '')}. The original is unchanged.`);
+    return false;
   } finally { moveBusy = false; }
 }
 
@@ -4899,7 +4906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       $('viewer-back-btn').onclick = back;
       $('viewer-edit-btn').classList.toggle('hidden', !onEdit);
       $('viewer-edit-btn').onclick = async () => { if (onEdit) { await onEdit(); await refresh(); } };
-      // Share, Download and Delete after Edit, the same order as the rows and the image viewer (Decisions 134, 141).
+      // Share, Download, Move and Delete after Edit, the same order as the rows and the image viewer (Decisions 134, 141, 284).
       screen.querySelectorAll('.vwr-act').forEach((n) => n.remove());
       if (entry) {
         const add = (label, icon, extra, run) => {
@@ -4910,6 +4917,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         add('Share', 'share', '', () => window.Arkly.shareEntry(entry.id));
         add('Download', 'download', '', () => window.Arkly.downloadPlain(entry.id));
+        if (canMove(entry.type)) {
+          add(isVault ? 'Move to Home' : 'Move to Vault', 'move', '', async () => {
+            if (!(await moveEntryUI(entry.id, !isVault))) return;
+            finish();
+            if (refreshAfterUndo) await refreshAfterUndo();
+          });
+        }
         add('Delete', 'trash', ' warning-text', async () => {
           try { if (isVault) await deleteVaultEntry(entry.id); else await softDelete(db, entry.id); }
           catch (err) { toast(`Could not delete: ${err.message || err}`); return; }
@@ -5295,12 +5309,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="img-loading">Loading…</div>
             ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
           </div>`;
-        // Header order in image mode: back, name, Edit (rename), Share, Download, Delete, count. Appended after Edit.
+        // Header order in image mode: back, name, Edit (rename), Share, Download, Move, Delete, count. Appended after Edit.
         viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove());
         const editBtn = document.getElementById('viewer-edit-btn');
         const hdr = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const n = t.content.firstChild; editBtn.parentNode.append(n); return n; };
         const shareBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Share" title="Share">${iconSvg('share')}</button>`);
         const downloadBtn = hdr(`<button type="button" class="img-hdr icon-btn" aria-label="Download" title="Download">${iconSvg('download')}</button>`);
+        const moveLabel = isVault ? 'Move to Home' : 'Move to Vault';
+        const moveBtn = canMove('image') ? hdr(`<button type="button" class="img-hdr icon-btn" aria-label="${moveLabel}" title="${moveLabel}">${iconSvg('move')}</button>`) : null;
         const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn warning-text" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
@@ -5318,6 +5334,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         shareBtn.onclick = () => window.Arkly.shareEntry(item.id);
         downloadBtn.onclick = () => window.Arkly.downloadPlain(item.id);
+        if (moveBtn) moveBtn.onclick = async () => {
+          if (!(await moveEntryUI(item.id, !isVault))) return;
+          items.splice(index, 1);
+          if (!items.length) { close(); return; }
+          index = Math.min(index, items.length - 1);
+          openViewerRefresh();
+        };
         deleteBtn.onclick = async () => {
           if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
           offerUndo([item.id], { isVault });
