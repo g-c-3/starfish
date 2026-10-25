@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { chromeOnScroll } from './chrome-scroll.js';
 
 export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
-export const TEXT_MAX = 2 * 1024 * 1024; // larger text goes to another app: a textarea of that size is slow on a phone
+export const TEXT_MAX = 2 * 1024 * 1024; // larger text goes to another app (limit kept from the plain text box; to be raised after a device test of the code editor)
 export const PDF_MAX = 150 * 1024 * 1024; // the whole file is held in memory while it is open
 export const OFFICE_MAX = 50 * 1024 * 1024; // same reason; docx, xlsx and pptx are unpacked in memory
 
@@ -100,30 +100,49 @@ export function openFileViewer(file, ctx) {
     body.replaceChildren();
     const wrap = el('div', 'ev-text-wrap');
     if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text. It is open for reading only, so saving cannot damage it.'));
-    const ta = el('textarea', 'ev-text');
     const editable = !info.lossy && !readOnly; // readOnly: a copy taken out of an archive; saving would be lost
     if (readOnly && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
-    ta.value = text; ta.readOnly = !editable; ta.spellcheck = false;
-    ta.setAttribute('autocapitalize', 'off'); ta.setAttribute('autocomplete', 'off'); ta.setAttribute('aria-label', f.name);
-    wrap.appendChild(ta); body.appendChild(wrap);
-    let base = ta.value, saving = false;
-    const dirty = () => editable && ta.value !== base;
-    ta.addEventListener('input', () => { saveBtn.disabled = !dirty() || saving; ui.onActivity(); });
+    const bar = el('div', 'ev-tools'); const host = el('div', 'ev-code');
+    wrap.append(bar, host); body.appendChild(wrap);
+    let ed, make;
+    try { ({ createCodeEditor: make } = await import('./codeeditor.js')); }
+    catch (e) { if (mine === token) note(`The editor could not be loaded${errText(e)}`); return; }
+    if (mine !== token || closed) return;
+    let saving = false;
+    const sync = () => {
+      const dirty = ed.isDirty();
+      saveBtn.disabled = !dirty || saving; undoBtn.disabled = !ed.canUndo(); redoBtn.disabled = !ed.canRedo();
+      ui.onActivity();
+    };
+    ed = make({ parent: host, text, name: f.name, editable, ui, onChange: sync });
+    const tool = (label, title, fn) => { const b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = fn; bar.appendChild(b); return b; };
+    const editBtn = editable ? tool('Edit', 'Edit this file', () => setEdit(!ed.isEditing())) : null;
+    const undoBtn = tool('Undo', 'Undo', () => { ed.undo(); sync(); }); const redoBtn = tool('Redo', 'Redo', () => { ed.redo(); sync(); });
+    tool('Find', 'Find and replace', () => ed.find()); tool('Go to', 'Go to line', () => ed.goTo());
+    const wrapBtn = tool('Wrap', 'Wrap long lines', () => { wrapBtn.classList.toggle('on', ed.toggleWrap()); });
+    wrapBtn.classList.toggle('on', ed.isWrapped());
+    tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1)); tool('A+', 'Larger text', () => ed.bumpSize(1));
+    function setEdit(v) {
+      ed.setEditing(v);
+      if (editBtn) { editBtn.textContent = v ? 'Done' : 'Edit'; editBtn.classList.toggle('on', v); }
+      undoBtn.classList.toggle('hidden', !v); redoBtn.classList.toggle('hidden', !v);
+      saveBtn.classList.toggle('hidden', !v); sync();
+    }
+    setEdit(false);
     if (editable) {
-      saveBtn.classList.remove('hidden'); saveBtn.disabled = true;
       saveBtn.onclick = async () => {
-        if (saving || !dirty()) return;
+        if (saving || !ed.isDirty()) return;
         saving = true; saveBtn.disabled = true;
-        const value = ta.value;
+        const value = ed.getValue();
         try {
           await Filesystem.writeFile({ path: toUri(f.path), data: restoreEol(value, info.crlf), encoding: Encoding.UTF8 });
-          base = value; changed = true; toast('Saved');
+          ed.markClean(); changed = true; toast('Saved');
         } catch (e) { toast(`Could not save the file${errText(e)}`); }
-        saving = false; saveBtn.disabled = !dirty();
+        saving = false; sync();
       };
-      guard = async () => !dirty() || ui.askYesNo({ title: 'Discard changes?', text: 'This file has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
+      guard = async () => !ed.isDirty() || ui.askYesNo({ title: 'Discard changes?', text: 'This file has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
     }
-    cleanup = () => { ta.oninput = null; ta.blur(); };
+    cleanup = () => { ed.destroy(); };
   }
 
   // ---- Image ----
