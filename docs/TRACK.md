@@ -306,3 +306,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-25 | Session 154 (continued: Ubuntu 26.04) | Decision 286 | DP128 confirmed, Phase 26 closed; runner pinned to ubuntu-26.04; DP129 added; not run through CI |
 | 2026-10-25 | Session 154 (continued: double Back) | Decision 287 | Double Back to leave a landing page, wording by Back style; ArklyNav bridge and patch-nav.js added; DP130 added; vite build passes; not run through CI |
 | 2026-10-25 | Session 154 (continued: code editor) | Decision 288 | File explorer text view moved to CodeMirror 6 (line numbers, colours, undo, find/replace, go to line, scroll handle); stage 3 (note editors) open; DP131 added; vite build passes; not run through CI |
+| 2026-10-25 | Session 154 (continued: toasts) | Decision 289 | DP130 confirmed, Phase 28 closed; toasts fade in and out; exit notice dismissed on leaving the landing page; DP132 added; vite build passes; not run through CI |

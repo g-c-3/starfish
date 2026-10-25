@@ -3163,3 +3163,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not done: tabs for several files; the Home and Vault note editors (Phase 29, stage 3, own checks for Decisions 133 and 177).
 - Files: `src/js/codeeditor.js` (new), `src/js/explorer-view.js`, `src/css/style.css`, `package.json`, `package-lock.json`. `vite build` passes; the module ran under a DOM stand-in (open, edit, undo, redo, dirty, go to line, wrap); not run through CI, not device-tested (DP131). Mobile selection handles, the find panel and the scroll handle on the real WebView are the unproven parts.
 
+**289. Toasts fade; the exit notice leaves with the landing page.** Extends Decisions 91 and 287.
+- Owner request after DP130: the "again to exit" notice stayed for its full time after the person left the Home or Vault landing page, and toasts appeared and vanished abruptly.
+- Every toast now fades and slides in and out over 0.2 s (`.toast` is transparent until `.show`; `hideToast()` removes `show` and adds `hidden` after 220 ms). A newer toast cancels a pending hide. With reduced motion set on the phone, the slide is dropped.
+- The exit notice sets `exitNoticeUp`; `updateBackButtonState()` (run on every page class change) hides it, and resets the double-Back count, as soon as `backAction()` is no longer empty (a folder, sheet, viewer, Settings or the explorer is open). Any other toast clears the flag. Moving between the Home and Vault landing pages keeps the notice.
+- Files: `src/js/app.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP132).
+

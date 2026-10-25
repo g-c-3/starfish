@@ -438,6 +438,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 - **Quick-repeat patterns** — a "repeat monthly/weekly" toggle at creation time for recurring reminders (rent,
   bills) and recurring expenses, using the existing `repeat_rule` field already on the `entries` schema.
 - **Undo (Decision 137).** Every Delete shows a 6-second toast with Undo, which restores from trash. Delete permanently has none.
+- **Toasts (Decision 289).** One toast shows at a time. It fades and slides in and out (0.2 s; `.toast.show`, `hideToast()` removes `show`, then hides it after 220 ms); reduced-motion phones get a plain fade. The "again to exit" notice (Decision 287) is dismissed the moment Back would no longer leave the app, checked in `updateBackButtonState()`, which runs on every class change in the page.
 - **Trash / soft-delete (30-day auto-purge)** — every Delete is a soft-delete (`deleted_at` timestamp set, row
   hidden from all normal queries and from FTS results) with a dedicated "Trash" screen to restore or delete
   permanently early. **Two independent bins** (main + Vault — §3b), same rule, distinguished by `is_private`
