@@ -90,6 +90,11 @@ jobs:
       - name: Patch reminder notification actions (native receiver)
         run: node scripts/patch-reminder-actions.js
 
+      # Decision 281 — noise reduction for the voice recorder. Patches the plugin source in node_modules so that
+      # startRecording({ noiseReduction: true }) records from VOICE_COMMUNICATION; without the option nothing changes.
+      - name: Patch voice recorder (noise reduction)
+        run: node scripts/patch-voice.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
