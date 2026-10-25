@@ -4,6 +4,23 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 154**
+
+Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings read; DECISIONS and ARCHITECTURE not read in full. Releases v1.0.681 to v1.0.684 listed.
+- Owner confirmed: CI green for the Phase 25 file; DP127 confirmed on device. Phase 25 closed.
+- Security review of an uploaded build-security note against the repository (read-only, no file changed):
+  - No keystore, credential file, `.env` or secret pattern is tracked; `.gitignore` lists `android/app/release.keystore`; `android/` is not committed.
+  - `build-android.yml` takes the keystore and its three passwords from Actions secrets; the passwords reach Gradle through environment variables; the keystore password reaches `keytool` through `-storepass:env`.
+  - Package name and SHA-1 on the run Summary are public values, as the note says. `GDRIVE_WEB_CLIENT_ID` is a repository variable (a client ID), not a secret.
+  - Not checked: git history (the archive of `main` has no history), and the restrictions set in the Google Cloud Console.
+  - Owner confirmed: signing material has only ever been supplied through Actions secrets; the Google Cloud Android client is restricted to the package name and SHA-1.
+  - The workflow's actions (`checkout`, `setup-node`, `setup-java`, `upload-artifact`, all at v4) run on the Node 20 runtime, which GitHub is retiring.
+- Phase 26 (owner request) and Decision 285: the four actions bumped to `checkout@v6`, `setup-node@v6`, `setup-java@v5`, `upload-artifact@v7` after reading each `action.yml` (`node24`; `upload-artifact@v5` is still `node20`). The app's build Node moved from 20 to 24 on the owner's word ("everything to Node 24"); `npm ci` and `vite build` pass on Node 22 here, Node 24 itself not available. Not run through CI.
+Open: DP128 (CI run of the workflow change).
+Next session start point: the DP128 result, then the owner's new roadmap items.
+
+---
+
 **Session 153**
 
 Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-check part read; Decisions 155, 278, 279 read. Release list not read (hourly API limit); CI status left to the owner.

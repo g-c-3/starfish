@@ -3136,3 +3136,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `moveEntryUI` now reports whether the item moved; its other callers ignore the result.
 - The multi-select bar showed Make a PDF in the Voice folder, where it can only answer "Select PDFs to merge, or pictures to make a PDF." It is hidden while every selected row is a voice recording. It shows for any other selection, so a mixed selection from search keeps it.
 - Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP127).
+
+**285. Workflow actions on the Node 24 runtime.** Extends Decision 259's CI contract; no change to the build steps.
+- `build-android.yml` pinned `actions/checkout`, `actions/setup-node`, `actions/setup-java` and `actions/upload-artifact` at v4, which run on the Node 20 runtime that GitHub is retiring. Bumped to `checkout@v6`, `setup-node@v6`, `setup-java@v5` and `upload-artifact@v7`; the `action.yml` of each declares `node24`.
+- `upload-artifact@v5` still declares `node20`, so v7 was chosen over it. The release step (`gh`) is unchanged.
+- `node-version` in the Set up Node step (the version the app is built with, separate from the action runtime) moved from 20 to 24, so the whole pipeline is on one Node line. Checked here on Node 22: `npm ci` and `vite build` pass. Vite 7 needs 20.19 or 22.12 and up; the Capacitor CLI needs 18 and up; `sharp` 0.32.6 (icon generation) needs 14.15 and up. Not run on Node 24 itself.
+- Files: `.github/workflows/build-android.yml`. Not run through CI (DP128). If the build breaks on Node 24, set `node-version` back to 20; nothing else depends on it.
+
