@@ -53,6 +53,7 @@ Required:
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 ```
 `MODIFY_AUDIO_SETTINGS` is a normal permission, granted at install. It lets voice playback switch between the speaker and the earpiece (Decision 283; `scripts/patch-audioroute.js`).
+No permission is needed for the Back style bridge `window.ArklyNav` (Decision 287; `scripts/patch-nav.js`): it reads three phone settings to word the "again to exit" notice.
 `USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` are requested so reminders are delivered on time through Doze
 (Decision 101). They only change when the notification is delivered: it is still a plain banner, with no alarm
 screen or alarm sound. Google Play restricts both to alarm and calendar apps (see Decision 98).
