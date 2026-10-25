@@ -21,8 +21,10 @@ Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-
 - Closed on the owner's word without a device pass of their own: Phase 7 actions, the Phase 14 plain-UI and not-run notes, Phase 22 E1a, E3b, E3d stage 3 and equations, Phase 17 lock fixes and M, Phase 18 C.
 - Owner reported CI green and `ads.js` deleted.
 - Phase 23 (new, owner request) and Decision 282: version name derived from the build number (1.0.674, 1.0.675 ... 1.0.999, 1.1.000 ... 1.9.999, 2.0.000). `patch-version.js` writes it, `update-check.js` reads it back and still reads the old form. Checked in Node (mapping at every boundary, six update cases, the script on a stand-in `build.gradle`). Not run through CI. An older install cannot see the new tags: the first new build is installed by hand once.
-Open: DP125 (version scheme); CI run of the Phase 23 files.
-Next session start point: the DP125 result and the CI run of the Phase 23 files, then the owner's new roadmap items.
+- Owner confirmed DP125 on device: the version scheme works. Phase 23 closed.
+- Phase 24 (new, owner request) and Decision 283: Speaker / Earpiece for voice playback. A switch with one saved default at the top of the Voice folder (Home and Vault), and two options inside each player for that player only. Earpiece uses a new native bridge, written by `scripts/patch-audioroute.js`, plus the `MODIFY_AUDIO_SETTINGS` permission. `vite build` passes; the patch script was run twice on a stand-in file; the Java was not compiled here; not run through CI. Assumed: the per-player choice is not saved per file.
+Open: DP126 (playback output); CI run of the Phase 24 files.
+Next session start point: the DP126 result and the CI run of the Phase 24 files, then the owner's new roadmap items.
 
 ---
 

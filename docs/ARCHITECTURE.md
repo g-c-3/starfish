@@ -610,6 +610,7 @@ shows a notice and no actions.
 Both use the shared viewer shell. Recorder: ready, recording, review; review plays the take before the Save dialog, and a
 lock discards it. Saved voice opens in a viewer with the player (play/pause, scrub, speed). Vault audio is decrypted into
 an in-memory blob URL for the life of the viewer and revoked on close or lock. Playback re-arms the matching idle lock.
+Playback output (Decision 283): Speaker or Earpiece at the top of the Voice folder (Home and Vault, one default in `meta.voice_output`) and inside every player for that player only. Earpiece goes through the `window.ArklyAudioRoute` bridge (`scripts/patch-audioroute.js`; communication mode, released on pause, end and close); the speaker makes no native call. Permission `MODIFY_AUDIO_SETTINGS`.
 Noise reduction (Decision 281): a switch on the ready screen, kept in `meta.rec_noise`, off by default. `scripts/patch-voice.js` patches the plugin in CI so `startRecording({ noiseReduction: true })` records from `VOICE_COMMUNICATION` (the phone's own suppression, where it has one); otherwise `MIC`. The widget's recorder is unchanged, and the `noise_reduction` column stays NULL.
 
 ### Back button everywhere (Decision 104)
