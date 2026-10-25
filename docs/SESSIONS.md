@@ -13,11 +13,14 @@ Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-
 - ROADMAP: Phases 4, 10 and 15 checked complete; Phase 5 stays open for the noise toggle only; Phase 13 stays open for one item (in-app copy still saying "fully offline"); DP120 to DP123 and the Phase 13 owner setup ticked; stale entrance-motion text in the checklist corrected (DP40 was confirmed in Session 100).
 - Phase 13 in-app copy: the only "stays on this device" claim was the Settings subtitle in `src/index.html`; it now names export, share and Drive backup as the exceptions. Phase 13 checked complete. Copy only, no decision. Not run through CI.
 - Phases 1, 2 and 3 closed by the owner (signing confirmed by live releases; Play Console not planned; Phases 2 and 3 exercised on device since).
-- Decision 280: ad remnants removed (ad-gate screen and style, ad comments, ad text in ROADMAP, ARCHITECTURE and native-setup). `src/js/ads.js` is deleted by hand in the repository.
-- Decision 281: noise reduction for the voice recorder, built as a CI patch of the plugin (`scripts/patch-voice.js`) plus a switch on the recorder screen. DP124 open. If it shows no effect, drop the feature.
-- `vite build` passes. Not run through CI, not device-tested.
-Open: DP124 (noise reduction); CI run of the Session 153 changes.
-Next session start point: DP124 result, then the open checks of Phases 6, 7, 8, 14, 18 and 22.
+- Decision 280: ad remnants removed (ad-gate screen and style, ad comments, ad text in ROADMAP, ARCHITECTURE and native-setup). `src/js/ads.js` deleted in the repository (owner).
+- Decision 281: noise reduction for the voice recorder, built as a CI patch of the plugin (`scripts/patch-voice.js`) plus a switch on the recorder screen. DP124 confirmed.
+- `vite build` passes. CI green (owner).
+- Owner confirmed DP124 on device: noise reduction works. Phase 5 closed.
+- Owner confirmed the cross-PIN restore path on device (device-confirmed earlier, Session 150, Decision 255; the Phase 6 text saying otherwise was stale). Owner then closed every remaining open or partial roadmap item: Phases 6, 7, 8, 14, 17 (sub-items), 18, 21 (stage text), 22 and the device pass backlog. 39 lines marked closed.
+- Closed on the owner's word without a device pass of their own: Phase 7 actions, the Phase 14 plain-UI and not-run notes, Phase 22 E1a, E3b, E3d stage 3 and equations, Phase 17 lock fixes and M, Phase 18 C.
+Open: nothing. No open roadmap item remains; further work needs new items from the owner.
+Next session start point: the owner's new roadmap items.
 
 ---
 
