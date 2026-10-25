@@ -837,6 +837,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 ## Update check, public repo (Decisions 164, 214)
 - Tap only. One unauthenticated `GET api.github.com/repos/<repo>/releases`; newest release by build number: the version `1.0.674` style (Decision 282) is turned back into the CI run number, and the older `x.y.z+N` form is still read. No token, no stored credential. A 403 or 429 reads as the hourly limit (60 per address).
+- Release cleanup (Decision 291): `.github/workflows/release-builds-cleanup.yml`, run by hand, keeps the newest three releases (input `keep`) and deletes older ones with their tags and APKs; `dry_run` only lists. The update check reads the newest release, so it is unaffected.
 - Download: the asset's `browser_download_url`, natively into `cache/update/` with no header, then the system installer. Needs `REQUEST_INSTALL_PACKAGES`.
 - A token saved by an earlier build (`meta.update_token`) is deleted at start-up.
 

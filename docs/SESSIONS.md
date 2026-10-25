@@ -27,8 +27,9 @@ Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings re
 - Decision 290: opening limit 10 MB, editing limit 2 MB, larger files read-only with a banner.
 - Owner confirmed DP129, DP131 and DP132. Phases 27 and 30 closed; Phase 29 stages 1 and 2 closed.
 - Bug: the code editor's toolbar showed one full-width Find button, the rest off-screen. Cause: the global `input, button` rule sets `width: 100%`. Fix: `width: auto` on `.ev-tool` and on the find panel's buttons and checkboxes. Correct because a rule with a class selector overrides the element rule for these buttons only. `vite build` passes; not device-tested.
-Open: Phase 29 stage 3 (Home and Vault note editors).
-Next session start point: Phase 29 stage 3 (read the note editor code and Decisions 133 and 177 first).
+- Phase 31 (owner request) and Decision 291: `release-builds-cleanup.yml`, manual run, keeps the newest three releases, deletes older ones with their tags; `dry_run` input. Script logic tested against a stand-in `gh`; not run through CI.
+Open: DP133; Phase 29 stage 3 (Home and Vault note editors).
+Next session start point: the DP133 result, then Phase 29 stage 3 (read the note editor code and Decisions 133 and 177 first).
 
 ---
 

@@ -3175,3 +3175,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Further raising either limit needs its own device test (open time on a larger file; save of a file near the new editing limit).
 - Files: `src/js/explorer-view.js`.
 
+**291. Release cleanup workflow.** Extends Decision 282's release scheme.
+- Every push to `main` that builds creates a release with an APK (about 12 MB), so releases pile up. `release-builds-cleanup.yml` ("Release builds cleanup") keeps the newest three by creation time and deletes the rest with `gh release delete --cleanup-tag`, tags included.
+- Manual only (`workflow_dispatch`): inputs `keep` (default 3, at least 1) and `dry_run` (list only). No schedule, no trigger from the build workflow, so nothing is deleted unless the owner starts a run.
+- Permission `contents: write`, the run's own token, no stored credential. Runs on `ubuntu-26.04` (Decision 286); uses only the `gh` CLI already on the runner, so no action versions to keep current.
+- Not touched: run artifacts of `build-android.yml` (they expire on their own) and git history. Deleted tags are not reused: the version comes from the increasing run number (Decision 282).
+- The in-app update check reads the newest release, which is always kept.
+- Files: `.github/workflows/release-builds-cleanup.yml` (new). The script logic was run against a stand-in `gh` (keep 3, dry run, keep above the count, bad input); not run through CI (DP133).
+
