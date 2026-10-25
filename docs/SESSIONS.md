@@ -23,8 +23,10 @@ Start: "Go". Tier 1 docs read; ARCHITECTURE sections 1, 3, 4, 10 and the update-
 - Phase 23 (new, owner request) and Decision 282: version name derived from the build number (1.0.674, 1.0.675 ... 1.0.999, 1.1.000 ... 1.9.999, 2.0.000). `patch-version.js` writes it, `update-check.js` reads it back and still reads the old form. Checked in Node (mapping at every boundary, six update cases, the script on a stand-in `build.gradle`). Not run through CI. An older install cannot see the new tags: the first new build is installed by hand once.
 - Owner confirmed DP125 on device: the version scheme works. Phase 23 closed.
 - Phase 24 (new, owner request) and Decision 283: Speaker / Earpiece for voice playback. A switch with one saved default at the top of the Voice folder (Home and Vault), and two options inside each player for that player only. Earpiece uses a new native bridge, written by `scripts/patch-audioroute.js`, plus the `MODIFY_AUDIO_SETTINGS` permission. `vite build` passes; the patch script was run twice on a stand-in file; the Java was not compiled here; not run through CI. Assumed: the per-player choice is not saved per file.
-Open: DP126 (playback output); CI run of the Phase 24 files.
-Next session start point: the DP126 result and the CI run of the Phase 24 files, then the owner's new roadmap items.
+- Owner confirmed DP126 on device: the latest build plays through the chosen output. Phase 24 closed.
+- Phase 25 (new, owner report) and Decision 284: Move added to the file view and the image viewer header, as in every row; Make a PDF hidden in the multi-select bar while only voice recordings are selected (found in the owner's screen recording). `vite build` passes; not run through CI. PDF and file viewers were not changed; they build their own headers.
+Open: DP127 (Decision 284); CI run of the Phase 25 file.
+Next session start point: the DP127 result and the CI run of the Phase 25 file, then the owner's new roadmap items.
 
 ---
 

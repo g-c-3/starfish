@@ -300,3 +300,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-25 | Session 153 (continued: CI) | none | CI green for the Session 153 changes; ads.js deleted; docs only |
 | 2026-10-25 | Session 153 (continued: version scheme) | Decision 282 | Version name from the build number (v1.0.675 style); update check reads both forms; DP125 added; checked in Node; not run through CI |
 | 2026-10-25 | Session 153 (continued: playback output) | Decision 283 | DP125 confirmed, Phase 23 closed; Speaker / Earpiece for voice playback built (native bridge, folder switch, per-player options); DP126 added; vite build passes; not run through CI |
+| 2026-10-25 | Session 153 (continued: file view Move) | Decision 284 | DP126 confirmed, Phase 24 closed; Move added to the file view and image header; Make a PDF hidden for voice selection; DP127 added; vite build passes; not run through CI |

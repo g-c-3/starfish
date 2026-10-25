@@ -3130,3 +3130,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Permission: `MODIFY_AUDIO_SETTINGS`, a normal permission granted at install (`scripts/patch-manifest.js`). No network, no new data.
 - Risk: how a web view's audio follows the communication mode varies by phone and Android version. If the earpiece choice has no audible effect on the owner's phone (DP126), the bridge and the controls are removed.
 - Files: `scripts/java/ArklyAudioRouteBridge.java` (new), `scripts/patch-audioroute.js` (new), `scripts/patch-manifest.js`, `.github/workflows/build-android.yml`, `src/index.html`, `src/js/app.js`. `vite build` passes; the patch script run twice on a stand-in `MainActivity.java`, idempotent; the Java is not compiled here (no Android toolchain); not run through CI, not device-tested.
+
+**284. Move in the file view; no Make a PDF for voice recordings.** Extends Decisions 134, 181 and 185.
+- The file view (Money, Reminder, Location and Voice) and the image viewer header had Edit, Share, Download and Delete but no Move, while every row has it. Move now sits between Download and Delete, for the types that can move (Decisions 182 to 184). It asks the same question as the row action (Decision 186) and the direction follows the screen: Move to Vault from Home, Move to Home from the Vault. After a move the view closes (the image viewer steps to the next image).
+- `moveEntryUI` now reports whether the item moved; its other callers ignore the result.
+- The multi-select bar showed Make a PDF in the Voice folder, where it can only answer "Select PDFs to merge, or pictures to make a PDF." It is hidden while every selected row is a voice recording. It shows for any other selection, so a mixed selection from search keeps it.
+- Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP127).
