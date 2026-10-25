@@ -1,4 +1,4 @@
-// app.js — bootstraps the app: auth gate -> ad gate -> main UI.
+// app.js — bootstraps the app: auth gate -> main UI.
 // Control flow and key logic: auth gate, capture pipeline, folders, viewers, Money, Vault.
 
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
@@ -7,8 +7,6 @@ import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, cr
 import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
-// ads.js import removed here — no longer called from anywhere (see onUnlocked()). The module
-// itself is untouched, kept as Phase 12 scaffolding for a future build.
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
 import { initWidgetCapture, handleWidgetBack, closeWidgetCapture } from './widget.js';
@@ -126,7 +124,7 @@ function showScreen(id, { tab } = {}) {
   if (id === 'vault-screen') recordLocation('vault');
 
   // Bottom nav only makes sense once the app is unlocked (main-screen/vault-screen) — hidden for
-  // first-run, the lock screen, and the ad gate, which have nothing to navigate between yet.
+  // first-run and the lock screen, which have nothing to navigate between yet.
   const nav = document.getElementById('bottom-nav');
   if (!nav) return;
   const navKey = NAV_SCREENS[id];
@@ -961,17 +959,8 @@ async function onUnlocked() {
   if (bgRec && resumeRecordingHook) { const r = bgRec; bgRec = null; setTimeout(() => resumeRecordingHook(r), 0); } // back to the running take
   await armAppAutoLock(); // no-op if quick access (no password) — nothing to lock back to in that case
 
-  // Ads deliberately NOT wired in this build (explicit product decision — deferred to a future
-  // build, Phase 12 stays unstarted in ROADMAP.md). Previously called runDailyAdGateIfDue() here
-  // with window.adSdk, which has never actually been set anywhere (no AdMob plugin has been added
-  // to package.json) — ads.js's own try/catch handled that undefined reference safely on its own,
-  // so removing this isn't fixing a confirmed hang by itself, but it was extra async work sitting
-  // in the exact unlock path a freeze was reported on, and it served no purpose with nothing to
-  // gate. Removed rather than left calling into a module with nothing behind it.
-  //
-  // Update check (Decision 71) is NOT run here either, by design (Decision 72) — it's a manual
-  // Settings button (handleCheckForUpdateClick()) now, not a background check on every open. With
-  // ads still unwired, the app currently makes zero network calls unless that button is tapped.
+  // Update check (Decision 71) is NOT run here, by design (Decision 72): it is a manual Settings button
+  // (handleCheckForUpdateClick()), not a background check on every open.
   await checkAutoBackupOnOpen(); // never blocks getting into the app
   // Actual rendering (digest, on-this-day, timeline) happens via DOMContentLoaded's render*()
   // functions, called once right after bootstrap() resolves — showDigest()/showMainTimeline()
@@ -3972,6 +3961,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Home only (Decision 180): keep recording behind a lock. Off by default; can be changed before and during a take.
     let bgOn = false;
     if (!isVault) bgOn = (await metaGet('rec_background', '0')) === '1';
+    // Noise reduction (Decision 281): chosen before a take, applied by the patched plugin at start.
+    let noiseOn = (await metaGet('rec_noise', '0')) === '1';
 
     let state = 'ready', timer = null, startedAt = 0, taken = null, saved = null, player = null, url = null;
     if (resume) { state = 'recording'; startedAt = resume.startedAt; }
@@ -4011,7 +4002,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     const start = async () => {
       try {
-        const r = await VoiceRecorder.startRecording();
+        const r = await VoiceRecorder.startRecording({ noiseReduction: noiseOn });
         if (!r.value) { toast('Could not start recording'); return; }
       } catch (err) { toast(`Could not start recording: ${err.message || err}`); return; } // e.g. MICROPHONE_BEING_USED
       if (state === 'closed') { VoiceRecorder.stopRecording().catch(() => {}); return; }
@@ -4070,9 +4061,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="detail-actions">
           <button id="rec-main-btn" class="${recording ? 'rec-stop' : ''}"${state === 'stopping' ? ' disabled' : ''}>${recording ? 'Stop' : 'Record'}</button>
         </div>
+        ${recording ? '' : `<label class="switch-row"><input type="checkbox" id="rec-noise-switch"${noiseOn ? ' checked' : ''} /> Reduce background noise</label>
+        <p class="mode-description">Uses the phone's own noise suppression where it has one. Applies to the next take.</p>`}
         ${isVault ? '' : `<label class="switch-row"><input type="checkbox" id="rec-bg-switch"${bgOn ? ' checked' : ''} /> Keep recording when the app locks or goes to the background</label>
         <p class="mode-description">Off: a lock stops the take and keeps it as an Autosave entry.</p>`}`;
       body.querySelector('#rec-main-btn').onclick = recording ? stop : start;
+      const noiseSw = body.querySelector('#rec-noise-switch');
+      if (noiseSw) noiseSw.onchange = () => { noiseOn = noiseSw.checked; metaSet('rec_noise', noiseOn ? '1' : '0').catch(() => {}); };
       const bgSw = body.querySelector('#rec-bg-switch');
       if (bgSw) bgSw.onchange = () => { bgOn = bgSw.checked; metaSet('rec_background', bgOn ? '1' : '0').catch(() => {}); };
     }
