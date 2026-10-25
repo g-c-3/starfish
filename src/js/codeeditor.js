@@ -1,9 +1,10 @@
 // codeeditor.js — the text editor of the File explorer (Decision 288): line numbers, syntax colours, undo/redo, find and replace,
 // go to line, wrap and size switches, a draggable scroll handle. CodeMirror 6, bundled into the app (no network); this module is
-// loaded only when a text file opens. Wrap and size choices last until the app closes.
+// loaded only when a text file or a note opens. kind 'file' (File explorer) or 'note' (Home and Vault notes, Decision 292: plain
+// text, no numbers or colours, spell check on). Wrap and size choices last until the app closes, one set per kind.
 import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap } from '@codemirror/view';
-import { history, historyKeymap, defaultKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
+import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder } from '@codemirror/view';
+import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel, highlightSelectionMatches } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
@@ -41,7 +42,7 @@ const highlight = HighlightStyle.define([
   { tag: t.invalid, color: 'var(--cm-invalid)' }
 ]);
 
-const prefs = { wrap: true, size: 14 };
+const PREFS = { file: { wrap: true, size: 14 }, note: { wrap: true, size: 17 } };
 const MIN_SIZE = 10, MAX_SIZE = 24;
 
 const baseTheme = EditorView.theme({
@@ -62,8 +63,17 @@ const baseTheme = EditorView.theme({
   '.cm-panels': { backgroundColor: 'var(--surface)', color: 'var(--fg)', borderBottom: '1px solid var(--border)' }
 });
 
-// parent, text, name, editable (may be switched on), ui { askText }, onChange()
-export function createCodeEditor({ parent, text, name, editable = true, ui, onChange = () => {} }) {
+// note text: the page font, wider side padding, no gutter
+const noteTheme = EditorView.theme({
+  '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.65' },
+  '.cm-content': { padding: '14px 0 calc(40px + env(safe-area-inset-bottom, 0px))' },
+  '.cm-line': { padding: '0 18px' },
+  '.cm-placeholder': { color: 'var(--muted)' }
+});
+
+// parent, text, name, kind, editable (may be switched on), ui { askText }, onChange()
+export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {} }) {
+  const note = kind === 'note', prefs = PREFS[note ? 'note' : 'file'];
   const wrapC = new Compartment(), sizeC = new Compartment(), editC = new Compartment();
   const sizeTheme = () => EditorView.theme({ '&': { fontSize: `${prefs.size}px` } });
   const editExt = (on) => [EditorState.readOnly.of(!on), EditorView.editable.of(on)];
@@ -71,12 +81,14 @@ export function createCodeEditor({ parent, text, name, editable = true, ui, onCh
   const state = EditorState.create({
     doc: text,
     extensions: [
-      lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), history(), bracketMatching(), indentOnInput(),
-      highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme,
-      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-      languageFor(name),
+      ...(note ? [placeholder('Start typing\u2026')] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
+      history(), highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
+      keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
+      languageFor(note ? '' : name),
       wrapC.of(prefs.wrap ? EditorView.lineWrapping : []), sizeC.of(sizeTheme()), editC.of(editExt(false)),
-      EditorView.contentAttributes.of({ spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': name || 'text' }),
+      EditorView.contentAttributes.of(note
+        ? { spellcheck: 'true', autocapitalize: 'sentences', autocorrect: 'on', 'aria-label': 'Note text' }
+        : { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': name || 'text' }),
       EditorView.updateListener.of((u) => { if (u.docChanged) onChange(); })
     ]
   });
@@ -118,10 +130,10 @@ export function createCodeEditor({ parent, text, name, editable = true, ui, onCh
     markClean: () => { base = view.state.doc; },
     isEditing: () => on,
     canEdit: editable,
-    setEditing(v) {
+    setEditing(v, focus = true) { // focus false: switch on without raising the keyboard
       if (v && !editable) return;
       on = !!v; view.dispatch({ effects: editC.reconfigure(editExt(on)) });
-      if (on) view.focus();
+      if (on && focus) view.focus();
     },
     undo: () => undo(view), redo: () => redo(view),
     canUndo: () => undoDepth(view.state) > 0, canRedo: () => redoDepth(view.state) > 0,

@@ -2393,55 +2393,90 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
   });
 }
 
-// Resolves the text on Save, or null on leave. Leaving with unsaved changes needs a second Back within 3 s.
+// One import of the editor module, kept; a failed load is retried at the next open.
+let codeEditorModule = null;
+const loadCodeEditor = () => (codeEditorModule ||= import('./codeeditor.js').catch((e) => { codeEditorModule = null; throw e; }));
+
+// Resolves the text on Save, or null on leave. Unsaved changes: one Back asks Discard.
+// The text box is the code editor in note mode (Decision 292). The screen opens at once; the editor attaches when its module loads.
 // persist(text) / clear() (Decision 177): while typing and when the editor closes with unsaved changes by any route except an
 // explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
 function openTextEditor({ title = 'New note', text = '', isVault = false, persist = null, clear = null } = {}) {
   return new Promise((resolve) => {
     const $ = (id) => document.getElementById(id);
-    const screen = $('editor-screen'), ta = $('editor-text');
-    let dirty = false;
-    let draftTimer = null;
-    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (persist) Promise.resolve(persist(ta.value)).catch(() => {}); };
+    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools');
+    let ed = null, closed = false, dirty = false, draftTimer = null, countTimer = null;
+    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (persist && ed) Promise.resolve(persist(ed.getValue())).catch(() => {}); };
     const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = title;
-    ta.value = text;
+    host.replaceChildren(); bar.replaceChildren();
     const updateCount = () => {
-      const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
-      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${ta.value.length} characters`;
+      const v = ed ? ed.getValue() : text;
+      const words = v.trim() ? v.trim().split(/\s+/).length : 0;
+      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${v.length} characters`;
     };
     updateCount();
     const finish = (result, discarded = false) => {
+      if (closed) return;
+      closed = true;
       document.removeEventListener('visibilitychange', onHide);
-      clearTimeout(draftTimer);
+      clearTimeout(draftTimer); clearTimeout(countTimer);
       if (!discarded) { if (dirty) saveDraft(); else if (clear) Promise.resolve(clear()).catch(() => {}); } // lock, screen-off, Save: keep the text
+      if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
+      bar.replaceChildren();
       screen.classList.add('hidden');
-      ta.blur();
-      ta.oninput = null;
       activeEditor = null;
       updateBackButtonState();
       resolve(result);
     };
-    // Unsaved changes: one Back asks Yes/No (replaces the earlier tap-twice-within-3-seconds rule).
+    // Unsaved changes: one Back asks Yes/No.
     const requestBack = async () => {
       if (!dirty) { finish(null); return; }
       const yes = await askYesNo({ title: 'Discard changes?', text: 'Your note has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
-      if (yes && activeEditor) { if (clear) await Promise.resolve(clear()).catch(() => {}); finish(null, true); }
-    };
-    ta.oninput = () => {
-      dirty = ta.value !== text; updateCount();
-      if (persist) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
+      if (yes && !closed) { if (clear) await Promise.resolve(clear()).catch(() => {}); finish(null, true); }
     };
     $('editor-back-btn').onclick = requestBack;
     $('editor-save-btn').onclick = () => {
-      if (!ta.value.trim()) { toast('Nothing to save yet'); return; }
-      finish(ta.value);
+      const v = ed ? ed.getValue() : text;
+      if (!v.trim()) { toast('Nothing to save yet'); return; }
+      finish(v);
     };
     activeEditor = { finish, requestBack, isVault };
     screen.classList.remove('hidden');
     updateBackButtonState();
-    if (!text) setTimeout(() => ta.focus(), 60);
+    (async () => {
+      let mod;
+      try { mod = await loadCodeEditor(); }
+      catch (e) { if (!closed) { toast('The editor could not be loaded'); finish(null, true); } return; }
+      if (closed) return;
+      let undoBtn, redoBtn;
+      const sync = () => { undoBtn.disabled = !ed.canUndo(); redoBtn.disabled = !ed.canRedo(); };
+      ed = mod.createCodeEditor({
+        parent: host, text, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
+        onChange: () => {
+          dirty = ed.isDirty(); sync();
+          clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
+          if (persist) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
+        }
+      });
+      const tool = (label, label2, fn) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'ev-tool'; b.textContent = label; b.title = label2; b.setAttribute('aria-label', label2);
+        b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up
+        b.onclick = fn; bar.appendChild(b); return b;
+      };
+      undoBtn = tool('Undo', 'Undo', () => { ed.undo(); sync(); });
+      redoBtn = tool('Redo', 'Redo', () => { ed.redo(); sync(); });
+      tool('Find', 'Find and replace', () => ed.find());
+      tool('Go to', 'Go to line', () => ed.goTo());
+      const wrapBtn = tool('Wrap', 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
+      wrapBtn.classList.toggle('on', ed.isWrapped());
+      tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1));
+      tool('A+', 'Larger text', () => ed.bumpSize(1));
+      ed.setEditing(true, !text); // keyboard up at once for a new note only
+      sync();
+    })();
   });
 }
 
