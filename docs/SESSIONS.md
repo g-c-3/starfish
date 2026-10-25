@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 155**
+
+Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. DP133 result not reported.
+- Phase 29 stage 3 and Decision 292: Home and Vault note editor (`openTextEditor`) now runs on the code editor in note mode, replacing the text box. Toolbar: Undo, Redo, Find, Go to, Wrap, A-, A+. Drafts (Decision 177) and the Discard question (Decision 133) keep their rules. `codeeditor.js` gained `kind` ('file' or 'note'), per-kind wrap and size, `setEditing(on, focus)`. The editor is destroyed when the screen closes.
+- `vite build` passes; note mode smoke-tested under a DOM stand-in (line-ending normalisation, dirty, undo and redo, placeholder, kind separation, destroy); `app.js` wiring, lock paths and the keyboard behaviour on the real WebView not run; not run through CI.
+Open: DP133; DP134.
+Next session start point: the DP133 and DP134 results; fix what DP134 finds, then close Phase 29.
+
+---
+
 **Session 154**
 
 Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings read; DECISIONS and ARCHITECTURE not read in full. Releases v1.0.681 to v1.0.684 listed.

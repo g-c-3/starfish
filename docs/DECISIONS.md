@@ -3183,3 +3183,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The in-app update check reads the newest release, which is always kept.
 - Files: `.github/workflows/release-builds-cleanup.yml` (new). The script logic was run against a stand-in `gh` (keep 3, dry run, keep above the count, bad input); not run through CI (DP133).
 
+**292. Home and Vault note editors on the code editor.** Phase 29 stage 3; extends Decision 288, keeps Decisions 133 and 177.
+- The note text box is the code editor in note mode (`kind: 'note'`): plain text, no line numbers, no colours, no active-line highlight, page font at 17 px, placeholder, spell check and sentence capitals on. Enter copies no indentation. Wrap and text size are kept per kind until the app closes.
+- Toolbar above the text: Undo, Redo, Find, Go to, Wrap, A-, A+. Toolbar taps do not take focus, so the keyboard stays up.
+- Opens in editing mode; the keyboard rises for an empty new note only.
+- Unchanged: dirty means the text differs from the text at open; one Back with changes asks "Discard changes?"; Save needs non-empty text; draft write 0.5 s after typing, on hide and on close, cleared by a clean close, Discard or a save (Decision 177); lock and Vault lock close the editor through the same path.
+- The editor view is destroyed on every close, so no note text stays in the page after a lock.
+- The module loads on first use (one import, retried after a failure). If it cannot load, a notice shows and the screen closes without touching drafts.
+- Word and character counts update 150 ms after the last change.
+- Not done: tabs, a line-number switch for notes, markdown colours.
+- Files: `src/js/codeeditor.js`, `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; note mode ran under a DOM stand-in; not run through CI, not device-tested (DP134). Unproven on the WebView: keyboard behaviour on toolbar taps, spell check and capitals, draft commit after a lock.

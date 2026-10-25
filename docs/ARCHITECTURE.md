@@ -568,7 +568,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 One sheet for every capture and edit: file name, tags (max two), description, Save. Untouched Save stores the
 default name, no tags, no description; picked files keep their phone name. Tag chips list tags used by live
 entries in the same scope only (main dialog: non-private; Vault dialog: private). Text notes are written in a
-full-screen editor that leads into the dialog. Both overlays close when the app locks (all) or the Vault locks
+full-screen editor that leads into the dialog (the code editor in note mode, Decision 292; drafts per Decision 177). Both overlays close when the app locks (all) or the Vault locks
 (Vault ones); a capture loop that sees a lock stops instead of reopening the editor. Description is searchable in
 the same FTS column as the body. Tapping a row opens it; text notes, reminders and locations have viewers so far.
 
