@@ -139,6 +139,10 @@
 
       <div id="folder-view" class="hidden">
         <h2 id="folder-title"></h2>
+        <div id="voice-out-wrap" class="hidden">
+          <div class="seg" id="voice-out-seg" role="group" aria-label="Play recordings through"><button type="button" data-out="speaker" class="active">Speaker</button><button type="button" data-out="earpiece">Earpiece</button></div>
+          <p class="mode-description">Default for every recording. Each recording can still be played the other way.</p>
+        </div>
         <div id="pdf-inapp-wrap" class="hidden">
           <label class="switch-row"><input type="checkbox" id="pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick).</p>
@@ -411,6 +415,10 @@
 
       <div id="vault-folder-view" class="hidden">
         <h2 id="vault-folder-title"></h2>
+        <div id="vault-voice-out-wrap" class="hidden">
+          <div class="seg" id="vault-voice-out-seg" role="group" aria-label="Play recordings through"><button type="button" data-out="speaker" class="active">Speaker</button><button type="button" data-out="earpiece">Earpiece</button></div>
+          <p class="mode-description">Default for every recording. Each recording can still be played the other way.</p>
+        </div>
         <div id="vault-pdf-inapp-wrap" class="hidden">
           <label class="switch-row"><input type="checkbox" id="vault-pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick). The Vault then writes a temporary readable copy for that app, removed on the next launch or resume.</p>
