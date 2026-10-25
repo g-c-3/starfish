@@ -19,8 +19,10 @@ Start: "Go". Tier 1 docs read; Decision 284 and ARCHITECTURE section headings re
 - Owner confirmed DP128: the run is green, the only annotation is the ubuntu-latest notice. Phase 26 closed.
 - Phase 27 (owner request) and Decision 286: `runs-on: ubuntu-26.04` instead of `ubuntu-latest`. The Android SDK lists of the 24.04 and 26.04 images match; the shell tools used by the workflow were not checked on the new image. Not run through CI.
 - Phase 28 (owner request) and Decision 287: double Back on the Home and Vault landing pages. First Back shows "Press again to exit" (Back button) or "Swipe again to exit" (gesture), a second within three seconds goes to the background; the lock gate keeps one Back. New native bridge `window.ArklyNav` tells the two apart (`ArklyNavBridge.java`, `patch-nav.js`, new workflow step). `vite build` passes; patch script run twice on a stand-in; Java not compiled here; not run through CI. Assumed: the Samsung and Xiaomi setting keys; neutral wording when nothing is readable.
-Open: DP129 (CI run of the runner change); DP130 (Decision 287).
-Next session start point: the DP129 and DP130 results, then the owner's new roadmap items.
+- Phase 29 (owner request, scope: stages 1 to 3) and Decision 288: stages 1 and 2 built. CodeMirror 6 pinned and bundled (offline, lazy chunk about 660 kB, 238 kB gzipped); File explorer text view now has line numbers, syntax colours, read/edit toggle, undo/redo, find/replace, go to line, wrap and size switches, scroll handle. `vite build` passes; smoke-tested under a DOM stand-in; not run through CI, not device-tested.
+- Context reached the warning level before stage 3.
+Open: DP129, DP130, DP131; Phase 29 stage 3 (Home and Vault note editors).
+Next session start point: the DP129 to DP131 results, then Phase 29 stage 3 (read the note editor code and Decisions 133 and 177 first).
 
 ---
 
