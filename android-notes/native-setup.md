@@ -48,9 +48,11 @@ Required:
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.INTERNET" /> <!-- update check, Google Drive backup, Verify link -->
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" /> <!-- speaker or earpiece for voice playback -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 ```
+`MODIFY_AUDIO_SETTINGS` is a normal permission, granted at install. It lets voice playback switch between the speaker and the earpiece (Decision 283; `scripts/patch-audioroute.js`).
 `USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` are requested so reminders are delivered on time through Doze
 (Decision 101). They only change when the notification is delivered: it is still a plain banner, with no alarm
 screen or alarm sound. Google Play restricts both to alarm and calendar apps (see Decision 98).
