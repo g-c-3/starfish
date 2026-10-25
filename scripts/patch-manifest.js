@@ -37,6 +37,8 @@ const REQUIRED_PERMISSIONS = [
   'android.permission.MANAGE_EXTERNAL_STORAGE',
   'android.permission.WRITE_EXTERNAL_STORAGE',
   'android.permission.INTERNET',
+  // Speaker or earpiece for voice playback (Decision 283). A normal permission, granted at install.
+  'android.permission.MODIFY_AUDIO_SETTINGS',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   // Exact reminder delivery (Decision 101). Without one of these, @capacitor/local-notifications 6.x falls back to an
