@@ -1158,6 +1158,10 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .ev-tool { flex: none; width: auto; min-height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: 600 13px/1 inherit; font-family: inherit; box-shadow: none; }
 .ev-tool.on { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
 .ev-tool:disabled { opacity: .4; }
+.explorer-check { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+.explorer-check input { width: auto; margin: 0; flex: none; }
+.pack-form input[type="password"], .pack-form input[type="text"] { width: 100%; margin-top: 8px; }
+.pack-form .explorer-meta { margin-top: 10px; }
 .ev-choice { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
 .ev-code { position: relative; flex: 1; min-height: 0; }
 .ev-code .cm-editor { height: 100%; }
