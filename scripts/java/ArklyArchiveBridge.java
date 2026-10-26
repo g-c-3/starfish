@@ -85,7 +85,18 @@ public class ArklyArchiveBridge {
     // makes a new numbered folder, as start() does. entriesCsv: URL-encoded paths, or empty for everything.
     @JavascriptInterface
     public String startMode(String archivePath, String password, String entriesCsv, String mode) {
+        return startModeIn(archivePath, password, entriesCsv, mode, "");
+    }
+
+    // The same, with the folder to extract into named: the new folder is made inside destParent instead of beside the archive (an
+    // archive opened from inside another one sits in the app's cache; its files go beside the outer archive, Decision 297).
+    @JavascriptInterface
+    public String startModeIn(String archivePath, String password, String entriesCsv, String mode, String destParent) {
         try {
+            File into = destParent == null || destParent.length() == 0 ? null : new File(destParent);
+            if (into != null && !into.isDirectory()) {
+                return "";
+            }
             Set<String> filter = null;
             if (entriesCsv != null && entriesCsv.length() > 0) {
                 filter = new HashSet<String>();
@@ -100,7 +111,7 @@ public class ArklyArchiveBridge {
                 }
             }
             int m = "merge".equals(mode) ? Job.ASK : "replace".equals(mode) ? Job.REPLACE : Job.NEW;
-            return launch(archivePath, password, null, filter, m);
+            return launch(archivePath, password, null, filter, m, into);
         } catch (Exception e) {
             return "";
         }
@@ -129,10 +140,10 @@ public class ArklyArchiveBridge {
     }
 
     private String launch(String archivePath, String password, File destOverride, Set<String> filter) {
-        return launch(archivePath, password, destOverride, filter, Job.NEW);
+        return launch(archivePath, password, destOverride, filter, Job.NEW, null);
     }
 
-    private String launch(String archivePath, String password, File destOverride, Set<String> filter, int mode) {
+    private String launch(String archivePath, String password, File destOverride, Set<String> filter, int mode, File destParent) {
         try {
             File archive = new File(archivePath);
             if (!archive.isFile()) {
@@ -144,7 +155,7 @@ public class ArklyArchiveBridge {
                 }
             }
             String id = "j" + seq.incrementAndGet();
-            Job job = new Job(archive, password == null ? "" : password, destOverride, filter, mode);
+            Job job = new Job(archive, password == null ? "" : password, destOverride, filter, mode, destParent);
             jobs.put(id, job);
             Thread t = new Thread(job, "arkly-extract");
             t.setPriority(Thread.NORM_PRIORITY - 1);
@@ -436,11 +447,11 @@ public class ArklyArchiveBridge {
         volatile int kept = 0;
         volatile int replaced = 0;
 
-        Job(File archive, String password, File destOverride, Set<String> filter, int mode) {
+        Job(File archive, String password, File destOverride, Set<String> filter, int mode, File destParent) {
             this.archive = archive;
             this.password = password;
             this.filter = filter;
-            File parent = archive.getParentFile();
+            File parent = destParent != null ? destParent : archive.getParentFile();
             File named = new File(parent, baseName(archive.getName()));
             boolean into = destOverride == null && mode != NEW && named.isDirectory();
             this.mode = into ? mode : NEW;
