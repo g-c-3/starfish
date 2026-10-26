@@ -1158,6 +1158,7 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .ev-tool { flex: none; width: auto; min-height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: 600 13px/1 inherit; font-family: inherit; box-shadow: none; }
 .ev-tool.on { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
 .ev-tool:disabled { opacity: .4; }
+.ev-choice { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
 .ev-code { position: relative; flex: 1; min-height: 0; }
 .ev-code .cm-editor { height: 100%; }
 .ev-code .cm-panels input, .ev-code .cm-panels button { font: 13px/1.2 inherit; font-family: inherit; min-height: 34px; margin: 2px 3px 2px 0; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg); box-shadow: none; }
