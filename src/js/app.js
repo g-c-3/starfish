@@ -331,7 +331,7 @@ function outsideAction(o) {
     case 'money-dialog': case 'repay-dialog': return activeMoney && (() => activeMoney.leave());
     default: break;
   }
-  if (o.classList.contains('pdf-compose')) return activeCompose && (() => activeCompose.finish(null));
+  if (o.classList.contains('pdf-compose') || o.classList.contains('bulk-rename')) return activeCompose && (() => activeCompose.finish(null));
   const m = BACK_MODALS.find(([id]) => id === o.id);
   return m ? modalDismiss(m[0], m[1]) : null;
 }
@@ -374,7 +374,7 @@ function paintSelection() {
       .forEach((el) => el.classList.toggle('is-selected', !!ids && ids.has(el.dataset.id)));
   }
   const count = document.getElementById('sel-count');
-  if (count) count.textContent = ids ? `${ids.size} selected` : '';
+  if (count) count.innerHTML = ids ? `${ids.size}<span class="sel-word"> selected</span>` : '';
   document.querySelectorAll('#select-bar .sel-act').forEach((b) => { b.disabled = !ids || ids.size === 0; });
   const pdfBtn = document.getElementById('sel-pdf'); // Make a PDF has nothing to act on when only voice recordings are selected (Decision 284)
   if (pdfBtn) {
@@ -1996,8 +1996,9 @@ function rowIconHtml(type, ext) {
     ? `<span class="row-icon ext-badge" data-len="${e.length}">${escapeHtml(e)}</span>`
     : `<span class="row-icon">${iconSvg(TYPE_ICON[type] || 'file')}</span>`;
 }
+// The five buttons under a row (edit, share, download, move, delete) are not drawn (Decision 303): Edit is a tap on the row, and
+// the rest are in the selection bar and the viewers. actionPrefix is kept so the callers and the idle handlers need no change.
 function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '' }, actionPrefix = null) {
-  const btn = (kind, name, extra = '') => `<button class="icon-btn ${actionPrefix}-${kind}-btn${extra}" data-id="${escapeHtml(id)}" aria-label="${name}" title="${name}">${iconSvg(kind === 'delete' ? 'trash' : kind)}</button>`;
   return `
     <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
       ${rowIconHtml(type, ext)}
@@ -2006,7 +2007,6 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
         <span class="row-meta">${escapeHtml(meta)}</span>
         ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       </span>
-      ${actionPrefix ? `<span class="row-actions">${btn('edit', 'Edit')}${btn('share', 'Share')}${btn('download', 'Download')}${canMove(type) ? btn('move', actionPrefix === 'vault' ? 'Move to Home' : 'Move to Vault') : ''}${btn('delete', 'Delete', ' warning-text')}</span>` : ''}
     </div>`;
 }
 function emptyStateHtml(kind = 'folder') {
@@ -2427,10 +2427,10 @@ const loadCodeEditor = () => (codeEditorModule ||= import('./codeeditor.js').cat
 // The note editor: the code editor in note mode (Decision 292). The screen opens at once; the editor attaches when its module loads.
 // Resolves when the person leaves. Saving does not close it (Decision 302): Save is enabled only while there are changes, calls
 // session.onSave(text) and, when that returns true, the text counts as saved and Save is disabled again until the next change.
-// session (the caller's, and changed by it after the first save of a new note): { title, persist, clear, onSave, onDetails }.
+// session (the caller's, and changed by it after the first save of a new note): { title, persist, clear, onSave, onDetails, onRename }.
 // persist(text) / clear() (Decision 177): while typing and when the editor closes with unsaved changes by any route except an
 // explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
-// onDetails() (saved notes only): name, tags and description; returns true when changed.
+// onDetails() (saved notes only): name, tags and description; onRename(): the name only; both return true when the title changed.
 function openTextEditor({ text = '', isVault = false, session } = {}) {
   return new Promise((resolve) => {
     const $ = (id) => document.getElementById(id);
@@ -2441,6 +2441,13 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = session.title;
     host.replaceChildren(); bar.replaceChildren();
+    const renameBtn = $('editor-rename-btn');
+    renameBtn.onclick = async () => {
+      if (!session.onRename) return;
+      let changed = false;
+      try { changed = await session.onRename(); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
+      if (changed && !closed) $('editor-title').textContent = session.title;
+    };
     const hasText = () => { // Save needs something to save; the first 2000 characters settle it for almost every note
       const d = ed.view.state.doc;
       if (!d.length) return false;
@@ -3742,10 +3749,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (type === 'note') {
         // The editor stays open after Save (Decision 302). The first Save asks name, tags and description; later Saves are silent.
         let savedId = null, desc = '';
+        const pending = { name: '' };
         const session = { title: 'New vault note', ...noteDraftHandlers({ isVault: true }) };
+        session.onRename = () => renameNoteFromEditor(session, savedId, true, pending);
         session.onSave = async (text) => {
           if (!savedId) {
-            const d = await openSaveDialog({ heading: 'Save vault note', defaultName: defaultNoteName(text), isVault: true, discardLabel: 'Back to editing' });
+            const d = await openSaveDialog({ heading: 'Save vault note', defaultName: pending.name || defaultNoteName(text), isVault: true, discardLabel: 'Back to editing' });
             if (!d) return false; // Back to editing, or a lock meanwhile
             const id = await captureToVault({ type: 'note', label: d.name, tags: d.tags, description: d.description, text });
             await session.clear();
@@ -4403,10 +4412,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       // The editor stays open after Save (Decision 302). The first Save asks name, tags and description; later Saves are silent.
       // Backing out of the dialog returns to the editor with the text kept.
       let savedId = null, desc = '';
+      const pending = { name: '' };
       const session = { title: 'New note', ...noteDraftHandlers({ isVault: false }) };
+      session.onRename = () => renameNoteFromEditor(session, savedId, false, pending);
       session.onSave = async (text) => {
         if (!savedId) {
-          const d = await openSaveDialog({ heading: 'Save note', defaultName: defaultNoteName(text), discardLabel: 'Back to editing' });
+          const d = await openSaveDialog({ heading: 'Save note', defaultName: pending.name || defaultNoteName(text), discardLabel: 'Back to editing' });
           if (!d) return false; // Back to editing, or a lock meanwhile
           // The note is always saved. Reminder wording also offers a reminder on top of it (Decisions 175, 178); Back, No or a lock keeps the note only.
           let reminderAt = null;
@@ -4822,6 +4833,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         toast(err && err.code === 'encrypted' ? `${who} is password-protected. Remove its password first.` : err && Number.isInteger(err.index) ? `${who} could not be read.` : `Could not make the PDF: ${String((err && err.message) || err)}`);
       }
     }
+    // The selected ids in the order the rows are on screen (selection order for any not on screen).
+    function orderedSelectionIds(ids) {
+      const on = new Set(ids), out = [];
+      for (const el of document.querySelectorAll('.entry-row.is-selected, .thumb-tile.is-selected')) { if (on.delete(el.dataset.id)) out.push(el.dataset.id); }
+      return out.concat(ids.filter((id) => on.has(id)));
+    }
+    async function loadSelectedRows(ids, isVault) {
+      if (isVault) { const idx = getVaultIndex() || []; return ids.map((id) => idx.find((e) => e.id === id)).filter(Boolean); }
+      return (await Promise.all(ids.map(async (id) => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [id])).values || [])[0]))).filter(Boolean);
+    }
+    const renameOpts = (row) => (row.type === 'reminder' && isReminderActive(row) ? { rescheduleReminder: scheduleReminder } : {}); // the notification text follows the name
+    // Rename (Decision 303): one item goes through the Save dialog with its name, tags and description; several go through the
+    // numbering sheet, once, with a warning that the old names are not kept.
+    async function runSelectionRename() {
+      if (!selection || selection.ids.size === 0) return;
+      const { isVault } = selection;
+      if (isVault && !privateSessionKey) return;
+      const ids = orderedSelectionIds([...selection.ids]);
+      arm();
+      const rows = await loadSelectedRows(ids, isVault);
+      if (!rows.length) return;
+      const refresh = async () => {
+        exitSelection();
+        if (isVault) renderVault();
+        else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
+      };
+      if (rows.length === 1) {
+        const item = rows[0];
+        const tags = item.tags || await getEntryTags(item.id);
+        const d = await openSaveDialog({ heading: 'Rename', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault });
+        if (!d) return;
+        try {
+          await window.Arkly.editEntry(item.id, { label: d.name, description: d.description }, renameOpts(item));
+          await setEntryTags(item.id, d.tags);
+          if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
+        } catch (err) { toast(`Could not rename: ${err.message || err}`); return; }
+        await refresh();
+        toast('Renamed');
+        return;
+      }
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const { askBulkRename } = await import('./bulkrename.js');
+      const res = await askBulkRename({
+        items: rows.map((r) => ({ id: r.id, label: r.label || '' })),
+        hooks: { open: (finish) => { activeCompose = { finish, isVault }; updateBackButtonState(); }, close: () => { activeCompose = null; updateBackButtonState(); } }
+      });
+      if (!res) return;
+      if (isVault && !privateSessionKey) { exitSelection(); toast('The Vault locked. Nothing was renamed.'); return; }
+      let done = 0, failed = 0, firstError = '';
+      for (let i = 0; i < res.length; i++) {
+        if (res.length > 1) toast(`Renaming ${i + 1} of ${res.length}…`, true);
+        try { await window.Arkly.editEntry(res[i].id, { label: res[i].newName }, renameOpts(byId.get(res[i].id))); done++; }
+        catch (err) { failed++; if (!firstError) firstError = String(err.message || err).replace(/\.$/, ''); }
+      }
+      if (isVault && privateSessionKey && done) await refreshVaultIndexEntries(db, privateSessionKey, res.map((r) => r.id));
+      await refresh();
+      toast(failed ? `${done} renamed, ${failed} not renamed (${firstError}), left as they were` : `${done} renamed`);
+    }
+    document.getElementById('sel-rename').addEventListener('click', runSelectionRename);
     document.getElementById('sel-pdf').addEventListener('click', runMakePdf);
     document.getElementById('sel-share').addEventListener('click', () => runSelection('share'));
     document.getElementById('sel-download').addEventListener('click', () => runSelection('download'));
@@ -5007,6 +5077,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
 
+  // Rename from the editor's Rename button (Decision 303): the name only. A note that is not saved yet (id null) keeps the name in
+  // `pending` for its first Save. Returns true when the title changed.
+  async function renameNoteFromEditor(session, id, isVault, pending) {
+    const v = await askText({ title: 'Rename note', initial: id ? session.title : pending.name, placeholder: 'Name', ok: 'Rename', isVault });
+    if (v === null) return false;
+    const name = v.trim().slice(0, 120);
+    if (!name) { toast('Enter a name.'); return false; }
+    if (name === session.title) return false;
+    if (!id) { pending.name = name; session.title = name; return true; }
+    await window.Arkly.editEntry(id, { label: name }, {});
+    if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
+    session.title = name;
+    toast('Renamed');
+    return true;
+  }
+
   // Name, tags and description of a saved note, from the editor's Details button (Decision 302). Returns true when changed.
   async function editNoteDetails(session, id, isVault, getDesc, setDesc) {
     const tags = await getEntryTags(id);
@@ -5035,6 +5121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (err) { toast(`Could not save: ${err.message || err}`); return false; }
     };
     session.onDetails = () => editNoteDetails(session, item.id, isVault, () => desc, (v) => { desc = v; });
+    session.onRename = () => renameNoteFromEditor(session, item.id, isVault, null);
     await openTextEditor({ text, isVault, session });
   }
 
