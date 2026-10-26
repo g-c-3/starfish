@@ -9,14 +9,24 @@ export function isArchive(name) {
   return ENDINGS.some((e) => l.endsWith(e) && l.length > e.length);
 }
 
+// The folder name an extraction makes: the archive's name without its ending (the native side uses the same rule).
+export function baseNameOf(name) {
+  const l = String(name || '').toLowerCase();
+  const e = ENDINGS.find((x) => l.endsWith(x) && l.length > x.length);
+  return e ? name.slice(0, name.length - e.length) : name;
+}
+
 // Starts a job and polls it. Returns { cancel(), done } where done resolves with the final status:
 // { state: 'done' | 'error' | 'cancelled', code, message, files, skipped, bytes, dest }.
 // Everything by default; `entries` (paths inside the archive) extracts only those; `entry` (one path) extracts that one into the
 // app's cache for viewing, and the file is then dest + '/' + entry.
-export function startExtract(bridge, archivePath, { password = '', entries = null, entry = null, onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+// `mode` (Decision 295): 'merge' writes into the existing folder of the archive's name and, for each file that already exists, calls
+// onConflict(path) for 'replace' | 'skip' | 'replaceAll' | 'skipAll'; 'replace' replaces without asking; anything else makes a new folder.
+export function startExtract(bridge, archivePath, { password = '', entries = null, entry = null, mode = null, onConflict = async () => 'skip', onProgress = () => {}, pollMs = 300, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   let id = '';
   try {
     if (entry) id = bridge.startEntry(archivePath, password, entry);
+    else if ((mode === 'merge' || mode === 'replace') && bridge.startMode) id = bridge.startMode(archivePath, password, entries ? entries.map((p) => encodeURIComponent(p)).join(',') : '', mode);
     else if (entries) id = bridge.startSelected(archivePath, password, entries.map((p) => encodeURIComponent(p)).join(','));
     else id = bridge.start(archivePath, password);
   } catch { id = ''; }
@@ -26,6 +36,12 @@ export function startExtract(bridge, archivePath, { password = '', entries = nul
       await wait(pollMs);
       let s;
       try { s = JSON.parse(bridge.status(id)); } catch { s = { state: 'error', code: 'io', message: 'The extractor did not answer.' }; }
+      if (s.state === 'conflict') { // the job waits for an answer
+        let c = 'skip';
+        try { c = (await onConflict(s.pending)) || 'skip'; } catch { c = 'skip'; }
+        try { bridge.answer(id, c); } catch { /* the job is gone */ }
+        continue;
+      }
       if (s.state !== 'running') { try { bridge.release(id); } catch { /* nothing to release */ } return s; }
       onProgress(s);
     }

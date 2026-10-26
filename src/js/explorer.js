@@ -8,7 +8,8 @@ import { FileOpener } from '@capacitor-community/file-opener';
 import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 import * as manage from './explorer-manage.js';
 import { startOps, destProblem, resultText, findConflicts, canReplace } from './explorer-ops.js';
-import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText } from './explorer-archive.js';
+import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText, baseNameOf } from './explorer-archive.js';
+import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
 
 const KIND_EXT = {
   text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics',
@@ -130,7 +131,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
-  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null, resolve: null };
+  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null, resolve: null, ask: null };
   let closed = false, viewer = null, purged = false, job = null, browse = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -161,8 +162,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!on) return;
     const n = st.sel.size, trash = st.view === 'trash', arc = st.view === 'archive';
     $('explorer-sel-count').textContent = `${n} selected`;
-    const single = st.view === 'folder' && n === 1 && !selectedEntries()[0]?.isDir; // Open with: one file only
+    const single = (st.view === 'folder' || arc) && n === 1 && !selectedEntries()[0]?.isDir; // Open with: one file only
     $('explorer-sel-openwith').classList.toggle('hidden', !single);
+    $('explorer-sel-compress').classList.toggle('hidden', st.view !== 'folder' || n < 1); // Compress: any selection outside an archive
     for (const id of ['explorer-sel-rename', 'explorer-sel-info']) { $(id).classList.toggle('hidden', trash || arc); $(id).disabled = n !== 1; }
     $('explorer-sel-restore').classList.toggle('hidden', !trash);
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
@@ -792,6 +794,56 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     body.appendChild(box);
     return line;
   };
+  // Puts a question into the body and resolves with its answer; Back resolves null (Decision 295).
+  function askBody(build) {
+    return new Promise((resolve) => {
+      const done = (v) => { if (st.ask && st.ask.done === done) st.ask = null; resolve(v); };
+      st.ask = { done, cancel: () => done(null) };
+      body.replaceChildren();
+      build(done);
+    });
+  }
+  const btn = (label, cls, fn) => { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  const checkRow = (label) => {
+    const row = el('label', 'explorer-check'), box = document.createElement('input');
+    box.type = 'checkbox';
+    row.appendChild(box); row.appendChild(el('span', '', label));
+    return { row, box };
+  };
+  // The folder named after the archive is already there: Overwrite (then all at once, or file by file), or a new folder.
+  // Resolves 'replace' | 'merge' | 'new', or null.
+  const askExtractClash = (folder) => askBody((done) => {
+    const box = el('div', 'explorer-banner');
+    const stepOne = () => {
+      box.replaceChildren(el('div', '', `A folder named "${folder}" already exists here. Overwrite it, or extract into a new folder?`));
+      const a = el('div', 'banner-actions');
+      a.append(btn('Overwrite', 'danger-btn', stepTwo), btn('Create new folder', 'secondary-btn', () => done('new')), btn('Cancel', 'secondary-btn', () => done(null)));
+      box.appendChild(a);
+    };
+    const stepTwo = () => {
+      box.replaceChildren(el('div', '', `The archive is extracted into "${folder}". A file that already exists there is replaced and cannot be restored.`));
+      const { row, box: cb } = checkRow('Overwrite all folders and files');
+      box.appendChild(row);
+      box.appendChild(el('div', 'explorer-meta', 'Unchecked: you are asked about each file that already exists.'));
+      const a = el('div', 'banner-actions');
+      a.append(btn('Overwrite', 'danger-btn', () => done(cb.checked ? 'replace' : 'merge')), btn('Back', 'secondary-btn', stepOne));
+      box.appendChild(a);
+    };
+    stepOne();
+    body.appendChild(box);
+  });
+  // One file of the archive already exists. Resolves 'replace' | 'skip' | 'replaceAll' | 'skipAll', or null.
+  const askFileClash = (rel) => askBody((done) => {
+    const box = el('div', 'explorer-banner');
+    box.appendChild(el('div', '', `"${rel}" already exists. Replace it with the file from the archive? A replaced file cannot be restored.`));
+    const { row, box: cb } = checkRow('Do this for all folders and files');
+    box.appendChild(row);
+    const a = el('div', 'banner-actions');
+    a.append(btn('Replace', 'danger-btn', () => done(cb.checked ? 'replaceAll' : 'replace')), btn('Skip', 'secondary-btn', () => done(cb.checked ? 'skipAll' : 'skip')), btn('Stop', 'secondary-btn', () => { job?.cancel(); done(null); }));
+    box.appendChild(a);
+    body.appendChild(box);
+  });
+
   const leaveArchive = () => {
     const api = archiveApi();
     if (st.arc) { try { api?.closeArchive(st.arc.id); api?.clearCache(); } catch { /* nothing left to close */ } }
@@ -835,7 +887,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   }
 
   // One file of the archive: copied to the app's cache, shown in the built-in viewer, read-only, removed when the archive closes.
-  async function openArcEntry(e) {
+  async function openArcEntry(e, how = 'auto') { // how: 'auto' | 'viewer' | 'apps' (Open with)
     const arc = st.arc, api = archiveApi();
     if (!arc || job) return;
     if (isArchive(e.name)) { toast('Extract this archive first to open it.'); return; }
@@ -849,12 +901,12 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (closed || st.arc !== arc) return;
     if (res.state === 'done' && res.files) {
       await showArchiveDir(prefix);
-      openCached({ name: e.name, path: `${res.dest}/${e.path}`, size: e.size, mtime: 0, isDir: false });
+      openCached({ name: e.name, path: `${res.dest}/${e.path}`, size: e.size, mtime: 0, isDir: false }, how);
       return;
     }
     if (needsPassword(res)) {
       const pw = await ui.askText?.({ title: 'Password needed', text: errorText(res, !!arc.password), placeholder: 'Password', password: true, ok: 'Open', isVault });
-      if (pw) { arc.password = pw; await openArcEntry(e); return; }
+      if (pw) { arc.password = pw; await openArcEntry(e, how); return; }
     } else if (res.state === 'done') {
       toast('That file is not in the archive.');
     } else if (res.state === 'error') {
@@ -868,9 +920,11 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     const r = await ui.askYesNo({ title: 'Open this file how?', text: `\"${f.name}\" is a type Arkly does not know. Open it in the Arkly text editor, or in another app?`, yes: 'Arkly editor', no: 'Other apps', explicitNo: true });
     return r === true ? 'text' : r === 'no' ? 'apps' : null;
   }
-  async function openCached(file) {
+  async function openCached(file, how = 'auto') {
+    if (how === 'apps') { openExternal(file, true); return; }
     let kind = kindOf(file.name);
-    if (extOf(file.name) === '' && kind === 'other') kind = 'text';
+    if (how === 'viewer') kind = openWithKind(file.name);
+    else if (extOf(file.name) === '' && kind === 'other') kind = 'text';
     else if (!viewer && ui.onActivity && isUnknownType(file.name)) { const c = await askUnknown(file); if (c === null) return; if (c === 'text') kind = 'text'; }
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) { openExternal(file); return; }
     viewer = openFileViewer(file, {
@@ -879,32 +933,137 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     });
   }
 
-  // Extract everything, or only `entries` (paths inside the archive), into a new folder beside the archive.
-  async function actExtract(e, password = '', entries = null) {
+  // Extract everything, or only `entries` (paths inside the archive), into the folder named after the archive, beside it. When that
+  // folder exists, the person chooses Overwrite or a new numbered folder (Decision 295). `mode`: null on the first call.
+  async function actExtract(e, password = '', entries = null, mode = null) {
     const api = archiveApi();
     if (!api) { toast('Extracting works in the Android app.'); return; }
-    if (job) return;
+    if (job || st.ask) return;
     const cwd = st.cwd, arc = st.arc, prefix = arc ? arc.prefix : '';
+    const returnView = async () => { if (closed) return; if (arc && st.arc === arc) await showArchiveDir(prefix); else await showFolder(cwd); };
+    if (mode === null) {
+      mode = 'new';
+      const folder = baseNameOf(e.name);
+      let exists = false;
+      try { exists = (await fsApi.readdir(parentOf(e.path))).some((x) => x.isDir && x.name === folder); } catch { exists = false; }
+      if (exists && api.startMode) {
+        st.view = 'extract'; st.gen++;
+        chrome({ title: 'Extracting', folder: false });
+        mode = await askExtractClash(folder);
+        if (closed) return;
+        if (mode === null) { await returnView(); return; }
+      }
+    }
     st.view = 'extract'; st.gen++;
     chrome({ title: 'Extracting', folder: false });
-    const line = panel(`Extracting "${e.name}"…`, 'Starting…', () => job?.cancel());
-    job = startExtract(api, e.path, { password, entries, onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.files, 'file')} · ${formatSize(p.bytes)}${p.current ? ` · ${p.current}` : ''}`; } });
+    const title = `Extracting "${e.name}"…`;
+    let line = panel(title, 'Starting…', () => job?.cancel());
+    job = startExtract(api, e.path, {
+      password, entries, mode,
+      onConflict: async (rel) => { const c = await askFileClash(rel); if (!closed) line = panel(title, 'Continuing…', () => job?.cancel()); return c; },
+      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.files, 'file')} · ${formatSize(p.bytes)}${p.current ? ` · ${p.current}` : ''}`; },
+    });
     const res = await job.done;
     job = null;
     if (closed) return;
     if (res.state === 'done') {
       const name = res.dest ? res.dest.split('/').pop() : '';
-      toast(res.files ? `Extracted ${plural(res.files, 'file')} to "${name}".${res.skipped ? ` ${plural(res.skipped, 'unsafe entry').replace('entrys', 'entries')} skipped.` : ''}` : 'The archive is empty.');
+      if (res.files || res.kept) {
+        const extra = [];
+        if (res.replaced) extra.push(`${plural(res.replaced, 'file')} replaced`);
+        if (res.kept) extra.push(`${plural(res.kept, 'existing file')} kept`);
+        if (res.skipped) extra.push(`${plural(res.skipped, 'unsafe entry').replace('entrys', 'entries')} skipped`);
+        toast(`Extracted ${plural(res.files, 'file')} to "${name}".${extra.length ? ` ${extra.join('; ')}.` : ''}`);
+      } else toast('The archive is empty.');
     } else if (res.state === 'cancelled') {
-      toast('Extraction cancelled. Nothing was kept.');
+      toast(res.merging ? 'Extraction cancelled. Files already written were kept.' : 'Extraction cancelled. Nothing was kept.');
     } else if (needsPassword(res)) {
       const pw = await ui.askText?.({ title: 'Password needed', text: errorText(res, !!password), placeholder: 'Password', password: true, ok: 'Extract', isVault });
-      if (pw) { if (arc) arc.password = pw; await actExtract(e, pw, entries); return; }
+      if (pw) { if (arc) arc.password = pw; await actExtract(e, pw, entries, mode); return; }
     } else {
-      toast(errorText(res, !!password));
+      const t = errorText(res, !!password);
+      toast(res.merging ? t.replace('Nothing was kept.', 'Files already written were kept.') : t);
     }
     if (closed || st.view !== 'extract') return;
-    if (arc && st.arc === arc) await showArchiveDir(prefix); else await showFolder(cwd);
+    await returnView();
+  }
+
+  // ---- Compress (Decision 295): the selection of a folder becomes one zip or 7z beside the originals ----
+  const packApi = () => (typeof window !== 'undefined' ? window.ArklyPack : null);
+  const radios = (name, options, value, onPick) => {
+    const wrap = el('div', 'pack-options');
+    for (const o of options) {
+      const row = el('label', 'explorer-check'), r = document.createElement('input');
+      r.type = 'radio'; r.name = name; r.checked = o.id === value;
+      r.addEventListener('change', () => onPick(o));
+      row.appendChild(r);
+      const t = el('span', '', o.label);
+      if (o.hint) t.appendChild(el('span', 'explorer-meta', ` · ${o.hint}`));
+      row.appendChild(t);
+      wrap.appendChild(row);
+    }
+    return wrap;
+  };
+  // Resolves { format, level, password } or null.
+  const askPack = (count) => askBody((done) => {
+    const opt = { format: 'zip', level: 2 };
+    const box = el('div', 'explorer-banner pack-form');
+    box.appendChild(el('div', '', `Compress ${plural(count, 'item')}`));
+    const pwHint = el('div', 'explorer-meta', 'Optional. Anyone with the password can open the archive; without it nothing can. It cannot be recovered.');
+    const pw = document.createElement('input'), pw2 = document.createElement('input');
+    for (const [i, ph] of [[pw, 'Password (optional)'], [pw2, 'Repeat password']]) { i.type = 'password'; i.placeholder = ph; i.autocomplete = 'off'; i.setAttribute('autocapitalize', 'off'); i.spellcheck = false; }
+    const show = checkRow('Show password');
+    show.box.addEventListener('change', () => { pw.type = pw2.type = show.box.checked ? 'text' : 'password'; });
+    const syncPw = () => {
+      const zip = opt.format === 'zip';
+      pw.disabled = pw2.disabled = show.box.disabled = !zip;
+      if (!zip) { pw.value = pw2.value = ''; pwHint.textContent = '7z archives cannot have a password here. Choose ZIP to protect the archive.'; }
+      else pwHint.textContent = 'Optional. Anyone with the password can open the archive; without it nothing can. It cannot be recovered.';
+    };
+    box.appendChild(el('div', 'explorer-meta', 'Format'));
+    box.appendChild(radios('pack-format', FORMATS, 'zip', (o) => { opt.format = o.id; syncPw(); }));
+    box.appendChild(el('div', 'explorer-meta', 'Compression'));
+    box.appendChild(radios('pack-level', LEVELS, 2, (o) => { opt.level = o.id; }));
+    box.appendChild(el('div', 'explorer-meta', 'Password'));
+    box.append(pw, pw2, show.row, pwHint);
+    const a = el('div', 'banner-actions');
+    a.append(
+      btn('Compress', '', () => {
+        if (opt.format === 'zip' && pw.value !== pw2.value) { toast('The two passwords do not match.'); return; }
+        done({ format: opt.format, level: opt.level, password: opt.format === 'zip' ? pw.value : '' });
+      }),
+      btn('Cancel', 'secondary-btn', () => done(null)),
+    );
+    box.appendChild(a);
+    body.appendChild(box);
+    syncPw();
+  });
+  async function actCompress() {
+    if (st.view !== 'folder' || !st.sel.size || job || st.ask) return;
+    const api = packApi();
+    if (!api) { toast('Compressing works in the Android app.'); return; }
+    const items = selectedEntries(), cwd = st.cwd;
+    if (!items.length) return;
+    clearSel();
+    st.view = 'extract'; st.gen++;
+    chrome({ title: 'Compress', folder: false });
+    const choice = await askPack(items.length);
+    if (closed) return;
+    if (!choice) { await showFolder(cwd); return; }
+    chrome({ title: 'Compressing', folder: false });
+    let line = panel(`Compressing ${plural(items.length, 'item')}…`, 'Starting…', () => job?.cancel());
+    const base = packBaseName(items, cwd === st.volume.path ? '' : cwd.split('/').pop());
+    job = startPack(api, cwd, base, {
+      ...choice, paths: items.map((i) => i.path),
+      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${p.files} of ${p.total} files · ${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}${p.current ? ` · ${p.current}` : ''}`; },
+    });
+    const res = await job.done;
+    job = null;
+    if (closed) return;
+    let size = '';
+    if (res.state === 'done') { try { size = formatSize((await fsApi.stat(res.dest)).size); } catch { size = ''; } }
+    toast(packResultText(res, size));
+    if (st.view === 'extract') await showFolder(cwd);
   }
   function actExtractSel() {
     if (st.view === 'archive') {
@@ -941,14 +1100,16 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     docx: 'Arkly document viewer', xlsx: 'Arkly sheet viewer', pptx: 'Arkly slide viewer', archive: 'Arkly archive browser' };
   const openWithKind = (name) => { const k = kindOf(name); return k === 'other' && (extOf(name) === '' || isUnknownType(name)) ? 'text' : k; }; // a type that may be text
   async function actOpenWith() {
-    const list = selectedEntries();
-    if (list.length !== 1 || list[0].isDir || st.view !== 'folder') return;
-    const e = list[0], kind = openWithKind(e.name), label = VIEWER_NAME[kind];
-    if (!label || !ui.askYesNo || (kind !== 'archive' && !VIEW_KINDS.includes(kind))) { clearSel(); openExternal(e, true); return; }
+    const list = selectedEntries(), inArc = st.view === 'archive';
+    if (list.length !== 1 || list[0].isDir || (st.view !== 'folder' && !inArc)) return;
+    const e = list[0], kind = openWithKind(e.name), label = inArc && kind === 'archive' ? null : VIEWER_NAME[kind]; // a zip inside a zip: the phone's apps only
+    const apps = () => { clearSel(); if (inArc) openArcEntry(e, 'apps'); else openExternal(e, true); };
+    if (!label || !ui.askYesNo || (kind !== 'archive' && !VIEW_KINDS.includes(kind))) { apps(); return; }
     const r = await ui.askYesNo({ title: 'Open with', text: `"${e.name}"`, yes: label, no: 'Phone apps', explicitNo: true });
     if (closed || (r !== true && r !== 'no')) return;
+    if (r === 'no') { apps(); return; }
     clearSel();
-    if (r === 'no') openExternal(e, true);
+    if (inArc) openArcEntry(e, 'viewer');
     else if (kind === 'archive') openArchive(e);
     else openInViewer(e, kind);
   }
@@ -980,7 +1141,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function back() {
     if (viewer) { viewer.back(); return; }
     if (selecting()) { clearSel(); return; }
-    if (st.view === 'extract') { job?.cancel(); return; }
+    if (st.view === 'extract') { st.ask?.cancel(); job?.cancel(); return; }
     if (st.view === 'arcopen') { browse?.cancel(); return; }
     if (st.view === 'pick') { pickBack(); return; }
     if (st.view === 'resolve') { resolveBack(); return; }
@@ -1020,6 +1181,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     syncSelUi(); markRows();
   };
   $('explorer-sel-openwith').onclick = actOpenWith;
+  $('explorer-sel-compress').onclick = actCompress;
   $('explorer-sel-rename').onclick = actRename;
   $('explorer-sel-info').onclick = actInfo;
   $('explorer-sel-restore').onclick = actRestore;
