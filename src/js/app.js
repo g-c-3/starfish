@@ -303,18 +303,46 @@ const BACK_MODALS = [
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
   ['select-files-screen', 'select-files-close-btn']
 ];
+// The dismissal of one static modal: its own Cancel button, after Discard when it holds typed input (Decision 133).
+function modalDismiss(id, btn) {
+  const typed = MODAL_PENDING[id] && document.getElementById(MODAL_PENDING[id]);
+  return async () => {
+    if (typed && typed.value && !(await askDiscard())) return;
+    document.getElementById(btn)?.click();
+  };
+}
 function openModalDismiss() {
   for (const [id, btn] of BACK_MODALS) {
     const el = document.getElementById(id);
     if (!el || el.classList.contains('hidden')) continue;
-    const typed = MODAL_PENDING[id] && document.getElementById(MODAL_PENDING[id]);
-    return async () => {
-      if (typed && typed.value && !(await askDiscard())) return;
-      document.getElementById(btn)?.click();
-    };
+    return modalDismiss(id, btn);
   }
   return null;
 }
+// A tap on the dimmed area outside any dialog or sheet is Back for that dialog (Decision 299): the same action, so every rule
+// Back follows (Discard when typed input would be lost, Discard? for a recording) still applies. The press must also have started
+// on the dimmed area, so dragging out of a text field and letting go outside does not close anything.
+function outsideAction(o) {
+  switch (o.id) {
+    case 'yesno-dialog': return activeYesNo && (() => activeYesNo.finish(false));
+    case 'text-dialog': return activeText && (() => activeText.finish(null));
+    case 'secret-dialog': return () => document.getElementById('secret-cancel-btn')?.click();
+    case 'save-dialog': return activeSaveDialog && (() => activeSaveDialog.requestLeave());
+    case 'money-dialog': case 'repay-dialog': return activeMoney && (() => activeMoney.leave());
+    default: break;
+  }
+  if (o.classList.contains('pdf-compose')) return activeCompose && (() => activeCompose.finish(null));
+  const m = BACK_MODALS.find(([id]) => id === o.id);
+  return m ? modalDismiss(m[0], m[1]) : null;
+}
+let overlayPressTarget = null;
+document.addEventListener('pointerdown', (e) => { overlayPressTarget = e.target; }, true);
+document.addEventListener('click', (e) => {
+  const o = e.target;
+  if (!(o instanceof Element) || !o.classList.contains('modal-overlay') || o.classList.contains('hidden') || overlayPressTarget !== o) return;
+  const run = outsideAction(o);
+  if (run) { run(); updateBackButtonState(); }
+});
 // App lock: every static overlay (z-index above the lock screen) is dismissed with its own Cancel/Skip, and the Select files
 // list, which can hold Vault item names, is emptied. Without this they stayed on top of the lock screen.
 function closeStaticModals() {
@@ -2386,7 +2414,6 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       if (snap() === startSnap || await askDiscard()) finish(null);
     };
     $('sd-cancel-btn').onclick = requestLeave;
-    dlg.onclick = (e) => { if (e.target === dlg && !discardLabel) requestLeave(); }; // capture dialogs ignore outside taps so a stray tap can't lose a recording
     activeSaveDialog = { finish, isVault, requestLeave };
     dlg.classList.remove('hidden');
     updateBackButtonState();
