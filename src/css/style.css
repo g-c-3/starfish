@@ -1162,6 +1162,12 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .explorer-check input { width: auto; margin: 0; flex: none; }
 .pack-form input[type="password"], .pack-form input[type="text"] { width: 100%; margin-top: 8px; }
 .pack-form .explorer-meta { margin-top: 10px; }
+.ex-thumb { position: absolute; right: 0; top: 0; width: 20px; border-radius: 10px; border-left: 11px solid transparent; background: color-mix(in srgb, var(--muted) 55%, transparent); background-clip: padding-box; opacity: 0; transition: opacity .2s; touch-action: none; pointer-events: none; z-index: 2; }
+.ex-thumb.on { opacity: 1; pointer-events: auto; }
+.ex-ptr { position: absolute; left: 50%; top: 0; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--muted); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,.12); opacity: 0; pointer-events: none; z-index: 2; transition: opacity .15s; }
+.ex-ptr .ic { width: 16px; height: 16px; }
+.ex-ptr.spin .ic { animation: ex-spin .7s linear infinite; }
+@keyframes ex-spin { to { transform: rotate(360deg); } }
 .ev-choice { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
 .ev-code { position: relative; flex: 1; min-height: 0; }
 .ev-code .cm-editor { height: 100%; }
