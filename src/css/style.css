@@ -924,7 +924,6 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .player-track .scrub { display: block; width: 100%; margin: 0; padding: 0; accent-color: var(--brand); }
 .player-times { display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .audio-player .speed-btn { flex: none; width: auto; min-width: 54px; margin: 0; padding: 8px 10px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rec-discard { margin-top: 10px; }
 .rec-hero.live .row-icon { background: var(--danger); color: #fff; animation: rec-pulse 1.2s ease-in-out infinite; }
 #rec-main-btn.rec-stop { background: var(--danger); color: #fff; }
 @keyframes rec-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.5); } 50% { box-shadow: 0 0 0 12px rgba(217, 83, 79, 0); } }
