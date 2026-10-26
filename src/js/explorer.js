@@ -146,7 +146,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     titleEl.textContent = title;
     crumbsEl.classList.toggle('hidden', !(folder || archive));
     toolsEl.classList.toggle('hidden', !(folder || archive));
-    $('explorer-extract-btn').classList.toggle('hidden', !archive || !!st.arc?.nested); // an archive inside an archive is not extracted
+    $('explorer-extract-btn').classList.toggle('hidden', !archive);
     document.querySelector('#explorer-tools [data-sort="date"]')?.classList.toggle('hidden', archive); // entries carry no date
     $('explorer-hidden-btn').classList.toggle('hidden', !folder);
     $('explorer-new-btn').classList.toggle('hidden', !folder);
@@ -172,7 +172,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
     $('explorer-sel-share').disabled = arc || trash || selectedEntries().some((e) => e.isDir); // only files can be shared
     const one = n === 1 && !trash && !arc ? selectedEntries()[0] : null;
-    $('explorer-sel-extract').classList.toggle('hidden', !((arc && !st.arc.nested) || (one && !one.isDir && isArchive(one.name))));
+    $('explorer-sel-extract').classList.toggle('hidden', !(arc || (one && !one.isDir && isArchive(one.name))));
     const del = $('explorer-sel-delete');
     del.setAttribute('aria-label', trash ? 'Delete forever' : 'Delete'); del.title = trash ? 'Delete forever' : 'Delete';
   }
@@ -972,7 +972,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
 
   // Extract everything, or only `entries` (paths inside the archive), into the folder named after the archive, beside it. When that
   // folder exists, the person chooses Overwrite or a new numbered folder (Decision 295). `mode`: null on the first call.
-  async function actExtract(e, password = '', entries = null, mode = null) {
+  async function actExtract(e, password = '', entries = null, mode = null, intoDir = '') { // intoDir: for an archive taken out of another
     const api = archiveApi();
     if (!api) { toast('Extracting works in the Android app.'); return; }
     if (job || st.ask) return;
@@ -982,7 +982,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       mode = 'new';
       const folder = baseNameOf(e.name);
       let exists = false;
-      try { exists = (await fsApi.readdir(parentOf(e.path))).some((x) => x.isDir && x.name === folder); } catch { exists = false; }
+      try { exists = (await fsApi.readdir(intoDir || parentOf(e.path))).some((x) => x.isDir && x.name === folder); } catch { exists = false; }
       if (exists && api.startMode) {
         st.view = 'extract'; st.gen++;
         chrome({ title: 'Extracting', folder: false });
@@ -996,7 +996,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     const title = `Extracting "${e.name}"…`;
     let line = panel(title, 'Starting…', () => job?.cancel());
     job = startExtract(api, e.path, {
-      password, entries, mode,
+      password, entries, mode, destParent: intoDir,
       onConflict: async (rel) => { const c = await askFileClash(rel); if (!closed) line = panel(title, 'Continuing…', () => job?.cancel()); return c; },
       onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.files, 'file')} · ${formatSize(p.bytes)}${p.current ? ` · ${p.current}` : ''}`; },
     });
@@ -1016,7 +1016,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       toast(res.merging ? 'Extraction cancelled. Files already written were kept.' : 'Extraction cancelled. Nothing was kept.');
     } else if (needsPassword(res)) {
       const pw = await ui.askText?.({ title: 'Password needed', text: errorText(res, !!password), placeholder: 'Password', password: true, ok: 'Extract', isVault });
-      if (pw) { if (arc) arc.password = pw; await actExtract(e, pw, entries, mode); return; }
+      if (pw) { if (arc) arc.password = pw; await actExtract(e, pw, entries, mode, intoDir); return; }
     } else {
       const t = errorText(res, !!password);
       toast(res.merging ? t.replace('Nothing was kept.', 'Files already written were kept.') : t);
@@ -1107,7 +1107,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       const paths = [...st.sel];
       if (!paths.length) return;
       st.sel.clear(); syncSelUi();
-      actExtract({ name: st.arc.name, path: st.arc.path }, st.arc.password, paths);
+      actExtract({ name: st.arc.name, path: st.arc.path }, st.arc.password, paths, null, st.arc.nested ? st.cwd : '');
       return;
     }
     const [e] = selectedEntries();
@@ -1233,7 +1233,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   $('explorer-sel-copy').onclick = () => startPick('copy');
   $('explorer-sel-move').onclick = () => startPick('move');
   $('explorer-sel-share').onclick = actShare;
-  $('explorer-extract-btn').onclick = () => { if (st.arc) actExtract({ name: st.arc.name, path: st.arc.path }, st.arc.password); };
+  $('explorer-extract-btn').onclick = () => { if (st.arc) actExtract({ name: st.arc.name, path: st.arc.path }, st.arc.password, null, null, st.arc.nested ? st.cwd : ''); };
   $('explorer-sel-delete').onclick = () => (st.view === 'trash' ? actDeleteForever() : actDelete());
   document.addEventListener('visibilitychange', onVisible);
 
