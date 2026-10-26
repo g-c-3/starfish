@@ -1027,6 +1027,7 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 #select-bar .icon-btn { flex: none; width: 40px; height: 40px; margin: 0; padding: 0; display: grid; place-items: center; border-radius: 12px; border: none; background: transparent; color: var(--fg); box-shadow: none; }
 #select-bar .icon-btn.warning-text { color: var(--danger); }
 #select-bar .icon-btn:disabled { opacity: 0.35; }
+@media (max-width: 440px) { #sel-count .sel-word { display: none; } #select-bar { padding-left: 4px; padding-right: 4px; } } /* nine buttons: the count keeps its number only */
 #sel-count { flex: 1; min-width: 0; padding: 0 6px; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 body.selecting .row-actions { display: none; }
 body.selecting .entry-row { padding-right: 46px; }
