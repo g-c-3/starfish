@@ -80,6 +80,41 @@ public class ArklyArchiveBridge {
         }
     }
 
+    // Extracts into the folder named after the archive when it already exists (Decision 295). mode: "merge" asks about every file
+    // that already exists (status state "conflict", answered with answer()); "replace" replaces them without asking; anything else
+    // makes a new numbered folder, as start() does. entriesCsv: URL-encoded paths, or empty for everything.
+    @JavascriptInterface
+    public String startMode(String archivePath, String password, String entriesCsv, String mode) {
+        try {
+            Set<String> filter = null;
+            if (entriesCsv != null && entriesCsv.length() > 0) {
+                filter = new HashSet<String>();
+                for (String part : entriesCsv.split(",")) {
+                    String n = normalize(URLDecoder.decode(part, "UTF-8"));
+                    if (n.length() > 0) {
+                        filter.add(n);
+                    }
+                }
+                if (filter.isEmpty()) {
+                    return "";
+                }
+            }
+            int m = "merge".equals(mode) ? Job.ASK : "replace".equals(mode) ? Job.REPLACE : Job.NEW;
+            return launch(archivePath, password, null, filter, m);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    // Answers a "conflict" state: "replace", "skip", "replaceAll" or "skipAll" (the last two stay in force for the rest of the run).
+    @JavascriptInterface
+    public void answer(String id, String choice) {
+        Job j = id == null ? null : jobs.get(id);
+        if (j != null && choice != null) {
+            j.giveAnswer(choice);
+        }
+    }
+
     // Extracts one entry into the app's cache, for the viewers. status(id).dest is the folder it was written under; the file is
     // dest + "/" + entryPath.
     @JavascriptInterface
@@ -94,18 +129,22 @@ public class ArklyArchiveBridge {
     }
 
     private String launch(String archivePath, String password, File destOverride, Set<String> filter) {
+        return launch(archivePath, password, destOverride, filter, Job.NEW);
+    }
+
+    private String launch(String archivePath, String password, File destOverride, Set<String> filter, int mode) {
         try {
             File archive = new File(archivePath);
             if (!archive.isFile()) {
                 return "";
             }
             for (Job j : jobs.values()) {
-                if ("running".equals(j.state)) {
+                if ("running".equals(j.state) || "conflict".equals(j.state)) {
                     return "";
                 }
             }
             String id = "j" + seq.incrementAndGet();
-            Job job = new Job(archive, password == null ? "" : password, destOverride, filter);
+            Job job = new Job(archive, password == null ? "" : password, destOverride, filter, mode);
             jobs.put(id, job);
             Thread t = new Thread(job, "arkly-extract");
             t.setPriority(Thread.NORM_PRIORITY - 1);
@@ -385,13 +424,28 @@ public class ArklyArchiveBridge {
         private long lastCheck = 0;
         private boolean created = false;
         private String destRoot = null;
+        // Decision 295: NEW makes a numbered folder; ASK and REPLACE write into the existing folder of the archive's name.
+        static final int NEW = 0, ASK = 1, REPLACE = 2;
+        private final int mode;
+        private final boolean merging; // writing into a folder that was already there: a failed run must not delete it
+        private final Object lock = new Object();
+        private volatile String pending = "";
+        private volatile String answer = "";
+        private String sticky = "";
+        private File partial = null;
+        volatile int kept = 0;
+        volatile int replaced = 0;
 
-        Job(File archive, String password, File destOverride, Set<String> filter) {
+        Job(File archive, String password, File destOverride, Set<String> filter, int mode) {
             this.archive = archive;
             this.password = password;
             this.filter = filter;
             File parent = archive.getParentFile();
-            this.dest = destOverride != null ? destOverride : uniqueDir(parent, baseName(archive.getName()));
+            File named = new File(parent, baseName(archive.getName()));
+            boolean into = destOverride == null && mode != NEW && named.isDirectory();
+            this.mode = into ? mode : NEW;
+            this.merging = into;
+            this.dest = destOverride != null ? destOverride : (into ? named : uniqueDir(parent, baseName(archive.getName())));
             File space = this.dest.getParentFile();
             while (space != null && !space.exists()) {
                 space = space.getParentFile();
@@ -413,9 +467,57 @@ public class ArklyArchiveBridge {
             return false;
         }
 
+        void giveAnswer(String choice) {
+            synchronized (lock) {
+                answer = choice;
+                lock.notifyAll();
+            }
+        }
+
+        // What to do with a file that already exists: "replace" or "skip". Waits for the page's answer unless one is in force.
+        private String decide(File t) throws IOException {
+            if (mode == REPLACE || "replace".equals(sticky)) {
+                return "replace";
+            }
+            if ("skip".equals(sticky)) {
+                return "skip";
+            }
+            String base = dest.getAbsolutePath();
+            String full = t.getAbsolutePath();
+            pending = full.startsWith(base + File.separator) ? full.substring(base.length() + 1) : t.getName();
+            String got;
+            synchronized (lock) {
+                answer = "";
+                state = "conflict";
+                try {
+                    while (answer.length() == 0 && !cancelled) {
+                        lock.wait(250);
+                    }
+                } catch (InterruptedException ie) {
+                    cancelled = true;
+                }
+                got = answer;
+                state = "running";
+            }
+            pending = "";
+            if (cancelled) {
+                throw new Cancel();
+            }
+            if ("replaceAll".equals(got)) {
+                sticky = "replace";
+                return "replace";
+            }
+            if ("skipAll".equals(got)) {
+                sticky = "skip";
+                return "skip";
+            }
+            return "replace".equals(got) ? "replace" : "skip";
+        }
+
         String json() {
             return "{\"state\":\"" + state + "\",\"code\":\"" + esc(code) + "\",\"message\":\"" + esc(message) + "\",\"files\":" + files
-                    + ",\"skipped\":" + skipped + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
+                    + ",\"skipped\":" + skipped + ",\"kept\":" + kept + ",\"replaced\":" + replaced + ",\"pending\":\"" + esc(pending) + "\",\"merging\":" + merging
+                    + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
         }
 
         @Override
@@ -442,7 +544,10 @@ public class ArklyArchiveBridge {
         // Maps any failure to a state and code, and removes what was written: a failed or cancelled run keeps nothing.
         private void fail(Throwable e) {
             Failure f = describe(e, password, archive.getName());
-            if (created) {
+            if (partial != null) {
+                partial.delete(); // the file being written when the run stopped
+            }
+            if (created && !merging) {
                 deleteTree(dest);
             }
             if (f.cancelled) {
@@ -506,28 +611,60 @@ public class ArklyArchiveBridge {
                 write(new byte[] { (byte) b }, 0, 1);
             }
 
+            private boolean failed = false;
+
             @Override
             public void write(byte[] b, int off, int len) throws IOException {
-                if (cancelled) {
-                    throw new Cancel();
-                }
-                written += len;
-                if (written - lastCheck > CHECK_EVERY) {
-                    lastCheck = written;
-                    if (written > startFree - RESERVE) {
-                        throw new Fail("space", "There is not enough free space on this storage.");
+                try {
+                    if (cancelled) {
+                        throw new Cancel();
                     }
+                    written += len;
+                    if (written - lastCheck > CHECK_EVERY) {
+                        lastCheck = written;
+                        if (written > startFree - RESERVE) {
+                            throw new Fail("space", "There is not enough free space on this storage.");
+                        }
+                    }
+                    out.write(b, off, len);
+                } catch (IOException e) {
+                    failed = true;
+                    throw e;
                 }
-                out.write(b, off, len);
             }
 
             @Override
             public void close() throws IOException {
                 out.close();
+                if (!failed) {
+                    partial = null; // written whole: a later failure must not delete it
+                }
+            }
+        }
+
+        // Reads and drops the bytes of an entry that is not written (an existing file that is kept).
+        private class Discard extends OutputStream {
+            @Override
+            public void write(int b) {
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                if (cancelled) {
+                    throw new Cancel();
+                }
             }
         }
 
         private OutputStream open(File t) throws IOException {
+            boolean replacing = false;
+            if (merging && t.exists()) {
+                if (t.isDirectory() || "skip".equals(decide(t))) {
+                    kept++;
+                    return new Discard();
+                }
+                replacing = true;
+            }
             if (++files > MAX_ENTRIES) {
                 throw new Fail("entries", "The archive holds too many files.");
             }
@@ -536,6 +673,10 @@ public class ArklyArchiveBridge {
                 throw new Fail("io", "Could not create a folder for " + t.getName() + ".");
             }
             current = t.getName();
+            if (replacing) {
+                replaced++;
+            }
+            partial = t;
             return new Sink(new FileOutputStream(t));
         }
 
