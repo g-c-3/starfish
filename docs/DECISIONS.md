@@ -3232,3 +3232,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The buttons are shown again for the inner archive: the selection bar extracts only the selected entries, the title bar extracts everything. The clash questions of Decision 295 apply unchanged.
 - Files: `scripts/java/ArklyArchiveBridge.java`, `src/js/explorer-archive.js`, `src/js/explorer.js`. Checked: `vite build`; the native call against a real filesystem (extracts into the named folder, refuses a missing one); the screens not run; not run through CI, not device-tested (DP139).
 
+**298. Extract asks first.** Amends Decisions 221 and 295: an extract button started at once.
+- Every extract (title bar, selection bar, a selected archive in a folder, an inner archive) asks "Extract?" naming what is extracted (everything, or the number of selected items), the archive and the new folder's name. Choices: Extract or Cancel; Cancel writes nothing.
+- When the folder named after the archive already exists, the Overwrite or new folder question (Decision 295) is the confirmation and no second question is asked.
+- Asked once per extract: a password retry does not ask again.
+- Files: `src/js/explorer.js`. `vite build` passes; not run through CI, not device-tested (DP140).
+
