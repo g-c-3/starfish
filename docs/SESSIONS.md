@@ -18,8 +18,10 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Decision 297 (owner request, from screenshots): the selection bar inside an archive that was opened from another archive had no extract button. The inner archive is a cache copy, so extraction now names its destination folder (the folder holding the outermost archive); the buttons show for inner archives. Native check ran on a real filesystem; `vite build` passes; not run through CI.
 - Owner confirmed DP138 and DP139: Phase 34 closed.
 - Decision 298 (owner request): extract asked nothing and ran at once. It now asks "Extract?" first; when the target folder already exists, the Overwrite question stands in for it. `vite build` passes; not run through CI.
-Open: DP140.
-Next session start point: the DP140 result; then the next incomplete roadmap item.
+- Owner confirmed DP140. Question from the owner: should a tap outside the Extract box cancel it? Yes: the box had no outside-tap rule and every other Yes/No box shared that. Decision 299: an outside tap answers as Back does, for every Yes/No box; text sheets and capture dialogs unchanged. `vite build` passes; not run through CI.
+- Owner request: the outside-tap rule should be universal. Decision 300: one app-wide handler on the dimmed area of every dialog and sheet runs that dialog's Back action (Discard rules intact); the per-dialog handlers and the capture-dialog exception are gone. `vite build` passes; handler rules ran against a stand-in page; not run through CI.
+Open: DP141, DP142.
+Next session start point: the DP141 and DP142 results; then the next incomplete roadmap item.
 
 ---
 

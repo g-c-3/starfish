@@ -3238,3 +3238,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Asked once per extract: a password retry does not ask again.
 - Files: `src/js/explorer.js`. `vite build` passes; not run through CI, not device-tested (DP140).
 
+**299. A tap outside a Yes/No box closes it.** The box had no outside-tap rule, so a stray tap left it open.
+- Rule: a tap on the dimmed area answers exactly as Back does (Decision 104): the No answer, or no choice at all when the No button is a real choice (Open with, the unknown-file question, Restore mode, Save mark-up). Overwrite, Replace original and delete are never chosen this way.
+- Applies to every Yes/No box in the app. Not changed: text and password sheets (typed text would be lost by a stray tap), the Save sheet and capture dialogs (Decision 91), and the explorer's own in-page questions, which are not over a dimmed area.
+- Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP141).
+
+**300. A tap outside any dialog or sheet acts as Back.** Extends Decision 299 from Yes/No boxes to every dialog and sheet; replaces the capture-dialog rule of Decision 91 that ignored outside taps.
+- One handler for the whole app, on the dimmed area of every modal: the text sheet, the password and PIN prompt, the Save sheet (edit and capture), the Money form and repayment dialog, the Merge and Make a PDF order sheet, the static modals of Decision 104 and the Yes/No box. It runs that dialog's Back action, so each rule Back follows still applies: Discard when typed input or a changed form would be lost (Decision 133), "Discard?" for a recording or photo that has not been saved, no choice for boxes whose No is a real option.
+- A stray tap cannot lose a take: it opens the Discard question, never discards.
+- The press must also begin on the dimmed area: pressing in a field and releasing outside (a text drag) closes nothing.
+- The two per-dialog handlers (Yes/No box, Save sheet) are removed.
+- Not covered: pages that fill the screen (the explorer, the viewers, the editors) have no dimmed area; the explorer's own in-page questions have none either.
+- Files: `src/js/app.js`. `vite build` passes; the handler's rules ran against a stand-in page; not run through CI, not device-tested (DP141, DP142).
+
