@@ -4178,13 +4178,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div id="rec-player"></div>
           <div class="detail-actions">
             <button id="rec-save-btn">Save</button>
-            <button id="rec-again-btn" class="secondary-btn">Record again</button>
-          </div>
-          <div class="detail-actions rec-discard"><button id="rec-discard-btn" class="secondary-btn">Discard</button></div>`;
+            <button id="rec-discard-btn" class="danger-btn">Discard</button>
+          </div>`;
         player = createAudioPlayer(body.querySelector('#rec-player'), url, { fallbackMs: taken.ms, output: voiceOutDefault });
         body.querySelector('#rec-save-btn').onclick = () => { saved = taken; closeFn(); };
-        body.querySelector('#rec-again-btn').onclick = () => { dropReview(); taken = null; state = 'ready'; draw(); };
-        body.querySelector('#rec-discard-btn').onclick = () => { discarded = true; toast('Recording discarded'); closeFn(); };
+        body.querySelector('#rec-discard-btn').onclick = async () => { if (await guard()) { toast('Recording discarded'); closeFn(); } }; // asks first; guard() marks the take discarded
         return;
       }
       const recording = state === 'recording' || state === 'stopping';
