@@ -3251,3 +3251,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not covered: pages that fill the screen (the explorer, the viewers, the editors) have no dimmed area; the explorer's own in-page questions have none either.
 - Files: `src/js/app.js`. `vite build` passes; the handler's rules ran against a stand-in page; not run through CI, not device-tested (DP141, DP142).
 
+**301. Voice review: Discard replaces Record again.** Amends the review screen of the voice recorder (Decisions 179, 180).
+- Cause: Record again threw away the take at once and started a new one, with no question.
+- The review screen has Save and Discard in one row. Record again is removed. To record again, discard and start a new recording.
+- Discard is the app's red outlined button and asks first, with the same question as Back ("Discard recording?", Yes, discard or No, keep it). No keeps the take and the review screen. Yes marks the take discarded (no autosave, Decision 179) and closes with the notice "Recording discarded".
+- The widget's own Record again (the home widget) is a different control and is unchanged.
+- Files: `src/js/app.js`, `src/css/style.css` (an unused rule removed). `vite build` passes; not run through CI, not device-tested (DP143).
+
