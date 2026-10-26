@@ -12,8 +12,9 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Owner confirmed DP133 and DP134. Phases 29 and 31 closed.
 - Phase 32 (owner request) and Decision 293: a .cpp file offered the app chooser instead of the editor. Cause: the text extension list lacked it. Fix: list extended; a file of unknown type asks Arkly editor or Other apps (explorer and archive copies). `vite build` passes; not run through CI.
 - Owner requests and Decision 294: syntax colours for the new extensions (seven official language packages and the legacy modes, pinned, all at least 14 days old); a file that is not text offers Open in Arkly editor (read-only) or Other apps; a file with no extension takes the text route; an Open with button in the selection bar for one selected file. `.css` was already in the list with colours. `vite build` passes; every language coloured a sample under a DOM stand-in; not run through CI.
-Open: DP135, DP136.
-Next session start point: the DP135 and DP136 results; then the next incomplete roadmap item.
+- Owner requests and Decision 295: Open with for one file inside an archive; Compress (ZIP or 7z, three levels, ZIP password) from the selection bar; extract asks Overwrite or Create new folder when the folder exists, with a replace-all box. New native class `ArklyPackBridge`; extraction job gained merge, replace and a wait-for-answer state. 7z has no password (library limit, stated in the form). Native logic ran against a real filesystem with stand-ins for the zip and 7z libraries; `vite build` passes; not run through CI.
+Open: DP135, DP136, DP137.
+Next session start point: the DP135 to DP137 results (the first CI build compiles the new native code: read its log if it fails); then the next incomplete roadmap item.
 
 ---
 
