@@ -9,6 +9,8 @@ import { openFileViewer, VIEW_KINDS } from './explorer-view.js';
 import * as manage from './explorer-manage.js';
 import { startOps, destProblem, resultText, findConflicts, canReplace } from './explorer-ops.js';
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText, baseNameOf } from './explorer-archive.js';
+import { attachScrollThumb } from './scrollthumb.js';
+import { attachPullToRefresh } from './pulltorefresh.js';
 import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
 
 const KIND_EXT = {
@@ -131,7 +133,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
-  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null, resolve: null, ask: null };
+  const st = { view: 'gate', volumes: [], volume: null, cwd: null, entries: [], sort: { key: 'name', dir: 1 }, hidden: false, filter: '', gen: 0, sel: new Set(), trash: [], from: null, arc: null, pick: null, resolve: null, ask: null, arcStack: [] };
   let closed = false, viewer = null, purged = false, job = null, browse = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -144,7 +146,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     titleEl.textContent = title;
     crumbsEl.classList.toggle('hidden', !(folder || archive));
     toolsEl.classList.toggle('hidden', !(folder || archive));
-    $('explorer-extract-btn').classList.toggle('hidden', !archive);
+    $('explorer-extract-btn').classList.toggle('hidden', !archive || !!st.arc?.nested); // an archive inside an archive is not extracted
     document.querySelector('#explorer-tools [data-sort="date"]')?.classList.toggle('hidden', archive); // entries carry no date
     $('explorer-hidden-btn').classList.toggle('hidden', !folder);
     $('explorer-new-btn').classList.toggle('hidden', !folder);
@@ -170,7 +172,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
     $('explorer-sel-share').disabled = arc || trash || selectedEntries().some((e) => e.isDir); // only files can be shared
     const one = n === 1 && !trash && !arc ? selectedEntries()[0] : null;
-    $('explorer-sel-extract').classList.toggle('hidden', !(arc || (one && !one.isDir && isArchive(one.name))));
+    $('explorer-sel-extract').classList.toggle('hidden', !((arc && !st.arc.nested) || (one && !one.isDir && isArchive(one.name))));
     const del = $('explorer-sel-delete');
     del.setAttribute('aria-label', trash ? 'Delete forever' : 'Delete'); del.title = trash ? 'Delete forever' : 'Delete';
   }
@@ -846,8 +848,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
 
   const leaveArchive = () => {
     const api = archiveApi();
-    if (st.arc) { try { api?.closeArchive(st.arc.id); api?.clearCache(); } catch { /* nothing left to close */ } }
-    st.arc = null;
+    for (const a of [...st.arcStack, st.arc]) { if (a) { try { api?.closeArchive(a.id); } catch { /* already closed */ } } }
+    if (st.arc || st.arcStack.length) { try { api?.clearCache(); } catch { /* nothing to clear */ } }
+    st.arc = null; st.arcStack = [];
   };
 
   async function openArchive(e, password = '') {
@@ -879,7 +882,40 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     st.arc.items = listFolder(archiveApi(), st.arc.id, prefix);
     renderList();
   }
-  function closeArchiveView() { leaveArchive(); returnToFolder(); }
+  function closeArchiveView() {
+    if (st.arcStack.length) { // inside an archive that was opened from another: back to the outer one
+      try { archiveApi()?.closeArchive(st.arc.id); } catch { /* already closed */ }
+      st.arc = st.arcStack.pop();
+      showArchiveDir(st.arc.prefix);
+      return;
+    }
+    leaveArchive(); returnToFolder();
+  }
+  // An archive inside the open archive (Decision 296): copied to the cache like any entry, then listed on top of the outer one.
+  async function openNestedArchive(file, password = '') {
+    const api = archiveApi(), outer = st.arc;
+    if (!api || !outer || browse) return;
+    st.view = 'arcopen'; st.gen++;
+    chrome({ title: file.name, folder: false });
+    const line = panel(`Reading "${file.name}"…`, 'Starting…', () => browse?.cancel());
+    browse = openBrowse(api, file.path, { password, onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.count, 'item')} found`; } });
+    const res = await browse.done;
+    browse = null;
+    if (closed) { if (res.id) try { api.closeArchive(res.id); } catch { /* closed anyway */ } return; }
+    if (res.state === 'ready') {
+      st.arcStack.push(outer);
+      st.arc = { path: file.path, name: file.name, password, id: res.id, prefix: '', items: [], nested: true };
+      await showArchiveDir('');
+      return;
+    }
+    if (needsPassword(res)) {
+      const pw = await ui.askText?.({ title: 'Password needed', text: errorText(res, !!password), placeholder: 'Password', password: true, ok: 'Open', isVault });
+      if (pw) { await openNestedArchive(file, pw); return; }
+    } else if (res.state !== 'cancelled') {
+      toast(errorText(res, !!password));
+    }
+    if (!closed && st.view === 'arcopen' && st.arc === outer) await showArchiveDir(outer.prefix);
+  }
   function arcBack() {
     if (st.filter) { st.filter = ''; filterEl.value = ''; renderList(); return; }
     if (st.arc.prefix) showArchiveDir(st.arc.prefix.includes('/') ? st.arc.prefix.slice(0, st.arc.prefix.lastIndexOf('/')) : '');
@@ -890,7 +926,6 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   async function openArcEntry(e, how = 'auto') { // how: 'auto' | 'viewer' | 'apps' (Open with)
     const arc = st.arc, api = archiveApi();
     if (!arc || job) return;
-    if (isArchive(e.name)) { toast('Extract this archive first to open it.'); return; }
     const prefix = arc.prefix;
     st.view = 'extract'; st.gen++;
     chrome({ title: 'Opening', folder: false });
@@ -900,8 +935,10 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     job = null;
     if (closed || st.arc !== arc) return;
     if (res.state === 'done' && res.files) {
+      const file = { name: e.name, path: `${res.dest}/${e.path}`, size: e.size, mtime: 0, isDir: false };
+      if (isArchive(e.name) && how !== 'apps') { await openNestedArchive(file); return; }
       await showArchiveDir(prefix);
-      openCached({ name: e.name, path: `${res.dest}/${e.path}`, size: e.size, mtime: 0, isDir: false }, how);
+      openCached(file, how);
       return;
     }
     if (needsPassword(res)) {
@@ -1102,7 +1139,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   async function actOpenWith() {
     const list = selectedEntries(), inArc = st.view === 'archive';
     if (list.length !== 1 || list[0].isDir || (st.view !== 'folder' && !inArc)) return;
-    const e = list[0], kind = openWithKind(e.name), label = inArc && kind === 'archive' ? null : VIEWER_NAME[kind]; // a zip inside a zip: the phone's apps only
+    const e = list[0], kind = openWithKind(e.name), label = VIEWER_NAME[kind];
     const apps = () => { clearSel(); if (inArc) openArcEntry(e, 'apps'); else openExternal(e, true); };
     if (!label || !ui.askYesNo || (kind !== 'archive' && !VIEW_KINDS.includes(kind))) { apps(); return; }
     const r = await ui.askYesNo({ title: 'Open with', text: `"${e.name}"`, yes: label, no: 'Phone apps', explicitNo: true });
@@ -1130,6 +1167,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (job) job.cancel(); // the native side removes what it wrote
     st.pick = null; st.resolve = null;
     if (browse) browse.cancel();
+    thumbCtl.destroy(); ptrCtl.destroy();
     leaveArchive(); // closes the list and removes the copies taken out for viewing
     if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
     document.removeEventListener('visibilitychange', onVisible);
@@ -1180,6 +1218,12 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (keys.every((k) => st.sel.has(k))) st.sel.clear(); else keys.forEach((k) => st.sel.add(k));
     syncSelUi(); markRows();
   };
+  // A scroll handle for every list, and pull down to refresh everywhere except inside an archive (Decision 296).
+  const thumbCtl = attachScrollThumb(body);
+  const ptrCtl = attachPullToRefresh(body, {
+    enabled: () => !closed && !viewer && !selecting() && !job && !st.ask && ['folder', 'trash', 'roots'].includes(st.view),
+    onRefresh: () => $('explorer-refresh-btn').click(),
+  });
   $('explorer-sel-openwith').onclick = actOpenWith;
   $('explorer-sel-compress').onclick = actCompress;
   $('explorer-sel-rename').onclick = actRename;
