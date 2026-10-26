@@ -5,7 +5,7 @@
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder } from '@codemirror/view';
 import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
-import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput, StreamLanguage } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel, highlightSelectionMatches } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { javascript } from '@codemirror/lang-javascript';
@@ -17,6 +17,30 @@ import { xml } from '@codemirror/lang-xml';
 import { yaml } from '@codemirror/lang-yaml';
 import { java } from '@codemirror/lang-java';
 import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
+import { go } from '@codemirror/lang-go';
+import { rust } from '@codemirror/lang-rust';
+import { php } from '@codemirror/lang-php';
+import { sql } from '@codemirror/lang-sql';
+import { sass } from '@codemirror/lang-sass';
+import { less } from '@codemirror/lang-less';
+// languages without a Lezer grammar: the CodeMirror 5 style modes (Decision 294)
+import { csharp, kotlin, scala, dart } from '@codemirror/legacy-modes/mode/clike';
+import { ruby } from '@codemirror/legacy-modes/mode/ruby';
+import { swift } from '@codemirror/legacy-modes/mode/swift';
+import { lua } from '@codemirror/legacy-modes/mode/lua';
+import { perl } from '@codemirror/legacy-modes/mode/perl';
+import { r } from '@codemirror/legacy-modes/mode/r';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
+import { properties } from '@codemirror/legacy-modes/mode/properties';
+import { diff } from '@codemirror/legacy-modes/mode/diff';
+import { cmake } from '@codemirror/legacy-modes/mode/cmake';
+import { groovy } from '@codemirror/legacy-modes/mode/groovy';
+import { stex } from '@codemirror/legacy-modes/mode/stex';
+import { gas } from '@codemirror/legacy-modes/mode/gas';
+const legacy = (mode) => () => StreamLanguage.define(mode);
 
 // extension -> language; anything else stays plain text
 const LANGS = {
@@ -24,7 +48,15 @@ const LANGS = {
   ts: () => javascript({ typescript: true }), tsx: () => javascript({ typescript: true, jsx: true }),
   json: () => json(), html: () => html(), htm: () => html(), css: () => css(), md: () => markdown(), markdown: () => markdown(),
   xml: () => xml(), svg: () => xml(), xhtml: () => xml(), plist: () => xml(), yml: () => yaml(), yaml: () => yaml(),
-  java: () => java(), py: () => python()
+  java: () => java(), py: () => python(),
+  c: () => cpp(), h: () => cpp(), cpp: () => cpp(), cc: () => cpp(), cxx: () => cpp(), hpp: () => cpp(), hh: () => cpp(), hxx: () => cpp(),
+  go: () => go(), rs: () => rust(), php: () => php(), sql: () => sql(), scss: () => sass(), sass: () => sass({ indented: true }), less: () => less(),
+  vue: () => html(), svelte: () => html(),
+  cs: legacy(csharp), kt: legacy(kotlin), kts: legacy(kotlin), scala: legacy(scala), dart: legacy(dart),
+  rb: legacy(ruby), swift: legacy(swift), lua: legacy(lua), pl: legacy(perl), r: legacy(r),
+  sh: legacy(shell), bash: legacy(shell), mk: legacy(shell), toml: legacy(toml), ps1: legacy(powerShell),
+  properties: legacy(properties), env: legacy(properties), diff: legacy(diff), patch: legacy(diff),
+  cmake: legacy(cmake), gradle: legacy(groovy), tex: legacy(stex), asm: legacy(gas)
 };
 export const languageFor = (name) => { const m = /\.([a-z0-9]+)$/i.exec(name || ''); const f = m && LANGS[m[1].toLowerCase()]; return f ? f() : []; };
 
@@ -39,6 +71,11 @@ const highlight = HighlightStyle.define([
   { tag: [t.heading], color: 'var(--cm-keyword)', fontWeight: '700' },
   { tag: [t.link, t.url], color: 'var(--cm-prop)', textDecoration: 'underline' },
   { tag: [t.meta, t.processingInstruction, t.punctuation], color: 'var(--cm-muted)' },
+  { tag: [t.inserted], color: 'var(--cm-string)' },
+  { tag: [t.deleted], color: 'var(--cm-invalid)' },
+  { tag: [t.definition(t.variableName), t.labelName, t.standard(t.variableName), t.special(t.variableName)], color: 'var(--cm-prop)' },
+  { tag: [t.standard(t.typeName), t.standard(t.name), t.macroName], color: 'var(--cm-type)' },
+  { tag: [t.operator, t.derefOperator], color: 'var(--cm-muted)' },
   { tag: t.invalid, color: 'var(--cm-invalid)' }
 ]);
 

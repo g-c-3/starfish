@@ -88,23 +88,35 @@ export function openFileViewer(file, ctx) {
   };
 
   // ---- Text ----
-  async function showText(f, mine) {
+  // pre: the text already read, when a binary file is opened anyway (Decision 294)
+  async function showText(f, mine, force = false, pre = null) {
     if (f.size > TEXT_MAX) { note('This file is too large to open here. Use Open with app.'); return; }
-    note('Loading…');
-    let data;
-    try { ({ data } = await Filesystem.readFile({ path: toUri(f.path), encoding: Encoding.UTF8 })); }
-    catch (e) { if (mine === token) note(`The file could not be read${errText(e)}`); return; }
-    if (mine !== token || closed) return;
+    let data = pre;
+    if (data === null) {
+      note('Loading…');
+      try { ({ data } = await Filesystem.readFile({ path: toUri(f.path), encoding: Encoding.UTF8 })); }
+      catch (e) { if (mine === token) note(`The file could not be read${errText(e)}`); return; }
+      if (mine !== token || closed) return;
+    }
     const text = typeof data === 'string' ? data : '';
     const info = inspectText(text);
-    if (info.binary) { note('This is not a text file. Use Open with app.'); return; }
+    if (info.binary && !force) { // say so, then let the person choose
+      note('This is not a text file.');
+      const row = el('div', 'ev-choice');
+      const mk = (label, fn, on) => { const b = el('button', on ? 'ev-tool on' : 'ev-tool', label); b.type = 'button'; b.onclick = fn; row.appendChild(b); };
+      mk('Open in Arkly editor', () => { if (mine === token && !closed) showText(f, mine, true, text); }, true);
+      mk('Other apps', () => { if (!closed) external(f, true); });
+      body.querySelector('.pdf-msg').appendChild(row);
+      return;
+    }
     body.replaceChildren();
     const wrap = el('div', 'ev-text-wrap');
-    if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text. It is open for reading only, so saving cannot damage it.'));
+    if (info.binary) wrap.appendChild(el('div', 'ev-banner', 'Not a text file: open for reading only, so saving cannot damage it. Parts may look garbled.'));
+    else if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text. It is open for reading only, so saving cannot damage it.'));
     const big = f.size > TEXT_EDIT_MAX;
-    const editable = !info.lossy && !readOnly && !big; // readOnly: a copy taken out of an archive; saving would be lost
-    if (readOnly && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
-    else if (big && !info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Larger than 2 MB: open for reading only.'));
+    const editable = !info.binary && !info.lossy && !readOnly && !big; // readOnly: a copy taken out of an archive; saving would be lost
+    if (readOnly && !info.lossy && !info.binary) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
+    else if (big && !info.lossy && !info.binary) wrap.appendChild(el('div', 'ev-banner', 'Larger than 2 MB: open for reading only.'));
     const bar = el('div', 'ev-tools'); const host = el('div', 'ev-code');
     wrap.append(bar, host); body.appendChild(wrap);
     let ed, make;

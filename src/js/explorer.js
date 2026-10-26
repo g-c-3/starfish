@@ -11,7 +11,8 @@ import { startOps, destProblem, resultText, findConflicts, canReplace } from './
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText } from './explorer-archive.js';
 
 const KIND_EXT = {
-  text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics'],
+  text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics',
+    'c', 'h', 'cpp', 'cc', 'cxx', 'hpp', 'hh', 'hxx', 'cs', 'go', 'rs', 'php', 'rb', 'swift', 'dart', 'lua', 'pl', 'r', 'scala', 'gradle', 'kts', 'properties', 'toml', 'bat', 'cmd', 'ps1', 'tex', 'bib', 'sass', 'bash', 'jsx', 'tsx', 'mjs', 'cjs', 'vue', 'svelte', 'scss', 'less', 'env', 'gitignore', 'lock', 'diff', 'patch', 'asm', 'mk', 'cmake'],
   image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'avif', 'heic'],
   pdf: ['pdf'],
   audio: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'amr', 'mid', 'midi'],
@@ -42,6 +43,9 @@ export function kindOf(name) {
   for (const [kind, list] of Object.entries(KIND_EXT)) if (list.includes(e)) return kind;
   return 'other';
 }
+// Unknown: in no list of the viewer kinds and with no known type, so it may be text (Decision 293).
+// No extension at all is not asked: it opens in the text viewer, which offers the choice itself when the file is not text.
+export const isUnknownType = (name) => extOf(name) !== '' && kindOf(name) === 'other' && !MIME[extOf(name)];
 export const mimeOf = (name) => MIME[extOf(name)] || '*/*'; // '*/*' lets Android list every app that takes a file
 
 export function formatSize(n) {
@@ -157,6 +161,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!on) return;
     const n = st.sel.size, trash = st.view === 'trash', arc = st.view === 'archive';
     $('explorer-sel-count').textContent = `${n} selected`;
+    const single = st.view === 'folder' && n === 1 && !selectedEntries()[0]?.isDir; // Open with: one file only
+    $('explorer-sel-openwith').classList.toggle('hidden', !single);
     for (const id of ['explorer-sel-rename', 'explorer-sel-info']) { $(id).classList.toggle('hidden', trash || arc); $(id).disabled = n !== 1; }
     $('explorer-sel-restore').classList.toggle('hidden', !trash);
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
@@ -856,8 +862,16 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     }
     if (!closed && st.arc === arc) await showArchiveDir(prefix);
   }
-  function openCached(file) {
-    const kind = kindOf(file.name);
+  // An unknown file type asks once: Arkly's text viewer or other apps. Resolves 'text', 'apps' or null (dismissed).
+  async function askUnknown(f) {
+    if (!ui.askYesNo) return 'apps';
+    const r = await ui.askYesNo({ title: 'Open this file how?', text: `\"${f.name}\" is a type Arkly does not know. Open it in the Arkly text editor, or in another app?`, yes: 'Arkly editor', no: 'Other apps', explicitNo: true });
+    return r === true ? 'text' : r === 'no' ? 'apps' : null;
+  }
+  async function openCached(file) {
+    let kind = kindOf(file.name);
+    if (extOf(file.name) === '' && kind === 'other') kind = 'text';
+    else if (!viewer && ui.onActivity && isUnknownType(file.name)) { const c = await askUnknown(file); if (c === null) return; if (c === 'text') kind = 'text'; }
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) { openExternal(file); return; }
     viewer = openFileViewer(file, {
       kind, siblings: [], toUri: toFileUri, ui, toast, isVault, readOnly: true, external: openExternal, leaving,
@@ -905,9 +919,14 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   }
 
   // Text, image, PDF, audio and video open in the built-in viewer; anything else goes to another app (Decision 211).
-  function openFile(e) {
+  async function openFile(e) {
     if (isArchive(e.name)) { openArchive(e); return undefined; }
-    const kind = kindOf(e.name);
+    let kind = kindOf(e.name);
+    if (extOf(e.name) === '' && kind === 'other') kind = 'text';
+    else if (!viewer && ui.onActivity && isUnknownType(e.name)) { const c = await askUnknown(e); if (c === null || closed) return undefined; if (c === 'text') kind = 'text'; }
+    return openInViewer(e, kind);
+  }
+  function openInViewer(e, kind) {
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) return openExternal(e);
     const siblings = kind === 'image' ? shownItems().filter((x) => !x.isDir && kindOf(x.name) === 'image') : [];
     viewer = openFileViewer(e, {
@@ -915,6 +934,23 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       onClose: ({ changed }) => { viewer = null; if (changed && !closed && st.view === 'folder') showFolder(st.cwd); }
     });
     return undefined;
+  }
+
+  // Open with (Decision 294), one selected file: the Arkly viewer for its kind, or the phone's apps for its type.
+  const VIEWER_NAME = { text: 'Arkly text editor', image: 'Arkly image viewer', pdf: 'Arkly PDF viewer', audio: 'Arkly player', video: 'Arkly player',
+    docx: 'Arkly document viewer', xlsx: 'Arkly sheet viewer', pptx: 'Arkly slide viewer', archive: 'Arkly archive browser' };
+  const openWithKind = (name) => { const k = kindOf(name); return k === 'other' && (extOf(name) === '' || isUnknownType(name)) ? 'text' : k; }; // a type that may be text
+  async function actOpenWith() {
+    const list = selectedEntries();
+    if (list.length !== 1 || list[0].isDir || st.view !== 'folder') return;
+    const e = list[0], kind = openWithKind(e.name), label = VIEWER_NAME[kind];
+    if (!label || !ui.askYesNo || (kind !== 'archive' && !VIEW_KINDS.includes(kind))) { clearSel(); openExternal(e, true); return; }
+    const r = await ui.askYesNo({ title: 'Open with', text: `"${e.name}"`, yes: label, no: 'Phone apps', explicitNo: true });
+    if (closed || (r !== true && r !== 'no')) return;
+    clearSel();
+    if (r === 'no') openExternal(e, true);
+    else if (kind === 'archive') openArchive(e);
+    else openInViewer(e, kind);
   }
 
   async function openExternal(e, chooser = false) { // chooser: always list the apps that can open it
@@ -983,6 +1019,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (keys.every((k) => st.sel.has(k))) st.sel.clear(); else keys.forEach((k) => st.sel.add(k));
     syncSelUi(); markRows();
   };
+  $('explorer-sel-openwith').onclick = actOpenWith;
   $('explorer-sel-rename').onclick = actRename;
   $('explorer-sel-info').onclick = actInfo;
   $('explorer-sel-restore').onclick = actRestore;
