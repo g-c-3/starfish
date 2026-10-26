@@ -164,7 +164,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     view,
     getValue: () => view.state.doc.toString(),
     isDirty: () => !view.state.doc.eq(base),
-    markClean: () => { base = view.state.doc; },
+    markClean: (doc = view.state.doc) => { base = doc; }, // doc: the text that was saved, when more was typed meanwhile
     isEditing: () => on,
     canEdit: editable,
     setEditing(v, focus = true) { // focus false: switch on without raising the keyboard
