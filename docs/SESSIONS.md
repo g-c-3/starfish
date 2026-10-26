@@ -21,8 +21,9 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Owner confirmed DP140. Question from the owner: should a tap outside the Extract box cancel it? Yes: the box had no outside-tap rule and every other Yes/No box shared that. Decision 299: an outside tap answers as Back does, for every Yes/No box; text sheets and capture dialogs unchanged. `vite build` passes; not run through CI.
 - Owner request: the outside-tap rule should be universal. Decision 300: one app-wide handler on the dimmed area of every dialog and sheet runs that dialog's Back action (Discard rules intact); the per-dialog handlers and the capture-dialog exception are gone. `vite build` passes; handler rules ran against a stand-in page; not run through CI.
 - Decision 301 (owner request, from a screenshot): the voice review screen's Record again discarded the take without asking. It is removed; Save and a red Discard share one row; Discard asks "Discard recording?" first. `vite build` passes; not run through CI.
-Open: DP141, DP142, DP143.
-Next session start point: the DP141 to DP143 results; then the next incomplete roadmap item.
+- Decision 302 (owner request, from screenshots): the note editor's Save was enabled with no changes, always opened the whole Save dialog, and closed the editor. Now: Save only with changes; a saved note saves in place with no dialog and the editor stays; a new note asks once on its first Save; Details button for name, tags and description; draft handlers switch to the saved entry after the first Save. `vite build` passes; the editor logic ran against a stand-in page; not run through CI.
+Open: DP141, DP142, DP143, DP144.
+Next session start point: the DP141 to DP144 results; then the next incomplete roadmap item.
 
 ---
 

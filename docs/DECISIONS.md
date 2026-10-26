@@ -3258,3 +3258,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The widget's own Record again (the home widget) is a different control and is unchanged.
 - Files: `src/js/app.js`, `src/css/style.css` (an unused rule removed). `vite build` passes; not run through CI, not device-tested (DP143).
 
+**302. The note editor saves in place.** Amends Decisions 91, 133 and 292: Save opened the whole Save dialog for every note, was enabled when nothing had changed, and closed the editor afterwards.
+- Save is enabled only while the text differs from the last saved text (from the text at open, for a note not yet saved) and holds something other than spaces. A note opens with Save disabled.
+- A saved note: Save writes the text at once, without a dialog, keeps name, tags and description, and leaves the editor open with Save disabled. Leaving is the person's choice: Back closes at once when there are no changes and asks "Discard changes?" when there are.
+- A new note: the first Save opens the Save sheet (name, tags, description; "Back to editing" returns with the text kept). After it the note is saved: the title shows its name, the editor stays open, and later Saves are silent. The reminder question of Decisions 175 and 178 is asked on the first Save only.
+- Drafts (Decision 177): after the first Save the editor switches from the new-note draft to the edit draft of the saved entry, so a lock or a closed app after more typing updates that entry and never makes a duplicate Autosave note. A Save clears the draft; typing again writes it again.
+- Details button (saved notes only), added because the old Save dialog was the only place to change a note's name, tags and description: it opens the Save sheet as "Edit details" and saves at once; the title follows the new name.
+- Text typed while a Save is running still counts as a change. A failed Save keeps Save enabled and says why.
+- Unchanged: Discard question, drafts on hide and lock, the editor view destroyed on close.
+- Files: `src/js/app.js`, `src/js/codeeditor.js` (`markClean(doc)`). `vite build` passes; the editor's Save and Details logic ran against a stand-in page (disabled and enabled states, failed and refused saves, title change); the Save sheet, lists and drafts not run; not run through CI, not device-tested (DP144).
+
