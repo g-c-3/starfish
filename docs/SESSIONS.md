@@ -22,8 +22,9 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Owner request: the outside-tap rule should be universal. Decision 300: one app-wide handler on the dimmed area of every dialog and sheet runs that dialog's Back action (Discard rules intact); the per-dialog handlers and the capture-dialog exception are gone. `vite build` passes; handler rules ran against a stand-in page; not run through CI.
 - Decision 301 (owner request, from a screenshot): the voice review screen's Record again discarded the take without asking. It is removed; Save and a red Discard share one row; Discard asks "Discard recording?" first. `vite build` passes; not run through CI.
 - Decision 302 (owner request, from screenshots): the note editor's Save was enabled with no changes, always opened the whole Save dialog, and closed the editor. Now: Save only with changes; a saved note saves in place with no dialog and the editor stays; a new note asks once on its first Save; Details button for name, tags and description; draft handlers switch to the saved entry after the first Save. `vite build` passes; the editor logic ran against a stand-in page; not run through CI.
-Open: DP141, DP142, DP143, DP144.
-Next session start point: the DP141 to DP144 results; then the next incomplete roadmap item.
+- Owner confirmed DP144 (note editor). Decision 303 (owner request): Rename button beside Save in the note editor; the five row buttons hidden in Home and the Vault; Rename in the selection bar: one item through the Save dialog, several through a numbering sheet (Number, Add text, Find & replace, letters, preview, warning). `vite build` passes; naming rules and sheet ran against a stand-in page; not run through CI.
+Open: DP141, DP142, DP143, DP145.
+Next session start point: the DP141, DP142, DP143 and DP145 results; then the next incomplete roadmap item.
 
 ---
 
