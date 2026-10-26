@@ -3226,3 +3226,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Scroll handle: a draggable handle on the right of every explorer list that is longer than one and a half screens; it shows while scrolling or dragging and fades after about a second. It is narrower than the editor's handle so it stays clear of the selection circles.
 - Files: `src/js/explorer.js`, `src/js/scrollthumb.js` (new), `src/js/pulltorefresh.js` (new), `src/css/style.css`. Checked: `vite build`; both new modules against simulated touches and scrolling; nested archive flow not run (it needs the app); not run through CI, not device-tested (DP138).
 
+**297. Extract from an archive inside an archive.** Amends Decision 296, which hid the extract buttons for an archive opened from another one.
+- Cause of the earlier limit: the inner archive is a copy in the app's cache, and an extraction goes beside its archive, so the files would have landed in the cache and been removed.
+- Fix: the extraction names its destination folder. The new folder (named after the inner archive) is made in the folder that holds the outermost archive. Native `startModeIn(path, password, entries, mode, destParent)`; `startMode` is the same call with no folder named. A missing destination folder is refused.
+- The buttons are shown again for the inner archive: the selection bar extracts only the selected entries, the title bar extracts everything. The clash questions of Decision 295 apply unchanged.
+- Files: `scripts/java/ArklyArchiveBridge.java`, `src/js/explorer-archive.js`, `src/js/explorer.js`. Checked: `vite build`; the native call against a real filesystem (extracts into the named folder, refuses a missing one); the screens not run; not run through CI, not device-tested (DP139).
+

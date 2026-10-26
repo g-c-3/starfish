@@ -15,8 +15,9 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Owner requests and Decision 295: Open with for one file inside an archive; Compress (ZIP or 7z, three levels, ZIP password) from the selection bar; extract asks Overwrite or Create new folder when the folder exists, with a replace-all box. New native class `ArklyPackBridge`; extraction job gained merge, replace and a wait-for-answer state. 7z has no password (library limit, stated in the form). Native logic ran against a real filesystem with stand-ins for the zip and 7z libraries; `vite build` passes; not run through CI.
 - Owner confirmed DP135, DP136, DP137: Phases 32 and 33 closed.
 - Decision 296 (owner request): archives inside archives open in the Arkly archive browser (stack, read only) or the phone's apps, replacing the "Extract this archive first" notice; pull to refresh in folder lists, drive list and trash, not inside archives; a scroll handle on every explorer list. `vite build` passes; the two new modules ran against simulated touches; not run through CI.
-Open: DP138.
-Next session start point: the DP138 result; then the next incomplete roadmap item.
+- Decision 297 (owner request, from screenshots): the selection bar inside an archive that was opened from another archive had no extract button. The inner archive is a cache copy, so extraction now names its destination folder (the folder holding the outermost archive); the buttons show for inner archives. Native check ran on a real filesystem; `vite build` passes; not run through CI.
+Open: DP138, DP139.
+Next session start point: the DP138 and DP139 results; then the next incomplete roadmap item.
 
 ---
 
