@@ -3193,3 +3193,19 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Word and character counts update 150 ms after the last change.
 - Not done: tabs, a line-number switch for notes, markdown colours.
 - Files: `src/js/codeeditor.js`, `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; note mode ran under a DOM stand-in; not run through CI, not device-tested (DP134). Unproven on the WebView: keyboard behaviour on toolbar taps, spell check and capitals, draft commit after a lock.
+
+**293. Unknown file types in the File explorer.** Amends Decision 211's rule that anything outside the viewer kinds goes to another app.
+- Cause: `.cpp` was not in the text list, so it went to the app chooser. Fix: the text list gained common source and config extensions (C and C++ family, C#, Go, Rust, PHP, Ruby, Swift, Dart, Lua, Perl, R, Scala, Gradle, Kotlin script, properties, TOML, batch and shell variants, TeX, JSX/TSX, Vue, Svelte, SCSS, Less, env, diff, patch, assembler, make files).
+- A file is unknown when it is in no kind list and its extension has no entry in the type table (`isUnknownType`). Opening one asks "Open this file how?": Arkly editor (text viewer, Decisions 288, 290) or Other apps. Back, an outside tap or a lock does nothing. Known types without a viewer (documents, packages, e-books) do not ask.
+- A file that is not text opened in the editor shows the existing "not a text file" notice. Size limits of Decision 290 apply. Files from an archive keep read-only.
+- No highlighting for the new extensions: they open as plain text with line numbers. A language package needs a pinned dependency of its own.
+- Files: `src/js/explorer.js`. `vite build` passes; not run through CI, not device-tested (DP135).
+
+**294. Syntax colours, files that are not text, and Open with.** Extends Decisions 288 and 293.
+- Colours: official packages `lang-cpp` 6.0.3, `lang-go` 6.0.1, `lang-rust` 6.0.2, `lang-php` 6.0.2, `lang-sql` 6.10.0, `lang-sass` 6.0.2 (scss, sass), `lang-less` 6.0.2; `@codemirror/legacy-modes` 6.5.4 for C#, Kotlin, Scala, Dart, Ruby, Swift, Lua, Perl, R, shell, TOML, PowerShell, properties, diff, CMake, Gradle (Groovy), TeX, assembler. Vue and Svelte use the HTML colours. Every version, direct and transitive, is at least 14 days old; `package-lock.json` gained 13 packages and changed none. The editor chunk grew to about 1.1 MB (392 kB gzipped); it still loads only when a text file or note opens. No network calls added.
+- Colour map gained inserted, deleted, definition, label, standard name, macro and operator tags so the legacy modes show colour.
+- A file with a NUL byte shows "This is not a text file." with two choices: Open in Arkly editor or Other apps. The editor shows it read-only with a banner (a save could not restore the bytes); Other apps lists the phone's apps.
+- A file with no extension takes the text route directly, so a text file opens at once and a binary one gets the choice above. Unknown types with an extension still ask first (Decision 293).
+- Open with: one selected file in a folder shows an Open with button in the selection bar; two or more files, a folder, the trash and archive views hide it. The sheet offers the Arkly viewer for the kind (text editor, image viewer, PDF viewer, player, document, sheet or slide viewer, archive browser) or Phone apps, which lists the apps for the file's type. A kind without an Arkly viewer opens the phone's list directly.
+- Files: `src/js/codeeditor.js`, `src/js/explorer.js`, `src/js/explorer-view.js`, `src/index.html`, `src/css/style.css`, `package.json`, `package-lock.json`. `vite build` passes; every language parsed and coloured a sample under a DOM stand-in; not run through CI, not device-tested (DP136).
+

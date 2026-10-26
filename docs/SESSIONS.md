@@ -9,8 +9,11 @@ Most recent first. Numbered, no dates (see TRACK.md).
 Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. DP133 result not reported.
 - Phase 29 stage 3 and Decision 292: Home and Vault note editor (`openTextEditor`) now runs on the code editor in note mode, replacing the text box. Toolbar: Undo, Redo, Find, Go to, Wrap, A-, A+. Drafts (Decision 177) and the Discard question (Decision 133) keep their rules. `codeeditor.js` gained `kind` ('file' or 'note'), per-kind wrap and size, `setEditing(on, focus)`. The editor is destroyed when the screen closes.
 - `vite build` passes; note mode smoke-tested under a DOM stand-in (line-ending normalisation, dirty, undo and redo, placeholder, kind separation, destroy); `app.js` wiring, lock paths and the keyboard behaviour on the real WebView not run; not run through CI.
-Open: DP133; DP134.
-Next session start point: the DP133 and DP134 results; fix what DP134 finds, then close Phase 29.
+- Owner confirmed DP133 and DP134. Phases 29 and 31 closed.
+- Phase 32 (owner request) and Decision 293: a .cpp file offered the app chooser instead of the editor. Cause: the text extension list lacked it. Fix: list extended; a file of unknown type asks Arkly editor or Other apps (explorer and archive copies). `vite build` passes; not run through CI.
+- Owner requests and Decision 294: syntax colours for the new extensions (seven official language packages and the legacy modes, pinned, all at least 14 days old); a file that is not text offers Open in Arkly editor (read-only) or Other apps; a file with no extension takes the text route; an Open with button in the selection bar for one selected file. `.css` was already in the list with colours. `vite build` passes; every language coloured a sample under a DOM stand-in; not run through CI.
+Open: DP135, DP136.
+Next session start point: the DP135 and DP136 results; then the next incomplete roadmap item.
 
 ---
 
