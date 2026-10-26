@@ -983,12 +983,16 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       const folder = baseNameOf(e.name);
       let exists = false;
       try { exists = (await fsApi.readdir(intoDir || parentOf(e.path))).some((x) => x.isDir && x.name === folder); } catch { exists = false; }
-      if (exists && api.startMode) {
+      if (exists && api.startMode) { // the Overwrite question is the confirmation
         st.view = 'extract'; st.gen++;
         chrome({ title: 'Extracting', folder: false });
         mode = await askExtractClash(folder);
         if (closed) return;
         if (mode === null) { await returnView(); return; }
+      } else if (ui.askYesNo) { // Decision 298: nothing is extracted before the person agrees
+        const what = entries ? plural(entries.length, 'selected item') : 'everything';
+        const yes = await ui.askYesNo({ title: 'Extract?', text: `Extract ${what} from "${e.name}" into a new folder named "${folder}" ${intoDir ? 'beside the first archive' : 'beside it'}?`, yes: 'Extract', no: 'Cancel' });
+        if (!yes || closed) return;
       }
     }
     st.view = 'extract'; st.gen++;
