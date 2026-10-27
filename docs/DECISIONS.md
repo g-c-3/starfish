@@ -3288,3 +3288,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - File explorer text view keeps its own line numbers, one per line.
 - Files: `src/js/app.js`, `src/js/codeeditor.js`, `src/js/explorer-view.js`, `src/css/style.css`. `vite build` passes; the row arithmetic, gutter, Find toggle, clear buttons and Rename wiring ran against a stand-in page that has no layout; real row heights, wrapping and Go to not run; not run through CI, not device-tested (DP146).
 
+**305. Clear buttons, row-number baseline, line count.** Amends Decision 304 after a device check.
+- Cause: the clear buttons used a text glyph, which sits low in its box and looked plain. They are now drawn icons in a small round filled button, centred on their field.
+- Cause: the row numbers were smaller text in a line box of their own, so their baseline sat above the text's. Each number now sits in a line at the text's own font size and the digits are 0.62 em inside it, so every row shares the text's baseline at any zoom.
+- The footer of the note editor adds the line count: "N words · N characters · N lines". Lines are rows as numbered beside the text, so the count equals the last number and follows wrapping and zoom. The File explorer text view counts lines.
+- Fix found on the way: the total used by Go to line and the number column's width included the editor's padding (about two rows too many); it now measures the document alone.
+- Files: `src/js/codeeditor.js`, `src/js/app.js`, `src/css/style.css`. `vite build` passes; the markers, icon buttons, row count and footer text ran against a stand-in page without layout; alignment is judged on a device; not run through CI (DP147).
+

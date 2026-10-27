@@ -25,8 +25,9 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Owner confirmed DP144 (note editor). Decision 303 (owner request): Rename button beside Save in the note editor; the five row buttons hidden in Home and the Vault; Rename in the selection bar: one item through the Save dialog, several through a numbering sheet (Number, Add text, Find & replace, letters, preview, warning). `vite build` passes; naming rules and sheet ran against a stand-in page; not run through CI.
 - Owner confirmed DP141 to DP145: Phases 35, 36 and 38 closed.
 - Decision 304 (owner request, from screenshots): editor Rename opens the full Save dialog; Details button removed; Find panel gets a clear button in each field, no corner close button, and the Find tool toggles it; notes show row numbers (every wrapped row numbered, continuous); Go to line follows them. `vite build` passes; logic ran against a stand-in page without layout; not run through CI.
-Open: DP146.
-Next session start point: the DP146 result (row numbers need a real device); then the next incomplete roadmap item.
+- Decision 305 (owner request, from a screenshot): Find and Replace clear buttons are icons centred in their fields; row numbers share the text's baseline; the footer adds a line count equal to the last row number; the row total no longer includes padding. `vite build` passes; logic ran against a stand-in page without layout; not run through CI.
+Open: DP146, DP147.
+Next session start point: the DP146 and DP147 results (row numbers need a real device); then the next incomplete roadmap item.
 
 ---
 
