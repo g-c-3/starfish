@@ -5567,7 +5567,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isVault) armVaultAutoLock();
       redraw();
     });
-    attachGridPinch(document.getElementById(isVault ? 'vault-folder-list' : 'folder-list'), {
+    const listBox = document.getElementById(isVault ? 'vault-folder-list' : 'folder-list');
+    attachGridPinch(document.getElementById(isVault ? 'vault-screen' : 'main-screen'), {
+      grid: () => { const g = listBox.querySelector('.thumb-grid'); return g && g.offsetParent ? g : null; }, // null while the folder is hidden
       getCols: () => galleryCols,
       onCols: async (n) => { galleryCols = n; await metaSet('gallery_cols', String(n)); if (isVault) armVaultAutoLock(); }
     });

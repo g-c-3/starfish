@@ -16,11 +16,10 @@ let blockUntil = 0;
 const renew = () => { blockUntil = Date.now() + 500; };
 export const pinchBlocked = () => Date.now() < blockUntil;
 
-// root: the list container (stays in the page; its grid is replaced on each draw).
-// getCols(): current value. onCols(n): once, when the fingers lift.
-export function attachGridPinch(root, { getCols, onCols }) {
+// root: the whole screen, so a pinch works on the empty space around and below the tiles too.
+// grid(): the grid element while a Gallery grid is on screen, else null. getCols(): current value. onCols(n): once, when the fingers lift.
+export function attachGridPinch(root, { grid, getCols, onCols }) {
   let base = null, cur = 0;
-  const grid = () => root.querySelector('.thumb-grid');
   const d = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const finish = () => {
     const b = base;
