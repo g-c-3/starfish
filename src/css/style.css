@@ -1177,9 +1177,10 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .ev-code .cm-panels label { font-size: 12.5px; margin-right: 8px; white-space: nowrap; }
 .ev-code .cm-panels button[name="close"] { display: none; } /* the Find tool closes the panel */
 .ev-code .cm-panels .ev-fw { position: relative; display: block; }
-.ev-code .cm-panels .ev-fw input { width: 100%; padding-right: 38px; margin-right: 0; }
-.ev-code .cm-panels .ev-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 26px; min-height: 26px; height: 26px; margin: 0; padding: 0; border: none; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--muted); font-size: 19px; line-height: 1; }
-.ev-code .cm-panels .ev-clear:active { background: var(--surface); color: var(--fg); }
+.ev-code .cm-panels .ev-fw input { width: 100%; margin: 2px 0; padding-right: 42px; }
+.ev-code .cm-panels .ev-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 24px; min-width: 24px; height: 24px; min-height: 24px; margin: 0; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--fg); }
+.ev-code .cm-panels .ev-clear svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; pointer-events: none; }
+.ev-code .cm-panels .ev-clear:active { background: color-mix(in srgb, var(--muted) 38%, transparent); }
 .cm-thumb { position: absolute; right: 2px; top: 0; width: 22px; border-radius: 11px; background: color-mix(in srgb, var(--brand) 55%, transparent); border-left: 8px solid transparent; background-clip: padding-box; opacity: 0; transition: opacity .18s; touch-action: none; z-index: 5; pointer-events: none; }
 .cm-thumb.on { opacity: 1; pointer-events: auto; }
 :root { --cm-keyword: #7c3aed; --cm-string: #0f7b4b; --cm-number: #c2410c; --cm-comment: #7a7690; --cm-type: #0369a1; --cm-prop: #b4236b; --cm-muted: #6b6785; --cm-invalid: #dc2626; }
