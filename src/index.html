@@ -14,6 +14,8 @@
       <symbol id="i-voice" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
       <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/></symbol>
       <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M8.5 14h7M8.5 17.5h5"/></symbol>
       <symbol id="i-reminder" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
       <symbol id="i-location" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
@@ -151,7 +153,6 @@
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick).</p>
         </div>
         <button id="folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
-        <div id="gallery-bar" class="gallery-bar hidden"><div class="seg" id="gallery-view-seg" role="group" aria-label="Gallery layout"><button type="button" data-gv="grid" class="active">Grid</button><button type="button" data-gv="list">List</button></div><span class="gallery-hint" id="gallery-hint"></span></div>
         <div id="money-summary" class="money-summary hidden"></div>
         <div id="folder-list"></div>
 
@@ -428,7 +429,6 @@
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick). The Vault then writes a temporary readable copy for that app, removed on the next launch or resume.</p>
         </div>
         <button id="vault-folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
-        <div id="vault-gallery-bar" class="gallery-bar hidden"><div class="seg" id="vault-gallery-view-seg" role="group" aria-label="Gallery layout"><button type="button" data-gv="grid" class="active">Grid</button><button type="button" data-gv="list">List</button></div><span class="gallery-hint" id="vault-gallery-hint"></span></div>
         <div id="vault-money-summary" class="money-summary hidden"></div>
         <div id="vault-folder-list"></div>
       </div>
