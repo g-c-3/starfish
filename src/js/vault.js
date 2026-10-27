@@ -180,7 +180,7 @@ const VAULT_FILE_TYPES = ['voice', 'image', 'pdf', 'file']; // the types whose b
 
 // Index rows leave the file bytes out: file types return NULL for encrypted_body plus its length, so the bridge never
 // carries a file just to list it. Small types (text, money, location, reminder) still return their body.
-const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, file_path, file_key, encrypted_label, encrypted_description, extension, created_at,
+const VAULT_INDEX_SQL = `SELECT rowid AS rid, id, type, label, file_path, file_key, encrypted_label, encrypted_description, extension, created_at, updated_at,
   fire_at, repeat_rule, completed_at, snoozed_until, is_private, deleted_at, encrypted_meta, LENGTH(encrypted_body) AS body_len,
   CASE WHEN type IN ('voice','image','pdf','file') THEN NULL ELSE encrypted_body END AS encrypted_body
   FROM entries`;
@@ -192,7 +192,7 @@ const INDEX_BLOB_KEY = 'vault_index_blob', TEXT_BLOB_KEY = 'vault_text_blob'; //
 const FP_TAIL = 20, SAVE_DELAY_MS = 1500, REBUILD_BULK_MIN = 50, NOTICE_MIN = 10;
 const FP_SQL = `substr(CAST(IFNULL(encrypted_label,'') AS TEXT),-${FP_TAIL}) || '|' || substr(CAST(IFNULL(encrypted_description,'') AS TEXT),-${FP_TAIL}) || '|' ||
   CASE WHEN type IN ('voice','image','pdf','file') THEN substr(CAST(IFNULL(encrypted_meta,'') AS TEXT),-${FP_TAIL}) ELSE substr(CAST(IFNULL(encrypted_body,'') AS TEXT),-${FP_TAIL}) END`;
-const VAULT_LIGHT_SQL = `SELECT rowid AS rid, id, type, extension, file_path, created_at, fire_at, repeat_rule, completed_at, snoozed_until, deleted_at, ${FP_SQL} AS fp FROM entries`;
+const VAULT_LIGHT_SQL = `SELECT rowid AS rid, id, type, extension, file_path, created_at, updated_at, fire_at, repeat_rule, completed_at, snoozed_until, deleted_at, ${FP_SQL} AS fp FROM entries`;
 const tail = (v) => String(v ?? '').slice(-FP_TAIL);
 const labelFp = (row) => tail(row.encrypted_label); // the Vault Trash list has no other encrypted column
 function rowFp(row) {
@@ -337,7 +337,7 @@ async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null)
     }
   }
   if (row.type === 'note' || isFile) vaultTexts.set(row.id, { fp, t: text });
-  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, filePath: row.file_path || null, tags, description, sizeBytes, money, location, createdAt: row.created_at,
+  return { id: row.id, rid: row.rid, type: row.type, label, extension: row.extension || null, filePath: row.file_path || null, tags, description, sizeBytes, money, location, createdAt: row.created_at, updatedAt: row.updated_at || row.created_at,
     fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp };
 }
 
@@ -345,7 +345,7 @@ async function indexEntryFromRow(db, privateSessionKey, row, tagsByEntry = null)
 // notification action can change them while the Vault is locked.
 function indexEntryFromCache(row, c, tags) {
   return { id: row.id, rid: row.rid, type: row.type, label: c.l, extension: row.extension || null, filePath: row.file_path || null, tags, description: c.d || '', sizeBytes: c.s || 0,
-    money: c.m || null, location: c.loc || null, createdAt: row.created_at,
+    money: c.m || null, location: c.loc || null, createdAt: row.created_at, updatedAt: row.updated_at || row.created_at,
     fire_at: row.fire_at, repeat_rule: row.repeat_rule, completed_at: row.completed_at, snoozed_until: row.snoozed_until, fp: row.fp };
 }
 

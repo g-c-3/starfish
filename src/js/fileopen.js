@@ -20,11 +20,18 @@ const MIME_BY_EXT = {
   odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet',
   odp: 'application/vnd.oasis.opendocument.presentation',
   zip: 'application/zip', gz: 'application/gzip', tar: 'application/x-tar', '7z': 'application/x-7z-compressed',
-  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  bmp: 'image/bmp', ico: 'image/x-icon', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff',
   mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac',
-  mp4: 'video/mp4', mkv: 'video/x-matroska', webm: 'video/webm', mov: 'video/quicktime', '3gp': 'video/3gpp',
+  mp4: 'video/mp4', m4v: 'video/x-m4v', mkv: 'video/x-matroska', webm: 'video/webm', mov: 'video/quicktime', '3gp': 'video/3gpp', '3g2': 'video/3gpp2',
+  avi: 'video/x-msvideo', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', mpg: 'video/mpeg', mpeg: 'video/mpeg', ogv: 'video/ogg', mts: 'video/mp2t', m2ts: 'video/mp2t',
   epub: 'application/epub+zip', apk: 'application/vnd.android.package-archive', vcf: 'text/x-vcard', ics: 'text/calendar'
 };
+
+// Video extensions of the Gallery (Decision 306). Decides the poster frame and the player; the phone's own app takes over when the
+// WebView cannot decode the codec.
+const VIDEO_EXTS = new Set(['mp4', 'm4v', 'mkv', 'webm', 'mov', '3gp', '3g2', 'avi', 'wmv', 'flv', 'mpg', 'mpeg', 'ogv', 'mts', 'm2ts']);
+function isVideoExt(ext) { return VIDEO_EXTS.has(String(ext || '').replace(/^\./, '').toLowerCase()); }
 
 // Unknown or missing extension gives '*/*': Android then lists every app that accepts a file.
 function mimeForExtension(ext) {
@@ -81,4 +88,4 @@ async function openDecryptedFile(id, extension, base64) {
   await launch(uri, extension);
 }
 
-export { mimeForExtension, openStoredFile, openDecryptedFile, plainUriFor, purgeOpenCopies };
+export { mimeForExtension, isVideoExt, openStoredFile, openDecryptedFile, plainUriFor, purgeOpenCopies };

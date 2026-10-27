@@ -23,7 +23,8 @@ import { openMoneyForm, openRepayDialog } from './moneyui.js';
 import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
-import { openStoredFile, openDecryptedFile, purgeOpenCopies } from './fileopen.js';
+import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
+import { DEFAULT_COLS, BIG_THUMB_COLS, clampCols, colsLabel, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
@@ -42,10 +43,10 @@ import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, bu
 
 
 const CATEGORY_LABELS = {
-  notes: 'Notes', private_vault: 'Private Vault', voice: 'Voice', images: 'Images', pdfs: 'PDFs',
+  notes: 'Notes', private_vault: 'Private Vault', voice: 'Voice', images: 'Gallery', pdfs: 'PDFs',
   reminders: 'Reminders', locations: 'Locations', money: 'Money', files: 'Files', expenses: 'Expenses', tags: 'Tags', app_settings: 'App Settings'
 };
-const VAULT_TYPE_LABELS = { note: 'Notes', voice: 'Voice', image: 'Image', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
+const VAULT_TYPE_LABELS = { note: 'Notes', voice: 'Voice', image: 'Gallery', pdf: 'PDF', reminder: 'Reminder', location: 'Location', money: 'Money', file: 'Files' };
 
 initPasswordEyes(); // eye control on every password field (Decision 200)
 
@@ -1438,6 +1439,7 @@ function audioMimeForExtension(ext) {
   return { aac: 'audio/aac', webm: 'audio/webm', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext] || 'audio/aac';
 }
 function mimeTypeForVaultRow(row) {
+  if (row.type === 'image') { const m = mimeForExtension(row.extension); return m === '*/*' ? 'application/octet-stream' : m; } // Gallery: any image or video (Decision 306)
   const byExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
     pdf: 'application/pdf', aac: 'audio/aac', webm: 'audio/webm', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
   return byExt[row.extension] || 'application/octet-stream';
@@ -1977,17 +1979,18 @@ function moneyRowMeta(d) {
   const state = st === 'partly returned' ? `${Money.STATUS_LABELS[st]}, ${Money.formatAmount(Money.remaining(d), currencySymbol)} left` : (st ? Money.STATUS_LABELS[st] : '');
   return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
 }
-function rowMeta(row) {
+// inFolder: the list sits inside its own category, so the category name is left out. The time is the last change (Decision 306).
+function rowMeta(row, inFolder = false) {
   if (row.type === 'money' || row.type === 'expense') {
     const d = Money.fromRow(row);
     if (d) return moneyRowMeta(d);
   }
-  if (row.type !== 'reminder') return { meta: [typeLabelFor(row.type), formatEntryDate(row.created_at)].filter(Boolean).join(' · '), done: false };
+  if (row.type !== 'reminder') return { meta: [inFolder ? '' : typeLabelFor(row.type), formatEntryDate(row.updated_at || row.created_at)].filter(Boolean).join(' · '), done: false };
   const st = reminderStatus(row);
   const when = formatEntryDate(reminderNextDue(row));
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
   const timing = st === 'snoozed' ? `Snoozed until ${formatEntryDate(row.snoozed_until)}` : `${lead} ${when}`;
-  return { meta: ['Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
+  return { meta: [inFolder ? '' : 'Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
 }
 // Files show their extension (PDF, DOCX, ZIP) in place of the folder icon; no extension keeps the icon.
 function rowIconHtml(type, ext) {
@@ -1998,10 +2001,14 @@ function rowIconHtml(type, ext) {
 }
 // The five buttons under a row (edit, share, download, move, delete) are not drawn (Decision 303): Edit is a tap on the row, and
 // the rest are in the selection bar and the viewers. actionPrefix is kept so the callers and the idle handlers need no change.
-function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '' }, actionPrefix = null) {
+// thumb: a Gallery list row, the icon is replaced by the item's thumbnail (filled by loadThumbsInto).
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false }, actionPrefix = null) {
+  const icon = thumb
+    ? `<span class="row-icon row-thumb${isVideoExt(ext) ? ' is-video' : ''}" data-id="${escapeHtml(id)}">${iconSvg('image')}</span>`
+    : rowIconHtml(type, ext);
   return `
     <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
-      ${rowIconHtml(type, ext)}
+      ${icon}
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
         <span class="row-meta">${escapeHtml(meta)}</span>
@@ -2547,7 +2554,7 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
 // encrypted under the Vault key (Decision 254). lockVault() empties the Vault ones from this map.
 const THUMB_PX = 320;
 const thumbMem = new Map(); // 'h:<id>' | 'v:<id>' -> data URL
-function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k.startsWith('v:')) thumbMem.delete(k); }
+function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k[0] === 'v') thumbMem.delete(k); }
 let thumbActive = 0;
 const thumbQueue = [];
 function runThumbJob(job) { // two decodes at a time: full-size photos are large
@@ -2574,49 +2581,70 @@ async function downscaleToDataUrl(blobUrl, maxSide) {
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.72);
 }
+// A video's thumbnail is one frame near the start, drawn after a seek.
+async function videoFrameToDataUrl(blobUrl, maxSide) {
+  const v = document.createElement('video');
+  v.muted = true; v.preload = 'auto'; v.playsInline = true;
+  try {
+    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('Video not readable')); v.src = blobUrl; });
+    if (v.duration > 0.5) {
+      await new Promise((res) => { v.onseeked = res; setTimeout(res, 2000); v.currentTime = Math.min(1, v.duration / 4); });
+    }
+    const w = v.videoWidth, h = v.videoHeight;
+    if (!w || !h) throw new Error('No picture in this video');
+    const k = Math.min(1, maxSide / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.72);
+  } finally { v.removeAttribute('src'); v.load(); }
+}
 // Full-size blob URL for an image entry; the caller revokes it.
 async function imageBlobUrl(item, isVault) {
   if (isVault) return (await openVaultEntry(item.id)).blobUrl;
   const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
   if (!row) throw new Error('Image not found');
-  return URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: mimeTypeForVaultRow({ extension: row.extension }) }));
+  return URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: mimeTypeForVaultRow({ type: 'image', extension: row.extension }) }));
 }
-async function thumbFor(item, isVault) {
-  const key = `${isVault ? 'v' : 'h'}:${item.id}`;
+// big: a larger picture for wide tiles (1 or 2 per row). The stored Vault thumbnail is the small one, so a big one is made from the file.
+async function thumbFor(item, isVault, big = false) {
+  const key = `${isVault ? 'v' : 'h'}${big ? 'L' : ''}:${item.id}`;
+  const px = big ? 800 : THUMB_PX;
   if (thumbMem.has(key)) return thumbMem.get(key);
   let dataUrl;
   const ref = isVault ? { id: item.id, filePath: ((getVaultIndex() || []).find((e) => e.id === item.id) || item).filePath || null } : null;
-  if (isVault && privateSessionKey) { // stored thumbnail: no decode of the full image
+  if (isVault && privateSessionKey && !big) { // stored thumbnail: no decode of the full image
     dataUrl = await getVaultThumb(db, privateSessionKey, ref);
     if (dataUrl && privateSessionKey) { thumbMem.set(key, dataUrl); return dataUrl; }
   }
   const url = await imageBlobUrl(item, isVault);
-  try { dataUrl = await downscaleToDataUrl(url, THUMB_PX); } finally { URL.revokeObjectURL(url); }
+  try { dataUrl = await (isVideoExt(item.extension) ? videoFrameToDataUrl(url, px) : downscaleToDataUrl(url, px)); } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
-  if (isVault) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
+  if (isVault && !big) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
   return dataUrl;
 }
 let thumbObserver = null;
 // Fills a grid of .thumb-tile[data-id] as tiles scroll into view.
-function loadThumbsInto(container, items, isVault) {
+function loadThumbsInto(container, items, isVault, big = false) {
   if (thumbObserver) thumbObserver.disconnect();
   const byId = new Map(items.map((i) => [i.id, i]));
   const load = async (tile) => {
     const item = byId.get(tile.dataset.id);
     if (!item) return;
     try {
-      const src = await runThumbJob(async () => (tile.isConnected ? thumbFor(item, isVault) : null));
+      const src = await runThumbJob(async () => (tile.isConnected ? thumbFor(item, isVault, big) : null));
       if (src && tile.isConnected) tile.innerHTML = `<img src="${src}" alt="" draggable="false">`;
     } catch { /* tile keeps its placeholder */ }
   };
   thumbObserver = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.isIntersecting) { thumbObserver.unobserve(e.target); load(e.target); }
   }, { rootMargin: '200px' });
-  container.querySelectorAll('.thumb-tile').forEach((t) => thumbObserver.observe(t));
+  container.querySelectorAll('.thumb-tile, .row-thumb').forEach((t) => thumbObserver.observe(t));
 }
-function thumbGridHtml(items) {
-  return `<div class="thumb-grid">${items.map((i) => `<button type="button" class="thumb-tile" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg('image')}</button>`).join('')}</div>`;
+function thumbGridHtml(items, cols = DEFAULT_COLS) {
+  const dense = cols >= 7 ? 2 : cols >= 5 ? 1 : 0;
+  return `<div class="thumb-grid" style="--cols:${cols}" data-cols="${cols}" data-dense="${dense}">${items.map((i) => `<button type="button" class="thumb-tile${isVideoExt(i.extension) ? ' is-video' : ''}" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg(isVideoExt(i.extension) ? 'play' : 'image')}</button>`).join('')}</div>`;
 }
 
 // Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
@@ -3678,12 +3706,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // button, a universal New asks for a type, and the list under the search box is search results only.
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
   // Vault Money rows show kind, amount, status and date from the unlocked index; the label is the readable summary, as on Home (Decision 143).
-  function vaultRowProps(e) {
-    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e) : rowMeta({ type: e.type, created_at: e.createdAt });
+  function vaultRowProps(e, inFolder = false) {
+    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e, inFolder) : rowMeta({ type: e.type, created_at: e.createdAt, updated_at: e.updatedAt }, inFolder);
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items) {
-    return items.map((e) => entryRowHtml(vaultRowProps(e), 'vault')).join('') || emptyStateHtml('folder');
+    return items.map((e) => entryRowHtml(vaultRowProps(e, true), 'vault')).join('') || emptyStateHtml('folder');
   }
 
   function renderVaultCounts() {
@@ -3698,14 +3726,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderVaultFolderList() {
     const container = document.getElementById('vault-folder-list');
     const items = browseVault(openVaultFolderType);
-    if (openVaultFolderType === 'image') { // thumbnail grid, decoded in memory only (Decision 105)
-      container.innerHTML = items.length ? thumbGridHtml(items) : emptyStateHtml('folder');
-      container.querySelectorAll('.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
-        await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), true);
-        renderVault();
-      }));
-      loadThumbsInto(container, items, true);
-      paintSelection();
+    if (openVaultFolderType === 'image') { // Gallery, decoded in memory only (Decisions 105, 306)
+      renderGallery(container, items, true, async () => renderVault());
       return;
     }
     container.innerHTML = vaultRowsHtml(items);
@@ -3838,7 +3860,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const files = await readPicked(picked);
             const single = files.length === 1;
             const d = await openSaveDialog({
-              heading: single ? `Save ${typeLabelFor(type).toLowerCase()}` : `Save ${files.length} files`,
+              heading: single ? (type === 'image' ? 'Save to Gallery' : `Save ${typeLabelFor(type).toLowerCase()}`) : `Save ${files.length} files`,
               defaultName: single ? files[0].name : (VAULT_TYPE_LABELS[type] || type),
               count: files.length, isVault: true, discardLabel: 'Discard'
             });
@@ -3870,6 +3892,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
     await showVoiceSwitch('vault-voice-out-wrap', 'vault-voice-out-seg', type);
+    document.getElementById('vault-gallery-bar').classList.toggle('hidden', type !== 'image');
+    if (type === 'image') await loadGalleryPrefs();
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -4090,7 +4114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // records live via the microphone; file/image/pdf still use a file picker, now with correct
   // accept filters too (also missing before — pdf/image accepted literally any file type).
   function acceptForType(type) {
-    if (type === 'image') return 'image/*';
+    if (type === 'image') return 'image/*,video/*'; // Gallery: any image or video (Decision 306)
     if (type === 'pdf') return 'application/pdf,.pdf';
     return ''; // 'file' (generic) is intentionally unrestricted
   }
@@ -4262,7 +4286,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Reads picked files to base64 (shared by the Home and Vault pickers).
   const readPicked = (picked) => Promise.all(picked.map((file) => new Promise((res) => {
     const r = new FileReader();
-    r.onloadend = () => res({ name: file.name, fileData: r.result.split(',')[1], extension: file.name.split('.').pop() });
+    // A picture or video with no extension in its name takes one from its type.
+    const media = /^(image|video)\//.test(file.type) && !/\.[A-Za-z0-9]+$/.test(file.name);
+    r.onloadend = () => res({ name: file.name, fileData: r.result.split(',')[1], extension: media ? file.type.split('/')[1].split(';')[0].replace('quicktime', 'mov') : file.name.split('.').pop() });
     r.readAsDataURL(file);
   })));
 
@@ -4502,7 +4528,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Picked files keep the name they have on the phone (Decision 91). Several files: the dialog
         // offers keep-each-name or one common name, numbered (Decision 84).
         const d = await openSaveDialog({
-          heading: single ? `Save ${typeLabelFor(type).toLowerCase()}` : `Save ${files.length} files`,
+          heading: single ? (type === 'image' ? 'Save to Gallery' : `Save ${typeLabelFor(type).toLowerCase()}`) : `Save ${files.length} files`,
           defaultName: single ? files[0].name : (VAULT_TYPE_LABELS[type] || type),
           count: files.length, discardLabel: 'Discard'
         });
@@ -4548,19 +4574,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderMoneySummary();
     if (!openFolderType) return;
     const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
-    if (openFolderType === 'image') { // thumbnail grid (Decision 105)
-      const box = document.getElementById('folder-list');
-      box.innerHTML = rows.length ? thumbGridHtml(rows) : emptyStateHtml('folder');
-      box.querySelectorAll('.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
-        await openImageViewer(rows, rows.findIndex((r) => r.id === t.dataset.id), false);
-        await renderMainTimeline();
-      }));
-      loadThumbsInto(box, rows, false);
-      paintSelection();
+    if (openFolderType === 'image') { // Gallery: grid or list (Decisions 105, 306)
+      renderGallery(document.getElementById('folder-list'), rows, false, renderMainTimeline);
       return;
     }
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row, true)
     }, 'main')).join('') || emptyStateHtml('folder');
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -4624,6 +4643,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
     await showVoiceSwitch('voice-out-wrap', 'voice-out-seg', type);
+    document.getElementById('gallery-bar').classList.toggle('hidden', type !== 'image');
+    if (type === 'image') await loadGalleryPrefs();
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
@@ -4695,7 +4716,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       root.addEventListener('pointercancel', end);
       root.addEventListener('contextmenu', (e) => { if (rowOf(e.target)) e.preventDefault(); });
       root.addEventListener('click', (e) => {
-        if (swallow) { swallow = false; e.preventDefault(); e.stopPropagation(); return; }
+        if (swallow || pinchBlocked()) { swallow = false; e.preventDefault(); e.stopPropagation(); return; }
         const row = rowOf(e.target);
         if (!selection || !row || e.target.closest('.row-actions')) return;
         e.preventDefault(); e.stopPropagation(); // capture phase: the normal open handler never runs while selecting
@@ -5512,6 +5533,55 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Full-screen image viewer over a list (the folder's images, in grid order): swipe or arrows to move, pinch and
   // double-tap to zoom. One full-size blob URL at a time, revoked on every change and on close or lock (Decision 105).
+  // ---- Gallery layout (Decision 306): grid or list, and items per row by pinch. Both choices are kept in meta (gallery_view, gallery_cols). ----
+  let galleryView = 'grid', galleryCols = DEFAULT_COLS;
+  async function loadGalleryPrefs() {
+    galleryView = (await metaGet('gallery_view', 'grid')) === 'list' ? 'list' : 'grid';
+    galleryCols = clampCols(await metaGet('gallery_cols', String(DEFAULT_COLS)));
+  }
+  const galleryIds = (isVault) => (isVault ? ['vault-gallery-bar', 'vault-gallery-view-seg', 'vault-gallery-hint'] : ['gallery-bar', 'gallery-view-seg', 'gallery-hint']);
+  function paintGalleryBar(isVault) {
+    const [barId, segId, hintId] = galleryIds(isVault);
+    document.getElementById(segId).querySelectorAll('button[data-gv]').forEach((b) => b.classList.toggle('active', b.dataset.gv === galleryView));
+    document.getElementById(hintId).textContent = galleryView === 'grid' ? `${colsLabel(galleryCols)} · pinch to resize` : '';
+  }
+  function renderGallery(box, items, isVault, reopen) {
+    paintGalleryBar(isVault);
+    const list = galleryView === 'list';
+    box.innerHTML = !items.length ? emptyStateHtml('folder')
+      : list ? items.map((i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) })).join('')
+      : thumbGridHtml(items, galleryCols);
+    box.querySelectorAll(list ? '.entry-row' : '.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
+      await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), isVault);
+      await reopen();
+    }));
+    loadThumbsInto(box, items, isVault, !list && galleryCols <= BIG_THUMB_COLS);
+    paintSelection();
+  }
+  for (const isVault of [false, true]) {
+    const [barId, segId, hintId] = galleryIds(isVault);
+    const redraw = () => (isVault ? renderVault() : renderMainTimeline());
+    document.getElementById(segId).addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-gv]');
+      if (!b || b.dataset.gv === galleryView) return;
+      galleryView = b.dataset.gv === 'list' ? 'list' : 'grid';
+      await metaSet('gallery_view', galleryView);
+      if (isVault) armVaultAutoLock();
+      redraw();
+    });
+    attachGridPinch(document.getElementById(isVault ? 'vault-folder-list' : 'folder-list'), {
+      getCols: () => galleryCols,
+      onLive: (n) => { document.getElementById(hintId).textContent = `${colsLabel(n)} · pinch to resize`; if (isVault) armVaultAutoLock(); },
+      onCols: async (n) => {
+        const wasBig = galleryCols <= BIG_THUMB_COLS;
+        galleryCols = n;
+        await metaSet('gallery_cols', String(n));
+        if (wasBig !== (n <= BIG_THUMB_COLS)) redraw(); // wide tiles need the larger thumbnails
+        else paintGalleryBar(isVault);
+      }
+    });
+  }
+
   async function openImageViewer(list, startIndex, isVault) {
     const items = list.slice();
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
@@ -5532,8 +5602,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const item = await fresh(items[index]);
         items[index] = item;
         document.getElementById('viewer-title').textContent = item.label || 'Image';
+        const isVid = isVideoExt(item.extension);
         body.innerHTML = `
-          <div class="img-stage"><img class="img-full" alt="" draggable="false">
+          <div class="img-stage">${isVid ? '<video class="img-full vid-full" controls playsinline preload="metadata"></video>' : '<img class="img-full" alt="" draggable="false">'}
             <div class="img-loading">Loading…</div>
             ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
           </div>`;
@@ -5552,7 +5623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
         const render2 = () => body.isConnected && openViewerRefresh();
         if (zoom) zoom.destroy();
-        zoom = attachZoomPan(stage, img, { onSwipe: go, onActivity: arm });
+        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, onActivity: arm }); // a video keeps its own controls: no pinch or swipe on it, the arrows move on
         for (const [sel, step] of [['.img-prev', -1], ['.img-next', 1]]) {
           const b = body.querySelector(sel);
           if (!b) continue;
@@ -5583,9 +5654,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           const u = await imageBlobUrl(item, isVault);
           if (mine !== token) { URL.revokeObjectURL(u); return; } // moved on or closed while loading
           url = u;
-          await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not display this image')); img.src = u; });
+          await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
           loading.remove();
-        } catch (err) { if (mine === token) loading.textContent = String(err.message || err); }
+        } catch (err) {
+          if (mine !== token) return;
+          // A format the WebView cannot decode (for example HEIC or some video codecs): offer the phone's own app.
+          loading.classList.add('img-fail');
+          loading.innerHTML = `<span>${escapeHtml(String(err.message || err))}</span><button type="button" class="secondary-btn">Open in another app</button>`;
+          loading.querySelector('button').onclick = () => openFile(item, isVault);
+        }
       }
     });
   }

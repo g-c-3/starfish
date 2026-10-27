@@ -11,7 +11,7 @@ import * as Money from './money.js';
 import '../css/widget.css';
 
 const LINK = /^arkly:\/\/capture\/(note|voice|image|money|more)\/?$/;
-const TITLES = { note: 'Note', voice: 'Voice', image: 'Image', money: 'Money', more: 'More', reminder: 'Reminder', location: 'Location', pdf: 'PDF', file: 'File' };
+const TITLES = { note: 'Note', voice: 'Voice', image: 'Gallery', money: 'Money', more: 'More', reminder: 'Reminder', location: 'Location', pdf: 'PDF', file: 'File' };
 const ICONS = { note: 'i-note', voice: 'i-voice', image: 'i-image', money: 'i-money', more: 'i-plus', reminder: 'i-reminder', location: 'i-location', pdf: 'i-pdf', file: 'i-file' };
 const MORE_KINDS = ['reminder', 'location', 'pdf', 'file'];
 const REPEATS = [['', 'Does not repeat'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];

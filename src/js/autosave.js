@@ -46,7 +46,7 @@ function rowsOf(kind, parts, c, edit) {
     ['When', f.when], ['Person', f.person], ['Due', f.due], ['Repayments', reps ? String(reps) : ''], ...commonRows(c)];
 }
 // Voice, Image, PDF and File have no form of their own: only the details dialog of an edit (name, note, tags).
-const DETAIL_KINDS = { voice: 'Voice', image: 'Image', pdf: 'PDF', file: 'File' };
+const DETAIL_KINDS = { voice: 'Voice', image: 'Gallery', pdf: 'PDF', file: 'File' };
 const TITLES = { reminder: 'Reminder', location: 'Location', money: 'Money entry', ...DETAIL_KINDS };
 function noteOf(kind, parts, o, why) {
   const c = common(parts.save);

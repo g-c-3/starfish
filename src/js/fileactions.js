@@ -11,7 +11,7 @@ import { loadVaultEntryContent, saveVaultEntry, updateVaultFileContent, base64To
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
 import * as Money from './money.js';
 import { initFiles, readBase64, fileSize } from './files.js';
-import { plainUriFor } from './fileopen.js';
+import { plainUriFor, mimeForExtension } from './fileopen.js';
 import { repeatLabel } from './reminders.js';
 
 async function getEntryCategory(db, entryId) {
@@ -134,6 +134,7 @@ function mapLinkFor(lat, lng) {
 }
 
 function mimeTypeFor(row) {
+  if (row.type === 'image') { const m = mimeForExtension(row.extension); return m === '*/*' ? 'image/jpeg' : m; } // Gallery: images and videos (Decision 306)
   const byExt = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
     pdf: 'application/pdf', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
   return byExt[row.extension] || (row.type === 'image' ? 'image/jpeg' : row.type === 'pdf' ? 'application/pdf'
