@@ -1419,6 +1419,9 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .vid-full { pointer-events: auto; touch-action: auto; background: #000; }
 .img-fail { pointer-events: auto; display: grid; gap: 10px; justify-items: center; }
 .img-fail button { margin: 0; }
-.title-act { margin-left: auto; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; background: var(--surface-2, rgba(120, 120, 160, 0.14)); color: inherit; border: 0; }
+.title-act { margin-left: auto; width: 40px; height: 34px; padding: 0; flex: 0 0 auto; display: grid; place-items: center; background: none; border: 0; border-radius: 0; color: inherit; }
 .title-act .ic { width: 20px; height: 20px; }
-#folder-title:has(.title-act), #vault-folder-title:has(.title-act) { padding-right: 104px; } /* clear of the fixed lock and power buttons */
+.title-act:active { opacity: 0.6; }
+/* The button's centre sits one step (48px) left of the lock button, in the same line as the title icon. */
+#folder-title:has(.title-act), #vault-folder-title:has(.title-act) { padding-right: 130px; }
+#main-screen:has(.thumb-grid), #vault-screen:has(.thumb-grid) { touch-action: pan-y; } /* the pinch is ours, not the page's zoom */
