@@ -3307,3 +3307,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cost: a video is read whole into memory to play it and to draw its thumbnail (the file is encrypted, so it cannot be streamed); a very large video can fail or be slow. Home video thumbnails are redrawn each session; Vault ones are stored encrypted.
 - No new network call, credential or backup change.
 - Files: `src/js/app.js`, `src/js/gallerygrid.js` (NEW), `src/js/vault.js`, `src/js/fileopen.js`, `src/js/fileactions.js`, `src/js/widget.js`, `src/js/autosave.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP148).
+
+**307. Gallery: pinch fixed and reversed, range 3 to 9, layout switch in the title bar.** Amends Decision 306 after a device check.
+- Cause of the stuck pinch: the pinch set a flag that was cleared only by a touch end reaching the list; the list is redrawn while the fingers are down, so the touched tile was gone and the end never arrived. The flag stayed set and swallowed every tap, in grid and list. The block is now a short time window renewed by each pinch touch event, and touch ends are heard on the document. A lost touch end can no longer block taps.
+- Direction reversed: fingers together put more items in a row, fingers apart fewer. Range 3 to 9, default 3; a stored value outside it is brought inside. The larger thumbnails for 1 or 2 per row are removed (no longer reachable).
+- The "pinch to resize" text, the count line and the Grid/List bar are removed. A button at the right of the title bar, clear of the lock and power buttons, switches the layout; its icon shows the layout a tap switches to. The choice is kept.
+- Files: `src/js/gallerygrid.js`, `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP149).
