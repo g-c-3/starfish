@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 156**
+
+Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. DP146 and DP147 not reported.
+- Phase 40 and Decision 306 (owner request, from screenshots): category name removed from rows inside a folder; rows show last-change time; Image renamed Gallery and takes any image or video; Grid and List layouts; pinch on the grid sets items per row (1 to 10).
+- New `gallerygrid.js`; Vault index gained `updatedAt`; MIME map extended for images and videos; viewer plays video and offers Open in another app when a format cannot be decoded. Gallery section of ARCHITECTURE.md rewritten (it still described cached Home thumbnails).
+- `vite build` passes; not run through CI; pinch, video playback and thumbnails not run on a device.
+- Risks: a video is read whole into memory; the pinch direction follows the request (apart = more per row); ordering still by created time.
+- Next start: owner reports DP146, DP147, DP148; then the next phase.
+
+---
+
 **Session 155**
 
 Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. DP133 result not reported.

@@ -3295,3 +3295,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix found on the way: the total used by Go to line and the number column's width included the editor's padding (about two rows too many); it now measures the document alone.
 - Files: `src/js/codeeditor.js`, `src/js/app.js`, `src/css/style.css`. `vite build` passes; the markers, icon buttons, row count and footer text ran against a stand-in page without layout; alignment is judged on a device; not run through CI (DP147).
 
+**306. Gallery (formerly Image); category name out of folder rows; last-change time.** Owner request, from screenshots.
+- Rows inside a category folder no longer repeat the category name beside the time (Home and Vault). Search and Trash rows keep it, as they mix categories. Reminder rows lose the word "Reminder" in the folder only.
+- Rows show the time of the last change (`updated_at`), falling back to the created time. A rename already wrote `updated_at`; the Vault index gained `updatedAt` from the same column. Money rows keep the entry's own date. Detail screens still show Created. Ordering stays by created time: an edited item does not move.
+- The Image category is renamed Gallery everywhere it is shown (cards, folder title, Save dialog, widget, drafts, backup category label). The stored type stays `image`; nothing is migrated.
+- Gallery takes any image or video. The picker accepts `image/*` and `video/*`; a picked picture or video with no extension in its name takes one from its type. Videos are stored as files like any other (encrypted at rest), with no size limit beyond the Files rule.
+- Viewing: an image as before; a video in a native player (controls, no pinch or swipe). A format the WebView cannot decode shows its reason and an Open in another app button. A video thumbnail is a frame near the start; a play badge marks videos in the grid and the list.
+- Grid or List switch above the items. List: thumbnail, name, last-change time. The choice is kept.
+- Pinch on the grid sets items per row, 1 to 10, default 3: fingers apart for more per row, together for fewer, as requested. Ten is the most where a tile (about 34 px on a phone) is still recognisable; one gives a full-width tile. The number shows live beside the switch and is kept. At 2 or fewer per row, larger thumbnails are made (memory only).
+- Selection, Move, Share, Download, Delete and Rename work the same on tiles and rows. Sharing and downloading a video use its own type.
+- Cost: a video is read whole into memory to play it and to draw its thumbnail (the file is encrypted, so it cannot be streamed); a very large video can fail or be slow. Home video thumbnails are redrawn each session; Vault ones are stored encrypted.
+- No new network call, credential or backup change.
+- Files: `src/js/app.js`, `src/js/gallerygrid.js` (NEW), `src/js/vault.js`, `src/js/fileopen.js`, `src/js/fileactions.js`, `src/js/widget.js`, `src/js/autosave.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP148).
