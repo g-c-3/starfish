@@ -23,8 +23,10 @@ Start: "Go". Tier 1 docs read; Decisions 133, 177, 288, 290 and ARCHITECTURE hea
 - Decision 301 (owner request, from a screenshot): the voice review screen's Record again discarded the take without asking. It is removed; Save and a red Discard share one row; Discard asks "Discard recording?" first. `vite build` passes; not run through CI.
 - Decision 302 (owner request, from screenshots): the note editor's Save was enabled with no changes, always opened the whole Save dialog, and closed the editor. Now: Save only with changes; a saved note saves in place with no dialog and the editor stays; a new note asks once on its first Save; Details button for name, tags and description; draft handlers switch to the saved entry after the first Save. `vite build` passes; the editor logic ran against a stand-in page; not run through CI.
 - Owner confirmed DP144 (note editor). Decision 303 (owner request): Rename button beside Save in the note editor; the five row buttons hidden in Home and the Vault; Rename in the selection bar: one item through the Save dialog, several through a numbering sheet (Number, Add text, Find & replace, letters, preview, warning). `vite build` passes; naming rules and sheet ran against a stand-in page; not run through CI.
-Open: DP141, DP142, DP143, DP145.
-Next session start point: the DP141, DP142, DP143 and DP145 results; then the next incomplete roadmap item.
+- Owner confirmed DP141 to DP145: Phases 35, 36 and 38 closed.
+- Decision 304 (owner request, from screenshots): editor Rename opens the full Save dialog; Details button removed; Find panel gets a clear button in each field, no corner close button, and the Find tool toggles it; notes show row numbers (every wrapped row numbered, continuous); Go to line follows them. `vite build` passes; logic ran against a stand-in page without layout; not run through CI.
+Open: DP146.
+Next session start point: the DP146 result (row numbers need a real device); then the next incomplete roadmap item.
 
 ---
 

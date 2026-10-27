@@ -3279,3 +3279,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not done: bulk rename of real files in the File explorer (its single rename is unchanged).
 - Files: `src/js/app.js`, `src/js/bulkrename.js` (new), `src/css/bulkrename.css` (new), `src/css/style.css`, `src/index.html`. `vite build` passes; the naming rules and the sheet ran against a stand-in page; the selection flow, Save dialog, reminders and Vault not run; not run through CI, not device-tested (DP145).
 
+**304. Note editor polish: full Save dialog for Rename, row numbers, Find panel.** Amends Decisions 302 and 303.
+- Rename (editor button): the whole Save dialog headed Rename, with name, tags and description, as for every other save or rename. A saved note is changed at once. A note not saved yet keeps the answers and shows them in its first Save sheet. The name-only prompt is removed.
+- The Details button is removed; Rename now covers it.
+- Find and Replace: a clear button inside each field (clears that field only), no close button; the Find tool opens the panel and closes it on the next tap and shows it is on while open (File explorer text view too). The panel itself is CodeMirror's, tidied after it opens.
+- Row numbers (notes only): every row on screen has its own number, so a wrapped line takes several numbers and the next line carries on from them; zoom and the Wrap switch change the count. A row is one line height: the first row of a line is its top over the line height, its row count its height over the line height. Small grey digits, no border. Rows of lines not drawn yet are estimated and may shift slightly when scrolled into view.
+- Go to line (notes) takes a row number from the column and lands on that row.
+- File explorer text view keeps its own line numbers, one per line.
+- Files: `src/js/app.js`, `src/js/codeeditor.js`, `src/js/explorer-view.js`, `src/css/style.css`. `vite build` passes; the row arithmetic, gutter, Find toggle, clear buttons and Rename wiring ran against a stand-in page that has no layout; real row heights, wrapping and Go to not run; not run through CI, not device-tested (DP146).
+
