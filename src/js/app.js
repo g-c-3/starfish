@@ -24,7 +24,7 @@ import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
-import { DEFAULT_COLS, BIG_THUMB_COLS, clampCols, colsLabel, attachGridPinch, pinchBlocked } from './gallerygrid.js';
+import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
@@ -2606,14 +2606,13 @@ async function imageBlobUrl(item, isVault) {
   if (!row) throw new Error('Image not found');
   return URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: mimeTypeForVaultRow({ type: 'image', extension: row.extension }) }));
 }
-// big: a larger picture for wide tiles (1 or 2 per row). The stored Vault thumbnail is the small one, so a big one is made from the file.
-async function thumbFor(item, isVault, big = false) {
-  const key = `${isVault ? 'v' : 'h'}${big ? 'L' : ''}:${item.id}`;
-  const px = big ? 800 : THUMB_PX;
+async function thumbFor(item, isVault) {
+  const key = `${isVault ? 'v' : 'h'}:${item.id}`;
+  const px = THUMB_PX;
   if (thumbMem.has(key)) return thumbMem.get(key);
   let dataUrl;
   const ref = isVault ? { id: item.id, filePath: ((getVaultIndex() || []).find((e) => e.id === item.id) || item).filePath || null } : null;
-  if (isVault && privateSessionKey && !big) { // stored thumbnail: no decode of the full image
+  if (isVault && privateSessionKey) { // stored thumbnail: no decode of the full image
     dataUrl = await getVaultThumb(db, privateSessionKey, ref);
     if (dataUrl && privateSessionKey) { thumbMem.set(key, dataUrl); return dataUrl; }
   }
@@ -2621,19 +2620,19 @@ async function thumbFor(item, isVault, big = false) {
   try { dataUrl = await (isVideoExt(item.extension) ? videoFrameToDataUrl(url, px) : downscaleToDataUrl(url, px)); } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
-  if (isVault && !big) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
+  if (isVault) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
   return dataUrl;
 }
 let thumbObserver = null;
 // Fills a grid of .thumb-tile[data-id] as tiles scroll into view.
-function loadThumbsInto(container, items, isVault, big = false) {
+function loadThumbsInto(container, items, isVault) {
   if (thumbObserver) thumbObserver.disconnect();
   const byId = new Map(items.map((i) => [i.id, i]));
   const load = async (tile) => {
     const item = byId.get(tile.dataset.id);
     if (!item) return;
     try {
-      const src = await runThumbJob(async () => (tile.isConnected ? thumbFor(item, isVault, big) : null));
+      const src = await runThumbJob(async () => (tile.isConnected ? thumbFor(item, isVault) : null));
       if (src && tile.isConnected) tile.innerHTML = `<img src="${src}" alt="" draggable="false">`;
     } catch { /* tile keeps its placeholder */ }
   };
@@ -3887,13 +3886,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const vTitle = document.getElementById('vault-folder-title');
     vTitle.dataset.vaultType = type;
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
     await showVoiceSwitch('vault-voice-out-wrap', 'vault-voice-out-seg', type);
-    document.getElementById('vault-gallery-bar').classList.toggle('hidden', type !== 'image');
-    if (type === 'image') await loadGalleryPrefs();
+    if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(true); }
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -4638,13 +4636,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
     await showVoiceSwitch('voice-out-wrap', 'voice-out-seg', type);
-    document.getElementById('gallery-bar').classList.toggle('hidden', type !== 'image');
-    if (type === 'image') await loadGalleryPrefs();
+    if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(false); }
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
@@ -5539,14 +5536,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     galleryView = (await metaGet('gallery_view', 'grid')) === 'list' ? 'list' : 'grid';
     galleryCols = clampCols(await metaGet('gallery_cols', String(DEFAULT_COLS)));
   }
-  const galleryIds = (isVault) => (isVault ? ['vault-gallery-bar', 'vault-gallery-view-seg', 'vault-gallery-hint'] : ['gallery-bar', 'gallery-view-seg', 'gallery-hint']);
-  function paintGalleryBar(isVault) {
-    const [barId, segId, hintId] = galleryIds(isVault);
-    document.getElementById(segId).querySelectorAll('button[data-gv]').forEach((b) => b.classList.toggle('active', b.dataset.gv === galleryView));
-    document.getElementById(hintId).textContent = galleryView === 'grid' ? `${colsLabel(galleryCols)} · pinch to resize` : '';
+  // The title-bar button shows the layout a tap switches to.
+  function galleryViewBtnHtml() {
+    const toList = galleryView === 'grid';
+    return `<button type="button" class="title-act" aria-label="${toList ? 'List view' : 'Grid view'}" title="${toList ? 'List view' : 'Grid view'}">${iconSvg(toList ? 'list' : 'grid')}</button>`;
+  }
+  function paintGalleryBtn(isVault) {
+    const btn = document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').querySelector('.title-act');
+    if (btn) btn.outerHTML = galleryViewBtnHtml();
   }
   function renderGallery(box, items, isVault, reopen) {
-    paintGalleryBar(isVault);
     const list = galleryView === 'list';
     box.innerHTML = !items.length ? emptyStateHtml('folder')
       : list ? items.map((i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) })).join('')
@@ -5555,30 +5554,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), isVault);
       await reopen();
     }));
-    loadThumbsInto(box, items, isVault, !list && galleryCols <= BIG_THUMB_COLS);
+    loadThumbsInto(box, items, isVault);
     paintSelection();
   }
   for (const isVault of [false, true]) {
-    const [barId, segId, hintId] = galleryIds(isVault);
     const redraw = () => (isVault ? renderVault() : renderMainTimeline());
-    document.getElementById(segId).addEventListener('click', async (e) => {
-      const b = e.target.closest('button[data-gv]');
-      if (!b || b.dataset.gv === galleryView) return;
-      galleryView = b.dataset.gv === 'list' ? 'list' : 'grid';
+    document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
+      if (!e.target.closest('.title-act')) return;
+      galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
+      paintGalleryBtn(isVault);
       if (isVault) armVaultAutoLock();
       redraw();
     });
     attachGridPinch(document.getElementById(isVault ? 'vault-folder-list' : 'folder-list'), {
       getCols: () => galleryCols,
-      onLive: (n) => { document.getElementById(hintId).textContent = `${colsLabel(n)} · pinch to resize`; if (isVault) armVaultAutoLock(); },
-      onCols: async (n) => {
-        const wasBig = galleryCols <= BIG_THUMB_COLS;
-        galleryCols = n;
-        await metaSet('gallery_cols', String(n));
-        if (wasBig !== (n <= BIG_THUMB_COLS)) redraw(); // wide tiles need the larger thumbnails
-        else paintGalleryBar(isVault);
-      }
+      onCols: async (n) => { galleryCols = n; await metaSet('gallery_cols', String(n)); if (isVault) armVaultAutoLock(); }
     });
   }
 
