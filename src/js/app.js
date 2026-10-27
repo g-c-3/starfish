@@ -2460,7 +2460,8 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
     const updateCount = () => {
       const v = ed ? ed.getValue() : text;
       const words = v.trim() ? v.trim().split(/\s+/).length : 0;
-      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${v.length} characters`;
+      const rows = ed ? ed.rowCount() : v.split('\n').length; // the lines as numbered beside the text
+      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${v.length} characters · ${rows} line${rows === 1 ? '' : 's'}`;
     };
     updateCount();
     const finish = (discarded = false) => {
@@ -2513,6 +2514,7 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
       ed = mod.createCodeEditor({
         parent: host, text, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
+        onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
         onChange: () => {
           dirty = ed.isDirty(); sync(); syncSave();
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);

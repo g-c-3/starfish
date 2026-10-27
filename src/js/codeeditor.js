@@ -107,7 +107,9 @@ const noteTheme = EditorView.theme({
   '.cm-placeholder': { color: 'var(--muted)' },
   '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'var(--muted)', opacity: '0.7' },
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 0 0 12px', minWidth: '0' },
-  '.ev-rn': { textAlign: 'right', fontSize: '11px', fontVariantNumeric: 'tabular-nums', userSelect: 'none' },
+  '.ev-rn': { textAlign: 'right', fontVariantNumeric: 'tabular-nums', userSelect: 'none' },
+  '.ev-rn span': { display: 'block' },
+  '.ev-rn i': { fontStyle: 'normal', fontSize: '0.62em' },
   '.cm-line': { padding: '0 18px 0 10px' }
 });
 
@@ -125,16 +127,17 @@ class RowMarker extends GutterMarker {
     const d = document.createElement('div');
     d.className = 'ev-rn';
     for (let i = 0; i < this.rows; i++) {
-      const r = document.createElement('span');
-      r.textContent = String(this.start + i);
+      const r = document.createElement('span'); // inherits the text's font size: its baseline is the text's baseline
+      const n = document.createElement('i');    // the digits sit on that baseline, smaller
+      n.textContent = String(this.start + i);
       r.style.height = r.style.lineHeight = `${this.lh}px`;
-      d.appendChild(r);
+      r.appendChild(n); d.appendChild(r);
     }
     return d;
   }
 }
 const lineH = (view) => view.defaultLineHeight || 20;
-const totalRows = (view) => Math.max(1, Math.round(view.contentHeight / lineH(view)));
+const totalRows = (view) => { const b = view.lineBlockAt(view.state.doc.length); return Math.max(1, Math.round((b.top + b.height) / lineH(view))); }; // the document alone, without its padding
 const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(totalRows(view)).length) - 1, 1, lineH(view)); // sets the width
 const rowGutter = () => gutter({
   class: 'cm-lineNumbers ev-rows',
@@ -156,7 +159,8 @@ function tidySearchPanel(panel) {
     input.replaceWith(wrap);
     wrap.appendChild(input);
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'ev-clear'; b.textContent = '\u00d7';
+    b.type = 'button'; b.className = 'ev-clear';
+    b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>';
     b.setAttribute('aria-label', label); b.title = label;
     b.onmousedown = (e) => e.preventDefault();
     b.onclick = () => { input.value = ''; input.dispatchEvent(new Event('change', { bubbles: true })); input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); };
@@ -165,7 +169,7 @@ function tidySearchPanel(panel) {
 }
 
 // parent, text, name, kind, editable (may be switched on), ui { askText }, onChange()
-export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {}, onFind = () => {} }) {
+export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {}, onFind = () => {}, onRows = () => {} }) {
   const note = kind === 'note', prefs = PREFS[note ? 'note' : 'file'];
   const wrapC = new Compartment(), sizeC = new Compartment(), editC = new Compartment();
   const sizeTheme = () => EditorView.theme({ '&': { fontSize: `${prefs.size}px` } });
@@ -184,6 +188,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
         : { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': name || 'text' }),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) onChange();
+        if (u.docChanged || u.heightChanged || u.geometryChanged) onRows(); // the number of rows can change without the text changing
         const open = searchPanelOpen(u.state);
         if (open !== findOpen) { findOpen = open; onFind(open); }
       })
@@ -228,6 +233,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     getValue: () => view.state.doc.toString(),
     isDirty: () => !view.state.doc.eq(base),
     markClean: (doc = view.state.doc) => { base = doc; }, // doc: the text that was saved, when more was typed meanwhile
+    rowCount: () => (note ? totalRows(view) : view.state.doc.lines), // rows as numbered on screen (notes), else lines
     isEditing: () => on,
     canEdit: editable,
     setEditing(v, focus = true) { // focus false: switch on without raising the keyboard
