@@ -133,7 +133,7 @@ export function openFileViewer(file, ctx) {
     const tool = (label, title, fn) => { const b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = fn; bar.appendChild(b); return b; };
     const editBtn = editable ? tool('Edit', 'Edit this file', () => setEdit(!ed.isEditing())) : null;
     const undoBtn = tool('Undo', 'Undo', () => { ed.undo(); sync(); }); const redoBtn = tool('Redo', 'Redo', () => { ed.redo(); sync(); });
-    tool('Find', 'Find and replace', () => ed.find()); tool('Go to', 'Go to line', () => ed.goTo());
+    const findBtn = tool('Find', 'Find and replace', () => { findBtn.classList.toggle('on', ed.find()); }); tool('Go to', 'Go to line', () => ed.goTo()); // a second tap closes it
     const wrapBtn = tool('Wrap', 'Wrap long lines', () => { wrapBtn.classList.toggle('on', ed.toggleWrap()); });
     wrapBtn.classList.toggle('on', ed.isWrapped());
     tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1)); tool('A+', 'Larger text', () => ed.bumpSize(1));

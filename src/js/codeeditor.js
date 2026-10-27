@@ -3,10 +3,10 @@
 // loaded only when a text file or a note opens. kind 'file' (File explorer) or 'note' (Home and Vault notes, Decision 292: plain
 // text, no numbers or colours, spell check on). Wrap and size choices last until the app closes, one set per kind.
 import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder } from '@codemirror/view';
+import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder, gutter, GutterMarker } from '@codemirror/view';
 import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput, StreamLanguage } from '@codemirror/language';
-import { search, searchKeymap, openSearchPanel, closeSearchPanel, highlightSelectionMatches } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen, highlightSelectionMatches } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
@@ -104,12 +104,68 @@ const baseTheme = EditorView.theme({
 const noteTheme = EditorView.theme({
   '.cm-scroller': { fontFamily: 'inherit', lineHeight: '1.65' },
   '.cm-content': { padding: '14px 0 calc(40px + env(safe-area-inset-bottom, 0px))' },
-  '.cm-line': { padding: '0 18px' },
-  '.cm-placeholder': { color: 'var(--muted)' }
+  '.cm-placeholder': { color: 'var(--muted)' },
+  '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'var(--muted)', opacity: '0.7' },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 0 0 12px', minWidth: '0' },
+  '.ev-rn': { textAlign: 'right', fontSize: '11px', fontVariantNumeric: 'tabular-nums', userSelect: 'none' },
+  '.cm-line': { padding: '0 18px 0 10px' }
 });
 
+// Row numbers for notes (Decision 304): every row on screen is numbered in turn, so a line that wraps takes several numbers and the
+// next line carries on from them; zoom or the Wrap switch changes the count. A row is one line height: the first row of a block
+// is its top divided by the line height, its row count is its height divided by the line height.
+export function rowSpan(top, height, lh) {
+  const h = lh > 0 ? lh : 20;
+  return { start: Math.round(top / h) + 1, rows: Math.max(1, Math.round(height / h)) };
+}
+class RowMarker extends GutterMarker {
+  constructor(start, rows, lh) { super(); this.start = start; this.rows = rows; this.lh = lh; }
+  eq(o) { return o.start === this.start && o.rows === this.rows && Math.abs(o.lh - this.lh) < 0.5; }
+  toDOM() {
+    const d = document.createElement('div');
+    d.className = 'ev-rn';
+    for (let i = 0; i < this.rows; i++) {
+      const r = document.createElement('span');
+      r.textContent = String(this.start + i);
+      r.style.height = r.style.lineHeight = `${this.lh}px`;
+      d.appendChild(r);
+    }
+    return d;
+  }
+}
+const lineH = (view) => view.defaultLineHeight || 20;
+const totalRows = (view) => Math.max(1, Math.round(view.contentHeight / lineH(view)));
+const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(totalRows(view)).length) - 1, 1, lineH(view)); // sets the width
+const rowGutter = () => gutter({
+  class: 'cm-lineNumbers ev-rows',
+  lineMarker: (view, line) => { const { start, rows } = rowSpan(line.top, line.height, lineH(view)); return new RowMarker(start, rows, lineH(view)); },
+  lineMarkerChange: (u) => u.docChanged || u.heightChanged || u.geometryChanged || u.viewportChanged || u.transactions.some((t) => t.reconfigured),
+  initialSpacer: (view) => spacerFor(view),
+  updateSpacer: (_sp, u) => spacerFor(u.view)
+});
+
+// The Find and Replace panel: a clear button inside each field, and no close button (the Find tool toggles the panel).
+function tidySearchPanel(panel) {
+  if (panel.dataset.tidy) return;
+  panel.dataset.tidy = '1';
+  for (const [name, label] of [['search', 'Clear find'], ['replace', 'Clear replace']]) {
+    const input = panel.querySelector(`input[name="${name}"]`);
+    if (!input) continue;
+    const wrap = document.createElement('span');
+    wrap.className = 'ev-fw';
+    input.replaceWith(wrap);
+    wrap.appendChild(input);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ev-clear'; b.textContent = '\u00d7';
+    b.setAttribute('aria-label', label); b.title = label;
+    b.onmousedown = (e) => e.preventDefault();
+    b.onclick = () => { input.value = ''; input.dispatchEvent(new Event('change', { bubbles: true })); input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); };
+    wrap.appendChild(b);
+  }
+}
+
 // parent, text, name, kind, editable (may be switched on), ui { askText }, onChange()
-export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {} }) {
+export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {}, onFind = () => {} }) {
   const note = kind === 'note', prefs = PREFS[note ? 'note' : 'file'];
   const wrapC = new Compartment(), sizeC = new Compartment(), editC = new Compartment();
   const sizeTheme = () => EditorView.theme({ '&': { fontSize: `${prefs.size}px` } });
@@ -118,7 +174,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
   const state = EditorState.create({
     doc: text,
     extensions: [
-      ...(note ? [placeholder('Start typing\u2026')] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
+      ...(note ? [placeholder('Start typing\u2026'), rowGutter()] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
       history(), highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
       keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
       languageFor(note ? '' : name),
@@ -126,11 +182,17 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
       EditorView.contentAttributes.of(note
         ? { spellcheck: 'true', autocapitalize: 'sentences', autocorrect: 'on', 'aria-label': 'Note text' }
         : { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': name || 'text' }),
-      EditorView.updateListener.of((u) => { if (u.docChanged) onChange(); })
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) onChange();
+        const open = searchPanelOpen(u.state);
+        if (open !== findOpen) { findOpen = open; onFind(open); }
+      })
     ]
   });
   const view = new EditorView({ state, parent });
   let base = view.state.doc;
+  const panelWatch = new MutationObserver(() => { const p = view.dom.querySelector('.cm-search'); if (p) tidySearchPanel(p); });
+  panelWatch.observe(view.dom, { childList: true, subtree: true });
 
   // draggable scroll handle (long files): appears while scrolling, stays while it is dragged
   const sc = view.scrollDOM;
@@ -160,6 +222,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
   const endDrag = () => { dragging = false; place(); };
   thumb.addEventListener('pointerup', endDrag); thumb.addEventListener('pointercancel', endDrag);
 
+  let findOpen = false;
   const api = {
     view,
     getValue: () => view.state.doc.toString(),
@@ -174,9 +237,31 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     },
     undo: () => undo(view), redo: () => redo(view),
     canUndo: () => undoDepth(view.state) > 0, canRedo: () => redoDepth(view.state) > 0,
-    find() { openSearchPanel(view); },
+    find() { // the Find tool opens the panel and closes it again; returns whether it is open now
+      if (searchPanelOpen(view.state)) { closeSearchPanel(view); return false; }
+      openSearchPanel(view);
+      return true;
+    },
     closeFind() { closeSearchPanel(view); },
     async goTo() {
+      if (note) { // rows as numbered on screen (Decision 304)
+        const lh = lineH(view), total = totalRows(view);
+        const v = await ui.askText({ title: 'Go to line', text: `1 to ${total}`, placeholder: 'Line number', ok: 'Go' });
+        const k = parseInt(v, 10);
+        if (!Number.isFinite(k)) return;
+        const row = Math.min(total, Math.max(1, k));
+        const block = view.lineBlockAtHeight((row - 1) * lh + lh / 2);
+        view.dispatch({ selection: { anchor: block.from }, effects: EditorView.scrollIntoView(block.from, { y: 'center' }) });
+        const inside = row - 1 - Math.round(block.top / lh); // a wrapped line: move to the row asked for
+        if (inside > 0) {
+          requestAnimationFrame(() => {
+            const c = view.coordsAtPos(block.from), r = view.contentDOM.getBoundingClientRect();
+            const pos = c ? view.posAtCoords({ x: r.left + 30, y: c.top + inside * lh + lh / 2 }) : null;
+            if (pos != null) view.dispatch({ selection: { anchor: pos } });
+          });
+        }
+        return;
+      }
       const n = view.state.doc.lines;
       const v = await ui.askText({ title: 'Go to line', text: `1 to ${n}`, placeholder: 'Line number', ok: 'Go' });
       const k = parseInt(v, 10);
@@ -187,7 +272,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     toggleWrap() { prefs.wrap = !prefs.wrap; view.dispatch({ effects: wrapC.reconfigure(prefs.wrap ? EditorView.lineWrapping : []) }); return prefs.wrap; },
     isWrapped: () => prefs.wrap,
     bumpSize(d) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, prefs.size + d)); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); },
-    destroy() { clearTimeout(hideT); sc.removeEventListener('scroll', onScroll); thumb.remove(); view.destroy(); }
+    destroy() { panelWatch.disconnect(); clearTimeout(hideT); sc.removeEventListener('scroll', onScroll); thumb.remove(); view.destroy(); }
   };
   return api;
 }
