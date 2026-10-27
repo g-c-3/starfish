@@ -632,15 +632,16 @@ after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, sh
 `entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
 word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
 
-### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306)
+### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307)
 The Gallery folder (Home and Vault; entry type `image`) holds any image or video. A video is told by its extension (`isVideoExt` in
 `fileopen.js`); no new type and no schema change. Two layouts, kept in `meta`: `gallery_view` (grid or list) and `gallery_cols`
-(1 to 10, default 3); neither is in a backup. Grid: tiles square; a two-finger pinch on the grid sets the number per row, fingers
-apart for more, together for fewer (`gallerygrid.js`; touch events, the grid has `touch-action: pan-y`). The count is applied live
-through a CSS variable and saved when the fingers lift. The click that follows a pinch is swallowed (`pinchBlocked`, also read by the
-long-press selection handler). List: the normal row with the item's thumbnail in place of the icon.
+(3 to 9, default 3); neither is in a backup. Grid: tiles square; a two-finger pinch on the grid sets the number per row, fingers
+together for more, apart for fewer (`gallerygrid.js`; touch events, the grid has `touch-action: pan-y`). The count is applied live
+through a CSS variable and saved when the fingers lift. The click that follows a pinch is swallowed for a short window renewed by each
+pinch touch event (`pinchBlocked`, also read by the long-press selection handler); touch ends are heard on the document because the
+touched tile can be redrawn. The layout switch is a button in the folder title bar. List: the normal row with the item's thumbnail in place of the icon.
 Thumbnails: Home ones are held in memory only (Decision 162); Vault ones are also stored encrypted (Decision 254, small size only).
-At 2 per row or fewer a larger thumbnail (800 px) is made from the file and kept in memory only, for both. A video thumbnail is one
+A video thumbnail is one
 frame drawn through a `video` element. The viewer (shared shell) pages through the folder with swipe or arrows and holds one
 full-size blob URL at a time, revoked on change, close or lock. An image zooms with pinch and double-tap; a video plays in a native
 player with its own controls (no pinch, no swipe; the arrows move on). A format the WebView cannot decode (for example HEIC) shows

@@ -11,7 +11,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - New `gallerygrid.js`; Vault index gained `updatedAt`; MIME map extended for images and videos; viewer plays video and offers Open in another app when a format cannot be decoded. Gallery section of ARCHITECTURE.md rewritten (it still described cached Home thumbnails).
 - `vite build` passes; not run through CI; pinch, video playback and thumbnails not run on a device.
 - Risks: a video is read whole into memory; the pinch direction follows the request (apart = more per row); ordering still by created time.
-- Next start: owner reports DP146, DP147, DP148; then the next phase.
+- Owner confirmed DP146 and DP147 (Phase 39 closed) and DP148 except the pinch. Decision 307: the pinch got stuck after one use and blocked taps (cause and fix in the decision); direction reversed; range 3 to 9; "pinch to resize" text removed; Grid/List moved to the title bar. `vite build` passes; not run through CI.
+- Next start: owner reports DP149; then the next phase.
 
 ---
 
