@@ -632,11 +632,11 @@ after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, sh
 `entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
 word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
 
-### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307)
+### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308)
 The Gallery folder (Home and Vault; entry type `image`) holds any image or video. A video is told by its extension (`isVideoExt` in
 `fileopen.js`); no new type and no schema change. Two layouts, kept in `meta`: `gallery_view` (grid or list) and `gallery_cols`
 (3 to 9, default 3); neither is in a backup. Grid: tiles square; a two-finger pinch on the grid sets the number per row, fingers
-together for more, apart for fewer (`gallerygrid.js`; touch events, the grid has `touch-action: pan-y`). The count is applied live
+together for more, apart for fewer (`gallerygrid.js`; touch events heard on the whole Home or Vault screen, so empty space counts; the screen has `touch-action: pan-y` while a grid is shown). The count is applied live
 through a CSS variable and saved when the fingers lift. The click that follows a pinch is swallowed for a short window renewed by each
 pinch touch event (`pinchBlocked`, also read by the long-press selection handler); touch ends are heard on the document because the
 touched tile can be redrawn. The layout switch is a button in the folder title bar. List: the normal row with the item's thumbnail in place of the icon.

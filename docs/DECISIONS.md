@@ -3313,3 +3313,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Direction reversed: fingers together put more items in a row, fingers apart fewer. Range 3 to 9, default 3; a stored value outside it is brought inside. The larger thumbnails for 1 or 2 per row are removed (no longer reachable).
 - The "pinch to resize" text, the count line and the Grid/List bar are removed. A button at the right of the title bar, clear of the lock and power buttons, switches the layout; its icon shows the layout a tap switches to. The choice is kept.
 - Files: `src/js/gallerygrid.js`, `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP149).
+
+**308. Gallery: pinch on the whole screen; title-bar button without a box.** Amends Decision 307 after a device check.
+- Cause: the pinch was heard only on the list container, which is as tall as its tiles, so a pinch on the empty space below did nothing. It is now heard on the whole Home or Vault screen, while a Gallery grid is on screen and visible; elsewhere it is ignored. The screen takes no page zoom while a grid is shown.
+- The layout button has no background box. It is 40 by 34, the height of the title icon, so the title row keeps its normal height and the title, icon, button, lock and power buttons share one line. Its centre sits one step (48 px) left of the lock button.
+- Files: `src/js/gallerygrid.js`, `src/js/app.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP150).
