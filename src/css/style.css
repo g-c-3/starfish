@@ -1409,10 +1409,6 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .thumb-grid[data-dense="2"] { gap: 2px; }
 .thumb-grid[data-dense="2"] .thumb-tile { border-radius: 4px; }
 .thumb-grid[data-dense="2"] .thumb-tile .ic { width: 14px; height: 14px; }
-.gallery-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
-.gallery-bar .seg { margin: 0; flex: 0 0 auto; }
-.gallery-bar .seg button { padding: 7px 16px; }
-.gallery-hint { font-size: 12px; color: var(--muted); text-align: right; }
 .thumb-tile.is-video::before, .row-thumb.is-video::before {
   content: ''; position: absolute; left: 6px; bottom: 6px; z-index: 1; width: 20px; height: 20px; border-radius: 50%;
   background: rgba(0, 0, 0, 0.55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5v14l11-7z' fill='%23fff'/%3E%3C/svg%3E") center / 11px no-repeat; }
@@ -1423,3 +1419,6 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 .vid-full { pointer-events: auto; touch-action: auto; background: #000; }
 .img-fail { pointer-events: auto; display: grid; gap: 10px; justify-items: center; }
 .img-fail button { margin: 0; }
+.title-act { margin-left: auto; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; background: var(--surface-2, rgba(120, 120, 160, 0.14)); color: inherit; border: 0; }
+.title-act .ic { width: 20px; height: 20px; }
+#folder-title:has(.title-act), #vault-folder-title:has(.title-act) { padding-right: 104px; } /* clear of the fixed lock and power buttons */
