@@ -584,6 +584,8 @@ grow when typing at their edge. `createCodeEditor` (note mode) takes `spans`, re
 Layout (Decisions 309, 310): header, one tool row (Undo, Redo, Find, Go to, Wrap as icons; A-, A+; the three colours as dots; B, I, U),
 the text, and the count centred at the bottom. The floating Back button is hidden while the editor is open. Back with unsaved changes
 asks Save & exit, Yes discard or keep editing; Save & exit runs the Save button's own save.
+The style buttons show the state at the cursor when nothing is selected (dimmed). A copy of them floats under a selection that starts in
+the top 120 px of the text, clear of the system selection menu (Decision 311).
 
 ### Reminders: completion and notification actions (Decision 92)
 `reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
@@ -645,7 +647,7 @@ after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, sh
 `entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
 word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
 
-### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308, 310)
+### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308, 310, 311)
 The Gallery folder (Home and Vault; entry type `image`) holds any image or video. A video is told by its extension (`isVideoExt` in
 `fileopen.js`); no new type and no schema change. Two layouts, kept in `meta`: `gallery_view` (grid or list) and `gallery_cols`
 (3 to 9, default 3); neither is in a backup. Grid: tiles square; a two-finger pinch on the grid sets the number per row, fingers
@@ -653,7 +655,9 @@ together for more, apart for fewer (`gallerygrid.js`; touch events heard on the 
 through a CSS variable and saved when the fingers lift. The click that follows a pinch is swallowed for a short window renewed by each
 pinch touch event (`pinchBlocked`, also read by the long-press selection handler); touch ends are heard on the document because the
 touched tile can be redrawn. The layout switch is a button in the folder title bar. List: the normal row with the item's thumbnail in place of the icon.
-Thumbnails: Home ones are held in memory only (Decision 162); Vault ones are also stored encrypted (Decision 254, small size only).
+Thumbnails: kept in memory for the session and as small files encrypted under the master key (Home, `hthumbs/`, Decision 311) or the
+Vault key (`vthumbs/`, Decision 254), named by the SHA-256 of the entry id; a stale one (different file path) is made again; not in backups;
+a sweep at start removes those with no image behind them.
 A video thumbnail is one
 frame drawn through a `video` element. The viewer (shared shell) pages through the folder with swipe or arrows and holds one
 full-size blob URL at a time, revoked on change, close or lock; the pictures either side are read ahead as blob links (images only) so
