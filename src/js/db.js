@@ -1,6 +1,8 @@
 // db.js — SQLite schema & init for Arkly
 // Uses @capacitor-community/sqlite. All data is local-only.
 
+import { plainNoteText } from './notestyle.js';
+
 const SCHEMA_VERSION = 1;
 
 const SCHEMA_SQL = `
@@ -313,7 +315,7 @@ async function insertEntry(db, entry) {
   // in-memory index vault.js builds fresh on unlock — see vault.js's buildVaultIndex().
   if (!is_private) {
     // The description is searchable alongside the body, in the same FTS column (contentless table, so no new column).
-    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, [body_text, description].filter(Boolean).join(' ')]);
+    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [id, label, [plainNoteText(body_text), description].filter(Boolean).join(' ')]);
     await db.run(
       `INSERT INTO label_history (type, label) VALUES (?,?)
        ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,
@@ -347,7 +349,9 @@ async function searchEntries(db, queryText, opts = {}) {
   // 2. Substring matches anywhere in label, body or description, like the Vault's search ("1073" finds "1001073062.png").
   //    Private entries are excluded, as they are from the index.
   const like = (t) => `%${t.replace(/[\\%_]/g, '\\$&')}%`;
-  const clause = `(COALESCE(label,'') || ' ' || COALESCE(body_text,'') || ' ' || COALESCE(description,'')) LIKE ? ESCAPE '\\'`;
+  // The words only: a note's style data (notestyle.js) starts at the first line break plus three U+2063.
+  const words = `CASE WHEN INSTR(COALESCE(body_text,''), CHAR(10, 8291, 8291, 8291)) > 0 THEN SUBSTR(body_text, 1, INSTR(body_text, CHAR(10, 8291, 8291, 8291)) - 1) ELSE COALESCE(body_text,'') END`;
+  const clause = `(COALESCE(label,'') || ' ' || ${words} || ' ' || COALESCE(description,'')) LIKE ? ESCAPE '\\'`;
   const sub = (await db.query(
     `SELECT * FROM entries WHERE is_private = 0 AND deleted_at IS NULL AND ${terms.map(() => clause).join(' AND ')}
      ORDER BY created_at DESC LIMIT ?`,

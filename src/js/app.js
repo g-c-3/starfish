@@ -24,6 +24,7 @@ import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
+import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
@@ -2438,21 +2439,24 @@ const loadCodeEditor = () => (codeEditorModule ||= import('./codeeditor.js').cat
 // persist(text) / clear() (Decision 177): while typing and when the editor closes with unsaved changes by any route except an
 // explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
 // onRename(text): the Save dialog with name, tags and description; returns true when the title changed.
-function openTextEditor({ text = '', isVault = false, session } = {}) {
+// text: the note as stored: its words, then its styles when it has any (notestyle.js).
+function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
   return new Promise((resolve) => {
+    const { text, spans } = splitNoteStyle(stored);
     const $ = (id) => document.getElementById(id);
-    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), saveBtn = $('editor-save-btn');
+    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), styleBar = $('editor-style-tools'), saveBtn = $('editor-save-btn');
+    const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat()); // what is stored and drafted
     let ed = null, closed = false, dirty = false, saving = false, draftTimer = null, countTimer = null, findBtn = null;
-    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(ed.getValue())).catch(() => {}); };
+    const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(raw())).catch(() => {}); };
     const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = session.title;
-    host.replaceChildren(); bar.replaceChildren();
+    host.replaceChildren(); bar.replaceChildren(); styleBar.replaceChildren();
     const renameBtn = $('editor-rename-btn');
     renameBtn.onclick = async () => {
       if (!session.onRename) return;
       let changed = false;
-      try { changed = await session.onRename(ed ? ed.getValue() : text); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
+      try { changed = await session.onRename(ed ? raw() : stored); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
       if (changed && !closed) $('editor-title').textContent = session.title;
     };
     const hasText = () => { // Save needs something to save; the first 2000 characters settle it for almost every note
@@ -2478,7 +2482,7 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
       clearTimeout(draftTimer); clearTimeout(countTimer);
       if (!discarded) { if (dirty) saveDraft(); else if (session.clear) Promise.resolve(session.clear()).catch(() => {}); } // lock, screen-off: keep the text
       if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
-      bar.replaceChildren();
+      bar.replaceChildren(); styleBar.replaceChildren();
       screen.classList.add('hidden');
       activeEditor = null;
       updateBackButtonState();
@@ -2493,15 +2497,15 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
     $('editor-back-btn').onclick = requestBack;
     saveBtn.onclick = async () => {
       if (saving || saveBtn.disabled || !ed) return;
-      const doc = ed.view.state.doc, v = doc.toString();
+      const doc = ed.view.state.doc, v = doc.toString(), fmt = ed.getFormat();
       if (!v.trim()) { toast('Nothing to save yet'); return; }
       saving = true; syncSave();
       let ok = false;
-      try { ok = await session.onSave(v); } catch (err) { toast(`Could not save: ${err.message || err}`); }
+      try { ok = await session.onSave(joinNoteStyle(v, fmt)); } catch (err) { toast(`Could not save: ${err.message || err}`); }
       saving = false;
       if (closed || !ed) return;
       if (ok) {
-        ed.markClean(doc); // what was typed while saving still counts as a change
+        ed.markClean(doc, fmt); // what was typed or styled while saving still counts as a change
         dirty = ed.isDirty();
         if (!dirty) { clearTimeout(draftTimer); draftTimer = null; }
         $('editor-title').textContent = session.title;
@@ -2518,30 +2522,42 @@ function openTextEditor({ text = '', isVault = false, session } = {}) {
       if (closed) return;
       let undoBtn, redoBtn;
       const sync = () => { undoBtn.disabled = !ed.canUndo(); redoBtn.disabled = !ed.canRedo(); };
+      const mk = (host2, cls, html, label, fn) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = cls; b.innerHTML = html; b.title = label; b.setAttribute('aria-label', label);
+        b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up and the selection
+        b.onclick = fn; host2.appendChild(b); return b;
+      };
+      // Second row (Decision 309): one colour of red, green, blue, and bold, italic, underline. Usable with text selected only;
+      // a second tap on the same one removes it.
+      const sw = {}, fm = {};
+      for (const [k, name] of [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']]) sw[k] = mk(styleBar, `ns-sw ns-sw-${k}`, '', `${name} text`, () => ed.toggleStyle('c', k));
+      styleBar.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
+      for (const [k, h, name] of [['b', '<b>B</b>', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['u', '<u>U</u>', 'Underline']]) fm[k] = mk(styleBar, 'ev-tool ev-fmt', h, name, () => ed.toggleStyle(k));
+      const paintStyle = (inf) => {
+        for (const k of Object.keys(sw)) { sw[k].disabled = !inf.has; sw[k].classList.toggle('on', inf.c === k); }
+        for (const k of Object.keys(fm)) { fm[k].disabled = !inf.has; fm[k].classList.toggle('on', !!inf[k]); }
+      };
+      paintStyle({ has: false, c: null, b: false, i: false, u: false });
       ed = mod.createCodeEditor({
-        parent: host, text, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
+        parent: host, text, spans, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
         onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
+        onSelect: paintStyle,
         onChange: () => {
           dirty = ed.isDirty(); sync(); syncSave();
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
           if (session.persist) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
         }
       });
-      const tool = (label, label2, fn) => {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'ev-tool'; b.textContent = label; b.title = label2; b.setAttribute('aria-label', label2);
-        b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up
-        b.onclick = fn; bar.appendChild(b); return b;
-      };
-      undoBtn = tool('Undo', 'Undo', () => { ed.undo(); sync(); });
-      redoBtn = tool('Redo', 'Redo', () => { ed.redo(); sync(); });
-      findBtn = tool('Find', 'Find and replace', () => ed.find()); // a second tap closes it
-      tool('Go to', 'Go to line', () => ed.goTo());
-      const wrapBtn = tool('Wrap', 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
+      undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
+      redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
+      findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => ed.find()); // a second tap closes it
+      mk(bar, 'ev-tool', 'Go to', 'Go to line', () => ed.goTo());
+      const wrapBtn = mk(bar, 'ev-tool', 'Wrap', 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
       wrapBtn.classList.toggle('on', ed.isWrapped());
-      tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1));
-      tool('A+', 'Larger text', () => ed.bumpSize(1));
+      mk(bar, 'ev-tool', 'A\u2212', 'Smaller text', () => ed.bumpSize(-1));
+      mk(bar, 'ev-tool', 'A+', 'Larger text', () => ed.bumpSize(1));
       ed.setEditing(true, !text); // keyboard up at once for a new note only
       sync(); syncSave();
     })();
@@ -5599,7 +5615,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         body.innerHTML = `
           <div class="img-stage">${isVid ? '<video class="img-full vid-full" controls playsinline preload="metadata"></video>' : '<img class="img-full" alt="" draggable="false">'}
             <div class="img-loading">Loading…</div>
-            ${items.length > 1 ? `<button type="button" class="img-nav img-prev" aria-label="Previous image">‹</button><button type="button" class="img-nav img-next" aria-label="Next image">›</button>` : ''}
           </div>`;
         // Header order in image mode: back, name, Edit (rename), Share, Download, Move, Delete, count. Appended after Edit.
         viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove());
@@ -5616,13 +5631,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
         const render2 = () => body.isConnected && openViewerRefresh();
         if (zoom) zoom.destroy();
-        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, onActivity: arm }); // a video keeps its own controls: no pinch or swipe on it, the arrows move on
-        for (const [sel, step] of [['.img-prev', -1], ['.img-next', 1]]) {
-          const b = body.querySelector(sel);
-          if (!b) continue;
-          b.addEventListener('pointerdown', (e) => e.stopPropagation()); // arrows are not part of the gesture area
-          b.addEventListener('pointerup', (e) => e.stopPropagation());
-          b.addEventListener('click', () => go(step));
+        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, onActivity: arm }); // a video keeps its own controls: no pinch on it
+        if (isVid) { // a horizontal swipe above the player's controls moves on, as on an image
+          let sx = 0, sy = 0, live = false;
+          stage.addEventListener('touchstart', (e) => {
+            const t0 = e.touches[0];
+            live = e.touches.length === 1 && t0.clientY < img.getBoundingClientRect().bottom - 72;
+            sx = t0.clientX; sy = t0.clientY;
+          }, { passive: true });
+          stage.addEventListener('touchend', (e) => {
+            if (!live) return;
+            live = false;
+            const t0 = e.changedTouches[0], dx = t0.clientX - sx, dy = t0.clientY - sy;
+            if (Math.abs(dx) > stage.clientWidth * 0.2 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? 1 : -1);
+          }, { passive: true });
         }
         shareBtn.onclick = () => window.Arkly.shareEntry(item.id);
         downloadBtn.onclick = () => window.Arkly.downloadPlain(item.id);

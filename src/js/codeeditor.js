@@ -8,6 +8,7 @@ import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoD
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput, StreamLanguage } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen, highlightSelectionMatches } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
+import { noteStyle } from './notestyle-cm.js';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
@@ -169,8 +170,10 @@ function tidySearchPanel(panel) {
 }
 
 // parent, text, name, kind, editable (may be switched on), ui { askText }, onChange()
-export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, onChange = () => {}, onFind = () => {}, onRows = () => {} }) {
+// spans: the styles of a note (notestyle.js); onSelect(info) when the selection or its styles change (notes only).
+export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, spans = [], onChange = () => {}, onFind = () => {}, onRows = () => {}, onSelect = () => {} }) {
   const note = kind === 'note', prefs = PREFS[note ? 'note' : 'file'];
+  const ns = note ? noteStyle(spans) : null;
   const wrapC = new Compartment(), sizeC = new Compartment(), editC = new Compartment();
   const sizeTheme = () => EditorView.theme({ '&': { fontSize: `${prefs.size}px` } });
   const editExt = (on) => [EditorState.readOnly.of(!on), EditorView.editable.of(on)];
@@ -179,7 +182,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     doc: text,
     extensions: [
       ...(note ? [placeholder('Start typing\u2026'), rowGutter()] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
-      history(), highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
+      history(), ...(ns ? [ns.extension] : []), highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
       keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
       languageFor(note ? '' : name),
       wrapC.of(prefs.wrap ? EditorView.lineWrapping : []), sizeC.of(sizeTheme()), editC.of(editExt(false)),
@@ -187,7 +190,9 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
         ? { spellcheck: 'true', autocapitalize: 'sentences', autocorrect: 'on', 'aria-label': 'Note text' }
         : { spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': name || 'text' }),
       EditorView.updateListener.of((u) => {
-        if (u.docChanged) onChange();
+        const styled = ns && ns.touched(u);
+        if (u.docChanged || styled) onChange();
+        if (ns && (u.selectionSet || u.docChanged || styled)) onSelect(ns.info(u.state));
         if (u.docChanged || u.heightChanged || u.geometryChanged) onRows(); // the number of rows can change without the text changing
         const open = searchPanelOpen(u.state);
         if (open !== findOpen) { findOpen = open; onFind(open); }
@@ -196,6 +201,8 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
   });
   const view = new EditorView({ state, parent });
   let base = view.state.doc;
+  const fmtKey = (s = ns ? ns.spansOf(view.state) : []) => JSON.stringify(s);
+  let baseKey = fmtKey();
   const panelWatch = new MutationObserver(() => { const p = view.dom.querySelector('.cm-search'); if (p) tidySearchPanel(p); });
   panelWatch.observe(view.dom, { childList: true, subtree: true });
 
@@ -231,8 +238,11 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
   const api = {
     view,
     getValue: () => view.state.doc.toString(),
-    isDirty: () => !view.state.doc.eq(base),
-    markClean: (doc = view.state.doc) => { base = doc; }, // doc: the text that was saved, when more was typed meanwhile
+    isDirty: () => !view.state.doc.eq(base) || fmtKey() !== baseKey,
+    markClean: (doc = view.state.doc, fmt) => { base = doc; baseKey = fmt ? fmtKey(fmt) : fmtKey(); }, // doc, fmt: what was saved, when more was done meanwhile
+    getFormat: () => (ns ? ns.spansOf(view.state) : []),
+    toggleStyle: (kind, value) => (ns ? ns.toggle(view, kind, value) : false), // colour 'r' 'g' 'b', or 'b' 'i' 'u'; false when nothing is selected
+    styleInfo: () => (ns ? ns.info(view.state) : { has: false, c: null, b: false, i: false, u: false }),
     rowCount: () => (note ? totalRows(view) : view.state.doc.lines), // rows as numbered on screen (notes), else lines
     isEditing: () => on,
     canEdit: editable,

@@ -18,6 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, toBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
+import { plainNoteText } from './notestyle.js';
 import { planVaultRestore, applyVaultPlan } from './vaultrestore.js';
 
 const SCHEMA_VERSION = 1;
@@ -590,7 +591,7 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, summary) {
   // and label_history entirely, not just their body — indexing even the label would leak a
   // vault item's existence/title into ordinary, no-PIN search and autocomplete.
   if (!entry.is_private) {
-    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, [bodyText, entry.description].filter(Boolean).join(' ')]);
+    await db.run(`INSERT INTO entries_fts (id, label, body_text) VALUES (?,?,?)`, [targetId, label, [plainNoteText(bodyText), entry.description].filter(Boolean).join(' ')]);
     await db.run(
       `INSERT INTO label_history (type, label) VALUES (?,?)
        ON CONFLICT(type, label) DO UPDATE SET use_count = use_count + 1`,

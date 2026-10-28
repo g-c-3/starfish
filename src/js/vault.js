@@ -11,6 +11,7 @@
 import { insertEntry, VAULT_PLACEHOLDER_LABEL } from './db.js';
 import { encryptPrivateNote, decryptPrivateNote, fieldAad, isBoundField } from './crypto.js';
 import * as Money from './money.js';
+import { plainNoteText } from './notestyle.js';
 import { initFiles, saveVaultBase64, readVaultBase64, vaultFileSize, removeFile, writeText, readText, removePath, listPaths } from './files.js';
 
 const VAULT_TYPES = ['note', 'voice', 'image', 'pdf', 'reminder', 'location', 'money', 'file']; // mirrors the Home capture cards, in card order
@@ -523,7 +524,7 @@ async function ensureVaultTexts(db, key) {
       try {
         if (e.type === 'note') {
           const r = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [e.id])).values || [])[0];
-          t = r ? await decryptPrivateNote(key, r.encrypted_body, fieldAad(e.id, 'body')) : '';
+          t = r ? plainNoteText(await decryptPrivateNote(key, r.encrypted_body, fieldAad(e.id, 'body'))) : '';
         } else {
           const r = ((await db.query(`${VAULT_INDEX_SQL} WHERE id=?`, [e.id])).values || [])[0];
           const m = r ? await fileEntryMeta(db, key, r) : null;

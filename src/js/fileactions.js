@@ -13,6 +13,7 @@ import * as Money from './money.js';
 import { initFiles, readBase64, fileSize } from './files.js';
 import { plainUriFor, mimeForExtension } from './fileopen.js';
 import { repeatLabel } from './reminders.js';
+import { plainNoteText } from './notestyle.js';
 
 async function getEntryCategory(db, entryId) {
   const row = (await db.query(`SELECT * FROM entries WHERE id=?`, [entryId])).values[0];
@@ -84,7 +85,7 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
     const content = loaded.content;
     row.label = loaded.row.label; // the stored label is a placeholder (Decision 145)
     if (row.type === 'note') {
-      await Share.share({ text: content.text, title: row.label });
+      await Share.share({ text: plainNoteText(content.text), title: row.label });
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
       await Share.share({ text: withNote(moneyPlainText(content.money), await vaultNote(row, privateSessionKey)), title: row.label });
@@ -112,7 +113,7 @@ async function shareEntry(db, entryId, { privateSessionKey = null } = {}) {
   } else if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
     await Share.share({ url: await plainUriFor(row), title: row.label });
   } else {
-    await Share.share({ text: row.body_text || row.label, title: row.label });
+    await Share.share({ text: plainNoteText(row.body_text) || row.label, title: row.label });
   }
 }
 
@@ -173,7 +174,7 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
     base = `${sanitizeFilename(row.label)}${ext}`;
     const path = await freeDownloadPath(base);
     if (row.type === 'note') {
-      await text(path, content.text);
+      await text(path, plainNoteText(content.text));
     } else if (row.type === 'money') {
       if (!content.money) throw new Error('This entry has no readable amount.');
       await text(path, withNote(moneyPlainText(content.money), await vaultNote(row, privateSessionKey)));
@@ -198,7 +199,7 @@ async function downloadPlain(db, entryId, { privateSessionKey = null } = {}) {
   } else if (row.type === 'money' || row.type === 'expense') {
     await text(path, moneyRowPlainText(row));
   } else {
-    await text(path, row.body_text || '');
+    await text(path, plainNoteText(row.body_text));
   }
   return path;
 }
@@ -268,7 +269,7 @@ async function editEntry(db, entryId, fields, { privateSessionKey = null, resche
   if (!row.is_private && (updates.body_text !== undefined || updates.description !== undefined)) {
     const body = updates.body_text !== undefined ? updates.body_text : row.body_text;
     const desc = updates.description !== undefined ? updates.description : row.description;
-    await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [[body, desc].filter(Boolean).join(' '), entryId]);
+    await db.run(`UPDATE entries_fts SET body_text=? WHERE id=?`, [[plainNoteText(body), desc].filter(Boolean).join(' '), entryId]);
   }
   if (row.type === 'reminder' && (fields.fire_at !== undefined || fields.repeat_rule !== undefined) && rescheduleReminder) { // Vault reminders too
     await rescheduleReminder({ ...row, ...updates, id: entryId }); // caller supplies notifications.js's scheduleReminder
@@ -311,7 +312,7 @@ async function getSelectableEntries(db, { vaultIndex = null, scope = 'home' } = 
     if (FILE_BEARING_CATEGORIES.has(cat) && row.file_path) {
       sizeBytes = await fileSize(row); // 0 when the file is missing or unreadable — the entry is still listed, with an unknown size
     } else if (row.body_text) {
-      sizeBytes = new Blob([row.body_text]).size;
+      sizeBytes = new Blob([plainNoteText(row.body_text)]).size;
     }
     sizeBytes += rowExtraBytes(row);
     (groups[cat] = groups[cat] || []).push({ id: row.id, label: row.label, type: row.type, sizeBytes });
