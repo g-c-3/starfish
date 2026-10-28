@@ -2452,7 +2452,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     const $ = (id) => document.getElementById(id);
     const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), saveBtn = $('editor-save-btn');
     const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat()); // what is stored and drafted
-    let ed = null, closed = false, dirty = false, saving = false, draftTimer = null, countTimer = null, findBtn = null;
+    let ed = null, closed = false, dirty = false, saving = false, draftTimer = null, countTimer = null, findBtn = null, floatCleanup = () => {};
     const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(raw())).catch(() => {}); };
     const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
@@ -2540,7 +2540,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up and the selection
         b.onclick = fn; host2.appendChild(b); return b;
       };
-      let paintStyle = () => {}, floatCleanup = () => {};
+      let paintStyle = () => {};
       ed = mod.createCodeEditor({
         parent: host, text, spans, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
