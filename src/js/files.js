@@ -108,6 +108,49 @@ async function readText(path) { need(); return new TextDecoder().decode(await io
 async function removePath(path) { need(); try { await io.remove(path); } catch { /* already gone */ } }
 async function listPaths(dir) { need(); return io.list(dir); }
 
+// ---- Home thumbnails (Decision 311): one small file per Home image or video in `hthumbs/`, named by the SHA-256 of the entry id, holding
+// { p: the file_path, d: JPEG data URL } under the master key (AES-GCM, the name as additional data). A thumbnail whose `p` differs from
+// the row's is stale and is made again. A cache: not in backups, made again when missing, removed by the sweep when no Home image maps to it.
+const HTHUMB_DIR = 'hthumbs';
+async function hthumbPath(id) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(id)));
+  return `${HTHUMB_DIR}/${[...h].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+async function putHomeThumb(id, filePath, dataUrl) {
+  try {
+    need();
+    const path = await hthumbPath(id), iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(path) }, await homeKey(),
+      new TextEncoder().encode(JSON.stringify({ p: filePath || null, d: dataUrl }))));
+    const out = new Uint8Array(12 + ct.length);
+    out.set(iv, 0); out.set(ct, 12);
+    await io.write(path, out);
+  } catch { /* a cache */ }
+}
+// -> data URL, or null when there is none, it is stale, or it does not open under this key.
+async function getHomeThumb(id, filePath) {
+  try {
+    need();
+    const path = await hthumbPath(id), b = await io.read(path);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.subarray(0, 12), additionalData: new TextEncoder().encode(path) }, await homeKey(), b.subarray(12));
+    const t = JSON.parse(new TextDecoder().decode(pt));
+    return t && t.p === (filePath || null) && typeof t.d === 'string' ? t.d : null;
+  } catch { return null; }
+}
+// Removes thumbnails of images that no longer exist on Home (deleted, purged, moved to the Vault, wiped by a restore). Trashed ones keep theirs.
+async function sweepHomeThumbs() {
+  try {
+    need();
+    const names = await io.list(HTHUMB_DIR);
+    if (!names.length) return 0;
+    const ids = ((await boundDb.query(`SELECT id FROM entries WHERE is_private=0 AND type='image'`)).values || []).map((r) => r.id);
+    const keep = new Set(await Promise.all(ids.map(async (id) => (await hthumbPath(id)).slice(HTHUMB_DIR.length + 1))));
+    let removed = 0;
+    for (const n of names) if (!keep.has(n)) { await io.remove(`${HTHUMB_DIR}/${n}`); removed++; }
+    return removed;
+  } catch { return 0; }
+}
+
 // Move: the file stays where it is; only its key is wrapped again, for the other key. Both need the file's path.
 async function rewrapForVault(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, await homeKey(), vmk); }
 async function rewrapForHome(vmk, row) { need(); return rewrapFileKey(row.file_key, row.file_path, row.file_path, vmk, await homeKey()); }
@@ -176,5 +219,6 @@ async function migratePlainFiles({ onProgress } = {}) {
 
 export {
   migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile,
-  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths
+  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths,
+  putHomeThumb, getHomeThumb, sweepHomeThumbs
 };

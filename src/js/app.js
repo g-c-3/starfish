@@ -26,7 +26,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
-import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes } from './files.js';
+import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
@@ -2488,7 +2488,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       clearTimeout(draftTimer); clearTimeout(countTimer);
       if (!discarded) { if (dirty) saveDraft(); else if (session.clear) Promise.resolve(session.clear()).catch(() => {}); } // lock, screen-off: keep the text
       if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
-      bar.replaceChildren();
+      bar.replaceChildren(); floatCleanup();
       screen.classList.add('hidden');
       activeEditor = null;
       updateBackButtonState();
@@ -2540,7 +2540,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up and the selection
         b.onclick = fn; host2.appendChild(b); return b;
       };
-      let paintStyle = () => {};
+      let paintStyle = () => {}, floatCleanup = () => {};
       ed = mod.createCodeEditor({
         parent: host, text, spans, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
@@ -2561,18 +2561,40 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       mk(bar, 'ev-tool', 'A\u2212', 'Smaller text', () => ed.bumpSize(-1));
       mk(bar, 'ev-tool', 'A+', 'Larger text', () => ed.bumpSize(1));
       // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
-      // selected only; a second tap on the one that is on removes it.
-      const gap = () => bar.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
-      const sw = {}, fm = {};
-      gap();
-      for (const [k, name] of [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']]) sw[k] = mk(bar, 'ev-tool ns-dotbtn', `<span class="ns-dot ns-dot-${k}"></span>`, `${name} text`, () => ed.toggleStyle('c', k));
-      gap();
-      for (const [k, h, name] of [['b', '<b>B</b>', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['u', '<u>U</u>', 'Underline']]) fm[k] = mk(bar, 'ev-tool ev-fmt', h, name, () => ed.toggleStyle(k));
-      paintStyle = (inf) => {
-        for (const k of Object.keys(sw)) { sw[k].disabled = !inf.has; sw[k].classList.toggle('on', inf.c === k); }
-        for (const k of Object.keys(fm)) { fm[k].disabled = !inf.has; fm[k].classList.toggle('on', !!inf[k]); }
+      // selected only; a second tap on the one that is on removes it. With only a cursor they stay dimmed but show the style of the
+      // character beside it. A copy floats under a selection near the top, where the system's menu would cover the tool row.
+      const styleSets = [];
+      const addStyleButtons = (into) => {
+        const sw = {}, fm = {};
+        for (const [k, name] of [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']]) sw[k] = mk(into, 'ev-tool ns-dotbtn', `<span class="ns-dot ns-dot-${k}"></span>`, `${name} text`, () => ed.toggleStyle('c', k));
+        into.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
+        for (const [k, h, name] of [['b', '<b>B</b>', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['u', '<u>U</u>', 'Underline']]) fm[k] = mk(into, 'ev-tool ev-fmt', h, name, () => ed.toggleStyle(k));
+        styleSets.push({ sw, fm });
       };
-      paintStyle({ has: false, c: null, b: false, i: false, u: false });
+      bar.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
+      addStyleButtons(bar);
+      const floatBar = document.createElement('div');
+      floatBar.className = 'ns-float hidden';
+      screen.appendChild(floatBar);
+      addStyleButtons(floatBar);
+      floatCleanup = () => floatBar.remove();
+      const placeFloat = (inf) => {
+        const v = ed && ed.view, { from, to } = v ? v.state.selection.main : { from: 0, to: 0 };
+        const a = v && from !== to ? v.coordsAtPos(from) : null, b = a ? v.coordsAtPos(to) : null;
+        if (!a || !b || Math.min(a.top, b.top) - host.getBoundingClientRect().top > 120) { floatBar.classList.add('hidden'); return; }
+        floatBar.classList.remove('hidden');
+        floatBar.style.top = `${Math.max(a.bottom, b.bottom) + 44}px`; // under the selection handles
+        floatBar.style.left = `${Math.max(8, (window.innerWidth - floatBar.offsetWidth) / 2)}px`;
+      };
+      paintStyle = (inf) => {
+        for (const { sw, fm } of styleSets) {
+          for (const k of Object.keys(sw)) { sw[k].disabled = !inf.has; sw[k].classList.toggle('on', inf.c === k); }
+          for (const k of Object.keys(fm)) { fm[k].disabled = !inf.has; fm[k].classList.toggle('on', !!inf[k]); }
+        }
+        placeFloat(inf);
+      };
+      ed.view.scrollDOM.addEventListener('scroll', () => placeFloat(ed.styleInfo()), { passive: true });
+      paintStyle(ed.styleInfo());
       ed.setEditing(true, !text); // keyboard up at once for a new note only
       sync(); syncSave();
     })();
@@ -2580,9 +2602,9 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
 }
 
 // ---- Image thumbnails and zoom/pan (Phase 16 D, Decision 105) ----
-// Thumbnails: longest side THUMB_PX, JPEG. Home ones are held only in this map; nothing is written to disk
-// (Decision 162: a cached thumbnail would be a plain copy of an encrypted image). Vault ones are also kept as small files
-// encrypted under the Vault key (Decision 254). lockVault() empties the Vault ones from this map.
+// Thumbnails: longest side THUMB_PX, JPEG. Kept in this map for the session and as small files encrypted under the master key (Home,
+// Decision 311; never a plain copy, Decision 162) or the Vault key (Decision 254), so a restart does not decode every image again.
+// lockVault() empties the Vault ones from this map.
 const THUMB_PX = 320;
 const thumbMem = new Map(); // 'h:<id>' | 'v:<id>' -> data URL
 function clearVaultThumbs() { for (const k of [...thumbMem.keys()]) if (k[0] === 'v') thumbMem.delete(k); }
@@ -2647,11 +2669,16 @@ async function thumbFor(item, isVault) {
     dataUrl = await getVaultThumb(db, privateSessionKey, ref);
     if (dataUrl && privateSessionKey) { thumbMem.set(key, dataUrl); return dataUrl; }
   }
+  if (!isVault) { // stored thumbnail (Decision 311): no decode of the full file after a restart
+    dataUrl = await getHomeThumb(item.id, item.file_path || null);
+    if (dataUrl) { thumbMem.set(key, dataUrl); return dataUrl; }
+  }
   const url = await imageBlobUrl(item, isVault);
   try { dataUrl = await (isVideoExt(item.extension) ? videoFrameToDataUrl(url, px) : downscaleToDataUrl(url, px)); } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
   if (isVault) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
+  else putHomeThumb(item.id, item.file_path || null, dataUrl).catch(() => {});
   return dataUrl;
 }
 let thumbObserver = null;
@@ -3241,6 +3268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkSignature();
   purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
   purgeUpdateDownload(); // the downloaded APK from an earlier update (Decision 164)
+  initFiles(db); sweepHomeThumbs().catch(() => {}); // stored thumbnails of Home images that no longer exist (Decision 311)
   import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than

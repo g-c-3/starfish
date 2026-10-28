@@ -98,9 +98,12 @@ export function noteStyle(initial = []) {
     view.dispatch({ effects: styleEffect.of({ kind, value: on ? null : (kind === 'c' ? value : 1), from, to }) });
     return true;
   };
+  // With a selection: what covers all of it. With only a cursor: what is on the character before it (else after it), for display.
   const info = (state) => {
     const { from, to } = state.selection.main;
-    return { has: from !== to, c: coverage(state, 'c', from, to), b: !!coverage(state, 'b', from, to), i: !!coverage(state, 'i', from, to), u: !!coverage(state, 'u', from, to) };
+    const has = from !== to;
+    const at = (k) => (has ? coverage(state, k, from, to) : (coverage(state, k, Math.max(0, from - 1), from) ?? coverage(state, k, from, from + 1)));
+    return { has, c: at('c'), b: !!at('b'), i: !!at('i'), u: !!at('u') };
   };
   const touched = (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(styleEffect) || e.is(resetEffect)));
   return { extension: [field, undoable], spansOf, toggle, info, touched };
