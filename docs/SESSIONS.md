@@ -17,6 +17,7 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Risks: styles are in the stored text, so an older build restoring a newer backup shows the data line; DP150 not yet reported.
 - Decision 310: Gallery swipe smooth (slide off and in, neighbours read ahead); editor colours and styles moved into the single tool row (Go to and Wrap as icons); Back with unsaved changes offers Save & exit. `vite build` passes; not run through CI.
 - Decision 311: Home thumbnails stored encrypted under the master key (`hthumbs/`), so a restart reads small files instead of decoding every image; floating style bar under a selection near the top; style state shown at the cursor (dimmed); colours darker on light, lighter on dark. `vite build` passes; thumbnail store tested apart from the device; not run through CI.
+- Decision 312: closing the editor froze the app (a name used outside its scope in the close function); fixed.
 - Next start: owner reports DP150 to DP153; then the next phase.
 
 ---

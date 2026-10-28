@@ -3344,3 +3344,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Editor, cursor only: the six style buttons stay dimmed but show the style of the character before the cursor (else after it): the colour dot ringed, B, I, U filled. With a selection they show what covers all of it.
 - Colours: darker on the light page (#a31621, #14612a, #1240a8), lighter on the dark page (#ff8f96, #7fe3a0, #92b8ff).
 - Files: `src/js/files.js`, `src/js/app.js`, `src/js/notestyle-cm.js`, `src/css/style.css`. `vite build` passes; the thumbnail store tested apart from the device (write, read, stale, missing, sweep, no plain text in the file); cursor state tested apart from the page; not run through CI, not device-tested (DP153).
+
+**312. Editor close froze the app.** Fix to Decision 311.
+- Cause: closing the editor ran `floatCleanup`, which was declared inside the block that builds the tools, outside the scope of the close function. The close threw before it hid the editor or resolved, so the screen stayed and the app looked frozen.
+- Fix: `floatCleanup` is declared with the editor's other state, and the tools block only assigns it.
+- Why correct: the close function now finds the name in its own scope, so it always reaches hiding the editor and resolving.
+- Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP153 item 6).
