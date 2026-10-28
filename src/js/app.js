@@ -2140,7 +2140,8 @@ async function confirmStrength(kind, secret) {
   return !w || askYesNo({ title: w.title, text: w.text, yes: 'Use it', no: 'Change it' });
 }
 
-function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false } = {}) {
+// extra: a third button, shown first, that resolves 'extra'.
+function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false, extra = '' } = {}) {
   if (activeYesNo) return Promise.resolve(false);
   return new Promise((resolve) => {
     const dlg = document.getElementById('yesno-dialog');
@@ -2148,6 +2149,10 @@ function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', 
     document.getElementById('yesno-text').textContent = text;
     document.getElementById('yesno-yes-btn').textContent = yes;
     document.getElementById('yesno-no-btn').textContent = no;
+    const extraBtn = document.getElementById('yesno-extra-btn');
+    extraBtn.textContent = extra;
+    extraBtn.classList.toggle('hidden', !extra);
+    document.getElementById('yesno-yes-btn').classList.toggle('secondary-btn', !!extra); // the first choice is the filled one
     const finish = (v) => {
       if (!activeYesNo) return;
       activeYesNo = null;
@@ -2155,6 +2160,7 @@ function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', 
       resolve(v);
     };
     document.getElementById('yesno-yes-btn').onclick = () => finish(true);
+    extraBtn.onclick = () => finish('extra');
     document.getElementById('yesno-no-btn').onclick = () => finish(explicitNo ? 'no' : false);
     activeYesNo = { finish };
     dlg.classList.remove('hidden');
@@ -2444,14 +2450,14 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
   return new Promise((resolve) => {
     const { text, spans } = splitNoteStyle(stored);
     const $ = (id) => document.getElementById(id);
-    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), styleBar = $('editor-style-tools'), saveBtn = $('editor-save-btn');
+    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), saveBtn = $('editor-save-btn');
     const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat()); // what is stored and drafted
     let ed = null, closed = false, dirty = false, saving = false, draftTimer = null, countTimer = null, findBtn = null;
     const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(raw())).catch(() => {}); };
     const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = session.title;
-    host.replaceChildren(); bar.replaceChildren(); styleBar.replaceChildren();
+    host.replaceChildren(); bar.replaceChildren();
     const renameBtn = $('editor-rename-btn');
     renameBtn.onclick = async () => {
       if (!session.onRename) return;
@@ -2482,28 +2488,32 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       clearTimeout(draftTimer); clearTimeout(countTimer);
       if (!discarded) { if (dirty) saveDraft(); else if (session.clear) Promise.resolve(session.clear()).catch(() => {}); } // lock, screen-off: keep the text
       if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
-      bar.replaceChildren(); styleBar.replaceChildren();
+      bar.replaceChildren();
       screen.classList.add('hidden');
       activeEditor = null;
       updateBackButtonState();
       resolve(null);
     };
-    // Unsaved changes: one Back asks Yes/No.
+    // Unsaved changes: one Back asks Save & exit, Yes discard or keep editing (Decision 310).
     const requestBack = async () => {
       if (!dirty) { finish(); return; }
-      const yes = await askYesNo({ title: 'Discard changes?', text: 'Your note has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
-      if (yes && !closed) { if (session.clear) await Promise.resolve(session.clear()).catch(() => {}); finish(true); }
+      const r = await askYesNo({ title: 'Discard changes?', text: 'Your note has not been saved.', yes: 'Yes, discard', no: 'No, keep editing', extra: 'Save & exit' });
+      if (closed) return;
+      if (r === 'extra') { if (await doSave() && !closed) finish(); return; } // a failed or cancelled save keeps the editor open
+      if (r) { if (session.clear) await Promise.resolve(session.clear()).catch(() => {}); finish(true); }
     };
     $('editor-back-btn').onclick = requestBack;
-    saveBtn.onclick = async () => {
-      if (saving || saveBtn.disabled || !ed) return;
+    // Resolves true when the note was saved.
+    const doSave = async () => {
+      if (saving || !ed) return false;
+      if (saveBtn.disabled) { toast('Nothing to save yet'); return false; }
       const doc = ed.view.state.doc, v = doc.toString(), fmt = ed.getFormat();
-      if (!v.trim()) { toast('Nothing to save yet'); return; }
+      if (!v.trim()) { toast('Nothing to save yet'); return false; }
       saving = true; syncSave();
       let ok = false;
       try { ok = await session.onSave(joinNoteStyle(v, fmt)); } catch (err) { toast(`Could not save: ${err.message || err}`); }
       saving = false;
-      if (closed || !ed) return;
+      if (closed || !ed) return ok;
       if (ok) {
         ed.markClean(doc, fmt); // what was typed or styled while saving still counts as a change
         dirty = ed.isDirty();
@@ -2511,7 +2521,9 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         $('editor-title').textContent = session.title;
       }
       syncSave();
+      return ok;
     };
+    saveBtn.onclick = doSave;
     activeEditor = { finish: (r) => finish(r === true), requestBack, isVault };
     screen.classList.remove('hidden');
     updateBackButtonState();
@@ -2528,22 +2540,12 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         b.onmousedown = (e) => e.preventDefault(); // the tap keeps the keyboard up and the selection
         b.onclick = fn; host2.appendChild(b); return b;
       };
-      // Second row (Decision 309): one colour of red, green, blue, and bold, italic, underline. Usable with text selected only;
-      // a second tap on the same one removes it.
-      const sw = {}, fm = {};
-      for (const [k, name] of [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']]) sw[k] = mk(styleBar, `ns-sw ns-sw-${k}`, '', `${name} text`, () => ed.toggleStyle('c', k));
-      styleBar.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
-      for (const [k, h, name] of [['b', '<b>B</b>', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['u', '<u>U</u>', 'Underline']]) fm[k] = mk(styleBar, 'ev-tool ev-fmt', h, name, () => ed.toggleStyle(k));
-      const paintStyle = (inf) => {
-        for (const k of Object.keys(sw)) { sw[k].disabled = !inf.has; sw[k].classList.toggle('on', inf.c === k); }
-        for (const k of Object.keys(fm)) { fm[k].disabled = !inf.has; fm[k].classList.toggle('on', !!inf[k]); }
-      };
-      paintStyle({ has: false, c: null, b: false, i: false, u: false });
+      let paintStyle = () => {};
       ed = mod.createCodeEditor({
         parent: host, text, spans, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
         onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
-        onSelect: paintStyle,
+        onSelect: (inf) => paintStyle(inf),
         onChange: () => {
           dirty = ed.isDirty(); sync(); syncSave();
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
@@ -2553,11 +2555,24 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
       redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
       findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => ed.find()); // a second tap closes it
-      mk(bar, 'ev-tool', 'Go to', 'Go to line', () => ed.goTo());
-      const wrapBtn = mk(bar, 'ev-tool', 'Wrap', 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
+      mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
+      const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
       wrapBtn.classList.toggle('on', ed.isWrapped());
       mk(bar, 'ev-tool', 'A\u2212', 'Smaller text', () => ed.bumpSize(-1));
       mk(bar, 'ev-tool', 'A+', 'Larger text', () => ed.bumpSize(1));
+      // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
+      // selected only; a second tap on the one that is on removes it.
+      const gap = () => bar.appendChild(Object.assign(document.createElement('span'), { className: 'ns-gap' }));
+      const sw = {}, fm = {};
+      gap();
+      for (const [k, name] of [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']]) sw[k] = mk(bar, 'ev-tool ns-dotbtn', `<span class="ns-dot ns-dot-${k}"></span>`, `${name} text`, () => ed.toggleStyle('c', k));
+      gap();
+      for (const [k, h, name] of [['b', '<b>B</b>', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['u', '<u>U</u>', 'Underline']]) fm[k] = mk(bar, 'ev-tool ev-fmt', h, name, () => ed.toggleStyle(k));
+      paintStyle = (inf) => {
+        for (const k of Object.keys(sw)) { sw[k].disabled = !inf.has; sw[k].classList.toggle('on', inf.c === k); }
+        for (const k of Object.keys(fm)) { fm[k].disabled = !inf.has; fm[k].classList.toggle('on', !!inf[k]); }
+      };
+      paintStyle({ has: false, c: null, b: false, i: false, u: false });
       ed.setEditing(true, !text); // keyboard up at once for a new note only
       sync(); syncSave();
     })();
@@ -2663,14 +2678,14 @@ function thumbGridHtml(items, cols = DEFAULT_COLS) {
 }
 
 // Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
-const ZOOM_MAX = 6, ZOOM_DOUBLE = 2.5;
+const ZOOM_MAX = 6, ZOOM_DOUBLE = 2.5, SLIDE_MS = 160; // SLIDE_MS: a swipe slides the picture off and the next one in
 function clampPan(tx, ty, scale, stage, img) {
   const mx = Math.max(0, (img.clientWidth * scale - stage.clientWidth) / 2);
   const my = Math.max(0, (img.clientHeight * scale - stage.clientHeight) / 2);
   return [Math.min(mx, Math.max(-mx, tx)), Math.min(my, Math.max(-my, ty))];
 }
-function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
-  let scale = 1, tx = 0, ty = 0, swipeDx = 0;
+function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity = null } = {}) {
+  let scale = 1, tx = 0, ty = 0, swipeDx = 0, leaving = false;
   const pts = new Map();
   let pinch = null, lastTap = null, moved = false;
   const apply = (animate = false) => {
@@ -2681,6 +2696,7 @@ function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
   const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
   const down = (e) => {
+    if (leaving) return;
     stage.setPointerCapture?.(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
     moved = false;
@@ -2689,7 +2705,7 @@ function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
   };
   const move = (e) => {
     const p = pts.get(e.pointerId);
-    if (!p) return;
+    if (!p || leaving) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (Math.abs(e.clientX - p.sx) + Math.abs(e.clientY - p.sy) > 8) moved = true;
@@ -2714,7 +2730,14 @@ function attachZoomPan(stage, img, { onSwipe = null, onActivity = null } = {}) {
     if (scale < 1.02) { scale = 1; tx = ty = 0; }
     const dx = swipeDx;
     swipeDx = 0;
-    if (scale === 1 && Math.abs(dx) > stage.clientWidth * 0.2 && onSwipe) { apply(false); onSwipe(dx < 0 ? 1 : -1); return; }
+    const step = dx < 0 ? 1 : -1;
+    if (scale === 1 && Math.abs(dx) > stage.clientWidth * 0.2 && onSwipe && (!canSwipe || canSwipe(step))) {
+      leaving = true; // the picture carries on off the screen from where the finger left it; the next one slides in
+      img.style.transition = `transform ${SLIDE_MS}ms ease-out`;
+      img.style.transform = `translate(${dx < 0 ? -stage.clientWidth : stage.clientWidth}px, 0px) scale(1)`;
+      setTimeout(() => onSwipe(step), SLIDE_MS);
+      return;
+    }
     if (!moved) { // a tap: a second one close by is a double tap
       const now = Date.now();
       if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
@@ -5594,8 +5617,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openImageViewer(list, startIndex, isVault) {
     const items = list.slice();
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
-    let url = null, zoom = null, token = 0, openViewerRefresh = () => {};
+    let url = null, zoom = null, token = 0, openViewerRefresh = () => {}, enterDir = 0, shut = false;
     const drop = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+    // The pictures either side are made ahead (images only), so a swipe shows the next one at once.
+    const ahead = new Map(), making = new Set();
+    const takeUrl = async (item) => { const u = ahead.get(item.id); if (u) { ahead.delete(item.id); return u; } return imageBlobUrl(item, isVault); };
+    const makeAhead = (i) => {
+      const it = items[i];
+      if (!it || isVideoExt(it.extension) || ahead.has(it.id) || making.has(it.id)) return;
+      making.add(it.id);
+      imageBlobUrl(it, isVault).then((u) => {
+        making.delete(it.id);
+        if (!shut && Math.abs(i - index) === 1) ahead.set(it.id, u); else URL.revokeObjectURL(u);
+      }).catch(() => making.delete(it.id));
+    };
+    const trimAhead = () => {
+      for (const [id, u] of ahead) { if (Math.abs(items.findIndex((x) => x.id === id) - index) !== 1) { URL.revokeObjectURL(u); ahead.delete(id); } }
+    };
     const viewerScreen = document.getElementById('viewer-screen');
     viewerScreen.classList.add('image-mode'); // image fills the screen below the header (Decision 105)
     const fresh = async (item) => isVault
@@ -5604,7 +5642,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openViewer({
       title: items[index]?.label || 'Image', isVault,
       onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
-      onClose: () => { token++; viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      onClose: () => { token++; shut = true; for (const u of ahead.values()) URL.revokeObjectURL(u); ahead.clear(); viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
       render: async (body, { close, refresh }) => {
         openViewerRefresh = refresh;
         if (!items.length) { close(); return; }
@@ -5628,10 +5666,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
-        const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return; } index = n; arm(); render2(); };
+        const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return false; } index = n; enterDir = step; arm(); render2(); return true; };
+        const enter = enterDir; enterDir = 0;
+        if (enter) img.style.transform = `translate(${enter * stage.clientWidth}px, 0px)`; // waits off screen, slides in once loaded
+        const slideIn = () => {
+          if (!enter) return;
+          img.getBoundingClientRect(); // start the transition from the off-screen position
+          img.style.transition = `transform ${SLIDE_MS}ms ease-out`;
+          img.style.transform = 'translate(0px, 0px) scale(1)';
+        };
         const render2 = () => body.isConnected && openViewerRefresh();
         if (zoom) zoom.destroy();
-        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, onActivity: arm }); // a video keeps its own controls: no pinch on it
+        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, canSwipe: (s) => index + s >= 0 && index + s < items.length, onActivity: arm }); // a video keeps its own controls: no pinch on it
         if (isVid) { // a horizontal swipe above the player's controls moves on, as on an image
           let sx = 0, sy = 0, live = false;
           stage.addEventListener('touchstart', (e) => {
@@ -5666,13 +5712,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mine = ++token;
         drop();
         try {
-          const u = await imageBlobUrl(item, isVault);
+          const u = await takeUrl(item);
           if (mine !== token) { URL.revokeObjectURL(u); return; } // moved on or closed while loading
           url = u;
           await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
           loading.remove();
+          slideIn();
+          trimAhead(); makeAhead(index + 1); makeAhead(index - 1);
         } catch (err) {
           if (mine !== token) return;
+          slideIn();
           // A format the WebView cannot decode (for example HEIC or some video codecs): offer the phone's own app.
           loading.classList.add('img-fail');
           loading.innerHTML = `<span>${escapeHtml(String(err.message || err))}</span><button type="button" class="secondary-btn">Open in another app</button>`;
