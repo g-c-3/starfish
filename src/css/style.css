@@ -1428,17 +1428,15 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 #editor-screen .editor-bar .icon-btn .ic { width: 20px; height: 20px; }
 #editor-title { font-size: 15px; }
 #editor-screen .editor-save { padding: 6px 16px; border-radius: 10px; font-size: 14px; min-height: 0; }
-#editor-screen .ev-tools { gap: 5px; padding: 3px 8px; overflow: hidden; border-bottom: 0; }
-#editor-screen .ev-tools + .ev-tools { padding-top: 0; border-bottom: 1px solid var(--border); }
-#editor-screen .ev-tool { flex: 1 1 0; min-width: 0; min-height: 30px; height: 30px; padding: 0 4px; border-radius: 15px; font-size: 13px; display: grid; place-items: center; margin: 0; }
-#editor-screen .ev-tool .ic { width: 18px; height: 18px; }
-#editor-screen .ev-style { align-items: center; justify-content: flex-start; }
-#editor-screen .ev-style .ev-fmt { flex: 0 0 44px; font-size: 14px; }
-.ns-sw { flex: 0 0 30px; width: 30px; height: 30px; min-height: 0; margin: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: none; }
-.ns-sw-r { background: var(--ns-r); } .ns-sw-g { background: var(--ns-g); } .ns-sw-b { background: var(--ns-b); }
-.ns-sw.on { border-color: var(--fg); }
-.ns-sw:disabled { opacity: 0.3; }
-.ns-gap { flex: 0 0 14px; }
+#editor-screen .ev-tools { gap: 2px; padding: 3px 6px; overflow: hidden; border-bottom: 1px solid var(--border); }
+#editor-screen .ev-tool { flex: 1 1 0; min-width: 0; max-width: 40px; min-height: 30px; height: 30px; padding: 0; border-radius: 8px; font-size: 12px; display: grid; place-items: center; margin: 0; }
+#editor-screen .ev-tool .ic { width: 17px; height: 17px; }
+#editor-screen .ev-fmt { font-size: 13px; }
+.ns-gap { flex: 0 0 6px; }
+.ns-dot { width: 16px; height: 16px; border-radius: 50%; display: block; }
+.ns-dot-r { background: var(--ns-r); } .ns-dot-g { background: var(--ns-g); } .ns-dot-b { background: var(--ns-b); }
+#editor-screen .ns-dotbtn.on { background: transparent; box-shadow: inset 0 0 0 2px var(--fg); }
+.ns-dotbtn:disabled .ns-dot { opacity: 0.35; }
 #editor-screen .editor-count { padding: 5px 12px calc(7px + env(safe-area-inset-bottom, 0px)); text-align: center; }
 body.overlay-open #editor-screen { padding-bottom: 0; }
 body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the editor has its own Back */
