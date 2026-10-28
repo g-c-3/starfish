@@ -581,8 +581,9 @@ marker), the Vault body search, Share, Download, the size, and the restored sear
 state field of mark decorations, an effect to set or clear a style over a range, `invertedEffects` so undo and redo restore the set
 (also when styled text is deleted and returns), and `coverage` for the selection (what the six style buttons show). Styles do not
 grow when typing at their edge. `createCodeEditor` (note mode) takes `spans`, reports `onSelect`, and counts a style change as dirty.
-Layout: header, a tool row (Undo, Redo, Find as icons; Go to, Wrap, A-, A+), a style row, the text, and the count centred at the
-bottom. The floating Back button is hidden while the editor is open.
+Layout (Decisions 309, 310): header, one tool row (Undo, Redo, Find, Go to, Wrap as icons; A-, A+; the three colours as dots; B, I, U),
+the text, and the count centred at the bottom. The floating Back button is hidden while the editor is open. Back with unsaved changes
+asks Save & exit, Yes discard or keep editing; Save & exit runs the Save button's own save.
 
 ### Reminders: completion and notification actions (Decision 92)
 `reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
@@ -644,7 +645,7 @@ after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, sh
 `entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
 word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
 
-### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308)
+### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308, 310)
 The Gallery folder (Home and Vault; entry type `image`) holds any image or video. A video is told by its extension (`isVideoExt` in
 `fileopen.js`); no new type and no schema change. Two layouts, kept in `meta`: `gallery_view` (grid or list) and `gallery_cols`
 (3 to 9, default 3); neither is in a backup. Grid: tiles square; a two-finger pinch on the grid sets the number per row, fingers
@@ -655,7 +656,8 @@ touched tile can be redrawn. The layout switch is a button in the folder title b
 Thumbnails: Home ones are held in memory only (Decision 162); Vault ones are also stored encrypted (Decision 254, small size only).
 A video thumbnail is one
 frame drawn through a `video` element. The viewer (shared shell) pages through the folder with swipe or arrows and holds one
-full-size blob URL at a time, revoked on change, close or lock. An image zooms with pinch and double-tap; a video plays in a native
+full-size blob URL at a time, revoked on change, close or lock; the pictures either side are read ahead as blob links (images only) so
+a swipe slides at once, and are revoked when out of range, on close and on lock. An image zooms with pinch and double-tap; a video plays in a native
 player with its own controls (no pinch, no swipe; the arrows move on). A format the WebView cannot decode (for example HEIC) shows
 a message and Open in another app, which hands the file to the phone as Files does.
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).

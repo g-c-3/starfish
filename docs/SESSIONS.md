@@ -15,7 +15,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Owner confirmed DP149 except two points. Decision 308: the pinch worked only on the tiles, now on the whole screen; the layout button lost its box and lines up with the title, lock and power buttons. `vite build` passes; not run through CI.
 - Decision 309: Gallery title line aligned with the lock and power buttons (cause: global button minimum height); viewer arrows removed, video swipes; editor header and tool rows slimmer, Undo, Redo and Find as icons, count at the bottom centre; new style row (red, green, blue, bold, italic, underline) on selected text, stored as one last line of the note text (no schema change), stripped by every reader of the words (search, Share, Download, size). New `notestyle.js`, `notestyle-cm.js`. `vite build` passes; style logic tested apart from the page; not run through CI.
 - Risks: styles are in the stored text, so an older build restoring a newer backup shows the data line; DP150 not yet reported.
-- Next start: owner reports DP150 and DP151; then the next phase.
+- Decision 310: Gallery swipe smooth (slide off and in, neighbours read ahead); editor colours and styles moved into the single tool row (Go to and Wrap as icons); Back with unsaved changes offers Save & exit. `vite build` passes; not run through CI.
+- Next start: owner reports DP150, DP151 and DP152; then the next phase.
 
 ---
 
