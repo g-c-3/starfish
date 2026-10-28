@@ -13,7 +13,9 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Risks: a video is read whole into memory; the pinch direction follows the request (apart = more per row); ordering still by created time.
 - Owner confirmed DP146 and DP147 (Phase 39 closed) and DP148 except the pinch. Decision 307: the pinch got stuck after one use and blocked taps (cause and fix in the decision); direction reversed; range 3 to 9; "pinch to resize" text removed; Grid/List moved to the title bar. `vite build` passes; not run through CI.
 - Owner confirmed DP149 except two points. Decision 308: the pinch worked only on the tiles, now on the whole screen; the layout button lost its box and lines up with the title, lock and power buttons. `vite build` passes; not run through CI.
-- Next start: owner reports DP150; then the next phase.
+- Decision 309: Gallery title line aligned with the lock and power buttons (cause: global button minimum height); viewer arrows removed, video swipes; editor header and tool rows slimmer, Undo, Redo and Find as icons, count at the bottom centre; new style row (red, green, blue, bold, italic, underline) on selected text, stored as one last line of the note text (no schema change), stripped by every reader of the words (search, Share, Download, size). New `notestyle.js`, `notestyle-cm.js`. `vite build` passes; style logic tested apart from the page; not run through CI.
+- Risks: styles are in the stored text, so an older build restoring a newer backup shows the data line; DP150 not yet reported.
+- Next start: owner reports DP150 and DP151; then the next phase.
 
 ---
 

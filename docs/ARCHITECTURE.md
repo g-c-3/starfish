@@ -572,6 +572,18 @@ full-screen editor (the code editor in note mode, Decision 292; drafts per Decis
 (Vault ones); a capture loop that sees a lock stops instead of reopening the editor. Description is searchable in
 the same FTS column as the body. Tapping a row opens it; text notes, reminders and locations have viewers so far.
 
+### Note styles and editor layout (Decision 309)
+Notes carry character styles: colour (red, green, blue), bold, italic, underline. `notestyle.js` (pure) splits a stored note into
+its words and spans and joins them back; the spans are one last line of `body_text` (Home) or of the encrypted body (Vault): a line
+break, three U+2063, `{"v":1,"s":[[kind,from,to,value]]}`. No column was added, so Save, drafts, Move, backup and restore carry
+them unchanged. Readers that want the words call `plainNoteText`: the full-text row and the substring SQL on Home (the SQL cuts at the
+marker), the Vault body search, Share, Download, the size, and the restored search row. `notestyle-cm.js` is the editor side: a
+state field of mark decorations, an effect to set or clear a style over a range, `invertedEffects` so undo and redo restore the set
+(also when styled text is deleted and returns), and `coverage` for the selection (what the six style buttons show). Styles do not
+grow when typing at their edge. `createCodeEditor` (note mode) takes `spans`, reports `onSelect`, and counts a style change as dirty.
+Layout: header, a tool row (Undo, Redo, Find as icons; Go to, Wrap, A-, A+), a style row, the text, and the count centred at the
+bottom. The floating Back button is hidden while the editor is open.
+
 ### Reminders: completion and notification actions (Decision 92)
 `reminderStatus(row)` (`reminders.js`): `done` if `completed_at` is set; `fired` if it does not repeat and its time
 has passed; otherwise `upcoming`. Done and fired are greyed out in lists. A repeating reminder is never inactive
