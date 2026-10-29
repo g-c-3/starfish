@@ -176,9 +176,12 @@ let moneyMonth = null; // { y, m } month shown in the Money folder header; null 
 let vaultMoneyMonth = null; // same for the Vault Money folder (Decision 135)
 let moneyChartMode = 'month'; // chart under the month header: 'month' (6 months) or 'week' (weeks of the shown month); per folder, in memory (Decision 263)
 let vaultMoneyChartMode = 'month';
+const voiceFolderItems = { home: [], vault: [] }; // the recordings shown in an open Voice folder, in order: what the viewer swipes through (Decision 313)
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
+  stopRowPlay();
+  voiceFolderItems.home = [];
   openFolderType = null;
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
@@ -284,6 +287,8 @@ function closeVaultSettings() {
 let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
 function closeVaultFolder() {
   exitSelection();
+  stopRowPlay();
+  voiceFolderItems.vault = [];
   openVaultFolderType = null;
   vaultMoneyMonth = null;
   const vms = document.getElementById('vault-money-summary'); // amounts must not stay in the page once the folder closes or the Vault locks
@@ -1274,6 +1279,8 @@ async function finishVaultUnlock(vmk) {
 function lockVault() {
   if (pendingPurge?.isVault) flushPurge(); // the person chose to delete; the Undo toast goes with the lock
   exitSelection();
+  stopRowPlay();
+  voiceFolderItems.vault = [];
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
@@ -2003,8 +2010,10 @@ function rowIconHtml(type, ext) {
 // The five buttons under a row (edit, share, download, move, delete) are not drawn (Decision 303): Edit is a tap on the row, and
 // the rest are in the selection bar and the viewers. actionPrefix is kept so the callers and the idle handlers need no change.
 // thumb: a Gallery list row, the icon is replaced by the item's thumbnail (filled by loadThumbsInto).
-function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false }, actionPrefix = null) {
-  const icon = thumb
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false, play = false }, actionPrefix = null) {
+  const icon = play
+    ? `<button type="button" class="row-icon row-play" data-id="${escapeHtml(id)}" aria-label="Play">${PLAY_INNER(false)}</button>`
+    : thumb
     ? `<span class="row-icon row-thumb${isVideoExt(ext) ? ' is-video' : ''}" data-id="${escapeHtml(id)}">${iconSvg('image')}</span>`
     : rowIconHtml(type, ext);
   return `
@@ -2904,6 +2913,68 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, 
   };
 }
 
+// ---- Play from the Voice list (Decision 313): the round button on a recording plays it without opening it; the same button pauses.
+// One recording at a time; it stops when the folder closes, the Vault locks or a recording is opened.
+const PLAY_INNER = (on) => `${on ? ICON_PAUSE : ICON_PLAY}<span class="mic-badge">${iconSvg('voice')}</span>`;
+let rowPlay = null, rowPlayLoading = false; // rowPlay: { id, isVault, audio, url, routed }
+function paintRowPlay() {
+  document.querySelectorAll('.row-play').forEach((b) => {
+    const on = !!rowPlay && rowPlay.id === b.dataset.id && !rowPlay.audio.paused;
+    b.classList.toggle('playing', on);
+    b.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    b.innerHTML = PLAY_INNER(on);
+  });
+}
+function stopRowPlay() {
+  const r = rowPlay;
+  if (!r) return;
+  rowPlay = null;
+  try { r.audio.pause(); } catch { /* already stopped */ }
+  if (r.routed) setAudioRoute(false);
+  r.audio.removeAttribute('src');
+  r.audio.load();
+  URL.revokeObjectURL(r.url);
+  paintRowPlay();
+}
+// The saved output changed while a recording plays: move it at once.
+function reroutRowPlay() {
+  const r = rowPlay;
+  if (!r || r.audio.paused) return;
+  if (voiceOutDefault === 'earpiece') { if (!r.routed) r.routed = setAudioRoute(true); } else if (r.routed) { setAudioRoute(false); r.routed = false; }
+}
+async function toggleRowPlay(id, isVault) {
+  if (rowPlayLoading) return;
+  if (rowPlay && rowPlay.id === id) {
+    const a = rowPlay.audio;
+    if (!a.paused) { a.pause(); return; }
+    if (a.ended) a.currentTime = 0;
+    if (voiceOutDefault === 'earpiece' && !rowPlay.routed) rowPlay.routed = setAudioRoute(true);
+    a.play().catch(() => toast('Could not play this recording'));
+    return;
+  }
+  stopRowPlay();
+  rowPlayLoading = true;
+  let url;
+  try {
+    if (isVault) url = (await openVaultEntry(id)).blobUrl;
+    else {
+      const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [id])).values || [])[0];
+      if (!row) return;
+      url = URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: audioMimeForExtension(row.extension) }));
+    }
+  } catch (err) { toast(`Could not play: ${err.message || err}`); return; } finally { rowPlayLoading = false; }
+  const audio = new Audio(url), r = { id, isVault, audio, url, routed: false };
+  rowPlay = r;
+  const leave = () => { if (r.routed) { setAudioRoute(false); r.routed = false; } };
+  audio.addEventListener('play', paintRowPlay);
+  audio.addEventListener('pause', () => { leave(); paintRowPlay(); });
+  audio.addEventListener('ended', () => { leave(); paintRowPlay(); });
+  audio.addEventListener('timeupdate', () => { if (!audio.paused) (isVault ? armVaultAutoLock : armAppAutoLock)(); });
+  audio.addEventListener('error', () => { toast('Could not play this recording'); if (rowPlay === r) stopRowPlay(); });
+  if (voiceOutDefault === 'earpiece') { if (setAudioRoute(true)) r.routed = true; else toast('Earpiece is not available on this phone'); }
+  audio.play().catch(() => { toast('Could not play this recording'); if (rowPlay === r) stopRowPlay(); });
+}
+
 // Reminder completion (Decision 92). Top-level: notification actions call these before the UI exists.
 // Done: a one-off is finished and cancelled. A repeating reminder is only done for this time (Decision 108): its
 // snooze is cleared and the later occurrences stay scheduled.
@@ -3777,7 +3848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items) {
-    return items.map((e) => entryRowHtml(vaultRowProps(e, true), 'vault')).join('') || emptyStateHtml('folder');
+    return items.map((e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')).join('') || emptyStateHtml('folder');
   }
 
   function renderVaultCounts() {
@@ -3797,6 +3868,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     container.innerHTML = vaultRowsHtml(items);
+    if (openVaultFolderType === 'voice') { voiceFolderItems.vault = items; paintRowPlay(); }
     container.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async (e) => {
       if (e.target.closest('.row-actions')) return;
       await openEntry(r.dataset.id, true, items.find((i) => i.id === r.dataset.id));
@@ -3953,11 +4025,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const vTitle = document.getElementById('vault-folder-title');
     vTitle.dataset.vaultType = type;
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}`;
+    if (type === 'voice') await loadVoiceOut();
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
-    await showVoiceSwitch('vault-voice-out-wrap', 'vault-voice-out-seg', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(true); }
     renderVault();
   }
@@ -4644,8 +4716,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row, true)
+      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
     }, 'main')).join('') || emptyStateHtml('folder');
+    if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
       if (e.target.closest('.row-actions')) return;
@@ -4680,22 +4753,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (id === 'vault-pdf-inapp-toggle') armVaultAutoLock();
     });
   }
-  // Playback output default (Decision 283): one choice for Home and Vault, shown at the top of the Voice folder.
-  async function showVoiceSwitch(wrapId, segId, type) {
-    document.getElementById(wrapId).classList.toggle('hidden', type !== 'voice');
-    if (type !== 'voice') return;
-    voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
-    paintOutSeg(document.getElementById(segId), voiceOutDefault);
+  // Playback output default (Decisions 283, 313): one choice for Home and Vault, a small two-icon switch in the Voice folder's title bar.
+  async function loadVoiceOut() { voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker'; }
+  function voiceOutHtml() {
+    const b = (v, icon, label) => `<button type="button" data-out="${v}" class="${voiceOutDefault === v ? 'active' : ''}" aria-label="${label}" title="${label}">${iconSvg(icon)}</button>`;
+    return `<div class="vo-seg" role="group" aria-label="Play recordings through">${b('speaker', 'speaker', 'Speaker')}${b('earpiece', 'earpiece', 'Earpiece')}</div>`;
   }
-  for (const [id, vault] of [['voice-out-seg', false], ['vault-voice-out-seg', true]]) {
-    document.getElementById(id).addEventListener('click', async (e) => {
-      const b = e.target.closest('button[data-out]');
+  for (const isVault of [false, true]) {
+    document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
+      const b = e.target.closest('.vo-seg button[data-out]');
       if (!b) return;
       voiceOutDefault = b.dataset.out === 'earpiece' ? 'earpiece' : 'speaker';
-      paintOutSeg(document.getElementById(id), voiceOutDefault);
+      b.parentNode.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
       await metaSet('voice_output', voiceOutDefault);
-      if (vault) armVaultAutoLock();
+      reroutRowPlay();
+      if (isVault) armVaultAutoLock();
     });
+    // The round button on a recording row plays or pauses it; the rest of the row still opens it.
+    document.getElementById(isVault ? 'vault-folder-list' : 'folder-list').addEventListener('click', (e) => {
+      const b = e.target.closest('.row-play');
+      if (!b) return;
+      e.stopPropagation(); e.preventDefault();
+      if (isVault) armVaultAutoLock();
+      toggleRowPlay(b.dataset.id, isVault);
+    }, true);
   }
   async function openFolder(type, btn) {
     openFolderType = type;
@@ -4703,11 +4784,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}`;
+    if (type === 'voice') await loadVoiceOut();
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
-    await showVoiceSwitch('voice-out-wrap', 'voice-out-seg', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(false); }
     await renderMainTimeline();
   }
@@ -5552,44 +5633,112 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Saved voice entry: player plus details. Vault audio is decrypted on open into an in-memory URL, revoked on close.
-  async function openVoice(item, isVault) {
-    let url = null, player = null;
+  // A recording opens in the viewer; swipe sideways moves to the next or previous recording of the folder (Decision 313), the page
+  // sliding off and the next one in as in the Gallery. `list`: the folder's recordings in order, or nothing for a single one.
+  async function openVoice(item, isVault, list = null) {
+    stopRowPlay();
+    const items = list && list.some((x) => x.id === item.id) ? list.slice() : [item];
+    let index = items.findIndex((x) => x.id === item.id);
+    let url = null, player = null, token = 0, enterDir = 0, leaving = false, closed = false, viewerRefresh = () => {};
+    const ref = { id: item.id, type: item.type }; // the viewer's Share, Download, Move and Delete read this: it follows the swipe
+    const bodyEl = document.getElementById('viewer-body');
     const fresh = async () => isVault
-      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
-      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+      ? ((getVaultIndex() || []).find((e) => e.id === items[index].id) || items[index])
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [items[index].id])).values || [])[0] || items[index];
     const source = async () => {
       if (url) return url;
-      if (isVault) { url = (await openVaultEntry(item.id)).blobUrl; return url; }
+      if (isVault) { url = (await openVaultEntry(items[index].id)).blobUrl; return url; }
       const row = await fresh();
       url = URL.createObjectURL(new Blob([await readEntryBytes(row)], { type: audioMimeForExtension(row.extension) }));
       return url;
     };
+    const release = () => {
+      token++;
+      if (player) { player.destroy(); player = null; }
+      if (url) { URL.revokeObjectURL(url); url = null; }
+    };
+    const canGo = (s) => index + s >= 0 && index + s < items.length;
+    const go = (step) => {
+      if (closed || !canGo(step)) return false;
+      release();
+      index += step; ref.id = items[index].id; enterDir = step;
+      viewerRefresh();
+      return true;
+    };
+    // Swipe: the page follows the finger, then slides off (or eases back); a touch on the player's own controls is not a swipe.
+    const wrapEl = () => bodyEl.querySelector('.vv-wrap');
+    let sx = 0, sy = 0, dx = 0, mode = null, active = false;
+    const slide = (w, to) => { w.style.transition = `transform ${SLIDE_MS}ms ease-out`; w.style.transform = to; };
+    const onDown = (e) => {
+      if (leaving || !wrapEl() || e.target.closest('.audio-player, button, input, select, a')) return;
+      active = true; mode = null; dx = 0; sx = e.clientX; sy = e.clientY;
+    };
+    const onMove = (e) => {
+      if (!active) return;
+      dx = e.clientX - sx;
+      const dy = e.clientY - sy;
+      if (!mode && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
+      if (mode === 'v') { active = false; return; }
+      const w = mode === 'h' ? wrapEl() : null;
+      if (w) { w.style.transition = 'none'; w.style.transform = `translateX(${canGo(dx < 0 ? 1 : -1) ? dx : dx * 0.3}px)`; }
+    };
+    const onUp = (e) => {
+      if (!active) return;
+      active = false;
+      const w = wrapEl();
+      if (mode !== 'h' || !w) return;
+      const step = dx < 0 ? 1 : -1;
+      if (e.type === 'pointerup' && Math.abs(dx) > bodyEl.clientWidth * 0.2 && canGo(step)) {
+        leaving = true;
+        slide(w, `translateX(${dx < 0 ? -bodyEl.clientWidth : bodyEl.clientWidth}px)`);
+        setTimeout(() => go(step), SLIDE_MS);
+      } else slide(w, '');
+    };
+    const ev = [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['pointercancel', onUp]];
+    for (const [n, f] of ev) bodyEl.addEventListener(n, f);
+    bodyEl.classList.add('vv-swipe');
     await openViewer({
-      title: 'Voice', isVault, entry: item,
+      title: 'Voice', isVault, entry: ref,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      onClose: () => { if (player) { player.destroy(); player = null; } if (url) { URL.revokeObjectURL(url); url = null; } },
-      render: async (body) => {
+      onClose: () => { closed = true; release(); for (const [n, f] of ev) bodyEl.removeEventListener(n, f); bodyEl.classList.remove('vv-swipe'); },
+      render: async (body, { refresh }) => {
+        viewerRefresh = refresh;
+        leaving = false;
+        const mine = ++token;
         const row = await fresh();
         const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
+        if (mine !== token) return;
         const saved = isVault ? row.createdAt : row.created_at;
         body.innerHTML = `
-          <div class="detail-hero" data-type="voice">
-            <span class="row-icon">${iconSvg('voice')}</span>
-            <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
-            <div class="hero-sub">Voice recording</div>
-          </div>
-          <div id="vv-player"></div>
-          <dl class="detail-list">
-            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
-            ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
-            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
-          </dl>`;
-        if (player) { player.destroy(); player = null; }
+          <div class="vv-wrap">
+            <div class="detail-hero" data-type="voice">
+              <span class="row-icon">${iconSvg('voice')}</span>
+              <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
+              <div class="hero-sub">Voice recording${items.length > 1 ? ` · ${index + 1}/${items.length}` : ''}</div>
+            </div>
+            <div id="vv-player"></div>
+            <dl class="detail-list">
+              ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+              ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((tg) => `<span class="tag">${escapeHtml(tg)}</span>`).join('')}</dd></div>` : ''}
+              <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
+            </dl>
+          </div>`;
+        const enter = enterDir;
+        enterDir = 0;
+        if (enter) { // the new page waits off the screen on the side the swipe came from, then slides in
+          const w = wrapEl();
+          w.style.transform = `translateX(${enter * body.clientWidth}px)`;
+          w.getBoundingClientRect();
+          slide(w, '');
+        }
         try {
           voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
-          player = createAudioPlayer(body.querySelector('#vv-player'), await source(), { onActivity: isVault ? armVaultAutoLock : armAppAutoLock, output: voiceOutDefault });
+          const u = await source();
+          if (mine !== token) return;
+          player = createAudioPlayer(body.querySelector('#vv-player'), u, { onActivity: isVault ? armVaultAutoLock : armAppAutoLock, output: voiceOutDefault });
         } catch (err) {
-          body.querySelector('#vv-player').innerHTML = `<div class="hero-note">Could not open this recording: ${escapeHtml(String(err.message || err))}</div>`;
+          const box = mine === token && body.querySelector('#vv-player');
+          if (box) box.innerHTML = `<div class="hero-note">Could not open this recording: ${escapeHtml(String(err.message || err))}</div>`;
         }
       }
     });
@@ -5956,7 +6105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'money' || (item.type === 'expense' && !isVault)) await openMoney(item, isVault);
     else if (item.type === 'reminder') await openReminder(item, isVault);
     else if (item.type === 'location') await openLocation(item, isVault);
-    else if (item.type === 'voice') await openVoice(item, isVault);
+    else if (item.type === 'voice') await openVoice(item, isVault, isVault ? voiceFolderItems.vault : voiceFolderItems.home);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') await openFile(item, isVault);
     else if (item.type === 'pdf') {
