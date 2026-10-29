@@ -4036,8 +4036,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(true); }
-    document.getElementById('vault-folder-new-btn').classList.toggle('hidden', type === 'image');
-    document.getElementById('vault-gallery-actions').classList.toggle('hidden', type !== 'image');
+    document.getElementById('vault-folder-new-btn')?.classList.toggle('hidden', type === 'image' && !!document.getElementById('vault-gallery-actions'));
+    document.getElementById('vault-gallery-actions')?.classList.toggle('hidden', type !== 'image');
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -4789,15 +4789,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
   }
 
-  for (const [prefix, isVault, add] of [['gallery', false, () => startCapture('image')], ['vault-gallery', true, () => startVaultCapture('image')]]) {
-    document.getElementById(`${prefix}-add-btn`).addEventListener('click', add);
-    document.getElementById(`${prefix}-capture-btn`).addEventListener('click', () => startCameraCapture(isVault));
-    document.getElementById(`${prefix}-phone-btn`).addEventListener('click', () => openPhone(isVault));
-    if (!mediaAvailable()) { // a build without the native bridge (browser preview): Add only
-      document.getElementById(`${prefix}-capture-btn`).classList.add('hidden');
-      document.getElementById(`${prefix}-phone-btn`).classList.add('hidden');
+  // Wired in a try block and with null-safe lookups: a missing button must never stop the rest of the start-up wiring.
+  try {
+    for (const [prefix, isVault, add] of [['gallery', false, () => startCapture('image')], ['vault-gallery', true, () => startVaultCapture('image')]]) {
+      const $ = (s) => document.getElementById(`${prefix}-${s}-btn`);
+      $('add')?.addEventListener('click', add);
+      $('capture')?.addEventListener('click', () => startCameraCapture(isVault));
+      $('phone')?.addEventListener('click', () => openPhone(isVault));
+      if (!mediaAvailable()) { // a build without the native bridge (browser preview): Add only
+        $('capture')?.classList.add('hidden');
+        $('phone')?.classList.add('hidden');
+      }
     }
-  }
+  } catch (err) { console.error('Gallery buttons not wired:', err); }
 
   // ---- Main timeline — showMainTimeline() (app.js) only ever returned rows; nothing rendered
   // them or attached the five per-file actions (built in Phase 7, two sessions ago) to anything.
@@ -4907,8 +4911,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(false); }
-    document.getElementById('folder-new-btn').classList.toggle('hidden', type === 'image'); // Gallery: Add, Capture and Phone instead (Decision 316)
-    document.getElementById('gallery-actions').classList.toggle('hidden', type !== 'image');
+    document.getElementById('folder-new-btn')?.classList.toggle('hidden', type === 'image' && !!document.getElementById('gallery-actions')); // Gallery: Add, Capture and Phone instead (Decision 316)
+    document.getElementById('gallery-actions')?.classList.toggle('hidden', type !== 'image');
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
