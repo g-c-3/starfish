@@ -16,7 +16,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Owner: a 13 s 4K Capture was slow, and the Phone viewer left an unused band at the bottom. Decision 319: files stream into the encrypted store (no whole-file base64); the Save dialog opens before reading; viewer fills the screen. `vite build` passes; not run through CI.
 - Owner: only the first Capture shot was saved, and a video in the viewer showed a stretched play icon. Decision 320: Capture is a session that saves every new item on each return; thumbnails come from the phone at save time; the viewer sets a video poster. `vite build` passes; not run through CI.
 - Owner: Capture still saved one or two shots; no video thumbnails, old or new. Decision 321: new camera files are read from the DCIM folder with a longer look; the phone's own decoder makes video frames (also for saved videos, via a short-lived decrypted cache file). `vite build` passes; Java not compiled; not run through CI.
-- Next-session start: owner reports DP157 to DP159 (and CI result); fix what fails; then the owner names the next phase.
+- Owner: files saved out of order; Today chips stale until restart; trash message "1 moved"; Undo too dark; asked for Google-Photos drag-select and a better video player. Decision 322 fixes the first four. Drag-select (Phase 42) and the video player (Phase 43) are planned, not started: context ran low. Thumbnails confirmed working on the device (Decision 321).
+- Next-session start: Phase 42, then Phase 43; also owner reports DP157 to DP159 (and CI result); fix what fails; then the owner names the next phase.
 
 ---
 

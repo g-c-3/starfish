@@ -3419,3 +3419,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix, thumbnails: `ArklyMedia.thumbFile()` makes a frame (video) or a rotated photo thumbnail from a file path with the phone's own decoder. A new Capture or Phone file uses it on the original. A saved video whose frame the WebView cannot draw (load fails, 8 s timeout, or a blank frame) is decrypted into a short-lived cache file, framed natively, and the file is deleted at once; one at a time; the result is stored like any thumbnail (Decisions 311, 254). A leftover is removed at launch.
 - When a new file gets no thumbnail, the saved notice says why, once.
 - Files: `scripts/java/ArklyMediaBridge.java`, `src/js/phonegallery.js`, `src/js/app.js`. `vite build` passes; Java not compiled here; not run through CI, not device-tested (DP158, DP160).
+
+**322. Save order, Today chips, trash wording, toast.** Fixes after a device check.
+- Capture and Phone files were saved in the order Arkly got them, so the Gallery showed them out of shooting order: Capture followed the file's change time (a video's is its end), Phone saved the newest first. Both now save oldest first by shot time: the time in a camera file name (such as `IMG_20261029_200543485`), else the file's own time.
+- The Today chips (such as "24 images") were drawn once at start. They are now redrawn with the folder counts, so a change in any category shows at once; "On this day" follows.
+- Trash messages read "N item(s) moved to trash" (also "N items shared", "N items downloaded"), in the Gallery, search, the folder lists and the File explorer.
+- The toast box has `width: max-content`; a fixed box at left 50% wrapped at half the screen and covered the buttons. The Undo label is mixed from the brand colour and the page colour, so it reads on the inverted box in light and dark.
+- Files: `src/js/app.js`, `src/js/explorer.js`, `src/js/phonegallery.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP161).
