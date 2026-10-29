@@ -97,6 +97,8 @@ async function removeFile(row) {
 
 // ---- Vault files (Decision 212): same on-disk format, file key wrapped under the Vault key (a CryptoKey) ----
 const vaultStore = (vmk) => { need(); return createFileStore({ io, getMasterKey: async () => vmk, chunkSize: chunk }); };
+// Streaming Vault writer: same shape as beginFile(), the file key wrapped under the Vault key (Decision 319).
+const beginVaultFile = (vmk) => vaultStore(vmk).begin();
 const saveVaultBase64 = (vmk, b64) => vaultStore(vmk).write(new Uint8Array(fromBase64(b64)));
 const readVaultBytes = (vmk, row) => vaultStore(vmk).read(row);
 const readVaultBase64 = async (vmk, row) => toBase64(await readVaultBytes(vmk, row));
@@ -219,6 +221,6 @@ async function migratePlainFiles({ onProgress } = {}) {
 
 export {
   migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile,
-  saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths,
+  beginVaultFile, saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths,
   putHomeThumb, getHomeThumb, sweepHomeThumbs
 };

@@ -26,25 +26,28 @@ const extOf = (name, mime) => {
   return String(mime || '').split('/')[1]?.split(';')[0].replace('quicktime', 'mov').replace('jpeg', 'jpg') || 'jpg';
 };
 
-// [{ name, fileData (base64), extension }] one at a time, so only one file is in memory as raw bytes.
-export async function readPhoneFiles(items, onProgress) {
-  const out = [];
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    if (onProgress) onProgress(i + 1, items.length);
-    const res = await fetch(mediaSrc(it.path));
-    if (!res.ok) throw new Error(`${it.name}: HTTP ${res.status}`);
-    const blob = await res.blob();
-    const fileData = await new Promise((ok, bad) => {
-      const r = new FileReader();
-      r.onloadend = () => ok(String(r.result).split(',')[1] || '');
-      r.onerror = () => bad(r.error);
-      r.readAsDataURL(blob);
-    });
-    out.push({ name: it.name, fileData, extension: extOf(it.name, it.mime) });
+// Streams one phone file into `sink(bytes)` in the pieces the WebView delivers, so a long 4K video is never held whole in memory or
+// turned into one base64 string (Decision 319). Returns the byte count.
+export async function streamPhoneFile(item, sink) {
+  const res = await fetch(mediaSrc(item.path));
+  if (!res.ok) throw new Error(`${item.name}: HTTP ${res.status}`);
+  let total = 0;
+  if (res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.length) { total += value.length; await sink(value); }
+    }
+  } else {
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    total = bytes.length;
+    await sink(bytes);
   }
-  return out;
+  return total;
 }
+
+export const phoneExtension = (item) => extOf(item.name, item.mime);
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const clock = (ms) => { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -284,7 +287,7 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     const top = el('div', 'ph-view-top');
     const x = el('button', 'ph-x', 'Close');
     x.onclick = closeViewer;
-    const name = el('span', '', it.name);
+    const name = el('span', '', '');
     const add = el('button', '', 'Add');
     add.onclick = async () => {
       const saved = onPick ? await onPick([st.items[st.viewer.i]]) : false;
@@ -292,10 +295,9 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     };
     top.append(x, name, add);
     const stage = el('div', 'ph-view-stage');
-    const count = el('div', 'ph-view-count');
-    v.append(top, stage, count);
+    v.append(top, stage);
     screen.appendChild(v);
-    st.viewer = { el: v, stage, name, count, i };
+    st.viewer = { el: v, stage, name, i };
     showViewer(i);
     let x0 = null;
     stage.addEventListener('touchstart', (e) => { x0 = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
@@ -316,8 +318,7 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     if (it.video) { m.controls = true; m.playsInline = true; }
     m.src = mediaSrc(it.path);
     vw.stage.appendChild(m);
-    vw.name.textContent = it.name;
-    vw.count.textContent = `${i + 1} of ${st.total || st.items.length}`;
+    vw.name.textContent = `${i + 1} of ${st.total || st.items.length} · ${it.name}`;
     if (i >= st.items.length - 3 && st.items.length < st.total) loadPage();
   }
   function closeViewer() {

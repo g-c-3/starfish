@@ -26,8 +26,8 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
-import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, readPhoneFiles } from './phonegallery.js';
-import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
+import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension } from './phonegallery.js';
+import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
@@ -1169,9 +1169,9 @@ async function applyTags(entryId, tagNames) {
 // ---- Non-text capture (voice/image/pdf/file) — didn't exist at all until now; captureText/saveNote
 // only ever handled typed text. Mirrors vault.js's captureToVault() but unencrypted, matching the
 // file-storage convention (Directory.Data/files/<32 hex>, encrypted, Decision 161) already established for backup/restore. ----
-async function captureFile(type, { label, tags = [], description = '', fileData, extension, autoCategory = null }) {
+async function captureFile(type, { label, tags = [], description = '', fileData, extension, autoCategory = null, stored = null }) {
   const id = crypto.randomUUID();
-  const { path: filePath, fileKey } = await saveBase64(fileData); // files/<32 hex>, encrypted; the type stays in extension
+  const { path: filePath, fileKey } = stored || await saveBase64(fileData); // stored: already streamed to disk (Decision 319) // files/<32 hex>, encrypted; the type stays in extension
 
   // OCR for image/pdf isn't implemented yet — Phase 5's native plugin wiring (ML Kit/Tesseract) is
   // still just documented, not coded (android-notes/native-setup.md §6). body_text stays null until
@@ -1188,7 +1188,7 @@ async function captureFile(type, { label, tags = [], description = '', fileData,
 // (Decision 84). files: array of { fileData (base64), extension }, in selection order.
 // Numbering continues from the baseLabel's counter row in label_history, so a later batch picks up
 // where the last one stopped ("Invoice 4" after "Invoice 1..3"). Each file is an independent entry.
-async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], description = '') {
+async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], description = '', save = null) { // save(file, label, i): stores one file itself (Decision 319)
   const historyRow = await db.query(
     `SELECT use_count FROM label_history WHERE type=? AND label=?`,
     [type, baseLabel]
@@ -1207,7 +1207,7 @@ async function batchAddWithCommonLabel(type, baseLabel, files, tags = [], descri
 
   const createdIds = [];
   for (let i = 0; i < files.length; i++) {
-    createdIds.push(await captureFile(type, {
+    createdIds.push(save ? await save(files[i], labels[i], i) : await captureFile(type, {
       label: labels[i], tags, description, fileData: files[i].fileData, extension: files[i].extension
     }));
   }
@@ -1407,10 +1407,10 @@ async function showMainTimeline(types = null) {
 // ---- Private Vault: capture + browse — deliberately mirrors captureText/showMainTimeline's shape,
 // since spec asks for the vault to be "an exact replica of the home screen function" apart from what
 // stays private-at-rest and the Share/Download restriction being lifted (both, same as non-vault). ----
-async function captureToVault({ type, label, tags = [], description = '', text, fileData, extension, ocrText, autoCategory, money, location, fireAt = null, repeatRule = null }) {
+async function captureToVault({ type, label, tags = [], description = '', text, fileData, storedFile, extension, ocrText, autoCategory, money, location, fireAt = null, repeatRule = null }) {
   if (!privateSessionKey) throw new Error('Vault locked — unlock with PIN before capturing');
   armVaultAutoLock(); // any activity resets the vault's own timer, independent of the app-level one
-  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, extension, ocrText, autoCategory, money, location, fireAt, repeatRule });
+  const id = await saveVaultEntry(db, privateSessionKey, { type, label, tags, description, text, fileData, storedFile, extension, ocrText, autoCategory, money, location, fireAt, repeatRule });
   await refreshVaultIndexEntries(db, privateSessionKey, [id]); // only the new item, so it is immediately searchable/listed
   return id;
 }
@@ -4724,52 +4724,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (!items.length) { toast('No new photo or video found'); return; }
     try {
-      toast(`Saving ${items.length === 1 ? 'to Gallery' : items.length + ' files'}…`, true);
-      const files = await readPhoneFiles(items);
-      for (const f of files) {
-        if (p.isVault) await captureToVault({ type: 'image', label: f.name, tags: [], description: '', fileData: f.fileData, extension: f.extension });
-        else await captureFile('image', { label: f.name, fileData: f.fileData, extension: f.extension });
+      for (let i = 0; i < items.length; i++) {
+        toast(items.length === 1 ? 'Saving to Gallery…' : `Saving ${i + 1} of ${items.length}…`, true);
+        await savePhoneItem(items[i], p.isVault, { label: items[i].name });
       }
       if (p.isVault) renderVault(); else await renderMainTimeline();
-      toast(files.length === 1 ? 'Saved to Gallery' : `${files.length} files saved to Gallery`);
+      toast(items.length === 1 ? 'Saved to Gallery' : `${items.length} files saved to Gallery`);
     } catch (err) { toast(`Could not save: ${err.message || err}`); }
   }
   window.addEventListener('arkly-camera-return', () => { finishCameraCapture().catch(() => {}); });
 
-  // Picked on the phone: read, then the same Save dialog as the file chooser. true = saved (the Phone screen closes).
-  async function importPhoneItems(items, isVault) {
-    let files;
+  // One phone file streamed into the encrypted store, then its entry (Decision 319). Nothing is held whole in memory.
+  async function savePhoneItem(item, isVault, { label, tags = [], description = '' }) {
+    const w = isVault ? await beginVaultFile(privateSessionKey) : await beginFile();
+    let stored;
     try {
-      files = await readPhoneFiles(items, (i, n) => { if (n > 1) toast(`Reading ${i} of ${n}…`, true); else toast('Reading…', true); });
-      hideToast();
-    } catch (err) { toast(`Could not read: ${err.message || err}`); return false; }
-    const single = files.length === 1;
+      await streamPhoneFile(item, (bytes) => w.append(bytes));
+      stored = await w.finish();
+    } catch (err) { await w.abort(); throw err; }
+    const extension = phoneExtension(item);
+    try {
+      if (isVault) await captureToVault({ type: 'image', label, tags, description, storedFile: stored, extension });
+      else await captureFile('image', { label, tags, description, stored, extension });
+    } catch (err) { await removeFile({ file_path: stored.path }).catch(() => {}); throw err; }
+  }
+
+  // Picked on the phone: the same Save dialog as the file chooser (names come from the phone, no file is read first), then each file
+  // is streamed in. true = saved (the Phone screen closes).
+  async function importPhoneItems(items, isVault) {
+    const single = items.length === 1;
     const d = await openSaveDialog({
-      heading: single ? 'Save to Gallery' : `Save ${files.length} files`,
-      defaultName: single ? files[0].name : VAULT_TYPE_LABELS.image,
-      count: files.length, isVault, discardLabel: 'Back'
+      heading: single ? 'Save to Gallery' : `Save ${items.length} files`,
+      defaultName: single ? items[0].name : VAULT_TYPE_LABELS.image,
+      count: items.length, isVault, discardLabel: 'Back'
     });
     if (!d) return false;
+    const progress = (i) => toast(single ? 'Saving…' : `Saving ${i} of ${items.length}…`, true);
     try {
-      if (isVault) {
-        const numbered = !single && d.mode === 'number';
-        const start = numbered ? nextBatchStart(getVaultIndex(), 'image', d.name) : 0;
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          await captureToVault({ type: 'image', label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
-        }
-        renderVault();
-        toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
-      } else {
-        if (!single && d.mode === 'number') {
-          const { ids, first, last } = await batchAddWithCommonLabel('image', d.name, files, d.tags, d.description);
-          toast(`${ids.length} files added: ${first} to ${last}`);
-        } else {
-          for (const f of files) await captureFile('image', { label: single ? d.name : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
-          toast(single ? 'Saved' : `${files.length} files added`);
-        }
+      const one = (it, label, i) => { progress(i + 1); return savePhoneItem(it, isVault, { label, tags: d.tags, description: d.description }); };
+      if (!single && d.mode === 'number' && !isVault) {
+        const { ids, first, last } = await batchAddWithCommonLabel('image', d.name, items, d.tags, d.description, one);
         await renderMainTimeline();
+        toast(`${ids.length} files added: ${first} to ${last}`);
+        return true;
       }
+      const numbered = !single && d.mode === 'number'; // Vault: continues after the highest "<n> N" (Decision 174)
+      const start = numbered ? nextBatchStart(getVaultIndex(), 'image', d.name) : 0;
+      for (let i = 0; i < items.length; i++) {
+        await one(items[i], single ? d.name : numbered ? `${d.name} ${start + i + 1}` : items[i].name, i);
+      }
+      if (isVault) renderVault(); else await renderMainTimeline();
+      toast(single ? (isVault ? 'Saved to the Vault' : 'Saved') : `${items.length} files added${isVault ? ' to the Vault' : ''}`);
       return true;
     } catch (err) { toast(`Could not save: ${err.message || err}`); return false; }
   }
