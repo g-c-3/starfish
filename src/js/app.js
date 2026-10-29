@@ -4775,6 +4775,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!b) return;
       e.stopPropagation(); e.preventDefault();
       if (isVault) armVaultAutoLock();
+      b.classList.remove('tap-glow'); void b.offsetWidth; b.classList.add('tap-glow'); // a soft glow on the button that was tapped
+      setTimeout(() => b.classList.remove('tap-glow'), 600);
       toggleRowPlay(b.dataset.id, isVault);
     }, true);
   }
