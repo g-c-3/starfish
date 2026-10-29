@@ -330,3 +330,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-28 | Session 156 (continued: swipe, editor row) | Decision 310 | Gallery swipe slides smoothly; editor tools in one row; Save & exit on Back; DP152 added; vite build passes; not run through CI |
 | 2026-10-28 | Session 156 (continued: thumbnails, editor) | Decision 311 | Encrypted stored Home thumbnails; floating style bar near the top; style shown at the cursor; colour depth by theme; DP153 added; vite build passes; not run through CI |
 | 2026-10-29 | Session 156 (continued: close freeze) | Decision 312 | Editor close no longer freezes; vite build passes; not run through CI |
+| 2026-10-29 | Session 156 (continued: Voice) | Decision 313 | Voice title-bar output switch; play button on rows; swipe between recordings; DP154 added; vite build passes; not run through CI |
