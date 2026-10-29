@@ -3385,3 +3385,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Order is by capture time, then by time added; an item with no capture time sorts after the rest. The DCIM filter leaves screenshots and downloads out of Capture; Phone shows them.
 - Risk: each picked file is read whole into memory, as with Add; a very large video can fail.
 - Files: `scripts/java/ArklyMediaBridge.java`, `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159).
+
+**318. Gallery buttons: start-up wiring made null-safe.** Fix to Decision 316 after a device recording.
+- Symptom: tapping the Gallery card opened nothing.
+- Cause: confirmed by the owner. `index.html` was not uploaded with `app.js`, so the button lookup found nothing and threw, and the card handlers registered after it never ran.
+- Fix: the lookups are null-safe and wrapped in a try block that logs and goes on; the folder-open code no longer assumes the three-button row exists, and keeps New visible when it does not.
+- Why correct: a missing button now costs only that button; the card handlers registered after it always run. The fix is a safeguard; the missing file was the cause.
+- Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP157).

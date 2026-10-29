@@ -12,6 +12,7 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - New native bridge `window.ArklyMedia` and CI step; no new permission (All files access of Decision 207). New `phonegallery.js` and `phonegallery.css`; `app.js` and `index.html` changed; camera icon added to the sprite.
 - `vite build` passes; Java not compiled here; not run through CI; nothing device-tested.
 - Risks: the bridge's first CI compile; media queries and the camera hand-off depend on the phone's camera app and Android version; files are read whole into memory; originals stay in the phone's gallery.
+- Owner reported the Gallery card opening nothing (screen recording). Cause confirmed: `index.html` was missing from the upload. Decision 318: start-up wiring made null-safe as a safeguard. `vite build` passes; not run through CI.
 - Next-session start: owner reports DP157 to DP159 (and CI result); fix what fails; then the owner names the next phase.
 
 ---
