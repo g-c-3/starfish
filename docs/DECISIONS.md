@@ -3400,3 +3400,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Why correct: the stored format is unchanged, so backup, restore, Move and the Vault read these files as any other; only the way the bytes arrive changed.
 - The copy itself stays: the camera app saves to the phone first and Arkly stores its own encrypted copy; the original is not deleted (Decision 317).
 - Files: `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/files.js`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159).
+
+**320. Camera session, thumbnails at save, video poster.** Fix to Decisions 317 and 319 after a device check.
+- Symptom: with Capture only the first photo or video taken was saved; a video opened in the viewer showed the WebView's stretched play icon, not a picture.
+- Cause (camera): not confirmed. The import ran once at the first return and then ended Capture, so a return in the middle of shooting, several shots, or a file the camera app had not finished writing left everything after the first unsaved.
+- Cause (picture): the viewer set no poster, and the WebView drew its default one until playback.
+- Fix, camera: Capture is a session. It lasts while that Gallery (Home or Vault) stays open, at most 15 minutes after the last activity; tapping Capture again inside it keeps what is still unsaved. Every return from the camera app saves each phone item added to a DCIM folder since the session began that has not been saved yet, then looks once more for stragglers. One failed file does not stop the rest; the notice counts saved and failed. Leaving the Gallery, or a Vault lock, ends the session.
+- Fix, picture: a file saved from Capture or Phone gets its thumbnail from the phone's own, stored at once (Home: under the master key; Vault: under the Vault key; Decisions 311, 254), so a long 4K video is not decoded to make one. The viewer sets a poster from the stored thumbnail when one exists (never decoding the file for it) and seeks to 0.05 s once loaded to paint the first frame. The Phone viewer does the same with the phone's thumbnail at 720.
+- Old videos with no stored thumbnail are still made on demand, as before; they get no poster until then.
+- Risk: while a session is open, a DCIM photo taken with the camera app within the window is saved on the next return to Arkly. Phone adds anything missed.
+- Files: `src/js/phonegallery.js`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159, DP160).

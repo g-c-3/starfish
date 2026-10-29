@@ -680,8 +680,9 @@ The Gallery folder (Home and Vault) has three buttons: Add (file chooser), Captu
 (`scripts/java/ArklyMediaBridge.java`, written by `scripts/patch-media.js`): read-only MediaStore access, no permission beyond the All
 files access of the File explorer (checked through `window.ArklyExplorer`). Files are read through `Capacitor.convertFileSrc` and saved with
 `captureFile` (Home) or `captureToVault` (Vault) with a file already streamed into the store (`beginFile` / `beginVaultFile`, Decision 319), so they take the normal path: Home under the master key, Vault under the Vault key.
-- Capture: `openCamera()` starts the phone's camera app; the page keeps `{ isVault, since }`. The resume signal (`arkly-camera-return`,
-  sent from the `appStateChange` handler) lists DCIM items added since and saves them. State is in memory only.
+- Capture: `openCamera()` starts the phone's camera app; the page keeps a session `{ isVault, since, seen, ... }` while that Gallery is open
+  (Decision 320). Each resume signal (`arkly-camera-return`, sent from the `appStateChange` handler) lists DCIM items added since and saves
+  those not yet seen, with the phone's own thumbnail stored beside them. State is in memory only.
 - Phone (`src/js/phonegallery.js`): paged list, album chips, day groups, thumbnails one at a time in memory, viewer from the file URL.
   Picks go to `importPhoneItems` in `app.js`, which opens the same Save dialog as Add before any file is read, then streams each file in. Closes with a Vault lock when opened from the Vault.
 - Stored: `phone_cols` in meta. Nothing else persists; no thumbnail cache.
