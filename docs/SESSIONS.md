@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 158**
+
+Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. The release check hit the unauthenticated rate limit (403), so CI status was not verified. DP157 to DP159, DP161 not reported.
+- Phase 42, Decision 323: drag-to-select in the Gallery grid and list (Home, Vault, search lists) and the Phone browser. Long press selects, dragging extends to every tile between the first and the finger, back shrinks it, edges scroll, a lift opens nothing.
+- New `dragselect.js`; `app.js` and `phonegallery.js` changed. Phone's long press now only selects.
+- `vite build` passes; range logic tested apart from the page; not run through CI; nothing device-tested (DP162).
+- Risks: the scroll lock needs the first move after the long press to be cancelable (a finger already past the system's touch slop starts a scroll and ends the drag); edge-scroll speed is untuned.
+- Next-session start: Phase 43 (video player); also owner reports DP157 to DP159, DP161, DP162 (and CI result); fix what fails.
+
+---
+
 **Session 157**
 
 Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. The release check hit the unauthenticated rate limit (403), so CI status was not verified.

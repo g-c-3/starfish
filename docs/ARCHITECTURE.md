@@ -675,7 +675,7 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
-### Gallery: Add, Capture, Phone (Decisions 316, 317)
+### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)
 The Gallery folder (Home and Vault) has three buttons: Add (file chooser), Capture, Phone. Capture and Phone use `window.ArklyMedia`
 (`scripts/java/ArklyMediaBridge.java`, written by `scripts/patch-media.js`): read-only MediaStore access, no permission beyond the All
 files access of the File explorer (checked through `window.ArklyExplorer`). Files are read through `Capacitor.convertFileSrc` and saved with
@@ -688,10 +688,14 @@ files access of the File explorer (checked through `window.ArklyExplorer`). File
   Picks go to `importPhoneItems` in `app.js`, which opens the same Save dialog as Add before any file is read, then streams each file in. Closes with a Vault lock when opened from the Vault.
 - Stored: `phone_cols` in meta. Nothing else persists; no thumbnail cache.
 
-### Multi-select (Decision 122)
+### Multi-select (Decisions 122, 323)
 Long press on a row or image tile in `#folder-list`, `#timeline`, `#vault-folder-list` or `#vault-list` starts selection (module state
 `selection`, bar `#select-bar`). A capture-phase click handler turns taps into toggles while selecting, so open handlers never run.
 Actions call `runBulkFileAction` (the Select files path). Ended by Back, folder close, screen change, Vault lock or finishing an action.
+Drag-to-select (`src/js/dragselect.js`, Decision 323): the long press selects its tile, then `begin()` makes the selection the earlier set plus
+every tile from that one to the tile under the finger, in document order; the grid root has a permanent non-passive `touchmove` that stops the
+page scrolling while a drag is active, and the nearest scrolling ancestor moves near the top and bottom edge. `dragBlocked` swallows the click after the lift.
+The Phone browser (`phonegallery.js`) uses the same module on its own tiles; there a long press only selects.
 
 ### PDF viewer (Decision 121)
 Entries of type PDF open in `pdfviewer.js`, built on a bundled pdf.js (legacy build, pinned) and loaded on the first PDF open. Pages are

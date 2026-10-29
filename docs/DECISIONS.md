@@ -3426,3 +3426,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Trash messages read "N item(s) moved to trash" (also "N items shared", "N items downloaded"), in the Gallery, search, the folder lists and the File explorer.
 - The toast box has `width: max-content`; a fixed box at left 50% wrapped at half the screen and covered the buttons. The Undo label is mixed from the brand colour and the page colour, so it reads on the inverted box in light and dark.
 - Files: `src/js/app.js`, `src/js/explorer.js`, `src/js/phonegallery.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP161).
+
+**323. Drag-to-select.** Owner request (Google Photos behaviour).
+- New `src/js/dragselect.js`, DOM only. The caller's long press selects the pressed tile, then calls `begin(tile, x, y)`. While the finger stays down, the selection is the set held before the press plus every tile from the pressed one to the tile under the finger, in document order. Moving back shrinks the range; the pressed tile stays selected.
+- The drag stops the page scrolling through a permanent non-passive `touchmove` on the grid root (a handler added after the touch starts is not reliably honoured). Near the top or bottom edge (80 px) the nearest scrolling ancestor moves up to 18 px per frame and the tile under the finger is read again. A second finger, a lift or a cancel ends it.
+- The click after a drag is swallowed for 400 ms, renewed by each move (`dragBlocked`), as the pinch does (`pinchBlocked`).
+- Home and Vault: wired into the long-press handler of `#folder-list`, `#timeline` and `#vault-folder-list` (grid and list rows alike). Phone: wired into its own long press; a long press there now only selects (it no longer toggles a selected tile off; a tap does).
+- Nothing is stored. No schema, permission, native or network change.
+- Files: `src/js/dragselect.js` (NEW), `src/js/app.js`, `src/js/phonegallery.js`. `vite build` passes; range logic tested apart from the page; not run through CI, not device-tested (DP162).
