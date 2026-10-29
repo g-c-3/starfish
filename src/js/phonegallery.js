@@ -19,13 +19,21 @@ export const mediaSrc = (path) => Capacitor.convertFileSrc('file://' + path);
 export function openCamera() { try { return !!bridge()?.openCamera(); } catch { return false; } }
 export const cameraSince = () => { try { return Number(bridge().launchedAt()) || 0; } catch { return 0; } };
 // New camera files: read straight from the DCIM folder (always current), the media index as a second source (Decision 320).
+// When the shot was taken: the time in a camera file name (IMG_20261029_200543485), else the file's own time.
+export function shotTime(it) {
+  const m = /(\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})(\d{3})?/.exec(it.name || '');
+  if (m) { const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], +(m[7] || 0)).getTime(); if (t) return t; }
+  return it.taken || 0;
+}
+export const byShotTime = (a, b) => shotTime(a) - shotTime(b) || String(a.name).localeCompare(String(b.name));
+
 export const newCameraMedia = (sinceSec) => {
   const b = bridge();
   if (!b) return [];
   let fs = [];
   try { fs = b.sinceFs ? parse(b.sinceFs(sinceSec), []) : []; } catch { fs = []; }
-  if (fs.length) return fs;
-  try { return parse(b.since(sinceSec), []); } catch { return []; }
+  if (fs.length) return fs.sort(byShotTime);
+  try { return parse(b.since(sinceSec), []).sort(byShotTime); } catch { return []; }
 };
 
 const extOf = (name, mime) => {
@@ -250,7 +258,7 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
 
   async function submit() {
     if (!st.sel.size || !onPick) return;
-    const items = [...st.sel].sort((a, b) => a - b).map((i) => st.items[i]);
+    const items = [...st.sel].map((i) => st.items[i]).sort(byShotTime); // oldest first, so the Gallery keeps the shooting order (Decision 322)
     const saved = await onPick(items);
     if (saved && !closed) finish();
   }

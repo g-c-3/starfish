@@ -2097,7 +2097,7 @@ function hideToast() {
 let refreshAfterUndo = null; // set once the screens exist: redraws Home, search and the Vault
 function offerUndo(ids, { isVault = false, message = null, after = null } = {}) {
   if (!ids.length) return;
-  toast(message || (ids.length === 1 ? 'Moved to trash' : `${ids.length} moved to trash`), false, {
+  toast(message || `${ids.length} item${ids.length === 1 ? '' : 's'} moved to trash`, false, {
     label: 'Undo', isVault,
     run: async () => {
       try {
@@ -4910,6 +4910,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   async function renderFolderCounts() {
+    renderDigest().catch(() => {}); // the Today chips follow every change in every category (Decision 322)
+    renderOnThisDay().catch(() => {});
     const res = await db.query(`SELECT type, COUNT(*) AS c FROM entries WHERE deleted_at IS NULL AND is_private=0 GROUP BY type`);
     const byType = Object.fromEntries((res.values || []).map((r) => [r.type, r.c]));
     document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => {
@@ -5115,7 +5117,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       else { await renderMainTimeline(); document.getElementById('search-input')?.dispatchEvent(new Event('input')); }
       const done = results.length - failed.length;
       const verb = action === 'delete' ? 'moved to trash' : action === 'share' ? 'shared' : 'downloaded';
-      const msg = failed.length ? `${done} ${verb}, ${failed.length} failed: ${failed[0].error}` : `${done} ${verb}`;
+      const what = `${done} item${done === 1 ? '' : 's'}`;
+      const msg = failed.length ? `${what} ${verb}, ${failed.length} failed: ${failed[0].error}` : `${what} ${verb}`;
       if (action === 'delete' && done) offerUndo(results.filter((r) => r.ok).map((r) => r.id), { isVault, message: msg });
       else toast(msg);
     }

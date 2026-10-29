@@ -373,7 +373,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (!yes) return;
     const r = await manage.trashEntries(fsApi, items, volume);
     st.sel.clear();
-    toast(r.failed ? `${r.done} moved to trash, ${r.failed} could not be moved${why(r)}.` : `${r.done} moved to trash.`);
+    const what = `${r.done} item${r.done === 1 ? '' : 's'}`;
+    toast(r.failed ? `${what} moved to trash, ${r.failed} could not be moved${why(r)}.` : `${what} moved to trash.`);
     await afterChange(cwd);
   }
   async function showProps(e) {
