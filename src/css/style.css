@@ -1454,11 +1454,10 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 .vo-seg button.active { background: var(--surface); color: var(--tc-ink, var(--brand-ink)); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
 .vo-seg .ic { width: 17px; height: 17px; }
 #folder-title:has(.vo-seg), #vault-folder-title:has(.vo-seg) { padding-right: 92px; position: relative; top: -3px; } /* clear of the lock button, on its line */
-.row-play { position: relative; padding: 0; margin: 0; min-width: 0; min-height: 0; border: 0; border-radius: 50%; cursor: pointer; }
-.row-play .ic { width: 20px; height: 20px; }
-.row-play.playing { background: rgb(var(--tc-rgb)); color: #fff; }
-.row-play:active { transform: scale(0.94); }
-.mic-badge { position: absolute; right: -3px; bottom: -3px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: 0 0 0 1px rgba(var(--tc-rgb), 0.35); color: var(--tc-ink, var(--brand-ink)); }
-.mic-badge .ic { width: 10px; height: 10px; }
+.row-play { position: relative; padding: 0; margin: 0; min-width: 0; min-height: 0; border: 0; cursor: pointer; } /* a tile like the category icon; the whole tile is the button */
+.row-play:active { transform: scale(0.95); }
+.play-badge { position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--tc-ink, var(--brand-ink)); color: #fff; box-shadow: 0 0 0 2px var(--surface); }
+.play-badge .ic { width: 12px; height: 12px; }
+.row-play.playing .play-badge { background: var(--danger); }
 #viewer-body.vv-swipe { overflow-x: hidden; touch-action: pan-y; }
 .vv-wrap { min-height: calc(100vh - 240px); } /* a tall area, so a swipe also works on the empty space */
