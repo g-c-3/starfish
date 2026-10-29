@@ -874,7 +874,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .toast .toast-action:active { background: rgba(127, 127, 127, 0.25); }
 .entry-row[data-id] { cursor: pointer; }
 /* :active also matches every ancestor of the pressed element, so a press on an action button lit the whole row; the row only reacts when the press is outside .row-actions. */
-.entry-row[data-id]:active:not(:has(.row-actions :active)) { background: var(--surface-2); }
+.entry-row[data-id]:active:not(:has(.row-actions :active)):not(:has(.row-play:active)) { background: var(--surface-2); } /* a press on the play button lights the button only (Decision 315) */
 
 /* ---- Entry viewer shell + reminder detail (Decision 92) ---- */
 #viewer-screen {
@@ -1455,7 +1455,10 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 .vo-seg .ic { width: 17px; height: 17px; }
 #folder-title:has(.vo-seg), #vault-folder-title:has(.vo-seg) { padding-right: 92px; position: relative; top: -3px; } /* clear of the lock button, on its line */
 .row-play { position: relative; padding: 0; margin: 0; min-width: 0; min-height: 0; border: 0; cursor: pointer; } /* a tile like the category icon; the whole tile is the button */
-.row-play:active { transform: scale(0.95); }
+.row-play:active { transform: scale(0.95); box-shadow: 0 0 0 5px rgba(var(--tc-rgb), 0.32); }
+.row-play.tap-glow { animation: play-glow 0.55s ease-out; }
+@keyframes play-glow { from { box-shadow: 0 0 0 0 rgba(var(--tc-rgb), 0.5); } to { box-shadow: 0 0 0 11px rgba(var(--tc-rgb), 0); } }
+@media (prefers-reduced-motion: reduce) { .row-play.tap-glow { animation: none; } }
 .play-badge { position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--tc-ink, var(--brand-ink)); color: #fff; box-shadow: 0 0 0 2px var(--surface); }
 .play-badge .ic { width: 12px; height: 12px; }
 .row-play.playing .play-badge { background: var(--danger); }
