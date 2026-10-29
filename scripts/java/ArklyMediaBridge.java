@@ -6,6 +6,11 @@ import android.content.ContentUris;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
+import android.media.MediaMetadataRetriever;
+import android.os.Environment;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,6 +19,10 @@ import android.util.Base64;
 import android.util.Size;
 import android.webkit.JavascriptInterface;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -197,5 +206,135 @@ public class ArklyMediaBridge {
             }
         } catch (Exception ignored) { }
         return out.toString();
+    }
+
+    // ---- Reading the DCIM folder directly (Decision 320). The media index can list a new camera file seconds after it was
+    // written; the folder itself is always current. Skips hidden and half-written files (names starting with a dot, files
+    // changed in the last 1.5 s). id is the path, so the page can tell what it has already saved.
+    private static final String[] IMG_EXT = { "jpg", "jpeg", "png", "heic", "heif", "webp", "dng", "gif", "avif" };
+    private static final String[] VID_EXT = { "mp4", "mov", "3gp", "mkv", "webm", "m4v" };
+
+    private static String extOf(String name) {
+        int i = name.lastIndexOf('.');
+        return i < 0 ? "" : name.substring(i + 1).toLowerCase();
+    }
+
+    private static boolean in(String[] list, String v) {
+        for (String s : list) if (s.equals(v)) return true;
+        return false;
+    }
+
+    private static void walk(File dir, int depth, long sinceMs, long nowMs, ArrayList<File> out) {
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        for (File f : kids) {
+            String name = f.getName();
+            if (name.startsWith(".")) continue;
+            if (f.isDirectory()) {
+                if (depth < 4) walk(f, depth + 1, sinceMs, nowMs, out);
+                continue;
+            }
+            String e = extOf(name);
+            if (!in(IMG_EXT, e) && !in(VID_EXT, e)) continue;
+            long m = f.lastModified();
+            if (m >= sinceMs && nowMs - m >= 1500 && f.length() > 0) out.add(f);
+        }
+    }
+
+    // Same shape as since(); id is the file path (a string).
+    @JavascriptInterface
+    public String sinceFs(long sinceSec) {
+        JSONArray out = new JSONArray();
+        try {
+            ArrayList<File> hits = new ArrayList<File>();
+            walk(new File(Environment.getExternalStorageDirectory(), "DCIM"), 0, sinceSec * 1000L, System.currentTimeMillis(), hits);
+            Collections.sort(hits, new Comparator<File>() {
+                @Override
+                public int compare(File a, File b) { return Long.compare(a.lastModified(), b.lastModified()); }
+            });
+            for (File f : hits) {
+                String e = extOf(f.getName());
+                boolean video = in(VID_EXT, e);
+                JSONObject o = new JSONObject();
+                o.put("id", f.getAbsolutePath());
+                o.put("name", f.getName());
+                o.put("path", f.getAbsolutePath());
+                o.put("mime", (video ? "video/" : "image/") + (e.equals("jpg") ? "jpeg" : e.equals("mov") ? "quicktime" : e));
+                o.put("size", f.length());
+                o.put("taken", f.lastModified());
+                o.put("dur", 0);
+                o.put("video", video);
+                out.put(o);
+            }
+        } catch (Exception ignored) { }
+        return out.toString();
+    }
+
+    private String thumbError = "";
+
+    @JavascriptInterface
+    public String thumbError() {
+        return thumbError;
+    }
+
+    private static Bitmap fit(Bitmap b, int px) {
+        int w = b.getWidth(), h = b.getHeight();
+        float k = Math.min(1f, (float) px / Math.max(w, h));
+        if (k >= 1f) return b;
+        return Bitmap.createScaledBitmap(b, Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)), true);
+    }
+
+    private static String jpegUrl(Bitmap b) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        b.compress(Bitmap.CompressFormat.JPEG, 72, bos);
+        return "data:image/jpeg;base64," + Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+    }
+
+    // A small JPEG data URL made from a file path: a video frame (any codec the phone can play, no WebView decoder involved) or a
+    // photo with its rotation applied. "" when none can be made; thumbError() then says why.
+    @JavascriptInterface
+    public String thumbFile(String path, boolean video, int px) {
+        thumbError = "";
+        try {
+            if (video) {
+                MediaMetadataRetriever r = new MediaMetadataRetriever();
+                try {
+                    r.setDataSource(path);
+                    long durMs = 0;
+                    try { durMs = Long.parseLong(r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)); } catch (Exception ignored) { }
+                    long at = durMs > 0 ? Math.min(1000000L, durMs * 250L) : 0L; // microseconds: about 1 s in, or a quarter of a short clip
+                    Bitmap b = r.getFrameAtTime(at, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                    if (b == null) b = r.getFrameAtTime();
+                    if (b == null) { thumbError = "no video frame"; return ""; }
+                    return jpegUrl(fit(b, px));
+                } finally {
+                    try { r.release(); } catch (Exception ignored) { }
+                }
+            }
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(path, o);
+            int longest = Math.max(o.outWidth, o.outHeight);
+            if (longest <= 0) { thumbError = "photo not readable"; return ""; }
+            int sample = 1;
+            while (longest / (sample * 2) >= px) sample *= 2;
+            BitmapFactory.Options d = new BitmapFactory.Options();
+            d.inSampleSize = sample;
+            Bitmap b = BitmapFactory.decodeFile(path, d);
+            if (b == null) { thumbError = "photo not decodable"; return ""; }
+            try {
+                int ori = new ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                int deg = ori == ExifInterface.ORIENTATION_ROTATE_90 ? 90 : ori == ExifInterface.ORIENTATION_ROTATE_180 ? 180 : ori == ExifInterface.ORIENTATION_ROTATE_270 ? 270 : 0;
+                if (deg != 0) {
+                    Matrix m = new Matrix();
+                    m.postRotate(deg);
+                    b = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), m, true);
+                }
+            } catch (Exception ignored) { }
+            return jpegUrl(fit(b, px));
+        } catch (Throwable e) {
+            thumbError = String.valueOf(e.getMessage());
+            return "";
+        }
     }
 }
