@@ -26,7 +26,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
-import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension } from './phonegallery.js';
+import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
 import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
@@ -2653,7 +2653,12 @@ async function videoFrameToDataUrl(blobUrl, maxSide) {
   const v = document.createElement('video');
   v.muted = true; v.preload = 'auto'; v.playsInline = true;
   try {
-    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('Video not readable')); v.src = blobUrl; });
+    await new Promise((res, rej) => { // a codec the WebView cannot decode may fire neither event: give up, never block the queue
+      const to = setTimeout(() => rej(new Error('Video not readable')), 8000);
+      v.onloadeddata = () => { clearTimeout(to); res(); };
+      v.onerror = () => { clearTimeout(to); rej(new Error('Video not readable')); };
+      v.src = blobUrl;
+    });
     if (v.duration > 0.5) {
       await new Promise((res) => { v.onseeked = res; setTimeout(res, 2000); v.currentTime = Math.min(1, v.duration / 4); });
     }
@@ -2662,9 +2667,43 @@ async function videoFrameToDataUrl(blobUrl, maxSide) {
     const k = Math.min(1, maxSide / Math.max(w, h));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
-    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const g = c.getContext('2d');
+    g.drawImage(v, 0, 0, c.width, c.height);
+    const px = g.getImageData(0, 0, c.width, c.height).data;
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4 * 61) lit += px[i] + px[i + 1] + px[i + 2];
+    if (!lit) throw new Error('Blank frame'); // undecoded: the phone's own decoder is asked instead
     return c.toDataURL('image/jpeg', 0.72);
   } finally { v.removeAttribute('src'); v.load(); }
+}
+// The WebView cannot decode every video (long 4K clips, some codecs). The phone's own decoder can: the decrypted file goes to a
+// short-lived cache file, the native side takes one frame, the file is deleted at once (Decision 320). One at a time.
+let nativeThumbChain = Promise.resolve();
+function nativeVideoThumb(blobUrl, item, px) {
+  const run = async () => {
+    const m = typeof window !== 'undefined' ? window.ArklyMedia : null;
+    if (!m || !m.thumbFile) throw new Error('No video frame');
+    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const ext = String(item.extension || 'mp4').replace(/^\./, '');
+    const rel = `thumbtmp/${item.id}.${ext}`;
+    try {
+      await Filesystem.rmdir({ path: 'thumbtmp', directory: Directory.Cache, recursive: true }).catch(() => {});
+      const blob = await (await fetch(blobUrl)).blob();
+      const STEP = 3 * 1024 * 1024;
+      for (let off = 0; off < blob.size; off += STEP) {
+        const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onloadend = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => bad(r.error); r.readAsDataURL(blob.slice(off, off + STEP)); });
+        if (off === 0) await Filesystem.writeFile({ path: rel, directory: Directory.Cache, data, recursive: true });
+        else await Filesystem.appendFile({ path: rel, directory: Directory.Cache, data });
+      }
+      const uri = (await Filesystem.getUri({ path: rel, directory: Directory.Cache })).uri;
+      const url = m.thumbFile(uri.replace(/^file:\/\//, ''), true, px);
+      if (!url) throw new Error(m.thumbError() || 'No video frame');
+      return url;
+    } finally { await Filesystem.rmdir({ path: 'thumbtmp', directory: Directory.Cache, recursive: true }).catch(() => {}); }
+  };
+  const next = nativeThumbChain.then(run, run);
+  nativeThumbChain = next.catch(() => {});
+  return next;
 }
 // Full-size blob URL for an image entry; the caller revokes it.
 async function imageBlobUrl(item, isVault) {
@@ -2688,12 +2727,29 @@ async function thumbFor(item, isVault) {
     if (dataUrl) { thumbMem.set(key, dataUrl); return dataUrl; }
   }
   const url = await imageBlobUrl(item, isVault);
-  try { dataUrl = await (isVideoExt(item.extension) ? videoFrameToDataUrl(url, px) : downscaleToDataUrl(url, px)); } finally { URL.revokeObjectURL(url); }
+  try {
+    if (isVideoExt(item.extension)) {
+      try { dataUrl = await videoFrameToDataUrl(url, px); } catch { dataUrl = await nativeVideoThumb(url, item, px); }
+    } else dataUrl = await downscaleToDataUrl(url, px);
+  } finally { URL.revokeObjectURL(url); }
   if (isVault && !privateSessionKey) throw new Error('Vault locked'); // locked while decoding: keep nothing
   thumbMem.set(key, dataUrl);
   if (isVault) putVaultThumb(db, privateSessionKey, ref, dataUrl).catch(() => {});
   else putHomeThumb(item.id, item.file_path || null, dataUrl).catch(() => {});
   return dataUrl;
+}
+// A thumbnail only when it is already made (memory or the stored one); never decodes the file.
+async function cachedThumb(item, isVault) {
+  const key = `${isVault ? 'v' : 'h'}:${item.id}`;
+  if (thumbMem.has(key)) return thumbMem.get(key);
+  try {
+    if (isVault) {
+      if (!privateSessionKey) return '';
+      const ref = { id: item.id, filePath: ((getVaultIndex() || []).find((e) => e.id === item.id) || item).filePath || null };
+      return (await getVaultThumb(db, privateSessionKey, ref)) || '';
+    }
+    return (await getHomeThumb(item.id, item.file_path || null)) || '';
+  } catch { return ''; }
 }
 let thumbObserver = null;
 // Fills a grid of .thumb-tile[data-id] as tiles scroll into view.
@@ -3345,6 +3401,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   purgeOpenCopies(); // decrypted Vault copies from an earlier open (Decision 118)
   purgeUpdateDownload(); // the downloaded APK from an earlier update (Decision 164)
   initFiles(db); sweepHomeThumbs().catch(() => {}); // stored thumbnails of Home images that no longer exist (Decision 311)
+  import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbtmp', directory: Directory.Cache, recursive: true })).catch(() => {}); // a decrypted frame source left by an interrupted thumbnail (Decision 320)
   import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than
@@ -4694,7 +4751,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Gallery: Add / Capture / Phone (Decision 316). Add is the file chooser as before. Capture opens the phone's camera app
   // and, when the app is back in front, saves what it just took. Phone browses the phone's photos and videos. All three save
   // to the Gallery that is open (Home or Vault). Capture and Phone need All files access (the File explorer's permission). ----
-  let cameraPending = null; // { isVault, since } while the camera app is in front
+  // A camera session lasts while that Gallery stays open (at most CAMERA_SESSION_MS after the last activity). Every return from the
+  // camera app saves what is new since the session began and has not been saved yet, so several shots, a video written late, or a
+  // return in the middle of shooting are all caught (Decision 320).
+  const CAMERA_SESSION_MS = 15 * 60 * 1000;
+  let cameraPending = null; // { isVault, since, seen: Set of phone media ids, busy, saved, last }
 
   async function ensureMediaAccess(why) {
     if (mediaAccess()) return true;
@@ -4709,33 +4770,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!(await ensureMediaAccess('Capture, which saves what the camera takes into the Gallery,'))) return;
     beginPickerLaunch(); // Decision 73: the camera app's pause is not a backgrounding
     if (!openCamera()) { toast('No camera app found'); return; }
-    cameraPending = { isVault, since: cameraSince() };
+    const now = Date.now();
+    if (cameraPending && cameraPending.isVault === isVault && now - cameraPending.last < CAMERA_SESSION_MS) cameraPending.last = now; // same session: keeps what is still unsaved
+    else cameraPending = { isVault, since: cameraSince(), seen: new Set(), busy: false, saved: 0, last: now };
   }
 
   async function finishCameraCapture() {
     const p = cameraPending;
-    if (!p) return;
-    cameraPending = null;
-    if (p.isVault && !privateSessionKey) { toast('The Vault locked. Use Phone to add the new photos after unlocking'); return; }
-    let items = [];
-    for (let i = 0; i < 3 && !items.length; i++) { // the camera app can still be writing a video when it closes
-      if (i) await new Promise((r) => setTimeout(r, 1200));
-      items = newCameraMedia(p.since);
-    }
-    if (!items.length) { toast('No new photo or video found'); return; }
+    if (!p || p.busy) return;
+    const galleryOpen = p.isVault ? openVaultFolderType === 'image' : openFolderType === 'image';
+    if (!galleryOpen || Date.now() - p.last > CAMERA_SESSION_MS) { cameraPending = null; return; }
+    if (p.isVault && !privateSessionKey) { cameraPending = null; toast('The Vault locked. Use Phone to add the new photos after unlocking'); return; }
+    p.busy = true;
+    let saved = 0, failed = 0, rounds = 0, noThumb = '';
     try {
-      for (let i = 0; i < items.length; i++) {
-        toast(items.length === 1 ? 'Saving to Gallery…' : `Saving ${i + 1} of ${items.length}…`, true);
-        await savePhoneItem(items[i], p.isVault, { label: items[i].name });
+      let quiet = 0;
+      while (rounds < 12) { // keeps looking for up to ~12 s: the camera app can finish a shot after Arkly is back in front
+        const fresh = newCameraMedia(p.since).filter((it) => !p.seen.has(it.id));
+        if (!fresh.length) {
+          quiet++;
+          if (quiet >= (saved || p.saved ? 3 : 5)) break; // nothing new for a while
+          rounds++;
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        quiet = 0;
+        for (const it of fresh) {
+          p.seen.add(it.id);
+          toast(`Saving ${saved + failed + 1}…`, true);
+          try { await savePhoneItem(it, p.isVault, { label: it.name }); saved++; p.saved++; if (lastThumbMiss) noThumb = lastThumbMiss; } catch (err) { failed++; console.error('Capture save failed:', err); }
+        }
+        rounds++;
+        await new Promise((r) => setTimeout(r, 1000));
       }
-      if (p.isVault) renderVault(); else await renderMainTimeline();
-      toast(items.length === 1 ? 'Saved to Gallery' : `${items.length} files saved to Gallery`);
-    } catch (err) { toast(`Could not save: ${err.message || err}`); }
+      p.last = Date.now();
+      if (saved || failed) { if (p.isVault) renderVault(); else await renderMainTimeline(); }
+      if (failed) toast(`${saved} saved, ${failed} could not be saved`);
+      else if (saved) toast((saved === 1 ? 'Saved to Gallery' : `${saved} files saved to Gallery`) + (noThumb ? ` (no preview: ${noThumb})` : ''));
+      else if (!p.saved) toast('No new photo or video found');
+      else hideToast();
+    } finally { p.busy = false; }
   }
   window.addEventListener('arkly-camera-return', () => { finishCameraCapture().catch(() => {}); });
 
   // One phone file streamed into the encrypted store, then its entry (Decision 319). Nothing is held whole in memory.
+  let lastThumbMiss = ''; // why the last saved file got no thumbnail (shown once in the notice)
   async function savePhoneItem(item, isVault, { label, tags = [], description = '' }) {
+    lastThumbMiss = '';
     const w = isVault ? await beginVaultFile(privateSessionKey) : await beginFile();
     let stored;
     try {
@@ -4743,10 +4824,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       stored = await w.finish();
     } catch (err) { await w.abort(); throw err; }
     const extension = phoneExtension(item);
+    let id;
     try {
-      if (isVault) await captureToVault({ type: 'image', label, tags, description, storedFile: stored, extension });
-      else await captureFile('image', { label, tags, description, stored, extension });
+      if (isVault) id = await captureToVault({ type: 'image', label, tags, description, storedFile: stored, extension });
+      else id = await captureFile('image', { label, tags, description, stored, extension });
     } catch (err) { await removeFile({ file_path: stored.path }).catch(() => {}); throw err; }
+    // The thumbnail comes from the phone's own, so a long 4K video is not decoded here to make one (Decision 320).
+    const thumb = phoneThumb(item, THUMB_PX);
+    if (!thumb) lastThumbMiss = phoneThumbError() || 'none made';
+    if (thumb && id) {
+      thumbMem.set(`${isVault ? 'v' : 'h'}:${id}`, thumb);
+      if (isVault) putVaultThumb(db, privateSessionKey, { id, filePath: stored.path }, thumb).catch(() => {});
+      else putHomeThumb(id, stored.path, thumb).catch(() => {});
+    }
   }
 
   // Picked on the phone: the same Save dialog as the file chooser (names come from the phone, no file is read first), then each file
@@ -6020,7 +6110,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           const u = await takeUrl(item);
           if (mine !== token) { URL.revokeObjectURL(u); return; } // moved on or closed while loading
           url = u;
+          if (isVid) { // a poster keeps the WebView's stretched play icon off the screen (Decision 320)
+            const pst = await cachedThumb(item, isVault);
+            if (pst && mine === token) img.poster = pst;
+          }
           await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
+          if (isVid) { try { img.currentTime = 0.05; } catch { /* the poster stays */ } } // paints the first real frame
           loading.remove();
           slideIn();
           trimAhead(); makeAhead(index + 1); makeAhead(index - 1);

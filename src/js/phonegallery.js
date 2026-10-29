@@ -18,7 +18,15 @@ export const mediaSrc = (path) => Capacitor.convertFileSrc('file://' + path);
 // Camera: opens the phone's own camera app. since() lists what it added to DCIM after that moment.
 export function openCamera() { try { return !!bridge()?.openCamera(); } catch { return false; } }
 export const cameraSince = () => { try { return Number(bridge().launchedAt()) || 0; } catch { return 0; } };
-export const newCameraMedia = (sinceSec) => { try { return parse(bridge().since(sinceSec), []); } catch { return []; } };
+// New camera files: read straight from the DCIM folder (always current), the media index as a second source (Decision 320).
+export const newCameraMedia = (sinceSec) => {
+  const b = bridge();
+  if (!b) return [];
+  let fs = [];
+  try { fs = b.sinceFs ? parse(b.sinceFs(sinceSec), []) : []; } catch { fs = []; }
+  if (fs.length) return fs;
+  try { return parse(b.since(sinceSec), []); } catch { return []; }
+};
 
 const extOf = (name, mime) => {
   const m = /\.([A-Za-z0-9]+)$/.exec(name || '');
@@ -48,6 +56,17 @@ export async function streamPhoneFile(item, sink) {
 }
 
 export const phoneExtension = (item) => extOf(item.name, item.mime);
+// The phone's own small picture of a photo or video, as a data URL ('' when none).
+export function phoneThumb(item, px = THUMB_PX) {
+  const b = bridge();
+  if (!b) return '';
+  try {
+    const own = b.thumbFile ? b.thumbFile(item.path, !!item.video, px) : '';
+    if (own) return own;
+  } catch { /* try the media index */ }
+  try { return typeof item.id === 'number' ? b.thumb(item.id, !!item.video, px) || '' : ''; } catch { return ''; }
+}
+export const phoneThumbError = () => { try { return bridge().thumbError() || ''; } catch { return ''; } };
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const clock = (ms) => { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -315,7 +334,7 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     const it = st.items[i];
     vw.stage.replaceChildren();
     const m = el(it.video ? 'video' : 'img');
-    if (it.video) { m.controls = true; m.playsInline = true; }
+    if (it.video) { m.controls = true; m.playsInline = true; m.preload = 'metadata'; m.poster = phoneThumb(it, 720); m.addEventListener('loadeddata', () => { try { m.currentTime = 0.05; } catch { /* the poster stays */ } }); }
     m.src = mediaSrc(it.path);
     vw.stage.appendChild(m);
     vw.name.textContent = `${i + 1} of ${st.total || st.items.length} · ${it.name}`;
