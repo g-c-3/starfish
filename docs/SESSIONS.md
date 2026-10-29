@@ -20,7 +20,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Decision 312: closing the editor froze the app (a name used outside its scope in the close function); fixed.
 - Decision 313: Voice: Speaker or Earpiece as two small icons in the title bar (hint line removed); round play and pause button on recording rows; swipe between recordings in the viewer with the Gallery's slide. `vite build` passes; not run through CI.
 - Decision 314: Voice rows show the microphone tile with a round play and pause badge; earpiece icon with sound waves. `vite build` passes; not run through CI.
-- Next start: owner reports DP150 to DP153 and DP155 (DP154 confirmed); then the next phase.
+- DP150 to DP155 confirmed (Phase 40 items). Decision 315: the whole row flashed on a press of the play button; now only the button glows.
+- Next start: owner reports DP156; then the next phase.
 
 ---
 

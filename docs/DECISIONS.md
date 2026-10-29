@@ -3362,3 +3362,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The recording tile is the squarish rounded tile of the category icon again, with the microphone; the round badge at its corner shows play, or pause while playing (the pause badge is red). The whole tile is the button, so the target is larger than the badge.
 - The earpiece icon is the handset with two small sound waves at its upper corner.
 - Files: `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP155).
+
+**315. Voice play button: only the button reacts.** Fix to Decision 313 after a device check.
+- Cause: a pressed element also marks every ancestor as pressed, so a press on the play button lit the whole row; the row rule already skipped presses on the row's action buttons but not on this one.
+- Fix: the row's press highlight now skips a press on the play button. The button itself shows a soft glow ring while pressed and a short fading ring after the tap (play or pause), switched off for reduced motion.
+- Why correct: the row still highlights for a press anywhere else on it, and the button is the only thing that reacts to its own press.
+- Files: `src/js/app.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP156).
