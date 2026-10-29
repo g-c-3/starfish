@@ -1,0 +1,26 @@
+/* Video controls (Decision 324). Drawn over the stage of the Gallery viewer and the Phone viewer. */
+.vp-video { pointer-events: none !important; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; background: #000; }
+.vp-video.vp-fill { object-fit: cover; }
+.vp-layer { position: absolute; inset: 0; z-index: 3; touch-action: none; user-select: none; -webkit-user-select: none; color: #fff; }
+.vp-layer svg { width: 100%; height: 100%; fill: currentColor; display: block; }
+.vp-layer button { margin: 0; min-width: 0; min-height: 0; border: 0; background: none; color: inherit; box-shadow: none; }
+.vp-ctl { transition: opacity .2s; }
+.vp-layer.vp-hide .vp-ctl { opacity: 0; pointer-events: none; }
+.vp-centre { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 28px; pointer-events: none; }
+.vp-centre button { pointer-events: auto; border-radius: 50%; background: rgba(0, 0, 0, 0.45); padding: 0; display: grid; place-items: center; }
+.vp-big { width: 68px; height: 68px; padding: 16px !important; }
+.vp-skip { width: 48px; height: 48px; padding: 10px !important; }
+.vp-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); }
+.vp-row { display: flex; align-items: center; gap: 10px; }
+.vp-time { flex: none; min-width: 40px; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.vp-seek { flex: 1; min-width: 0; margin: 0; height: 32px; accent-color: var(--brand, #7c6cf0); touch-action: none; }
+.vp-tools { justify-content: space-between; margin-top: 2px; }
+.vp-tool { height: 36px; min-width: 44px; padding: 0 10px !important; font-size: 14px; font-weight: 650; border-radius: 10px; display: grid; place-items: center; }
+.vp-tool svg { width: 22px; height: 22px; }
+.vp-tool.on { color: var(--brand, #7c6cf0); }
+.vp-hud { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 16px; background: rgba(0, 0, 0, 0.6); font-size: 14px; font-weight: 650; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.vp-hud.on { opacity: 1; }
+.vp-full { position: fixed !important; inset: 0 !important; z-index: 90 !important; width: auto; height: auto; background: #000; }
+body.vp-fs #viewer-screen .editor-bar, body.vp-fs .ph-view-top { display: none !important; }
+.ph-view-stage { position: relative; }
+.ph-vfail { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; justify-items: center; background: rgba(0, 0, 0, 0.8); color: #fff; }
