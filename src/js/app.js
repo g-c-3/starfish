@@ -26,6 +26,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
+import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, readPhoneFiles } from './phonegallery.js';
 import { initFiles, migratePlainFiles, saveBase64, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
@@ -414,6 +415,7 @@ function backAction() {
   const modal = openModalDismiss();
   if (modal) return modal;
   if (activeExplorer) return () => activeExplorer.back();
+  if (activePhone) return () => activePhone.back();
   if (activeEditor) return () => activeEditor.requestBack();
   if (activeViewer) return () => (activeViewer.back || activeViewer.finish)();
   if (searchOpen) return () => closeSearchScreen();
@@ -562,6 +564,7 @@ async function registerBackgroundLock() {
   App.addListener('appStateChange', async ({ isActive }) => {
     if (isActive) {
       lastResumeAt = Date.now(); drainQueuedReminderActions(); refillRepeating(); purgeOpenCopies();
+      window.dispatchEvent(new Event('arkly-camera-return')); // Gallery > Capture imports what the camera app just took (Decision 316)
       // Back in front on the Vault screen while it is locked: show the gate and offer biometric, as the Vault tab does.
       // The app lock screen hides the Vault screen, so this never races it (Decision 59).
       if (!privateSessionKey && !document.getElementById('vault-screen')?.classList.contains('hidden')) window.refreshVaultGateView?.({ prompt: vaultBioMayPrompt() });
@@ -2283,6 +2286,7 @@ function openSecretForm({ title, text = '', fields, ok = 'Submit', bioLabel = nu
 }
 let activeEditor = null;     // { finish, requestBack, isVault }
 let activeExplorer = null;   // { finish, back, isVault } — File explorer screen (Decisions 206, 207)
+let activePhone = null;      // { finish, back, isVault } — Gallery > Phone browser (Decision 316)
 let activeViewer = null;     // { finish, back, isVault } — entry viewer shell (Decision 92); back honours the viewer's guard
 let overlayAbortCount = 0;   // bumped when a lock force-closes overlays, so capture loops stop instead of reopening the editor
 
@@ -2301,6 +2305,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) activeSaveDialog.finish(null);
   if (activeEditor && (!vaultOnly || activeEditor.isVault)) activeEditor.finish(null);
   if (activeExplorer && (!vaultOnly || activeExplorer.isVault)) activeExplorer.finish(); // the listing is dropped with the screen
+  if (activePhone && (!vaultOnly || activePhone.isVault)) activePhone.finish(); // the thumbnails are dropped with it
   if (activeViewer && (!vaultOnly || activeViewer.isVault)) activeViewer.finish();
 }
 
@@ -3789,7 +3794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // above it (CSS: body.overlay-open) and Back dismisses it (Decision 104). Class changes cover every open/close path,
   // including a lock's forced close.
   const syncOverlayChrome = () => {
-    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), #explorer-screen:not(.hidden), .modal-overlay:not(.hidden)');
+    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), #explorer-screen:not(.hidden), #phone-screen, .modal-overlay:not(.hidden)');
     document.body.classList.toggle('overlay-open', open);
     updateBackButtonState();
   };
@@ -4031,6 +4036,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(true); }
+    document.getElementById('vault-folder-new-btn').classList.toggle('hidden', type === 'image');
+    document.getElementById('vault-gallery-actions').classList.toggle('hidden', type !== 'image');
     renderVault();
   }
   document.querySelectorAll('#vault-capture-bar button[data-vault-type]').forEach((btn) => btn.addEventListener('click', () => openVaultFolder(btn.dataset.vaultType, btn)));
@@ -4684,6 +4691,114 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // ---- Gallery: Add / Capture / Phone (Decision 316). Add is the file chooser as before. Capture opens the phone's camera app
+  // and, when the app is back in front, saves what it just took. Phone browses the phone's photos and videos. All three save
+  // to the Gallery that is open (Home or Vault). Capture and Phone need All files access (the File explorer's permission). ----
+  let cameraPending = null; // { isVault, since } while the camera app is in front
+
+  async function ensureMediaAccess(why) {
+    if (mediaAccess()) return true;
+    const yes = await askYesNo({ title: 'Allow file access', text: `${why} needs All files access, the same permission as the File explorer. Nothing leaves the phone.`, yes: 'Allow', no: 'Cancel' });
+    if (yes === true) { beginPickerLaunch(); requestMediaAccess(); toast('Allow it, then come back and try again'); }
+    return false;
+  }
+
+  async function startCameraCapture(isVault) {
+    if (!mediaAvailable()) { toast('Capture is not available in this build'); return; }
+    if (isVault && !privateSessionKey) { toast('Unlock the Vault first'); return; }
+    if (!(await ensureMediaAccess('Capture, which saves what the camera takes into the Gallery,'))) return;
+    beginPickerLaunch(); // Decision 73: the camera app's pause is not a backgrounding
+    if (!openCamera()) { toast('No camera app found'); return; }
+    cameraPending = { isVault, since: cameraSince() };
+  }
+
+  async function finishCameraCapture() {
+    const p = cameraPending;
+    if (!p) return;
+    cameraPending = null;
+    if (p.isVault && !privateSessionKey) { toast('The Vault locked. Use Phone to add the new photos after unlocking'); return; }
+    let items = [];
+    for (let i = 0; i < 3 && !items.length; i++) { // the camera app can still be writing a video when it closes
+      if (i) await new Promise((r) => setTimeout(r, 1200));
+      items = newCameraMedia(p.since);
+    }
+    if (!items.length) { toast('No new photo or video found'); return; }
+    try {
+      toast(`Saving ${items.length === 1 ? 'to Gallery' : items.length + ' files'}…`, true);
+      const files = await readPhoneFiles(items);
+      for (const f of files) {
+        if (p.isVault) await captureToVault({ type: 'image', label: f.name, tags: [], description: '', fileData: f.fileData, extension: f.extension });
+        else await captureFile('image', { label: f.name, fileData: f.fileData, extension: f.extension });
+      }
+      if (p.isVault) renderVault(); else await renderMainTimeline();
+      toast(files.length === 1 ? 'Saved to Gallery' : `${files.length} files saved to Gallery`);
+    } catch (err) { toast(`Could not save: ${err.message || err}`); }
+  }
+  window.addEventListener('arkly-camera-return', () => { finishCameraCapture().catch(() => {}); });
+
+  // Picked on the phone: read, then the same Save dialog as the file chooser. true = saved (the Phone screen closes).
+  async function importPhoneItems(items, isVault) {
+    let files;
+    try {
+      files = await readPhoneFiles(items, (i, n) => { if (n > 1) toast(`Reading ${i} of ${n}…`, true); else toast('Reading…', true); });
+      hideToast();
+    } catch (err) { toast(`Could not read: ${err.message || err}`); return false; }
+    const single = files.length === 1;
+    const d = await openSaveDialog({
+      heading: single ? 'Save to Gallery' : `Save ${files.length} files`,
+      defaultName: single ? files[0].name : VAULT_TYPE_LABELS.image,
+      count: files.length, isVault, discardLabel: 'Back'
+    });
+    if (!d) return false;
+    try {
+      if (isVault) {
+        const numbered = !single && d.mode === 'number';
+        const start = numbered ? nextBatchStart(getVaultIndex(), 'image', d.name) : 0;
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          await captureToVault({ type: 'image', label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+        }
+        renderVault();
+        toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
+      } else {
+        if (!single && d.mode === 'number') {
+          const { ids, first, last } = await batchAddWithCommonLabel('image', d.name, files, d.tags, d.description);
+          toast(`${ids.length} files added: ${first} to ${last}`);
+        } else {
+          for (const f of files) await captureFile('image', { label: single ? d.name : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+          toast(single ? 'Saved' : `${files.length} files added`);
+        }
+        await renderMainTimeline();
+      }
+      return true;
+    } catch (err) { toast(`Could not save: ${err.message || err}`); return false; }
+  }
+
+  async function openPhone(isVault) {
+    if (activePhone) return;
+    if (!mediaAvailable()) { toast('Phone is not available in this build'); return; }
+    if (isVault && !privateSessionKey) { toast('Unlock the Vault first'); return; }
+    const cols = clampCols(await metaGet('phone_cols', '4'));
+    activePhone = openPhoneGallery({
+      isVault, cols, leaving: beginPickerLaunch,
+      onCols: (n) => metaSet('phone_cols', String(n)),
+      onPick: (items) => importPhoneItems(items, isVault),
+      onActivity: () => (isVault ? armVaultAutoLock() : armAppAutoLock()),
+      onClose: () => { activePhone = null; updateBackButtonState(); }
+    });
+    updateBackButtonState();
+  }
+
+  for (const [prefix, isVault, add] of [['gallery', false, () => startCapture('image')], ['vault-gallery', true, () => startVaultCapture('image')]]) {
+    document.getElementById(`${prefix}-add-btn`).addEventListener('click', add);
+    document.getElementById(`${prefix}-capture-btn`).addEventListener('click', () => startCameraCapture(isVault));
+    document.getElementById(`${prefix}-phone-btn`).addEventListener('click', () => openPhone(isVault));
+    if (!mediaAvailable()) { // a build without the native bridge (browser preview): Add only
+      document.getElementById(`${prefix}-capture-btn`).classList.add('hidden');
+      document.getElementById(`${prefix}-phone-btn`).classList.add('hidden');
+    }
+  }
+
   // ---- Main timeline — showMainTimeline() (app.js) only ever returned rows; nothing rendered
   // them or attached the five per-file actions (built in Phase 7, two sessions ago) to anything.
   // This is that missing render step, mirroring renderVaultList's already-working shape. ----
@@ -4792,6 +4907,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(false); }
+    document.getElementById('folder-new-btn').classList.toggle('hidden', type === 'image'); // Gallery: Add, Capture and Phone instead (Decision 316)
+    document.getElementById('gallery-actions').classList.toggle('hidden', type !== 'image');
     await renderMainTimeline();
   }
   document.querySelectorAll('#capture-bar button[data-type]').forEach((btn) => btn.addEventListener('click', () => openFolder(btn.dataset.type, btn)));
