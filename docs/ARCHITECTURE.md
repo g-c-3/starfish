@@ -669,11 +669,18 @@ a sweep at start removes those with no image behind them.
 A video thumbnail is one
 frame drawn through a `video` element. The viewer (shared shell) pages through the folder with swipe or arrows and holds one
 full-size blob URL at a time, revoked on change, close or lock; the pictures either side are read ahead as blob links (images only) so
-a swipe slides at once, and are revoked when out of range, on close and on lock. An image zooms with pinch and double-tap; a video plays in a native
-player with its own controls (no pinch, no swipe; the arrows move on). A format the WebView cannot decode (for example HEIC) shows
+a swipe slides at once, and are revoked when out of range, on close and on lock. An image zooms with pinch and double-tap; a video plays under
+the shared controls of `videoplayer.js` (Decision 324; no pinch; a sideways swipe above the controls moves on). A format the WebView cannot decode (for example HEIC) shows
 a message and Open in another app, which hands the file to the phone as Files does.
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
+
+### Video player (Decision 324)
+`src/js/videoplayer.js` draws the controls over the stage of a viewer and turns the native controls off: centre play, pause or replay with 10 s
+skips, a bottom bar with seek, elapsed and remaining time, speed, loop, mute, fit or fill, full screen. Gestures sit on a layer over the picture (pointer
+events, `touch-action: none`): tap shows or hides, double-tap on a half skips 10 s, a vertical drag on the right half sets the volume. Controls hide 3 s
+after play starts. Full screen requests the browser's, and always adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
+instance per video, destroyed on item change, close and lock. Used by `openImageViewer` (Home, Vault) and the Phone viewer. Settings are not stored.
 
 ### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)
 The Gallery folder (Home and Vault) has three buttons: Add (file chooser), Capture, Phone. Capture and Phone use `window.ArklyMedia`

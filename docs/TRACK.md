@@ -341,3 +341,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-29 | Session 157 (continued: folder read, native thumbnails) | Decision 321 | Capture reads DCIM directly; video thumbnails by native decoder; DP158 and DP160 extended; vite build passes; not run through CI |
 | 2026-10-29 | Session 157 (end) | Decision 322; Phases 42, 43 planned | Save order, Today chips refresh, trash wording, toast width and Undo colour; vite build passes; not run through CI |
 | 2026-10-30 | Session 158 (end) | Decision 323; Phase 42 built | Drag-to-select in Gallery and Phone grids; DP162 added; vite build passes; not run through CI |
+| 2026-10-30 | Session 158 (continued: video player) | Decision 324; Phase 43 built | One video player for Gallery and Phone viewers; DP163 added; vite build passes; not run through CI |

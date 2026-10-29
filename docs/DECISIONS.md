@@ -3434,3 +3434,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Home and Vault: wired into the long-press handler of `#folder-list`, `#timeline` and `#vault-folder-list` (grid and list rows alike). Phone: wired into its own long press; a long press there now only selects (it no longer toggles a selected tile off; a tap does).
 - Nothing is stored. No schema, permission, native or network change.
 - Files: `src/js/dragselect.js` (NEW), `src/js/app.js`, `src/js/phonegallery.js`. `vite build` passes; range logic tested apart from the page; not run through CI, not device-tested (DP162).
+
+**324. Video player.** Owner request.
+- New `src/js/videoplayer.js` and `src/css/videoplayer.css`: one set of controls over the video in the Gallery viewer (Home, Vault) and the Phone viewer. The native controls are off.
+- Controls: large play, pause and replay (at the end); 10 s back and forward; seek bar with elapsed and remaining time; speed 0.5, 0.75, 1, 1.25, 1.5, 2; loop; mute; fit or fill; full screen. They hide 3 s after play starts and stay while paused or ended. Tap shows or hides, double-tap on a half skips 10 s that way, a vertical drag on the right half sets the volume.
+- Full screen asks the browser first and always applies a window-filling mode with the header hidden; a video wider than tall asks for landscape. Both browser calls may be refused by the WebView, which leaves the window-filling mode. Back leaves the viewer, not only full screen.
+- A playback error shows Open in the phone's player. Gallery uses the existing hand-off; Phone passes the file path to the file opener, which may refuse a path outside the app's folders (reason shown).
+- Controls stop their touches from reaching the viewer's sideways swipe. Speed, volume and loop are not kept between videos. Nothing is stored; no native, permission or network change.
+- Files: `src/js/videoplayer.js` (NEW), `src/css/videoplayer.css` (NEW), `src/js/app.js`, `src/js/phonegallery.js`. `vite build` passes; controls smoke-tested apart from the page; not run through CI, not device-tested (DP163).

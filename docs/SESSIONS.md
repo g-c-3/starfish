@@ -11,7 +11,10 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - New `dragselect.js`; `app.js` and `phonegallery.js` changed. Phone's long press now only selects.
 - `vite build` passes; range logic tested apart from the page; not run through CI; nothing device-tested (DP162).
 - Risks: the scroll lock needs the first move after the long press to be cancelable (a finger already past the system's touch slop starts a scroll and ends the drag); edge-scroll speed is untuned.
-- Next-session start: Phase 43 (video player); also owner reports DP157 to DP159, DP161, DP162 (and CI result); fix what fails.
+- Phase 43, Decision 324: one video player for the Gallery and Phone viewers: large play and replay, 10 s skip buttons and double-tap, seek bar with times, speed, loop, mute, fit or fill, full screen, volume drag, auto-hide, fallback to the phone's player. New `videoplayer.js` and `videoplayer.css`; `app.js` and `phonegallery.js` changed.
+- `vite build` passes; controls smoke-tested apart from the page; not run through CI; nothing device-tested (DP163).
+- Risks: full screen and the landscape lock depend on the WebView (the window-filling mode is the safe result); the Phone fallback may be refused for a path outside the app's folders; swipe-versus-controls and the volume drag are untested on a device.
+- Next-session start: owner reports DP157 to DP159, DP161 to DP163 (and CI result); fix what fails; then the owner names the next phase.
 
 ---
 
