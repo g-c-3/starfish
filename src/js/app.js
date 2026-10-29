@@ -2913,9 +2913,9 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, 
   };
 }
 
-// ---- Play from the Voice list (Decision 313): the round button on a recording plays it without opening it; the same button pauses.
+// ---- Play from the Voice list (Decisions 313, 314): the tile on a recording plays it without opening it; a tap again pauses. The round badge shows play or pause.
 // One recording at a time; it stops when the folder closes, the Vault locks or a recording is opened.
-const PLAY_INNER = (on) => `${on ? ICON_PAUSE : ICON_PLAY}<span class="mic-badge">${iconSvg('voice')}</span>`;
+const PLAY_INNER = (on) => `${iconSvg('voice')}<span class="play-badge">${on ? ICON_PAUSE : ICON_PLAY}</span>`;
 let rowPlay = null, rowPlayLoading = false; // rowPlay: { id, isVault, audio, url, routed }
 function paintRowPlay() {
   document.querySelectorAll('.row-play').forEach((b) => {
