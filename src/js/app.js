@@ -26,6 +26,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
+import { attachDragSelect, dragBlocked } from './dragselect.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
 import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
@@ -5052,6 +5053,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!root) continue;
       let timer = null, startX = 0, startY = 0, swallow = false;
       const rowOf = (t) => t.closest('.entry-row, .thumb-tile');
+      // Decision 323: after the long press, dragging selects every row or tile between the pressed one and the finger.
+      const drag = attachDragSelect(root, {
+        tileSel: '.entry-row, .thumb-tile',
+        getSel: () => (selection ? selection.ids : new Set()),
+        idOf: (el) => el.dataset.id,
+        apply: (next) => { if (!selection) return; selection.ids = next; paintSelection(); },
+        onTouch: arm
+      });
       const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
       root.addEventListener('pointerdown', (e) => {
         if (e.target.closest('.row-actions') || (e.pointerType === 'mouse' && e.button !== 0)) return;
@@ -5073,6 +5082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           selection.ids.add(id);
           arm();
           paintSelection();
+          drag.begin(row, startX, startY);
         }, LONG_MS);
       });
       root.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > SLOP) cancel(); });
@@ -5081,7 +5091,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       root.addEventListener('pointercancel', end);
       root.addEventListener('contextmenu', (e) => { if (rowOf(e.target)) e.preventDefault(); });
       root.addEventListener('click', (e) => {
-        if (swallow || pinchBlocked()) { swallow = false; e.preventDefault(); e.stopPropagation(); return; }
+        if (swallow || pinchBlocked() || dragBlocked()) { swallow = false; e.preventDefault(); e.stopPropagation(); return; }
         const row = rowOf(e.target);
         if (!selection || !row || e.target.closest('.row-actions')) return;
         e.preventDefault(); e.stopPropagation(); // capture phase: the normal open handler never runs while selecting

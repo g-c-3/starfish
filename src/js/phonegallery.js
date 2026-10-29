@@ -2,6 +2,7 @@
 // native window.ArklyMedia bridge (read-only) and returns the ones the person picks; app.js saves them. Nothing is cached on disk.
 import { Capacitor } from '@capacitor/core';
 import { clampCols, applyCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
+import { attachDragSelect, dragBlocked } from './dragselect.js';
 import '../css/phonegallery.css';
 
 const PAGE = 300, THUMB_PX = 240;
@@ -263,14 +264,28 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     if (saved && !closed) finish();
   }
 
-  // ---- Tap, long-press, swipe ----
+  // ---- Tap, long-press, drag, swipe ----
   let press = null;
+  const drag = attachDragSelect(body, {
+    tileSel: '.ph-tile',
+    getSel: () => st.sel,
+    idOf: (t) => Number(t.dataset.i),
+    apply: (next, changed) => { st.sel = next; changed.forEach(paintTile); paintHead(); },
+    onTouch: touch
+  });
   body.addEventListener('touchstart', (e) => {
     const tile = e.target.closest('.ph-tile');
     if (!tile || e.touches.length !== 1) { press = null; return; }
     touch();
     const t0 = e.touches[0];
-    press = { tile, x: t0.clientX, y: t0.clientY, long: false, timer: setTimeout(() => { if (press) { press.long = true; toggle(Number(tile.dataset.i)); } }, 450) };
+    press = { tile, x: t0.clientX, y: t0.clientY, long: false, timer: setTimeout(() => {
+      if (!press) return;
+      press.long = true;
+      const i = Number(tile.dataset.i);
+      if (!st.sel.has(i)) toggle(i); // a long press only selects; the drag that may follow extends from here (Decision 323)
+      else { st.selecting = true; paintHead(); }
+      drag.begin(tile, press.x, press.y);
+    }, 450) };
   }, { passive: true });
   body.addEventListener('touchmove', (e) => {
     if (!press) return;
@@ -282,7 +297,7 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
   body.addEventListener('touchcancel', () => { endPress(); press = null; }, { passive: true });
   body.addEventListener('contextmenu', (e) => { if (e.target.closest('.ph-tile')) e.preventDefault(); });
   body.addEventListener('click', (e) => {
-    if (pinchBlocked()) return;
+    if (pinchBlocked() || dragBlocked()) return;
     const h = e.target.closest('.ph-daysel');
     if (h) {
       const day = h.parentElement.dataset.day;
