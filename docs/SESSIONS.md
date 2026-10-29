@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 157**
+
+Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. The release check hit the unauthenticated rate limit (403), so CI status was not verified.
+- Phase 41, Decisions 316 and 317 (owner request, from a screenshot): the Gallery folder's New button split into Add, Capture and Phone, in Home and the Vault.
+- Add is the file chooser as before. Capture opens the phone's camera app and saves what it took. Phone is a full-window browser of the phone's photos and videos with album chips, day groups, pinch, viewer, multi-select and the Add dialog.
+- New native bridge `window.ArklyMedia` and CI step; no new permission (All files access of Decision 207). New `phonegallery.js` and `phonegallery.css`; `app.js` and `index.html` changed; camera icon added to the sprite.
+- `vite build` passes; Java not compiled here; not run through CI; nothing device-tested.
+- Risks: the bridge's first CI compile; media queries and the camera hand-off depend on the phone's camera app and Android version; files are read whole into memory; originals stay in the phone's gallery.
+- Next-session start: owner reports DP157 to DP159 (and CI result); fix what fails; then the owner names the next phase.
+
+---
+
 **Session 156**
 
 Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. DP146 and DP147 not reported.

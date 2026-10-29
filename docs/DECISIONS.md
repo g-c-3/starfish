@@ -3368,3 +3368,20 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: the row's press highlight now skips a press on the play button. The button itself shows a soft glow ring while pressed and a short fading ring after the tap (play or pause), switched off for reduced motion.
 - Why correct: the row still highlights for a press anywhere else on it, and the button is the only thing that reacts to its own press.
 - Files: `src/js/app.js`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP156).
+
+**316. Gallery: Add, Capture and Phone replace New.** Owner request.
+- The Gallery folder (Home and Vault) shows three buttons in place of New: Add (the file chooser, unchanged), Capture (camera icon), Phone (gallery icon). Other folders keep New. The Home New chooser still offers Gallery, which acts as Add.
+- Native bridge `window.ArklyMedia` (`scripts/java/ArklyMediaBridge.java`, `scripts/patch-media.js`, a CI step after `patch-audioroute.js`, a WebView interface like the others): read-only MediaStore listing in pages, newest first, optionally one album; album list; thumbnails as data URLs; camera launch; items added to a DCIM folder since a given second. It writes and deletes nothing and makes no network call.
+- No new permission and no Gradle change: it uses the All files access the File explorer already asks for (Decision 207). Capture and Phone ask for it with the same Allow step when it is missing.
+- A page with no bridge (browser preview) shows Add only.
+- Files: `scripts/java/ArklyMediaBridge.java`, `scripts/patch-media.js`, `.github/workflows/build-android.yml`, `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/app.js`, `src/index.html`. `vite build` passes; not run through CI, not device-tested (DP157).
+
+**317. Capture and Phone behaviour.** Owner request.
+- Capture opens the phone's own camera app, so every mode and setting of that app is available, photo or video. When Arkly is back in front, photos and videos added to a DCIM folder since the launch are saved to the open Gallery under their phone file names, with no Save dialog. Up to three checks, 1.2 s apart, cover a video still being written. None found: a notice.
+- The camera launch is marked as expected (Decision 73), so it does not trigger Lock when backgrounded.
+- The originals stay in the phone's own gallery; deleting another app's files needs a separate approval and is not done. If Android ends Arkly while the camera is open, nothing is imported; Phone adds them afterwards. A Vault Gallery capture saves encrypted; if the Vault locked meanwhile, nothing is saved and a notice says so.
+- Phone is a full-window screen: items grouped by day, album chips, pinch 3 to 9 per row (kept as `phone_cols`, default 4), tap opens a viewer (swipe, video controls), long-press or Select picks several, Select all per day. Add to Gallery reads the files and shows the Save dialog of Add; Back from the dialog keeps the selection. Back leaves the viewer, then the selection, then the screen. Opened from the Vault, it closes with a Vault lock.
+- Thumbnails are made one at a time for tiles near the screen and held in memory only; nothing is cached on disk.
+- Order is by capture time, then by time added; an item with no capture time sorts after the rest. The DCIM filter leaves screenshots and downloads out of Capture; Phone shows them.
+- Risk: each picked file is read whole into memory, as with Add; a very large video can fail.
+- Files: `scripts/java/ArklyMediaBridge.java`, `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159).

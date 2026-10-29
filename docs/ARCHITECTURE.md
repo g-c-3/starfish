@@ -675,6 +675,17 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
+### Gallery: Add, Capture, Phone (Decisions 316, 317)
+The Gallery folder (Home and Vault) has three buttons: Add (file chooser), Capture, Phone. Capture and Phone use `window.ArklyMedia`
+(`scripts/java/ArklyMediaBridge.java`, written by `scripts/patch-media.js`): read-only MediaStore access, no permission beyond the All
+files access of the File explorer (checked through `window.ArklyExplorer`). Files are read through `Capacitor.convertFileSrc` and saved with
+`captureFile` (Home) or `captureToVault` (Vault), so they take the normal path: Home plain, Vault encrypted.
+- Capture: `openCamera()` starts the phone's camera app; the page keeps `{ isVault, since }`. The resume signal (`arkly-camera-return`,
+  sent from the `appStateChange` handler) lists DCIM items added since and saves them. State is in memory only.
+- Phone (`src/js/phonegallery.js`): paged list, album chips, day groups, thumbnails one at a time in memory, viewer from the file URL.
+  Picks go to `importPhoneItems` in `app.js`, which opens the same Save dialog as Add. Closes with a Vault lock when opened from the Vault.
+- Stored: `phone_cols` in meta. Nothing else persists; no thumbnail cache.
+
 ### Multi-select (Decision 122)
 Long press on a row or image tile in `#folder-list`, `#timeline`, `#vault-folder-list` or `#vault-list` starts selection (module state
 `selection`, bar `#select-bar`). A capture-phase click handler turns taps into toggles while selecting, so open handlers never run.
