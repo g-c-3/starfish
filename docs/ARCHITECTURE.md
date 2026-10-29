@@ -682,7 +682,8 @@ files access of the File explorer (checked through `window.ArklyExplorer`). File
 `captureFile` (Home) or `captureToVault` (Vault) with a file already streamed into the store (`beginFile` / `beginVaultFile`, Decision 319), so they take the normal path: Home under the master key, Vault under the Vault key.
 - Capture: `openCamera()` starts the phone's camera app; the page keeps a session `{ isVault, since, seen, ... }` while that Gallery is open
   (Decision 320). Each resume signal (`arkly-camera-return`, sent from the `appStateChange` handler) lists DCIM items added since and saves
-  those not yet seen, with the phone's own thumbnail stored beside them. State is in memory only.
+  those not yet seen (read from the DCIM folder, Decision 321), with the phone's own thumbnail stored beside them. State is in memory only.
+  A video the WebView cannot frame gets its thumbnail from the native `thumbFile()` through a short-lived decrypted cache file.
 - Phone (`src/js/phonegallery.js`): paged list, album chips, day groups, thumbnails one at a time in memory, viewer from the file URL.
   Picks go to `importPhoneItems` in `app.js`, which opens the same Save dialog as Add before any file is read, then streams each file in. Closes with a Vault lock when opened from the Vault.
 - Stored: `phone_cols` in meta. Nothing else persists; no thumbnail cache.
