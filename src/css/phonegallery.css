@@ -1,0 +1,39 @@
+/* Gallery > Phone: full-window browser of the phone's photos and videos (Decision 316). */
+#phone-screen { position: fixed; inset: 0; z-index: 9; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); padding-top: env(safe-area-inset-top, 0px); }
+.ph-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 52px; box-sizing: border-box; }
+.ph-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 18px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-head button { width: auto; margin: 0; padding: 8px 14px; border-radius: 12px; font-size: 14px; font-weight: 650; flex: none; }
+.ph-head .ph-add { background: var(--brand); color: #fff; }
+.ph-chips { display: flex; gap: 8px; padding: 8px 14px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); flex: none; }
+.ph-chips::-webkit-scrollbar { display: none; }
+.ph-chip { flex: none; width: auto; margin: 0; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--surface-2); color: var(--muted); box-shadow: none; white-space: nowrap; }
+.ph-chip.on { background: var(--brand); color: #fff; }
+.ph-body { --cols: 4; flex: 1; overflow-y: auto; padding: 4px 4px calc(96px + env(safe-area-inset-bottom, 0px)); -webkit-overflow-scrolling: touch; }
+.ph-day { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px; font-size: 14px; font-weight: 650; color: var(--fg); }
+.ph-day .ph-daysel { display: none; font-size: 12px; font-weight: 650; color: var(--brand-ink, var(--brand)); }
+.ph-body.selecting .ph-day .ph-daysel { display: inline; }
+.ph-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 3px; }
+.ph-body[data-dense="1"] .ph-grid { gap: 2px; }
+.ph-body[data-dense="2"] .ph-grid { gap: 1px; }
+.ph-tile { position: relative; aspect-ratio: 1; margin: 0; padding: 0; width: 100%; overflow: hidden; border-radius: 6px; background: var(--surface-2); box-shadow: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ph-body[data-dense="2"] .ph-tile { border-radius: 2px; }
+.ph-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.ph-tile .ph-dur { position: absolute; right: 4px; bottom: 4px; padding: 1px 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; font-weight: 650; }
+.ph-body.selecting .ph-tile::after { content: ""; position: absolute; top: 5px; left: 5px; width: 20px; height: 20px; box-sizing: border-box; border: 2px solid #fff; border-radius: 50%; background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 13px; font-weight: 800; line-height: 16px; text-align: center; }
+.ph-body.selecting .ph-tile.on::after { content: "\2713"; background: var(--brand); border-color: var(--brand); }
+.ph-body.selecting .ph-tile.on img { transform: scale(0.88); border-radius: 6px; }
+.ph-msg { padding: 48px 24px; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.ph-msg button { width: auto; margin: 16px auto 0; padding: 12px 24px; border-radius: 14px; font-weight: 650; }
+.ph-more { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.ph-view { position: absolute; inset: 0; z-index: 2; background: #000; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+.ph-view-top { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: #fff; }
+.ph-view-top span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.ph-view-top button { width: auto; margin: 0; padding: 8px 14px; border-radius: 12px; font-size: 14px; font-weight: 650; background: var(--brand); color: #fff; }
+.ph-view-top button.ph-x { background: rgba(255, 255, 255, 0.16); }
+.ph-view-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: pan-y; }
+.ph-view-stage img, .ph-view-stage video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ph-view-count { padding: 8px 14px calc(88px + env(safe-area-inset-bottom, 0px)); text-align: center; color: #bbb; font-size: 13px; }
+
+/* Gallery folder: Add, Capture and Phone replace the single New button (Decision 316). */
+.gallery-actions { display: flex; gap: 8px; margin: 14px 0 16px; }
+.gallery-actions .new-btn { flex: 1 1 0; min-width: 0; margin: 0; padding: 0 6px; gap: 6px; font-size: 15px; }
