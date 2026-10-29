@@ -19,7 +19,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Decision 311: Home thumbnails stored encrypted under the master key (`hthumbs/`), so a restart reads small files instead of decoding every image; floating style bar under a selection near the top; style state shown at the cursor (dimmed); colours darker on light, lighter on dark. `vite build` passes; thumbnail store tested apart from the device; not run through CI.
 - Decision 312: closing the editor froze the app (a name used outside its scope in the close function); fixed.
 - Decision 313: Voice: Speaker or Earpiece as two small icons in the title bar (hint line removed); round play and pause button on recording rows; swipe between recordings in the viewer with the Gallery's slide. `vite build` passes; not run through CI.
-- Next start: owner reports DP150 to DP154; then the next phase.
+- Decision 314: Voice rows show the microphone tile with a round play and pause badge; earpiece icon with sound waves. `vite build` passes; not run through CI.
+- Next start: owner reports DP150 to DP153 and DP155 (DP154 confirmed); then the next phase.
 
 ---
 

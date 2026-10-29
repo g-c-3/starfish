@@ -3357,3 +3357,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Playback reads and decrypts the recording as the viewer does (Home: the file under the master key; Vault: under its key), into a blob link that is revoked on stop. No new storage.
 - In the recording viewer a horizontal swipe moves to the next or previous recording of the open folder, in the folder's order. The page follows the finger, slides off, and the next slides in (160 ms), as in the Gallery; at the first or last recording it eases back. Touches on the player's own controls are not swipes. The count (n/N) shows under the name; Share, Download, Move and Delete follow the recording shown. A recording opened from search has no list and does not swipe. The recording shown is read when it arrives, so nothing is decrypted ahead.
 - Files: `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP154).
+
+**314. Voice rows: microphone tile with a play badge; earpiece icon.** Amends Decision 313 after a device check.
+- The recording tile is the squarish rounded tile of the category icon again, with the microphone; the round badge at its corner shows play, or pause while playing (the pause badge is red). The whole tile is the button, so the target is larger than the badge.
+- The earpiece icon is the handset with two small sound waves at its upper corner.
+- Files: `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP155).

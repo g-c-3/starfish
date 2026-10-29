@@ -589,7 +589,7 @@ the top 120 px of the text, clear of the system selection menu (Decision 311).
 
 ### Voice list and viewer (Decisions 283, 313)
 The Speaker or Earpiece default is a two-icon switch in the Voice folder's title bar (`meta` `voice_output`, one value for Home and Vault).
-On a recording row the round icon is a play button (`.row-play`, a microphone badge): a capture-phase click on the list plays or pauses
+On a recording row the tile is the play button (`.row-play`: the microphone, with a round play or pause badge): a capture-phase click on the list plays or pauses
 that recording through one shared `Audio` element (`rowPlay`), read and decrypted like the viewer's, as a blob link revoked on stop;
 one at a time; stopped when the folder closes, the Vault locks or a recording opens. The open folder's recordings are kept in order in
 `voiceFolderItems` (cleared on close and on lock); the viewer swipes through them with the same slide as the Gallery, and the viewer's
