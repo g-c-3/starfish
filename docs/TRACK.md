@@ -336,3 +336,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-29 | Session 156 (end) | Decisions 306 to 315 | DP156 confirmed; Phase 40 closed; docs complete |
 | 2026-10-29 | Session 157 (end) | Decisions 316, 317 | Phase 41 added (Gallery: Add, Capture, Phone); DP157 to DP159 added; vite build passes; not run through CI |
 | 2026-10-29 | Session 157 (continued: Gallery card) | Decision 318 | Gallery buttons wired null-safe (cause: index.html missing from the upload); vite build passes; not run through CI |
+| 2026-10-29 | Session 157 (continued: streaming) | Decision 319 | Capture and Phone save by streaming; viewer fills the screen; DP158 and DP159 extended; vite build passes; not run through CI |

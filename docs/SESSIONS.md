@@ -13,6 +13,7 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - `vite build` passes; Java not compiled here; not run through CI; nothing device-tested.
 - Risks: the bridge's first CI compile; media queries and the camera hand-off depend on the phone's camera app and Android version; files are read whole into memory; originals stay in the phone's gallery.
 - Owner reported the Gallery card opening nothing (screen recording). Cause confirmed: `index.html` was missing from the upload. Decision 318: start-up wiring made null-safe as a safeguard. `vite build` passes; not run through CI.
+- Owner: a 13 s 4K Capture was slow, and the Phone viewer left an unused band at the bottom. Decision 319: files stream into the encrypted store (no whole-file base64); the Save dialog opens before reading; viewer fills the screen. `vite build` passes; not run through CI.
 - Next-session start: owner reports DP157 to DP159 (and CI result); fix what fails; then the owner names the next phase.
 
 ---

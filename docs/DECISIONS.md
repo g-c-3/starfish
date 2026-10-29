@@ -3383,7 +3383,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Phone is a full-window screen: items grouped by day, album chips, pinch 3 to 9 per row (kept as `phone_cols`, default 4), tap opens a viewer (swipe, video controls), long-press or Select picks several, Select all per day. Add to Gallery reads the files and shows the Save dialog of Add; Back from the dialog keeps the selection. Back leaves the viewer, then the selection, then the screen. Opened from the Vault, it closes with a Vault lock.
 - Thumbnails are made one at a time for tiles near the screen and held in memory only; nothing is cached on disk.
 - Order is by capture time, then by time added; an item with no capture time sorts after the rest. The DCIM filter leaves screenshots and downloads out of Capture; Phone shows them.
-- Risk: each picked file is read whole into memory, as with Add; a very large video can fail.
+- Files are streamed into storage (Decision 319), so a long video is not a risk for memory.
 - Files: `scripts/java/ArklyMediaBridge.java`, `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159).
 
 **318. Gallery buttons: start-up wiring made null-safe.** Fix to Decision 316 after a device recording.
@@ -3392,3 +3392,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fix: the lookups are null-safe and wrapped in a try block that logs and goes on; the folder-open code no longer assumes the three-button row exists, and keeps New visible when it does not.
 - Why correct: a missing button now costs only that button; the card handlers registered after it always run. The fix is a safeguard; the missing file was the cause.
 - Files: `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP157).
+
+**319. Capture and Phone store files by streaming; the viewer uses the whole screen.** Fix to Decisions 316 and 317 after a device check.
+- Symptom: a 13 s 4K video from Capture took very long to save, and the Phone viewer left an unused band at the bottom.
+- Cause: each file was read whole, turned into one base64 string, then decoded and written again; for a 4K video that is hundreds of megabytes in the page. The viewer reserved space under the picture for the count and the navigation bar.
+- Fix: the file is read as a stream and appended piece by piece to the encrypted store (`beginFile` for Home, `beginVaultFile` for the Vault, the same 1 MB chunks and key wrapping as before); the entry then points at the stored file (`stored` in `captureFile`, `storedFile` in `captureToVault`). The Save dialog of Phone opens before any file is read, from the names the phone gives. A failed save removes the partial file. The viewer drops the reserved band; the count is in the title line.
+- Why correct: the stored format is unchanged, so backup, restore, Move and the Vault read these files as any other; only the way the bytes arrive changed.
+- The copy itself stays: the camera app saves to the phone first and Arkly stores its own encrypted copy; the original is not deleted (Decision 317).
+- Files: `src/js/phonegallery.js`, `src/css/phonegallery.css`, `src/js/files.js`, `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP158, DP159).
