@@ -17,6 +17,8 @@
       <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
       <symbol id="i-goto" viewBox="0 0 24 24"><path d="M4 6h9M4 12h5M4 18h9"/><path d="M14 12h7m-3-3 3 3-3 3"/></symbol>
       <symbol id="i-wrap" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h12.5a3 3 0 0 1 0 6H12"/><path d="m14 15.5-2.5 2.5 2.5 2.5"/><path d="M4 18h4"/></symbol>
+      <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></symbol>
+      <symbol id="i-earpiece" viewBox="0 0 24 24"><path d="M5 4h3.5l1.8 4.5-2.3 1.4a11 11 0 0 0 6.1 6.1l1.4-2.3L20 15.5V19a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
       <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
       <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/></symbol>
@@ -148,10 +150,6 @@
 
       <div id="folder-view" class="hidden">
         <h2 id="folder-title"></h2>
-        <div id="voice-out-wrap" class="hidden">
-          <div class="seg" id="voice-out-seg" role="group" aria-label="Play recordings through"><button type="button" data-out="speaker" class="active">Speaker</button><button type="button" data-out="earpiece">Earpiece</button></div>
-          <p class="mode-description">Default for every recording. Each recording can still be played the other way.</p>
-        </div>
         <div id="pdf-inapp-wrap" class="hidden">
           <label class="switch-row"><input type="checkbox" id="pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick).</p>
@@ -424,10 +422,6 @@
 
       <div id="vault-folder-view" class="hidden">
         <h2 id="vault-folder-title"></h2>
-        <div id="vault-voice-out-wrap" class="hidden">
-          <div class="seg" id="vault-voice-out-seg" role="group" aria-label="Play recordings through"><button type="button" data-out="speaker" class="active">Speaker</button><button type="button" data-out="earpiece">Earpiece</button></div>
-          <p class="mode-description">Default for every recording. Each recording can still be played the other way.</p>
-        </div>
         <div id="vault-pdf-inapp-wrap" class="hidden">
           <label class="switch-row"><input type="checkbox" id="vault-pdf-inapp-toggle" checked /> Open PDFs in the in-app viewer</label>
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick). The Vault then writes a temporary readable copy for that app, removed on the next launch or resume.</p>
