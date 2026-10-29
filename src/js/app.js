@@ -27,6 +27,7 @@ import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeFor
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { attachDragSelect, dragBlocked } from './dragselect.js';
+import { attachVideoPlayer } from './videoplayer.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
 import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
@@ -6027,6 +6028,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
     let url = null, zoom = null, token = 0, openViewerRefresh = () => {}, enterDir = 0, shut = false;
     const drop = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+    let vplayer = null; // the video controls of the item on screen (Decision 324)
+    const dropPlayer = () => { if (vplayer) { vplayer.destroy(); vplayer = null; } };
     // The pictures either side are made ahead (images only), so a swipe shows the next one at once.
     const ahead = new Map(), making = new Set();
     const takeUrl = async (item) => { const u = ahead.get(item.id); if (u) { ahead.delete(item.id); return u; } return imageBlobUrl(item, isVault); };
@@ -6050,7 +6053,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openViewer({
       title: items[index]?.label || 'Image', isVault,
       onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
-      onClose: () => { token++; shut = true; for (const u of ahead.values()) URL.revokeObjectURL(u); ahead.clear(); viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      onClose: () => { token++; shut = true; dropPlayer(); for (const u of ahead.values()) URL.revokeObjectURL(u); ahead.clear(); viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
       render: async (body, { close, refresh }) => {
         openViewerRefresh = refresh;
         if (!items.length) { close(); return; }
@@ -6058,8 +6061,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         items[index] = item;
         document.getElementById('viewer-title').textContent = item.label || 'Image';
         const isVid = isVideoExt(item.extension);
+        dropPlayer();
         body.innerHTML = `
-          <div class="img-stage">${isVid ? '<video class="img-full vid-full" controls playsinline preload="metadata"></video>' : '<img class="img-full" alt="" draggable="false">'}
+          <div class="img-stage">${isVid ? '<video class="img-full vid-full" playsinline preload="metadata"></video>' : '<img class="img-full" alt="" draggable="false">'}
             <div class="img-loading">Loading…</div>
           </div>`;
         // Header order in image mode: back, name, Edit (rename), Share, Download, Move, Delete, count. Appended after Edit.
@@ -6130,6 +6134,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
           if (isVid) { try { img.currentTime = 0.05; } catch { /* the poster stays */ } } // paints the first real frame
           loading.remove();
+          if (isVid) {
+            vplayer = attachVideoPlayer(stage, img, {
+              onActivity: arm,
+              onFail: (msg) => { // the codec gives out while playing: offer the phone's own player
+                const box = document.createElement('div');
+                box.className = 'img-loading img-fail';
+                box.innerHTML = `<span>${escapeHtml(msg)}</span><button type="button" class="secondary-btn">Open in the phone's player</button>`;
+                box.querySelector('button').onclick = () => openFile(item, isVault);
+                stage.appendChild(box);
+              }
+            });
+          }
           slideIn();
           trimAhead(); makeAhead(index + 1); makeAhead(index - 1);
         } catch (err) {

@@ -3,6 +3,9 @@
 import { Capacitor } from '@capacitor/core';
 import { clampCols, applyCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { attachDragSelect, dragBlocked } from './dragselect.js';
+import { attachVideoPlayer } from './videoplayer.js';
+import { FileOpener } from '@capacitor-community/file-opener';
+import { mimeForExtension } from './fileopen.js';
 import '../css/phonegallery.css';
 
 const PAGE = 300, THUMB_PX = 240;
@@ -65,6 +68,13 @@ export async function streamPhoneFile(item, sink) {
 }
 
 export const phoneExtension = (item) => extOf(item.name, item.mime);
+// Hands a phone file to the phone's own player (the fallback when the WebView cannot decode it). Resolves '' or a reason.
+export async function openPhoneFile(item) {
+  try {
+    await FileOpener.open({ filePath: 'file://' + item.path, contentType: item.mime || mimeForExtension(extOf(item.name, item.mime)), openWithDefault: true });
+    return '';
+  } catch (err) { return String((err && err.message) || err || 'Could not open it'); }
+}
 // The phone's own small picture of a photo or video, as a data URL ('' when none).
 export function phoneThumb(item, px = THUMB_PX) {
   const b = bridge();
@@ -357,14 +367,30 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
     const it = st.items[i];
     vw.stage.replaceChildren();
     const m = el(it.video ? 'video' : 'img');
-    if (it.video) { m.controls = true; m.playsInline = true; m.preload = 'metadata'; m.poster = phoneThumb(it, 720); m.addEventListener('loadeddata', () => { try { m.currentTime = 0.05; } catch { /* the poster stays */ } }); }
+    if (vw.player) { vw.player.destroy(); vw.player = null; }
+    if (it.video) { m.playsInline = true; m.preload = 'metadata'; m.poster = phoneThumb(it, 720); m.addEventListener('loadeddata', () => { try { m.currentTime = 0.05; } catch { /* the poster stays */ } }); }
     m.src = mediaSrc(it.path);
     vw.stage.appendChild(m);
+    if (it.video) {
+      vw.player = attachVideoPlayer(vw.stage, m, {
+        onActivity: touch,
+        onFail: (msg) => { // the codec gives out while playing: offer the phone's own player
+          const box = el('div', 'ph-msg ph-vfail');
+          box.append(el('span', '', msg));
+          const b = el('button', '', "Open in the phone's player");
+          b.type = 'button';
+          b.onclick = async () => { const why = await openPhoneFile(it); if (why) box.firstChild.textContent = why; };
+          box.appendChild(b);
+          vw.stage.appendChild(box);
+        }
+      });
+    }
     vw.name.textContent = `${i + 1} of ${st.total || st.items.length} · ${it.name}`;
     if (i >= st.items.length - 3 && st.items.length < st.total) loadPage();
   }
   function closeViewer() {
     if (!st.viewer) return;
+    if (st.viewer.player) { st.viewer.player.destroy(); st.viewer.player = null; }
     st.viewer.stage.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); });
     st.viewer.el.remove();
     st.viewer = null;
