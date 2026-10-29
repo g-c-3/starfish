@@ -33,6 +33,7 @@
       <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
       <symbol id="i-file" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.4h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6"/></symbol>
       <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
       <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></symbol>
@@ -155,6 +156,11 @@
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick).</p>
         </div>
         <button id="folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
+        <div id="gallery-actions" class="gallery-actions hidden">
+          <button id="gallery-add-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>Add</span></button>
+          <button id="gallery-capture-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg><span>Capture</span></button>
+          <button id="gallery-phone-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg><span>Phone</span></button>
+        </div>
         <div id="money-summary" class="money-summary hidden"></div>
         <div id="folder-list"></div>
 
@@ -427,6 +433,11 @@
           <p class="mode-description">Off: a PDF opens in your phone's PDF app (or the one you pick). The Vault then writes a temporary readable copy for that app, removed on the next launch or resume.</p>
         </div>
         <button id="vault-folder-new-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>New</span></button>
+        <div id="vault-gallery-actions" class="gallery-actions hidden">
+          <button id="vault-gallery-add-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg><span>Add</span></button>
+          <button id="vault-gallery-capture-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg><span>Capture</span></button>
+          <button id="vault-gallery-phone-btn" class="new-btn"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg><span>Phone</span></button>
+        </div>
         <div id="vault-money-summary" class="money-summary hidden"></div>
         <div id="vault-folder-list"></div>
       </div>
