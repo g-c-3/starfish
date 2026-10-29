@@ -30,9 +30,8 @@
 .ph-view-top span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .ph-view-top button { width: auto; margin: 0; padding: 8px 14px; border-radius: 12px; font-size: 14px; font-weight: 650; background: var(--brand); color: #fff; }
 .ph-view-top button.ph-x { background: rgba(255, 255, 255, 0.16); }
-.ph-view-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: pan-y; }
-.ph-view-stage img, .ph-view-stage video { max-width: 100%; max-height: 100%; object-fit: contain; }
-.ph-view-count { padding: 8px 14px calc(88px + env(safe-area-inset-bottom, 0px)); text-align: center; color: #bbb; font-size: 13px; }
+.ph-view-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: pan-y; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.ph-view-stage img, .ph-view-stage video { width: 100%; height: 100%; object-fit: contain; }
 
 /* Gallery folder: Add, Capture and Phone replace the single New button (Decision 316). */
 .gallery-actions { display: flex; gap: 8px; margin: 14px 0 16px; }
