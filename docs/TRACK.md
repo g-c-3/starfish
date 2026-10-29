@@ -333,3 +333,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-29 | Session 156 (continued: Voice) | Decision 313 | Voice title-bar output switch; play button on rows; swipe between recordings; DP154 added; vite build passes; not run through CI |
 | 2026-10-29 | Session 156 (continued: Voice polish) | Decision 314 | DP154 confirmed; Voice row tile and play badge swapped; earpiece icon; DP155 added; vite build passes; not run through CI |
 | 2026-10-29 | Session 156 (continued: play glow) | Decision 315 | DP150 to DP155 confirmed; row no longer flashes on a play press, the button glows; DP156 added; vite build passes; not run through CI |
+| 2026-10-29 | Session 156 (end) | Decisions 306 to 315 | DP156 confirmed; Phase 40 closed; docs complete |
