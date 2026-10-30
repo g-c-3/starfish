@@ -41,6 +41,7 @@ import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiom
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { openExplorer } from './explorer.js';
+import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT } from './filesview.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -4131,6 +4132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
+    await showFilesSwitch('vault-files-inapp-wrap', 'vault-files-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(true); }
     document.getElementById('vault-folder-new-btn')?.classList.toggle('hidden', type === 'image' && !!document.getElementById('vault-gallery-actions'));
     document.getElementById('vault-gallery-actions')?.classList.toggle('hidden', type !== 'image');
@@ -5020,6 +5022,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById(wrapId).classList.toggle('hidden', type !== 'pdf');
     if (type === 'pdf') document.getElementById(toggleId).checked = (await metaGet('pdf_inapp_viewer', 'on')) === 'on';
   }
+  // Files folders carry one switch (shared by Home and the Vault): Arkly's own viewers or the phone's apps (Decision 333).
+  async function showFilesSwitch(wrapId, toggleId, type) {
+    document.getElementById(wrapId).classList.toggle('hidden', type !== 'file');
+    if (type === 'file') document.getElementById(toggleId).checked = (await metaGet('files_inapp_viewer', 'on')) === 'on';
+  }
+  for (const id of ['files-inapp-toggle', 'vault-files-inapp-toggle']) {
+    document.getElementById(id).addEventListener('change', async (e) => {
+      await metaSet('files_inapp_viewer', e.target.checked ? 'on' : 'off');
+      if (id === 'vault-files-inapp-toggle') armVaultAutoLock();
+    });
+  }
   for (const id of ['pdf-inapp-toggle', 'vault-pdf-inapp-toggle']) {
     document.getElementById(id).addEventListener('change', async (e) => {
       await metaSet('pdf_inapp_viewer', e.target.checked ? 'on' : 'off');
@@ -5064,6 +5077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
+    await showFilesSwitch('files-inapp-wrap', 'files-inapp-toggle', type);
     if (type === 'image') { await loadGalleryPrefs(); paintGalleryBtn(false); }
     document.getElementById('folder-new-btn')?.classList.toggle('hidden', type === 'image' && !!document.getElementById('gallery-actions')); // Gallery: Add, Capture and Phone instead (Decision 316)
     document.getElementById('gallery-actions')?.classList.toggle('hidden', type !== 'image');
@@ -6407,6 +6421,77 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // A stored file in Arkly's own viewer (Decision 333). Resolves true when a viewer took it, false when the phone's apps should (no viewer for the type).
+  async function openFileInArkly(item, isVault) {
+    const kind = arklyKind(item.extension);
+    if (!kind) return false;
+    if (kind === 'image' || kind === 'video') { await openImageViewer([item], 0, isVault); return true; }
+    if (kind === 'pdf') { await openPdf(item, isVault); return true; }
+    const viewerScreen = document.getElementById('viewer-screen');
+    const arm = isVault ? armVaultAutoLock : armAppAutoLock;
+    const ui = { askYesNo, askText, attachZoomPan, onActivity: arm };
+    const fresh = async () => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
+    const vaultBytes = async () => {
+      if (!privateSessionKey) throw new Error('Vault locked');
+      arm();
+      return base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
+    };
+    let mounted = null, url = null, token = 0;
+    const shut = () => { if (mounted) { try { mounted.destroy(); } catch { /* closing anyway */ } mounted = null; } if (url) { URL.revokeObjectURL(url); url = null; } };
+    viewerScreen.classList.add('file-mode');
+    await openViewer({
+      title: item.label || 'File', isVault, entry: item,
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode'); },
+      render: async (body) => {
+        const mine = ++token;
+        shut();
+        viewerScreen.querySelectorAll('.vwr-menu').forEach((n) => n.remove());
+        const say = (text, withApps = true) => {
+          body.replaceChildren();
+          const box = document.createElement('div'); box.className = 'pdf-msg';
+          const p = document.createElement('p'); p.textContent = text; box.appendChild(p);
+          if (withApps) { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = "Open in the phone's apps"; b.onclick = () => openFile(item, isVault); box.appendChild(b); }
+          body.appendChild(box);
+        };
+        say('Loading…', false);
+        try {
+          const row = isVault ? null : await fresh();
+          if (kind === 'audio') {
+            let blob;
+            if (isVault) blob = new Blob([await vaultBytes()], { type: mimeTypeForVaultRow({ type: 'image', extension: item.extension }) });
+            else blob = new Blob(await readEntryParts(row, (f) => { if (mine === token) say(`Decrypting… ${Math.round(f * 100)}%`, false); }), { type: mimeTypeForVaultRow({ type: 'image', extension: item.extension }) });
+            if (mine !== token) return;
+            url = URL.createObjectURL(blob);
+            mounted = mountAudioFile(body, url, item.label || 'Audio', ui);
+            return;
+          }
+          const bytes = isVault ? await vaultBytes() : await readEntryBytes(row);
+          if (mine !== token) return;
+          if (bytes.length > (FILE_LIMIT[kind] || Infinity)) { say('This file is too large to open here.'); return; }
+          if (kind === 'text') { const m = await mountTextFile(body, bytes, `${item.label || 'file'}.${item.extension || 'txt'}`, ui); if (mine !== token) { m.destroy(); return; } mounted = m; return; }
+          const m = await mountOfficeFile(body, kind, bytes, {
+            ui, setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
+            openWith: () => openFile(item, isVault)
+          });
+          if (mine !== token) { m.destroy(); return; }
+          mounted = m;
+          const menu = document.createElement('button'); // the Office toolbar sits behind a menu, as in the File explorer
+          menu.type = 'button'; menu.className = 'vwr-act vwr-menu icon-btn'; menu.title = 'Menu'; menu.setAttribute('aria-label', 'Menu');
+          menu.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="2" fill="currentColor" stroke="none"/></svg>';
+          menu.onclick = () => { arm(); m.toggleMenu(); };
+          document.getElementById('viewer-edit-btn').parentNode.append(menu);
+        } catch (err) {
+          if (mine !== token) return;
+          say(err && (err.office || err.notText) ? err.message : 'This file cannot be shown here.');
+        }
+      }
+    });
+    return true;
+  }
+
   // Tapping a row opens it. Text, reminder, location, voice, image and PDF have viewers; a file opens in the phone's app.
   async function openEntry(id, isVault, known = null) {
     let item = known;
@@ -6422,7 +6507,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'location') await openLocation(item, isVault);
     else if (item.type === 'voice') await openVoice(item, isVault, isVault ? voiceFolderItems.vault : voiceFolderItems.home);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
-    else if (item.type === 'file') await openFile(item, isVault);
+    else if (item.type === 'file') {
+      // Arkly's own viewer for the kinds it has, when the Files switch is on; anything else, or a switch that is off, goes to the phone's apps (Decision 333).
+      if ((await metaGet('files_inapp_viewer', 'on')) === 'on' && (await openFileInArkly(item, isVault))) return;
+      await openFile(item, isVault);
+    }
     else if (item.type === 'pdf') {
       if ((await metaGet('pdf_inapp_viewer', 'on')) === 'on') await openPdf(item, isVault); // off: the phone's own PDF app (Decision 148)
       else await openFile(item, isVault);
