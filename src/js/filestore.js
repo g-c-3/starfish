@@ -13,6 +13,7 @@ const HEADER = 16;
 const TAG = 16;
 const WRAP_IV = 12;
 const DEFAULT_CHUNK = 1024 * 1024;
+const PARALLEL = 6; // chunks decrypted at once
 const MASTER_META_KEY = 'file_master_key';
 const FILES_DIR = 'files';
 
@@ -156,6 +157,44 @@ function createFileStore({ io, getMasterKey, chunkSize = DEFAULT_CHUNK }) {
     return out;
   }
 
+  // Same checks and chunks as decryptAll, but chunks are decrypted a few at a time and handed back as a list, so a long video is neither
+  // decrypted one chunk after another nor copied into one array (Decision 329). onProgress(0..1) after each chunk.
+  async function decryptParts(enc, key, onProgress) {
+    if (enc.length < HEADER + TAG) throw new Error('Stored file is damaged.');
+    for (let i = 0; i < 4; i++) if (enc[i] !== MAGIC[i]) throw new Error('Stored file is damaged.');
+    const prefix = enc.subarray(4, 12);
+    const cs = new DataView(enc.buffer, enc.byteOffset, enc.byteLength).getUint32(12);
+    if (!cs) throw new Error('Stored file is damaged.');
+    const encLen = cs + TAG;
+    const body = enc.length - HEADER;
+    const n = Math.ceil(body / encLen);
+    if (body - (n - 1) * encLen < TAG) throw new Error('Stored file is damaged.');
+    const parts = new Array(n);
+    let next = 0, done = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= n) return;
+        const start = HEADER + i * encLen;
+        const part = enc.subarray(start, Math.min(start + encLen, enc.length));
+        try {
+          parts[i] = new Uint8Array(await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: chunkIv(prefix, i), additionalData: chunkAad(i, i === n - 1) }, key, part));
+        } catch { next = n; throw new Error('Stored file could not be decrypted.'); }
+        done++;
+        if (onProgress) onProgress(done / n);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, n) }, worker));
+    return parts;
+  }
+  async function readParts(row, onProgress) {
+    const raw = await io.read(row.file_path);
+    if (!row.file_key) return [raw];
+    const key = await importFileKey(await unwrap(row.file_key, row.file_path));
+    return decryptParts(raw, key, onProgress);
+  }
+
   // row: { file_path, file_key }. file_key null = file from before this stage, stored plain.
   async function read(row) {
     const raw = await io.read(row.file_path);
@@ -173,7 +212,7 @@ function createFileStore({ io, getMasterKey, chunkSize = DEFAULT_CHUNK }) {
     return row.file_key ? plainSize(s) : s;
   }
 
-  return { begin, write, read, size, plainSize, isEncrypted: (row) => !!row.file_key };
+  return { begin, write, read, readParts, size, plainSize, isEncrypted: (row) => !!row.file_key };
 }
 
 export { createFileStore, loadMasterKey, rewrapFileKey, sameWrappedKey, newFilePath, FILES_DIR, MASTER_META_KEY, DEFAULT_CHUNK };

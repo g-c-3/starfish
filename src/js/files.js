@@ -85,6 +85,8 @@ const saveBase64 = (b64) => need().write(new Uint8Array(fromBase64(b64)));
 const beginFile = () => need().begin();
 
 async function readBytes(row) { return need().read(await withKey(row)); }
+// The plain bytes as a list of chunks (Decision 329); onProgress(0..1).
+async function readParts(row, onProgress) { return need().readParts(await withKey(row), onProgress); }
 async function readBase64(row) { return toBase64(await readBytes(row)); }
 // Size of the stored file's contents; 0 when the file is missing.
 async function fileSize(row) {
@@ -220,7 +222,7 @@ async function migratePlainFiles({ onProgress } = {}) {
 }
 
 export {
-  migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readBase64, fileSize, removeFile,
+  migratePlainFiles, initFiles, withKey, saveBytes, saveBase64, beginFile, readBytes, readParts, readBase64, fileSize, removeFile,
   beginVaultFile, saveVaultBase64, readVaultBytes, readVaultBase64, vaultFileSize, rewrapForVault, rewrapForHome, keysMatch, beginRawFile, writeRawBase64, newFilePath, writeText, readText, removePath, listPaths,
   putHomeThumb, getHomeThumb, sweepHomeThumbs
 };

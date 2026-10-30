@@ -29,7 +29,7 @@ import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './galler
 import { attachDragSelect, dragBlocked } from './dragselect.js';
 import { attachVideoPlayer } from './videoplayer.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
-import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
+import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, readParts as readEntryParts, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
@@ -101,6 +101,7 @@ const VAULT_SECRET_INPUT_IDS = ['vault-pin-input', 'vault-setup-pin-input', 'vau
 let returnToVaultAfterUnlock = false;
 function showScreen(id, { tab } = {}) {
   if (id === 'lock-screen' && !appLockShowing()) {
+    clearVideoCache();
     returnToVaultAfterUnlock = !document.getElementById('vault-screen')?.classList.contains('hidden');
     if (privateSessionKey) lockVault(); // an app lock by any route also locks the Vault; it asks for its own PIN after the unlock (Decision 217)
   }
@@ -573,6 +574,7 @@ async function registerBackgroundLock() {
       if (!document.getElementById('lock-screen')?.classList.contains('hidden')) offerLockBiometric(); // Decision 205
       return;
     } // only act on going TO background, not returning from it
+    clearVideoCache();
     if (biometricPromptBusy()) return; // the fingerprint screen's own pause, never a real backgrounding (Decision 210)
     if (expectingPickerReturn) { expectingPickerReturn = false; return; }
     await handleLockTrigger('background');
@@ -2706,6 +2708,40 @@ function nativeVideoThumb(blobUrl, item, px) {
   const next = nativeThumbChain.then(run, run);
   nativeThumbChain = next.catch(() => {});
   return next;
+}
+// Home videos opened in the viewer stay decrypted in memory for a short while, so opening one again is instant (Decision 329).
+// Home only: a Vault video is never kept. Cleared when the app goes to the background, when the app lock shows, and when the
+// entry is moved or deleted from the viewer. Bounded by size and count; the oldest goes first.
+const VIDEO_CACHE_BYTES = 256 * 1024 * 1024, VIDEO_CACHE_ITEMS = 3;
+const videoCache = new Map(), videoKept = new Set(), videoPending = new Map();
+const releaseUrl = (u) => { if (!videoKept.has(u)) URL.revokeObjectURL(u); }; // a kept URL belongs to the cache
+function clearVideoCache(id) {
+  for (const [k, v] of [...videoCache]) if (id === undefined || k === id) { videoKept.delete(v.url); URL.revokeObjectURL(v.url); videoCache.delete(k); }
+}
+async function homeVideoUrl(item, onProgress) {
+  const hit = videoCache.get(item.id);
+  if (hit) { videoCache.delete(item.id); videoCache.set(item.id, hit); return hit.url; }
+  if (videoPending.has(item.id)) return videoPending.get(item.id);
+  const p = (async () => {
+    const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+    if (!row) throw new Error('Video not found');
+    const parts = await readEntryParts(row, onProgress);
+    const bytes = parts.reduce((n, x) => n + x.length, 0);
+    const url = URL.createObjectURL(new Blob(parts, { type: mimeTypeForVaultRow({ type: 'image', extension: row.extension }) }));
+    if (bytes <= VIDEO_CACHE_BYTES) {
+      videoCache.set(item.id, { url, bytes });
+      videoKept.add(url);
+      let total = 0;
+      for (const v of videoCache.values()) total += v.bytes;
+      for (const [k, v] of [...videoCache]) {
+        if (k === item.id || (videoCache.size <= VIDEO_CACHE_ITEMS && total <= VIDEO_CACHE_BYTES)) continue;
+        total -= v.bytes; videoKept.delete(v.url); URL.revokeObjectURL(v.url); videoCache.delete(k);
+      }
+    }
+    return url;
+  })().finally(() => videoPending.delete(item.id));
+  videoPending.set(item.id, p);
+  return p;
 }
 // Full-size blob URL for an image entry; the caller revokes it.
 async function imageBlobUrl(item, isVault) {
@@ -6029,12 +6065,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const items = list.slice();
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
     let url = null, zoom = null, token = 0, openViewerRefresh = () => {}, enterDir = 0, shut = false;
-    const drop = () => { if (url) { URL.revokeObjectURL(url); url = null; } };
+    const drop = () => { if (url) { releaseUrl(url); url = null; } };
     let vplayer = null; // the video controls of the item on screen (Decision 324)
     const dropPlayer = () => { if (vplayer) { vplayer.destroy(); vplayer = null; } };
     // The pictures either side are made ahead (images only), so a swipe shows the next one at once.
     const ahead = new Map(), making = new Set();
-    const takeUrl = async (item) => { const u = ahead.get(item.id); if (u) { ahead.delete(item.id); return u; } return imageBlobUrl(item, isVault); };
+    const takeUrl = async (item, onProgress) => {
+      const u = ahead.get(item.id); if (u) { ahead.delete(item.id); return u; }
+      if (!isVault && isVideoExt(item.extension)) return homeVideoUrl(item, onProgress);
+      return imageBlobUrl(item, isVault);
+    };
     const makeAhead = (i) => {
       const it = items[i];
       if (!it || isVideoExt(it.extension) || ahead.has(it.id) || making.has(it.id)) return;
@@ -6110,6 +6150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         downloadBtn.onclick = () => window.Arkly.downloadPlain(item.id);
         if (moveBtn) moveBtn.onclick = async () => {
           if (!(await moveEntryUI(item.id, !isVault))) return;
+          clearVideoCache(item.id);
           items.splice(index, 1);
           if (!items.length) { close(); return; }
           index = Math.min(index, items.length - 1);
@@ -6117,6 +6158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         deleteBtn.onclick = async () => {
           if (isVault) await deleteVaultEntry(item.id); else await softDelete(db, item.id);
+          clearVideoCache(item.id);
           offerUndo([item.id], { isVault });
           items.splice(index, 1);
           if (!items.length) { close(); return; }
@@ -6126,8 +6168,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mine = ++token;
         drop();
         try {
-          const u = await takeUrl(item);
-          if (mine !== token) { URL.revokeObjectURL(u); return; } // moved on or closed while loading
+          const u = await takeUrl(item, (f) => { if (mine === token && loading.isConnected) loading.textContent = `Loading… ${Math.round(f * 100)}%`; });
+          if (mine !== token) { releaseUrl(u); return; } // moved on or closed while loading
           url = u;
           if (isVid) { // a poster keeps the WebView's stretched play icon off the screen (Decision 320)
             const pst = await cachedThumb(item, isVault);
