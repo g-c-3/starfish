@@ -112,6 +112,11 @@ jobs:
       - name: Add the phone media bridge (native)
         run: node scripts/patch-media.js
 
+      # Decision 326 — window.ArklyScreen: system bars hidden and display cutout filled for video full screen. Needs the
+      # onCreate() that patch-screenlock.js guarantees. No permission, no Gradle change.
+      - name: Add the video full screen bridge (native)
+        run: node scripts/patch-screen.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
