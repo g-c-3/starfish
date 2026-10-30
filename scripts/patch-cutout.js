@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Lets the window draw into the display cutout on the short edges and paints the strip beside the camera with the app's colour (Decision 336): window.ArklyCutout,
+// Lets the app draw into the display cutout on the short edges: the bridge pads the content by hand for the status bar, navigation bar and keyboard
+// and leaves the cutout's side strips to the page (Decision 336): window.ArklyCutout,
 // a WebView JavaScript interface like patch-screen.js. android/ is never committed, so CI writes it here.
 //
 // Copies scripts/java/ArklyCutoutBridge.java next to MainActivity.java (package filled in) and registers it in onCreate(); the bridge sets the
-// cutout mode once, when it is created.
+// padding and cutout mode once, when it is created.
 // No Gradle change, no permission. Needs the onCreate() that patch-screenlock.js guarantees, so it runs after it. Idempotent.
 const fs = require('fs');
 const path = require('path');
