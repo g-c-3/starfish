@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Lets the whole app draw into the display cutout on the short edges and reads the cutout's insets for the page (Decision 336): window.ArklyCutout,
+// Lets the window draw into the display cutout on the short edges and paints the strip beside the camera with the app's colour (Decision 336): window.ArklyCutout,
 // a WebView JavaScript interface like patch-screen.js. android/ is never committed, so CI writes it here.
 //
 // Copies scripts/java/ArklyCutoutBridge.java next to MainActivity.java (package filled in) and registers it in onCreate(); the bridge sets the
