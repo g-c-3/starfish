@@ -3469,3 +3469,17 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The page no longer calls the browser's full screen or its orientation lock (the WebView does not support them here); the window-filling class and the bridge are the whole mechanism.
 - Decision: the display cutout is not drawn into. Beside it the display stays black instead of grey. Filling it would need the layout change that caused this fault; reopen only with a device-tested way to keep the page's insets correct.
 - Files: `scripts/java/ArklyScreenBridge.java`, `src/js/videoplayer.js`. `vite build` passes; the Java is not compiled yet, not run through CI, not device-tested (DP165).
+
+**329. Faster Home video open, with a short in-memory keep.** Owner report: a video loads on every open, longer for a larger file.
+- Cause: a Home video is stored encrypted in 1 MiB chunks; each open read the whole file, decrypted it chunk after chunk, joined the chunks into one array and copied that into a Blob.
+- Fix 1: `filestore.readParts` decrypts six chunks at a time and returns the chunk list; the Blob is built from the list (no joined array, no second copy). The checks, the chunk format and the failure on a changed or truncated chunk are the same as `read`. `read` is unchanged. The viewer shows `Loading… n%`.
+- Fix 2: the viewer keeps the decrypted Home video for the next open. At most 3 videos and 256 MiB; the oldest is dropped first; one larger than the limit is not kept. Cleared when the app goes to the background, when the app lock shows, and for an entry moved or deleted from the viewer.
+- A Vault video is never kept and loads as before (its content arrives as one encoded block from the Vault store). Images are unchanged.
+- Cost of the keep: decrypted video stays in memory while the app is in front, after the viewer is closed. Nothing is written to storage by this code.
+- Files: `src/js/filestore.js`, `src/js/files.js`, `src/js/app.js`. `vite build` passes; `readParts` round trip, tamper and tiny-file cases tested apart from the page; not run through CI, not device-tested (DP166).
+
+**330. Optional Edge button for the camera cutout.** Owner report: in landscape, the area beside the camera stays unused.
+- Decision 328 left the cutout alone because drawing into it needs a change of the window's layout, which left the page with wrong insets after full screen. So the change is not made unless asked for.
+- In full screen, a button Edge (only where the native bridge exists) turns it on: `window.ArklyScreen.immersive(on, landscape, edge)` draws under the cutout; turning it off, or leaving full screen, reverses it and sends the insets to the page again, at once and twice after. Edge is off after every start and is never stored, so a restart is always the normal layout.
+- Without a tap on Edge, nothing differs from 328.
+- Files: `scripts/java/ArklyScreenBridge.java`, `src/js/videoplayer.js`, `src/css/videoplayer.css`. `vite build` passes; the call sequence tested apart from the page; the Java is not compiled yet, not run through CI, not device-tested (DP167).
