@@ -4,7 +4,7 @@
 
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
-import { readBase64, withKey } from './files.js';
+import { readParts, withKey } from './files.js';
 
 const OPEN_DIR = 'open';
 
@@ -54,6 +54,32 @@ async function launch(uri, ext) {
   }
 }
 
+// Plain bytes into cache/open/ in slices of about 4 MiB, each sent to the file plugin on its own (Decision 332). One message holding a
+// whole large file as base64 ran the phone out of memory. `parts` is a list of Uint8Array; each is released once written.
+const OPEN_BATCH = 4 * 1024 * 1024;
+const blobBase64 = (blob) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(',')[1] || '');
+  r.onerror = () => rej(r.error || new Error('Could not read the file.'));
+  r.readAsDataURL(blob);
+});
+async function writeParts(path, parts) {
+  let batch = [], size = 0, first = true;
+  const flush = async () => {
+    if (!size) return;
+    const data = await blobBase64(new Blob(batch));
+    batch = []; size = 0;
+    if (first) { await Filesystem.writeFile({ path, directory: Directory.Cache, data, recursive: true }); first = false; }
+    else await Filesystem.appendFile({ path, directory: Directory.Cache, data });
+  };
+  for (let i = 0; i < parts.length; i++) {
+    batch.push(parts[i]); size += parts[i].length; parts[i] = null;
+    if (size >= OPEN_BATCH) await flush();
+  }
+  await flush();
+  if (first) await Filesystem.writeFile({ path, directory: Directory.Cache, data: '', recursive: true }); // an empty file
+}
+
 async function purgeOpenCopies() {
   try { await Filesystem.rmdir({ path: OPEN_DIR, directory: Directory.Cache, recursive: true }); }
   catch { /* nothing to remove */ }
@@ -68,7 +94,7 @@ async function plainUriFor(entryRow) {
   await purgeOpenCopies();
   const ext = row.extension ? `.${String(row.extension).replace(/^\./, '')}` : '';
   const path = `${OPEN_DIR}/${row.id}${ext}`;
-  await Filesystem.writeFile({ path, directory: Directory.Cache, data: await readBase64(row), recursive: true });
+  await writeParts(path, await readParts(row));
   return (await Filesystem.getUri({ path, directory: Directory.Cache })).uri;
 }
 
@@ -83,7 +109,13 @@ async function openDecryptedFile(id, extension, base64) {
   await purgeOpenCopies();
   const ext = extension ? `.${String(extension).replace(/^\./, '')}` : '';
   const path = `${OPEN_DIR}/${id}${ext}`;
-  await Filesystem.writeFile({ path, directory: Directory.Cache, data: base64, recursive: true });
+  // Slices of 4 Mi characters (a multiple of 4), each decoded on its own, so no single message carries the whole file (Decision 332).
+  const STEP = 4 * 1024 * 1024;
+  for (let off = 0; off === 0 || off < base64.length; off += STEP) {
+    const data = base64.slice(off, off + STEP);
+    if (off === 0) await Filesystem.writeFile({ path, directory: Directory.Cache, data, recursive: true });
+    else await Filesystem.appendFile({ path, directory: Directory.Cache, data });
+  }
   const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
   await launch(uri, extension);
 }

@@ -4095,7 +4095,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const picked = Array.from(input.files || []);
           if (!picked.length) return;
           try {
-            const files = await readPicked(picked);
+            const files = readPicked(picked);
             const single = files.length === 1;
             const d = await openSaveDialog({
               heading: single ? (type === 'image' ? 'Save to Gallery' : `Save ${typeLabelFor(type).toLowerCase()}`) : `Save ${files.length} files`,
@@ -4107,7 +4107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const start = numbered ? nextBatchStart(getVaultIndex(), type, d.name) : 0; // continues after the highest "<name> N" (Decision 174)
             for (let i = 0; i < files.length; i++) {
               const f = files[i];
-              await captureToVault({ type, label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
+              toast(single ? 'Saving…' : `Saving ${i + 1} of ${files.length}…`, true);
+              await savePicked(type, f, true, { label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description });
             }
             renderVault();
             toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
@@ -4523,13 +4524,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Main capture bar — mirrors vault-capture-bar's already-working pattern, unencrypted ----
   // Reads picked files to base64 (shared by the Home and Vault pickers).
-  const readPicked = (picked) => Promise.all(picked.map((file) => new Promise((res) => {
-    const r = new FileReader();
+  // The picked files, not read yet (Decision 332). savePicked streams each File into the encrypted store in slices, so a large video
+  // or PDF is never held whole in memory (reading it as one data URL failed silently for big files).
+  const readPicked = (picked) => picked.map((file) => {
     // A picture or video with no extension in its name takes one from its type.
     const media = /^(image|video)\//.test(file.type) && !/\.[A-Za-z0-9]+$/.test(file.name);
-    r.onloadend = () => res({ name: file.name, fileData: r.result.split(',')[1], extension: media ? file.type.split('/')[1].split(';')[0].replace('quicktime', 'mov') : file.name.split('.').pop() });
-    r.readAsDataURL(file);
-  })));
+    return { name: file.name, file, extension: media ? file.type.split('/')[1].split(';')[0].replace('quicktime', 'mov') : file.name.split('.').pop() };
+  });
+  const PICK_SLICE = 1024 * 1024;
+  async function savePicked(type, f, isVault, { label, tags = [], description = '' }) {
+    const w = isVault ? await beginVaultFile(privateSessionKey) : await beginFile();
+    let stored;
+    try {
+      for (let off = 0; off < f.file.size; off += PICK_SLICE) await w.append(new Uint8Array(await f.file.slice(off, off + PICK_SLICE).arrayBuffer()));
+      stored = await w.finish();
+    } catch (err) { await w.abort(); throw err; }
+    try {
+      if (isVault) return await captureToVault({ type, label, tags, description, storedFile: stored, extension: f.extension });
+      return await captureFile(type, { label, tags, description, stored, extension: f.extension });
+    } catch (err) { await removeFile({ file_path: stored.path }).catch(() => {}); throw err; }
+  }
 
   let locationFetching = false; // true while a GPS fix is pending; blocks a second Location capture
 
@@ -4762,7 +4776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       input.onchange = async () => {
         const picked = Array.from(input.files || []);
         if (!picked.length) return;
-        const files = await readPicked(picked);
+        const files = readPicked(picked);
         const single = files.length === 1;
         // Picked files keep the name they have on the phone (Decision 91). Several files: the dialog
         // offers keep-each-name or one common name, numbered (Decision 84).
@@ -4772,13 +4786,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           count: files.length, discardLabel: 'Discard'
         });
         if (!d) return;
-        if (!single && d.mode === 'number') {
-          const { ids, first, last } = await batchAddWithCommonLabel(type, d.name, files, d.tags, d.description);
-          toast(`${ids.length} files added: ${first} to ${last}`);
-        } else {
-          for (const f of files) await captureFile(type, { label: single ? d.name : f.name, tags: d.tags, description: d.description, fileData: f.fileData, extension: f.extension });
-          toast(single ? 'Saved' : `${files.length} files added`);
-        }
+        let n = 0;
+        const note = () => toast(single ? 'Saving…' : `Saving ${++n} of ${files.length}…`, true);
+        try {
+          if (!single && d.mode === 'number') {
+            const { ids, first, last } = await batchAddWithCommonLabel(type, d.name, files, d.tags, d.description,
+              (f, label) => { note(); return savePicked(type, f, false, { label, tags: d.tags, description: d.description }); });
+            toast(`${ids.length} files added: ${first} to ${last}`);
+          } else {
+            for (const f of files) { note(); await savePicked(type, f, false, { label: single ? d.name : f.name, tags: d.tags, description: d.description }); }
+            toast(single ? 'Saved' : `${files.length} files added`);
+          }
+        } catch (err) { toast(`Could not save: ${err.message || err}`); }
         await renderMainTimeline();
       };
       beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
