@@ -700,6 +700,15 @@ events, `touch-action: none`): tap shows or hides, double-tap on a half skips 10
 after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars through the inset controller, blackens the window behind the page, landscape for a wide video; the earlier orientation and background are restored on exit; layout and cutout mode are never changed, Decisions 328, 331), adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header), then asks the page for `requestFullscreen()` on the stage (Decisions 334, 335): `ArklyFullscreenClient` (Capacitor's chrome client, extended) shows it in a black dialog window with the display cutout enabled for that window only and closes it on Back, the button or the app leaving the foreground; a refusal leaves the window-filling mode. One
 instance per video, destroyed on item change, close and lock. Used by `openImageViewer` (Home, Vault) and the Phone viewer. Settings are not stored.
 
+### Display cutout, window insets and keyboard (Decisions 336, 337, 338)
+The window is set up once in `onCreate()` by `ArklyCutoutBridge` (`scripts/java/ArklyCutoutBridge.java`, written by `scripts/patch-cutout.js`, run after the screen-lock patch): cutout mode short edges; a listener on the content view applies the padding by hand (top: status bar or cutout if larger; bottom: navigation bar or keyboard if larger; sides: a navigation bar on that side) and consumes the insets; then the system's own padding is turned off. Nothing is changed at runtime, which keeps the rule of Decision 334 for every later change. `ArklyScreen.immersive` still never touches layout. A failure before the system padding is turned off leaves it in place.
+
+The page spans the strip beside the camera. `src/js/cutout.js` reads `window.ArklyCutout.insets()` (read only, CSS pixels) and sets `--cut-l` and `--cut-r`; `src/css/cutout.css` turns them into the clearance each side keeps (`--cp-l`, `--cp-r`, default `0px`: content uses the strip). Its selectors carry `:root` so they win over older rules whatever the load order. The status bar stays black; the keyboard's own window beside the cutout belongs to the keyboard app.
+
+The page shrinks to the space above the keyboard. `src/js/keyboard.js` marks the body `kb-open` while the height is below 78% of the largest seen, and scrolls a focused field to the centre; `src/css/keyboard.css` hides the bottom nav and lets dialogs use the whole height meanwhile. Editor fields and the search bar are left to their own handling.
+
+CI: `build-android.yml` has the `patch-fullscreen.js` and `patch-cutout.js` steps after the screen step; the release step runs only on `main`, so a branch build started by hand keeps only the artifact.
+
 ### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)
 The Gallery folder (Home and Vault) has three buttons: Add (file chooser), Capture, Phone. Capture and Phone use `window.ArklyMedia`
 (`scripts/java/ArklyMediaBridge.java`, written by `scripts/patch-media.js`): read-only MediaStore access, no permission beyond the All

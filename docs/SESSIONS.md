@@ -11,7 +11,15 @@ Start: "Go". Tier 1 docs read; Decision 334, the video player code and the scree
 - New `ArklyFullscreenClient.java` (extends Capacitor's chrome client) and `patch-fullscreen.js` with a CI step; `videoplayer.js` asks for `requestFullscreen()` on the stage and follows the fullscreen change back; refusal keeps the Decision 328 behaviour.
 - `vite build` passes; patch script tested for idempotency on a stand-in `MainActivity.java`; Java not compiled here; not run through CI; nothing device-tested (DP170).
 - Risks: first CI run compiles the Java; dialog window versus app lock and rotation untested; the file chooser and permission prompts rely on the extended chrome client behaving as before.
-- Next-session start: confirm CI green, then DP170 on device; Phase 46 is checked off only after it.
+- Owner result on device: the video fills the area beside the camera in full screen. Phase 46 is checked; DP170 items 4 to 10 not reported.
+- Phase 47, Decisions 336 to 339, tried on a branch with the owner testing each build on the phone. Withdrawn first: page padding from the reported cutout inset (doubled the gap), and a window background fill (strip filled, content still outside it). Built: window draws into the cutout, system padding turned off once at launch and replaced by hand-applied padding (`ArklyCutoutBridge`), cutout insets passed to the page, clearance variables default to `0px`.
+- Keyboard (Decision 337): the page now shrinks above the keyboard; `keyboard.js` and `keyboard.css` give dialogs the whole space and scroll the focused field into view. Confirmed on device in the Save to Gallery dialog, landscape.
+- Decision 338: the release step runs only on `main`; branch builds are started by hand and keep only the artifact.
+- Decision 339: pinned dialog buttons built and not adopted by the owner; not in the code.
+- Confirmed on device: the Gallery, the video viewer and the overlay span the full width in landscape; portrait unchanged; the keyboard dialog fits.
+- `vite build` passes; the Java was compiled by the branch CI runs. Not confirmed: portrait with the keyboard, Money and Repayment dialogs, the camera on the right, a side navigation bar, editor, Files, PDF viewer, search and Phone browser under the camera hole (DP171).
+- Risks: the main build after merge is not yet seen; every screen is affected by the new padding; the camera hole may clip content at `--cp-l` of `0px`.
+- Next-session start: confirm the `main` build is green, then DP171 and the rest of DP170 on device.
 
 ---
 
