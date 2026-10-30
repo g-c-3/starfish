@@ -1,0 +1,21 @@
+/* Display cutout (Decision 336). The page spans the whole window, strips beside the camera included; --cut-l and --cut-r
+   (cutout.js) are the cutout's side insets. --cp-l and --cp-r are the clearance the layout keeps from each side.
+   0px: content uses the strip like the other edge. To keep every control clear of the camera area instead, set them to
+   var(--cut-l) and var(--cut-r). `:root` in each selector wins over the older rules whatever the load order. */
+:root { --cut-l: 0px; --cut-r: 0px; --cp-l: 0px; --cp-r: 0px; }
+
+:root .screen { padding-left: calc(20px + var(--cp-l)); padding-right: calc(20px + var(--cp-r)); }
+:root #bottom-nav { left: calc(12px + var(--cp-l)); right: calc(12px + var(--cp-r)); }
+:root #power-close-btn { right: calc(14px + var(--cp-r)); }
+:root #lock-toggle-btn { right: calc(62px + var(--cp-r)); }
+:root .modal-overlay { padding-left: calc(20px + var(--cp-l)); padding-right: calc(20px + var(--cp-r)); }
+:root .widget-screen { padding-left: calc(18px + var(--cp-l)); padding-right: calc(18px + var(--cp-r)); }
+
+/* Full-window layers. */
+:root #editor-screen, :root #viewer-screen, :root #explorer-screen, :root #phone-screen,
+:root .ph-view, :root #explorer-viewer { padding-left: var(--cp-l); padding-right: var(--cp-r); }
+:root #select-bar { padding-left: calc(8px + var(--cp-l)); padding-right: calc(8px + var(--cp-r)); }
+
+/* Search overlay: its children are positioned, so padding on the layer would not move them. */
+:root #search-bar { left: calc(14px + var(--cp-l)); right: calc(14px + var(--cp-r)); }
+:root #search-panel { left: var(--cp-l); right: var(--cp-r); }

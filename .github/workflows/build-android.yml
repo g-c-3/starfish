@@ -122,6 +122,11 @@ jobs:
       - name: Add the video full screen overlay (native)
         run: node scripts/patch-fullscreen.js
 
+      # Decision 336 — window.ArklyCutout: the window draws into the display cutout on the short edges (set once at start) and
+      # the page reads the cutout's insets. Needs the onCreate() that patch-screenlock.js guarantees. No permission, no Gradle change.
+      - name: Add the display cutout bridge (native)
+        run: node scripts/patch-cutout.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
@@ -196,7 +201,9 @@ jobs:
       # APP_VERSION_NAME (set by scripts/patch-version.js into $GITHUB_ENV above, Decision 282)
       # prefixed with "v" — always unique since it is derived from the increasing run number, so
       # this never collides with an existing tag and never needs a --force overwrite.
+      # A run started by hand on another branch (a test build) keeps only the artifact above: it never becomes a Release, so the in-app update check never offers it.
       - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
