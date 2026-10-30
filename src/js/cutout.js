@@ -1,6 +1,7 @@
 // cutout.js — passes the display cutout's side insets to the page as --cut-l and --cut-r (Decision 336). DOM only.
 // window.ArklyCutout comes from patch-cutout.js; without it both stay 0 and nothing changes. cutout.css decides what they do.
 import '../css/cutout.css';
+import './keyboard.js';
 
 const root = document.documentElement;
 let last = '';
