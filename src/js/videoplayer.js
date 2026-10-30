@@ -1,6 +1,6 @@
 // videoplayer.js — one set of video controls for the Gallery viewer and the Phone viewer (Decision 324). DOM only.
 // attachVideoPlayer(stage, video, { onFail, onActivity }) draws the controls over `stage` and returns { destroy }.
-// Full screen also asks window.ArklyScreen (patch-screen.js, Decision 326) to hide the system bars and fill the display cutout.
+// Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326, 328) to hide the system bars and turn a wide video to landscape.
 // The native controls stay off; every control is a plain element over the video.
 import '../css/videoplayer.css';
 
@@ -117,16 +117,13 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   seek.addEventListener('pointerup', seekDone);
   seek.addEventListener('pointercancel', seekDone);
 
-  // ---- Full screen: the browser's when the WebView allows it, always the window-filling mode as well; wide video asks for landscape ----
-  async function enterFull() {
+  // ---- Full screen: the window-filling mode, plus the native bars-hidden mode when the bridge exists; wide video asks for landscape ----
+  function enterFull() {
     full = true;
     stage.classList.add('vp-full');
     document.body.classList.add('vp-fs');
     bFull.innerHTML = ICON.exit;
-    const wide = video.videoWidth > video.videoHeight;
-    try { if (window.ArklyScreen) window.ArklyScreen.immersive(true, wide); } catch { /* no native bridge: the window-filling mode stays */ }
-    try { if (stage.requestFullscreen) await stage.requestFullscreen(); } catch { /* the window-filling mode stays */ }
-    try { if (wide && screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch { /* not allowed here */ }
+    try { if (window.ArklyScreen) window.ArklyScreen.immersive(true, video.videoWidth > video.videoHeight); } catch { /* no native bridge: the window-filling mode stays */ }
   }
   function exitFull() {
     if (!full) return;
@@ -135,11 +132,8 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     document.body.classList.remove('vp-fs');
     bFull.innerHTML = ICON.full;
     try { if (window.ArklyScreen) window.ArklyScreen.immersive(false, false); } catch { /* no native bridge */ }
-    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch { /* already out */ }
-    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch { /* nothing locked */ }
   }
   bFull.onclick = () => { touch(); if (full) exitFull(); else enterFull(); schedule(); };
-  offs.push(on(document, 'fullscreenchange', () => { if (full && !document.fullscreenElement && !stage.classList.contains('vp-full')) exitFull(); }));
 
   // ---- Gestures on the picture: tap shows or hides, double tap skips, vertical drag on the right half sets the volume ----
   let g = null, lastTap = 0, lastX = 0;
