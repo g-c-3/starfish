@@ -27,7 +27,10 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Phase 44, Decision 332, from three recordings: opening a 158 MB PDF from Files closed the app (one whole-file base64 message to the file plugin); .mp4 files were not added from the file chooser (whole file read as a data URL, failure unhandled). Opened copies are now written in slices; picked files are streamed into the store in 1 MiB slices with a Saving… notice and an error message.
 - `vite build` passes; streamed save/read tested for 0 byte and chunk-boundary sizes; slice writer tested with a stand-in; not run through CI; nothing device-tested (DP168).
 - Risks: a large open from Files now takes time before the other app appears (no spinner); a very large add is slow and stops if the app is sent to the background; other whole-file paths (share, export, backup) are unchanged.
-- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166, DP168; fix what fails; then the owner names the next phase.
+- Phase 45, Decision 333: Files opened in Arkly. Switch under the Files title (Home and Vault, shared, on by default); image, video, PDF, audio, text and docx, xlsx, pptx open in Arkly; other types and the off position use the phone's apps. New `filesview.js` (text, audio, Office views) in the entry viewer; bytes decrypted in memory only.
+- `vite build` passes; not run through CI; nothing device-tested (DP169).
+- Risks: the Office toolbar menu button and the text view's layout inside the entry viewer are untested; large audio takes time and memory; the title bar placement follows the PDF switch (below the title), not inside the bar.
+- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166, DP168, DP169; fix what fails; then the owner names the next phase.
 
 ---
 

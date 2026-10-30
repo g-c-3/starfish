@@ -675,6 +675,12 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
+### Files opened in Arkly (Decision 333)
+Tapping a Files entry runs `openFileInArkly` when the shared switch `files_inapp_viewer` is on and `arklyKind(extension)` (the File explorer's kind lists) names
+a viewer: image and video go to the Gallery viewer, PDF to `openPdf`, and audio, text and docx, xlsx, pptx to `filesview.js` inside the entry viewer
+(`openViewer`, class `file-mode`). Bytes are decrypted in memory (`readBytes`, `readParts` for audio, or the Vault content); nothing is written to the phone.
+Anything else, or the switch off, goes to `openFile` (the phone's apps).
+
 ### Large files (Decision 332)
 Nothing holds a whole large file as one string. Opening a Home file in the phone's app (`fileopen.js`) decrypts it by chunk and writes `cache/open/<id>.<ext>`
 in slices of about 4 MiB; a Vault file, which arrives as base64, in slices of 4 Mi characters. The file chooser (Gallery Add, Files New, every type, Home and
