@@ -292,9 +292,9 @@ export function openPhoneGallery({ isVault = false, cols = 4, onCols, onPick, le
       if (!press) return;
       press.long = true;
       const i = Number(tile.dataset.i);
-      if (!st.sel.has(i)) toggle(i); // a long press only selects; the drag that may follow extends from here (Decision 323)
-      else { st.selecting = true; paintHead(); }
-      drag.begin(tile, press.x, press.y);
+      const was = st.sel.has(i); // a press on a selected tile starts the reverse drag (Decision 325)
+      if (!was) toggle(i); else { st.selecting = true; paintHead(); }
+      drag.begin(tile, press.x, press.y, { remove: was });
     }, 450) };
   }, { passive: true });
   body.addEventListener('touchmove', (e) => {

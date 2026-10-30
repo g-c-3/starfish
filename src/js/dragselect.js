@@ -1,7 +1,8 @@
-// dragselect.js — drag-to-select on a tile grid (Decision 323). DOM only; the caller owns the selection.
-// begin() is called by the caller's long press, with the pressed tile already selected. While the finger stays down, every tile
-// between that tile and the finger, in reading order, is selected on top of what was selected before the press; moving back
-// shrinks the range. Near the top or bottom edge the scroller moves. A second finger or a lift ends the drag.
+// dragselect.js — drag-to-select on a tile grid (Decisions 323, 325). DOM only; the caller owns the selection.
+// begin() is called by the caller's long press. Pressing an unselected tile (the caller has already selected it) starts a select drag:
+// every tile between that tile and the finger, in reading order, is selected on top of what was selected before the press.
+// Pressing a selected tile (the caller leaves it alone, remove: true) starts the reverse: those tiles are unselected instead.
+// Moving back shrinks the range either way. Near the top or bottom edge the scroller moves. A second finger or a lift ends the drag.
 const EDGE = 80, MAX_STEP = 18, BLOCK_MS = 400;
 
 let blockUntil = 0;
@@ -19,8 +20,9 @@ function scrollParent(el) {
 // root: element holding the tiles. tileSel: CSS selector of one tile.
 // getSel(): Set of ids selected now. idOf(tile): id of a tile.
 // apply(nextSet, changedTiles): the new selection and the tiles whose state changed.
-// Returns { begin(tile, x, y), active() }.
-export function attachDragSelect(root, { tileSel, getSel, idOf, apply, onTouch }) {
+// onEnd(): once, when a drag ends (a reverse drag may have emptied the selection; the caller decides what that means).
+// Returns { begin(tile, x, y, { remove }), active() }.
+export function attachDragSelect(root, { tileSel, getSel, idOf, apply, onTouch, onEnd }) {
   let d = null; // { list, index, base, anchor, lo, hi, x, y, raf }
 
   const rebuild = () => { d.list = [...root.querySelectorAll(tileSel)]; d.index = new Map(d.list.map((t, i) => [t, i])); };
@@ -35,7 +37,7 @@ export function attachDragSelect(root, { tileSel, getSel, idOf, apply, onTouch }
     }
     d.lo = lo; d.hi = hi;
     const next = new Set(d.base);
-    for (let k = lo; k <= hi; k++) if (d.list[k]) next.add(idOf(d.list[k]));
+    for (let k = lo; k <= hi; k++) if (d.list[k]) { if (d.remove) next.delete(idOf(d.list[k])); else next.add(idOf(d.list[k])); }
     apply(next, changed);
     if (onTouch) onTouch();
   }
@@ -68,6 +70,7 @@ export function attachDragSelect(root, { tileSel, getSel, idOf, apply, onTouch }
     cancelAnimationFrame(d.raf);
     d = null;
     blockUntil = Date.now() + BLOCK_MS;
+    if (onEnd) onEnd();
   }
 
   // Non-passive and permanent, so the page does not take the gesture over as a scroll once the drag has begun.
@@ -85,13 +88,15 @@ export function attachDragSelect(root, { tileSel, getSel, idOf, apply, onTouch }
 
   return {
     active: () => !!d,
-    begin(tile, x, y) {
+    begin(tile, x, y, { remove = false } = {}) {
       stop();
-      d = { list: [], index: new Map(), base: new Set(getSel()), anchor: 0, lo: 0, hi: 0, x, y, raf: 0, scroller: scrollParent(root) };
+      d = { list: [], index: new Map(), base: new Set(getSel()), anchor: 0, lo: 0, hi: 0, x, y, raf: 0, scroller: scrollParent(root), remove };
       rebuild();
       const a = d.index.get(tile);
       if (a === undefined) { d = null; return; }
-      d.anchor = d.lo = d.hi = a;
+      d.anchor = a;
+      d.lo = a + 1; d.hi = a; // an empty range, so the first update paints the pressed tile
+      update(a);
       d.raf = requestAnimationFrame(loop);
     }
   };

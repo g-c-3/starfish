@@ -1,5 +1,6 @@
 // videoplayer.js — one set of video controls for the Gallery viewer and the Phone viewer (Decision 324). DOM only.
 // attachVideoPlayer(stage, video, { onFail, onActivity }) draws the controls over `stage` and returns { destroy }.
+// Full screen also asks window.ArklyScreen (patch-screen.js, Decision 326) to hide the system bars and fill the display cutout.
 // The native controls stay off; every control is a plain element over the video.
 import '../css/videoplayer.css';
 
@@ -9,8 +10,8 @@ const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
   replay: '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>',
-  back: '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="17" font-size="8" font-weight="700" text-anchor="middle">10</text></svg>',
-  fwd: '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="17" font-size="8" font-weight="700" text-anchor="middle">10</text></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M20 11H8.8l4.6-4.6L12 5l-7 7 7 7 1.4-1.4L8.8 13H20z"/></svg><b>10</b>',
+  fwd: '<svg viewBox="0 0 24 24"><path d="M4 11h11.2l-4.6-4.6L12 5l7 7-7 7-1.4-1.4 4.6-4.6H4z"/></svg><b>10</b>',
   loop: '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z"/></svg>',
   vol: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>',
   mute: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm12.6 1.4L17 12l-1.4 1.6 1.4 1.4-1.4 1.4-1.4-1.4-1.4 1.4L12.4 15l1.4-1.4-1.4-1.6 1.4-1.4 1.4 1.4 1.4-1.4z"/></svg>',
@@ -122,8 +123,10 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     stage.classList.add('vp-full');
     document.body.classList.add('vp-fs');
     bFull.innerHTML = ICON.exit;
+    const wide = video.videoWidth > video.videoHeight;
+    try { if (window.ArklyScreen) window.ArklyScreen.immersive(true, wide); } catch { /* no native bridge: the window-filling mode stays */ }
     try { if (stage.requestFullscreen) await stage.requestFullscreen(); } catch { /* the window-filling mode stays */ }
-    try { if (video.videoWidth > video.videoHeight && screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch { /* not allowed here */ }
+    try { if (wide && screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch { /* not allowed here */ }
   }
   function exitFull() {
     if (!full) return;
@@ -131,6 +134,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     stage.classList.remove('vp-full');
     document.body.classList.remove('vp-fs');
     bFull.innerHTML = ICON.full;
+    try { if (window.ArklyScreen) window.ArklyScreen.immersive(false, false); } catch { /* no native bridge */ }
     try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch { /* already out */ }
     try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch { /* nothing locked */ }
   }

@@ -5060,7 +5060,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         getSel: () => (selection ? selection.ids : new Set()),
         idOf: (el) => el.dataset.id,
         apply: (next) => { if (!selection) return; selection.ids = next; paintSelection(); },
-        onTouch: arm
+        onTouch: arm,
+        onEnd: () => { if (selection && selection.ids.size === 0) exitSelection(); } // a reverse drag that cleared everything leaves selection mode
       });
       const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
       root.addEventListener('pointerdown', (e) => {
@@ -5074,16 +5075,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           timer = null;
           if (selection && selection.isVault !== vaultNow()) return;
           swallow = true; // the click that follows this press must not open the entry
+          const was = !!selection && selection.ids.has(id); // a press on a selected row starts the reverse drag (Decision 325)
           if (!selection) {
             selection = { isVault: vaultNow(), ids: new Set() };
             document.body.classList.add('selecting');
             document.getElementById('select-bar')?.classList.remove('hidden');
             updateBackButtonState();
           }
-          selection.ids.add(id);
+          if (!was) selection.ids.add(id);
           arm();
           paintSelection();
-          drag.begin(row, startX, startY);
+          drag.begin(row, startX, startY, { remove: was });
         }, LONG_MS);
       });
       root.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > SLOP) cancel(); });
