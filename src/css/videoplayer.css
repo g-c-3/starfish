@@ -26,4 +26,3 @@
 body.vp-fs #viewer-screen .editor-bar, body.vp-fs .ph-view-top { display: none !important; }
 .ph-view-stage { position: relative; }
 .ph-vfail { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; justify-items: center; background: rgba(0, 0, 0, 0.8); color: #fff; }
-.vp-tool[hidden] { display: none; }
