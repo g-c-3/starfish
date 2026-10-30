@@ -1,6 +1,7 @@
 // videoplayer.js — one set of video controls for the Gallery viewer and the Phone viewer (Decision 324). DOM only.
 // attachVideoPlayer(stage, video, { onFail, onActivity }) draws the controls over `stage` and returns { destroy }.
-// Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326, 328) to hide the system bars and turn a wide video to landscape.
+// Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326, 328) to hide the system bars and turn a wide video to landscape,
+// and asks the WebView for its fullscreen overlay (patch-fullscreen.js, Decision 334), which draws into the camera area; a refusal keeps the window-filling mode.
 // The native controls stay off; every control is a plain element over the video.
 import '../css/videoplayer.css';
 
@@ -118,6 +119,28 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   seek.addEventListener('pointercancel', seekDone);
 
   const native = (on) => { try { if (window.ArklyScreen) window.ArklyScreen.immersive(on, on && video.videoWidth > video.videoHeight); } catch { /* no native bridge: the window-filling mode stays */ } };
+  // ---- Overlay (Decision 334): the stage in the WebView's own fullscreen window. Only when the bridge exists; a refusal changes nothing. ----
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  let overlay = false;
+  function overlayOn() {
+    try {
+      if (!window.ArklyScreen || !stage.requestFullscreen) return;
+      const p = stage.requestFullscreen();
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* the window-filling mode stays */ }
+  }
+  function overlayOff() {
+    overlay = false;
+    try {
+      if (!fsEl() || !document.exitFullscreen) return;
+      const p = document.exitFullscreen();
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* already closed */ }
+  }
+  offs.push(on(document, 'fullscreenchange', () => {
+    if (fsEl() === stage) overlay = true;
+    else if (overlay) { overlay = false; if (full) exitFull(); }
+  }));
   // ---- Full screen: the window-filling mode, plus the native bars-hidden mode when the bridge exists; wide video asks for landscape ----
   function enterFull() {
     full = true;
@@ -125,6 +148,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     document.body.classList.add('vp-fs');
     bFull.innerHTML = ICON.exit;
     native(true);
+    overlayOn();
   }
   function exitFull() {
     if (!full) return;
@@ -132,6 +156,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     stage.classList.remove('vp-full');
     document.body.classList.remove('vp-fs');
     bFull.innerHTML = ICON.full;
+    overlayOff();
     native(false);
   }
   bFull.onclick = () => { touch(); if (full) exitFull(); else enterFull(); schedule(); };
