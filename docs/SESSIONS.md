@@ -17,6 +17,8 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Decision 325: reverse drag. A long press on a selected tile unselects it and, dragging, everything it passes; back reselects. Selection mode ends on lift if the reverse drag emptied it.
 - Decision 326, from a device screenshot of the player in landscape: skip buttons are a straight arrow with 10 below; the unused bands (system bars, cutout side) need a native window change, so new `ArklyScreen` bridge, `patch-screen.js` and a CI step. The Java is not compiled yet.
 - Risks: the first CI run must compile `ArklyScreenBridge.java` and stay green; if it fails, the build log names the line. Immersive mode after a swipe from the edge is untested.
+- Decision 327, from a screen recording: full screen left the page displaced after exit (title bar, lock and shutdown buttons) and the landscape band stayed. Cause: window flags written and reset by hand. Bridge rewritten on the standard inset calls with an exact restore.
+- Risks: the Java uses `androidx.core.view` classes (expected on the build classpath through the app's base activity, not yet compiled); the landscape band is not confirmed fixed.
 - Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP165; fix what fails; then the owner names the next phase.
 
 ---

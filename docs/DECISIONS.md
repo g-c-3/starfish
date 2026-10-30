@@ -3455,3 +3455,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Controls keep clear of the cutout through the safe-area insets.
 - No permission, no Gradle change, no data touched, nothing sent. New CI step `Add the video full screen bridge (native)`, after the phone media bridge.
 - Files: `src/js/videoplayer.js`, `src/css/videoplayer.css`, `scripts/patch-screen.js` (NEW), `scripts/java/ArklyScreenBridge.java` (NEW), `.github/workflows/build-android.yml`. `vite build` passes; the patch script tested on a stand-in `MainActivity.java`; the Java is not compiled yet, not run through CI, not device-tested (DP165).
+
+**327. Full screen bridge rewritten.** Device recording after 326: leaving full screen left the page one status-bar height too low (title bar, lock and shutdown buttons out of place, also after Back), and the landscape band beside the cutout stayed.
+- Cause: `ArklyScreenBridge` wrote the window's system UI flags directly and reset them to none on exit; the window kept stale padding from that flag change.
+- Fix: the bridge now uses `WindowCompat.setDecorFitsSystemWindows` and `WindowInsetsControllerCompat` (hide and show the system bars, swipe from the edge shows them briefly) plus the cutout mode. It records the orientation and cutout mode before it changes them and restores exactly those; an Off call with no On before it does nothing.
+- The full-screen class in the page no longer sets an explicit width and height; it fills the real viewport by its edges.
+- The landscape band may still need a further change if the first fix does not remove it; the cutout is now drawn into on short edges with the decor not fitting system windows, which is what browsers do. Reported after the next device run (DP165).
+- Files: `scripts/java/ArklyScreenBridge.java`, `src/css/videoplayer.css`. `vite build` passes; the Java is not compiled yet, not run through CI, not device-tested.

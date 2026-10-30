@@ -675,11 +675,11 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
-### Video player (Decisions 324, 326)
+### Video player (Decisions 324, 326, 327)
 `src/js/videoplayer.js` draws the controls over the stage of a viewer and turns the native controls off: centre play, pause or replay with 10 s
 skips, a bottom bar with seek, elapsed and remaining time, speed, loop, mute, fit or fill, full screen. Gestures sit on a layer over the picture (pointer
 events, `touch-action: none`): tap shows or hides, double-tap on a half skips 10 s, a vertical drag on the right half sets the volume. Controls hide 3 s
-after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars, draws under the display cutout, landscape for a wide video, all restored on exit), requests the browser's, and always adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
+after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars through the inset controller, draws under the display cutout, landscape for a wide video; the window's earlier state is recorded and restored on exit, Decision 327), requests the browser's, and always adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
 instance per video, destroyed on item change, close and lock. Used by `openImageViewer` (Home, Vault) and the Phone viewer. Settings are not stored.
 
 ### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)

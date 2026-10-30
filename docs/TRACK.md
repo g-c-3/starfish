@@ -343,3 +343,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-30 | Session 158 (end) | Decision 323; Phase 42 built | Drag-to-select in Gallery and Phone grids; DP162 added; vite build passes; not run through CI |
 | 2026-10-30 | Session 158 (continued: video player) | Decision 324; Phase 43 built | One video player for Gallery and Phone viewers; DP163 added; vite build passes; not run through CI |
 | 2026-10-30 | Session 158 (continued: reverse select, player layout) | Decisions 325, 326 | Reverse drag-select; straight skip arrows; native full screen bridge and CI step; DP164, DP165 added; vite build passes; not run through CI |
+| 2026-10-30 | Session 158 (continued: full screen fix) | Decision 327 | Native full screen bridge rewritten after a device recording; vite build passes; not run through CI |
