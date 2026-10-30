@@ -6168,7 +6168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const mine = ++token;
         drop();
         try {
-          const u = await takeUrl(item, (f) => { if (mine === token && loading.isConnected) loading.textContent = `Loading… ${Math.round(f * 100)}%`; });
+          const u = await takeUrl(item, (f) => { if (mine === token && loading.isConnected) loading.textContent = `Decrypting… ${Math.round(f * 100)}%`; });
           if (mine !== token) { releaseUrl(u); return; } // moved on or closed while loading
           url = u;
           if (isVid) { // a poster keeps the WebView's stretched play icon off the screen (Decision 320)

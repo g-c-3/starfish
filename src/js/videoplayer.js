@@ -1,6 +1,6 @@
 // videoplayer.js — one set of video controls for the Gallery viewer and the Phone viewer (Decision 324). DOM only.
 // attachVideoPlayer(stage, video, { onFail, onActivity }) draws the controls over `stage` and returns { destroy }.
-// Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326 to 329) to hide the system bars, turn a wide video to landscape and, on request, draw beside the camera cutout.
+// Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326, 328) to hide the system bars and turn a wide video to landscape.
 // The native controls stay off; every control is a plain element over the video.
 import '../css/videoplayer.css';
 
@@ -42,15 +42,14 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   seek.type = 'range'; seek.min = '0'; seek.max = '1000'; seek.value = '0'; seek.setAttribute('aria-label', 'Seek');
   const row1 = el('div', 'vp-row'); row1.append(tCur, seek, tLeft);
   const bSpeed = el('button', 'vp-tool', '1×'), bLoop = el('button', 'vp-tool', ICON.loop), bMute = el('button', 'vp-tool', ICON.vol);
-  const bFit = el('button', 'vp-tool', 'Fit'), bFull = el('button', 'vp-tool', ICON.full), bEdge = el('button', 'vp-tool', 'Edge');
-  bEdge.hidden = true; bEdge.setAttribute('aria-label', 'Use the area beside the camera');
+  const bFit = el('button', 'vp-tool', 'Fit'), bFull = el('button', 'vp-tool', ICON.full);
   bSpeed.setAttribute('aria-label', 'Speed'); bLoop.setAttribute('aria-label', 'Loop'); bMute.setAttribute('aria-label', 'Mute'); bFit.setAttribute('aria-label', 'Fit or fill'); bFull.setAttribute('aria-label', 'Full screen');
-  const row2 = el('div', 'vp-row vp-tools'); row2.append(bSpeed, bLoop, bMute, bFit, bEdge, bFull);
+  const row2 = el('div', 'vp-row vp-tools'); row2.append(bSpeed, bLoop, bMute, bFit, bFull);
   bar.append(row1, row2);
   layer.append(hud, centre, bar);
   stage.appendChild(layer);
 
-  let shown = true, hideT = null, hudT = null, seeking = false, full = false, speedI = 2, dead = false, edge = false;
+  let shown = true, hideT = null, hudT = null, seeking = false, full = false, speedI = 2, dead = false;
   const touch = () => { if (onActivity) onActivity(); };
 
   // ---- Show and hide ----
@@ -118,16 +117,13 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   seek.addEventListener('pointerup', seekDone);
   seek.addEventListener('pointercancel', seekDone);
 
-  const native = (on) => { try { if (window.ArklyScreen) window.ArklyScreen.immersive(on, on && video.videoWidth > video.videoHeight, on && edge); } catch { /* no native bridge: the window-filling mode stays */ } };
-  // Edge: also draw beside the camera cutout. Off at every start; never kept, so a restart is always the normal layout (Decision 329).
-  bEdge.onclick = () => { touch(); edge = !edge; bEdge.classList.toggle('on', edge); native(true); flash(edge ? 'Edge to edge on' : 'Edge to edge off'); schedule(); };
+  const native = (on) => { try { if (window.ArklyScreen) window.ArklyScreen.immersive(on, on && video.videoWidth > video.videoHeight); } catch { /* no native bridge: the window-filling mode stays */ } };
   // ---- Full screen: the window-filling mode, plus the native bars-hidden mode when the bridge exists; wide video asks for landscape ----
   function enterFull() {
     full = true;
     stage.classList.add('vp-full');
     document.body.classList.add('vp-fs');
     bFull.innerHTML = ICON.exit;
-    bEdge.hidden = !window.ArklyScreen; // only where the native bridge exists
     native(true);
   }
   function exitFull() {
@@ -136,7 +132,6 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     stage.classList.remove('vp-full');
     document.body.classList.remove('vp-fs');
     bFull.innerHTML = ICON.full;
-    edge = false; bEdge.hidden = true; bEdge.classList.remove('on');
     native(false);
   }
   bFull.onclick = () => { touch(); if (full) exitFull(); else enterFull(); schedule(); };
