@@ -24,7 +24,10 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Decision 330 (Edge button) was built, then withdrawn by Decision 331 after a device recording: it widened the picture but left the Gallery with a black strip afterwards. The bridge is bars-only again; the landscape camera area stays unused.
 - Decision 331 also: loading label `Decrypting… n%`; a Home video loads again after the app is closed (the kept copy is memory only, by design). Playing before the whole file is decrypted is not built; it needs a separate phase.
 - Risks: first CI run compiles the Java; memory use with several large videos is untested; a large first open after a restart is faster but not instant.
-- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166; fix what fails; then the owner names the next phase.
+- Phase 44, Decision 332, from three recordings: opening a 158 MB PDF from Files closed the app (one whole-file base64 message to the file plugin); .mp4 files were not added from the file chooser (whole file read as a data URL, failure unhandled). Opened copies are now written in slices; picked files are streamed into the store in 1 MiB slices with a Saving… notice and an error message.
+- `vite build` passes; streamed save/read tested for 0 byte and chunk-boundary sizes; slice writer tested with a stand-in; not run through CI; nothing device-tested (DP168).
+- Risks: a large open from Files now takes time before the other app appears (no spinner); a very large add is slow and stops if the app is sent to the background; other whole-file paths (share, export, backup) are unchanged.
+- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166, DP168; fix what fails; then the owner names the next phase.
 
 ---
 

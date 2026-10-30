@@ -675,6 +675,12 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
+### Large files (Decision 332)
+Nothing holds a whole large file as one string. Opening a Home file in the phone's app (`fileopen.js`) decrypts it by chunk and writes `cache/open/<id>.<ext>`
+in slices of about 4 MiB; a Vault file, which arrives as base64, in slices of 4 Mi characters. The file chooser (Gallery Add, Files New, every type, Home and
+Vault) returns File objects that `savePicked` streams in 1 MiB slices into the encrypted store (`beginFile` or `beginVaultFile`), then makes the entry from the
+stored file; on a failure the partial file is removed.
+
 ### Video loading (Decision 329)
 A Home video is read, decrypted by `filestore.readParts` (six chunks at a time, chunk list) and turned into a Blob URL by `homeVideoUrl` in `app.js`.
 The URL is kept for the next open: at most 3 videos and 256 MiB, oldest first. `clearVideoCache` runs when the app goes to the background, when the
