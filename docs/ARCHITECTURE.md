@@ -675,11 +675,11 @@ a message and Open in another app, which hands the file to the phone as Files do
 Lists inside a category do not repeat the category name; the time shown is the last change (`updated_at`, Vault index `updatedAt`).
 Search and Trash rows keep the category name and ordering is unchanged (created time).
 
-### Video player (Decision 324)
+### Video player (Decisions 324, 326)
 `src/js/videoplayer.js` draws the controls over the stage of a viewer and turns the native controls off: centre play, pause or replay with 10 s
 skips, a bottom bar with seek, elapsed and remaining time, speed, loop, mute, fit or fill, full screen. Gestures sit on a layer over the picture (pointer
 events, `touch-action: none`): tap shows or hides, double-tap on a half skips 10 s, a vertical drag on the right half sets the volume. Controls hide 3 s
-after play starts. Full screen requests the browser's, and always adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
+after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars, draws under the display cutout, landscape for a wide video, all restored on exit), requests the browser's, and always adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
 instance per video, destroyed on item change, close and lock. Used by `openImageViewer` (Home, Vault) and the Phone viewer. Settings are not stored.
 
 ### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)
@@ -702,7 +702,8 @@ Actions call `runBulkFileAction` (the Select files path). Ended by Back, folder 
 Drag-to-select (`src/js/dragselect.js`, Decision 323): the long press selects its tile, then `begin()` makes the selection the earlier set plus
 every tile from that one to the tile under the finger, in document order; the grid root has a permanent non-passive `touchmove` that stops the
 page scrolling while a drag is active, and the nearest scrolling ancestor moves near the top and bottom edge. `dragBlocked` swallows the click after the lift.
-The Phone browser (`phonegallery.js`) uses the same module on its own tiles; there a long press only selects.
+The Phone browser (`phonegallery.js`) uses the same module on its own tiles. A long press on a selected tile starts the reverse (Decision 325):
+`begin(..., { remove: true })` unselects the range instead; `onEnd` lets Home and Vault leave selection mode if that emptied it.
 
 ### PDF viewer (Decision 121)
 Entries of type PDF open in `pdfviewer.js`, built on a bundled pdf.js (legacy build, pinned) and loaded on the first PDF open. Pages are

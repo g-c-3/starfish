@@ -14,7 +14,10 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Phase 43, Decision 324: one video player for the Gallery and Phone viewers: large play and replay, 10 s skip buttons and double-tap, seek bar with times, speed, loop, mute, fit or fill, full screen, volume drag, auto-hide, fallback to the phone's player. New `videoplayer.js` and `videoplayer.css`; `app.js` and `phonegallery.js` changed.
 - `vite build` passes; controls smoke-tested apart from the page; not run through CI; nothing device-tested (DP163).
 - Risks: full screen and the landscape lock depend on the WebView (the window-filling mode is the safe result); the Phone fallback may be refused for a path outside the app's folders; swipe-versus-controls and the volume drag are untested on a device.
-- Next-session start: owner reports DP157 to DP159, DP161 to DP163 (and CI result); fix what fails; then the owner names the next phase.
+- Decision 325: reverse drag. A long press on a selected tile unselects it and, dragging, everything it passes; back reselects. Selection mode ends on lift if the reverse drag emptied it.
+- Decision 326, from a device screenshot of the player in landscape: skip buttons are a straight arrow with 10 below; the unused bands (system bars, cutout side) need a native window change, so new `ArklyScreen` bridge, `patch-screen.js` and a CI step. The Java is not compiled yet.
+- Risks: the first CI run must compile `ArklyScreenBridge.java` and stay green; if it fails, the build log names the line. Immersive mode after a swipe from the edge is untested.
+- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP165; fix what fails; then the owner names the next phase.
 
 ---
 

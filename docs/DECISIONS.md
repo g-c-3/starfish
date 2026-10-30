@@ -3442,3 +3442,16 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A playback error shows Open in the phone's player. Gallery uses the existing hand-off; Phone passes the file path to the file opener, which may refuse a path outside the app's folders (reason shown).
 - Controls stop their touches from reaching the viewer's sideways swipe. Speed, volume and loop are not kept between videos. Nothing is stored; no native, permission or network change.
 - Files: `src/js/videoplayer.js` (NEW), `src/css/videoplayer.css` (NEW), `src/js/app.js`, `src/js/phonegallery.js`. `vite build` passes; controls smoke-tested apart from the page; not run through CI, not device-tested (DP163).
+
+**325. Reverse drag-to-select.** Owner request; refines 323.
+- A long press on an already selected tile starts the reverse: the tile and every tile between it and the finger are unselected, on top of the selection held before the press. Moving back selects them again. Edge scroll and the 400 ms click guard are as in 323.
+- A long press on an unselected tile is unchanged: it selects, and the drag selects. A tap on a selected tile still unselects it.
+- `dragselect.js` takes `begin(tile, x, y, { remove })` and an `onEnd` callback. A reverse drag that empties the selection leaves selection mode only when the finger lifts (Home, Vault), so moving back can still restore tiles. Phone stays in selection mode with nothing selected, as before.
+- Files: `src/js/dragselect.js`, `src/js/app.js`, `src/js/phonegallery.js`. `vite build` passes; range logic tested apart from the page; not run through CI, not device-tested (DP164).
+
+**326. Video controls layout and native full screen.** Owner request; refines 324.
+- The skip buttons are a straight left or right arrow with 10 below it. The round arrow is gone.
+- Full screen left unused bands in landscape: the system bars and the area beside the display cutout belong to the window, not the page, so the page could not fill them. New `window.ArklyScreen.immersive(on, landscape)` (`scripts/patch-screen.js`, `scripts/java/ArklyScreenBridge.java`, a WebView JavaScript interface like `ArklyNav`): on hides the system bars, draws under the cutout on short edges and turns a wide video to landscape; off restores the previous orientation, cutout mode and bars. The page falls back to the window-filling mode when the bridge is missing.
+- Controls keep clear of the cutout through the safe-area insets.
+- No permission, no Gradle change, no data touched, nothing sent. New CI step `Add the video full screen bridge (native)`, after the phone media bridge.
+- Files: `src/js/videoplayer.js`, `src/css/videoplayer.css`, `scripts/patch-screen.js` (NEW), `scripts/java/ArklyScreenBridge.java` (NEW), `.github/workflows/build-android.yml`. `vite build` passes; the patch script tested on a stand-in `MainActivity.java`; the Java is not compiled yet, not run through CI, not device-tested (DP165).
