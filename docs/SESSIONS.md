@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 159**
+
+Start: "Go". Tier 1 docs read; Decision 334, the video player code and the screen bridge read; DECISIONS and ARCHITECTURE not read in full. CI status not checked.
+- Phase 46, Decision 335: video full screen in the WebView's fullscreen request, shown in a dialog window of its own with the display cutout enabled for that window only. The app window and page layout are not touched.
+- New `ArklyFullscreenClient.java` (extends Capacitor's chrome client) and `patch-fullscreen.js` with a CI step; `videoplayer.js` asks for `requestFullscreen()` on the stage and follows the fullscreen change back; refusal keeps the Decision 328 behaviour.
+- `vite build` passes; patch script tested for idempotency on a stand-in `MainActivity.java`; Java not compiled here; not run through CI; nothing device-tested (DP170).
+- Risks: first CI run compiles the Java; dialog window versus app lock and rotation untested; the file chooser and permission prompts rely on the extended chrome client behaving as before.
+- Next-session start: confirm CI green, then DP170 on device; Phase 46 is checked off only after it.
+
+---
+
 **Session 158**
 
 Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. The release check hit the unauthenticated rate limit (403), so CI status was not verified. DP157 to DP159, DP161 not reported.

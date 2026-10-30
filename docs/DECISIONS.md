@@ -3512,3 +3512,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The only route allowed for the camera area is the WebView's own fullscreen request: a native handler shows the fullscreen element in an overlay on the window and enables the display cutout for that overlay, then removes the overlay. Nothing is restored because nothing of the window or page was changed.
 - A failure leaves the Decision 328 behaviour. No setting is added.
 - Planned as Phase 46; not built.
+
+**335. Camera area in video full screen: built as a dialog window.** Implements Decision 334.
+- The page's `requestFullscreen()` on the player stage reaches the WebView's fullscreen request. `ArklyFullscreenClient` extends Capacitor's own chrome client (file chooser and permission handling kept) and replaces it in `onCreate()`. It shows the fullscreen view in a black `Dialog` of its own, with display cutout mode always (API 30 and up) or short edges (API 28, 29) set on that dialog's window only, and its system bars hidden. The app window's layout flags, cutout mode and insets are not touched; nothing is restored.
+- Closing: the button (`exitFullscreen`), Back (handled by the dialog), and the app leaving the foreground all close it and tell the WebView. The page follows the fullscreen change event back out of its own full screen state.
+- Failure: any exception refuses the request. The player keeps the Decision 328 behaviour (window-filling, bars hidden, black band). Without `window.ArklyScreen` the page does not ask.
+- `ArklyScreen.immersive` is unchanged and still runs first (landscape for wide video, bars hidden behind the overlay).
+- Page: the safe-area padding of the controls now reads the overlay's cutout, so controls stay clear of the camera.
+- New patch script `patch-fullscreen.js` and CI step, after the screen step. No permission, no Gradle change, nothing stored, nothing sent.
+- Files: `scripts/java/ArklyFullscreenClient.java`, `scripts/patch-fullscreen.js`, `.github/workflows/build-android.yml`, `src/js/videoplayer.js`. `vite build` passes; patch script tested for idempotency on a stand-in `MainActivity.java`; Java not compiled here; not run through CI, not device-tested (DP170).
+- Risks: the first CI run compiles the Java (`androidx.core.view` classes on the classpath, as for `ArklyScreenBridge`); a dialog window above the app is untested against the app lock (closed on pause by design); rotation while the dialog is open is untested.
