@@ -2,23 +2,24 @@ package __PACKAGE__;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
-import android.os.Build;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.view.View;
 import android.view.Window;
-import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
-// Video full screen (patch-screen.js, Decisions 326, 327): window.ArklyScreen.immersive(on, landscape). On: system bars hidden
-// (a swipe from the edge shows them briefly), content drawn under the display cutout, and the screen turned to landscape when
-// asked. Off: only what On changed is put back; with nothing changed, Off does nothing. Window flags are never written directly,
-// so the layout the app had before is the layout it gets back. No permission, touches no data, sends nothing.
+// Video full screen (patch-screen.js, Decisions 326 to 328): window.ArklyScreen.immersive(on, landscape). On: system bars hidden
+// (a swipe from the edge shows them briefly), the window behind the page black, and the screen turned to landscape when asked.
+// Off: those three put back; with no On before it, Off does nothing. It never changes how the window lays out its content (no
+// layout flags, no cutout mode), so the page's insets are the ones the app always had. No permission, touches no data, sends nothing.
 public class ArklyScreenBridge {
     private final Activity act;
     private boolean active = false;
     private int prevOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
-    private int prevCutout = 0;
+    private Drawable prevBackground = null;
 
     public ArklyScreenBridge(Activity act) {
         this.act = act;
@@ -31,18 +32,14 @@ public class ArklyScreenBridge {
             public void run() {
                 try {
                     Window w = act.getWindow();
-                    WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                    View decor = w.getDecorView();
+                    WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, decor);
                     if (on) {
                         if (!active) {
                             active = true;
                             prevOrientation = act.getRequestedOrientation();
-                            if (Build.VERSION.SDK_INT >= 28) {
-                                WindowManager.LayoutParams lp = w.getAttributes();
-                                prevCutout = lp.layoutInDisplayCutoutMode;
-                                lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-                                w.setAttributes(lp);
-                            }
-                            WindowCompat.setDecorFitsSystemWindows(w, false);
+                            prevBackground = decor.getBackground();
+                            decor.setBackgroundColor(Color.BLACK);
                             c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                         }
                         if (landscape) act.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
@@ -50,14 +47,9 @@ public class ArklyScreenBridge {
                     } else if (active) {
                         active = false;
                         c.show(WindowInsetsCompat.Type.systemBars());
-                        WindowCompat.setDecorFitsSystemWindows(w, true);
-                        if (Build.VERSION.SDK_INT >= 28) {
-                            WindowManager.LayoutParams lp = w.getAttributes();
-                            lp.layoutInDisplayCutoutMode = prevCutout;
-                            w.setAttributes(lp);
-                        }
+                        decor.setBackground(prevBackground);
+                        prevBackground = null;
                         act.setRequestedOrientation(prevOrientation);
-                        w.getDecorView().requestApplyInsets();
                     }
                 } catch (Exception e) {
                     // the page keeps its window-filling mode
