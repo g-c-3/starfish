@@ -30,7 +30,9 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Phase 45, Decision 333: Files opened in Arkly. Switch under the Files title (Home and Vault, shared, on by default); image, video, PDF, audio, text and docx, xlsx, pptx open in Arkly; other types and the off position use the phone's apps. New `filesview.js` (text, audio, Office views) in the entry viewer; bytes decrypted in memory only.
 - `vite build` passes; not run through CI; nothing device-tested (DP169).
 - Risks: the Office toolbar menu button and the text view's layout inside the entry viewer are untested; large audio takes time and memory; the title bar placement follows the PDF switch (below the title), not inside the bar.
-- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166, DP168, DP169; fix what fails; then the owner names the next phase.
+- Owner result on device after Phase 45: every pending check passed (DP157 to DP166, DP168, DP169), except the area beside the camera in landscape. Phases 41 to 45 are checked.
+- Decision 334 records the rule and the one route left for that area: the WebView's fullscreen overlay with the cutout enabled for the overlay only; no change to the app window. Planned as Phase 46, not built.
+- Next-session start: Phase 46 (native fullscreen handler, patch script, CI step, player change). First CI run compiles the Java; then DP170 on device.
 
 ---
 

@@ -3506,3 +3506,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The viewers sit in the entry viewer (same title bar, Share, Download, Move, Delete and edit button; Back and the Vault lock close them). Text is read only: a Files entry is not edited in place.
 - The audio and Office views are new in the Files folder and are not cached between opens.
 - Files: `src/js/filesview.js` (NEW), `src/js/app.js`, `src/index.html`, `src/css/style.css`. `vite build` passes; not run through CI, not device-tested (DP169).
+
+**334. Camera area in video full screen: overlay only.** Owner result on device: every check passed except the unused area beside the camera in landscape.
+- Rule: the app window's layout (content fitting, cutout mode, layout flags) is not changed for any reason, at any time. Two earlier attempts (326, 327, 330) changed it and left the page with wrong insets; both are withdrawn.
+- The only route allowed for the camera area is the WebView's own fullscreen request: a native handler shows the fullscreen element in an overlay on the window and enables the display cutout for that overlay, then removes the overlay. Nothing is restored because nothing of the window or page was changed.
+- A failure leaves the Decision 328 behaviour. No setting is added.
+- Planned as Phase 46; not built.

@@ -349,3 +349,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-10-30 | Session 158 (continued: Edge withdrawn) | Decision 331 | Edge button and layout change removed after a device recording; bars-only bridge restored; loading label shows decrypt percentage; vite build passes; not run through CI |
 | 2026-10-30 | Session 158 (continued: large files) | Decision 332; Phase 44 built | Large file open from Files written in slices; file chooser adds streamed in slices; DP168 added; vite build passes; not run through CI |
 | 2026-10-30 | Session 158 (continued: Files in Arkly) | Decision 333; Phase 45 built | Files switch and Arkly viewers for text, audio, Office, PDF, image, video; DP169 added; vite build passes; not run through CI |
+| 2026-10-30 | Session 158 (end) | Decision 334; Phases 41 to 45 checked; Phase 46 planned | Device checks passed except the landscape camera area; rule and route for it recorded; vite build passes |
