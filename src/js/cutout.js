@@ -1,26 +1,26 @@
-// cutout.js — gives the native window the app's background colour, so the strip beside the camera matches the app (Decision 336). DOM only.
-// window.ArklyCutout comes from patch-cutout.js; without it nothing happens. Re-sent on start, on a theme change and on resume.
+// cutout.js — passes the display cutout's side insets to the page as --cut-l and --cut-r (Decision 336). DOM only.
+// window.ArklyCutout comes from patch-cutout.js; without it both stay 0 and nothing changes. cutout.css decides what they do.
+import '../css/cutout.css';
+
 const root = document.documentElement;
 let last = '';
 
-function toHex(rgb) {
-  const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+))?/.exec(rgb || '');
-  if (!m || (m[4] !== undefined && Number(m[4]) < 1)) return null;
-  return '#' + [1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, '0')).join('');
-}
-
-function sync() {
+function read() {
   try {
-    if (!window.ArklyCutout || !document.body) return;
-    const hex = toHex(getComputedStyle(document.body).backgroundColor);
-    if (!hex || hex === last) return;
-    last = hex;
-    window.ArklyCutout.background(hex);
-  } catch { /* the window keeps its colour */ }
+    if (!window.ArklyCutout) return;
+    const [l, , r] = String(window.ArklyCutout.insets()).split(',').map((v) => Math.max(0, Math.round(Number(v) || 0)));
+    const key = `${l},${r}`;
+    if (key === last) return;
+    last = key;
+    root.style.setProperty('--cut-l', `${l}px`);
+    root.style.setProperty('--cut-r', `${r}px`);
+  } catch { /* insets stay as they were */ }
 }
 
-const syncSoon = () => { sync(); setTimeout(sync, 300); setTimeout(sync, 1500); };
-syncSoon();
-new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
-try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncSoon); } catch { /* no media query events */ }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) syncSoon(); });
+// The window's insets are not ready on the first frame and lag behind a rotation, so read again shortly after each.
+const readSoon = () => { read(); setTimeout(read, 250); setTimeout(read, 900); };
+readSoon();
+setTimeout(read, 2500);
+window.addEventListener('resize', readSoon);
+window.addEventListener('orientationchange', readSoon);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) readSoon(); });
