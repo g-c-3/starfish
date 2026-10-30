@@ -968,6 +968,8 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 
 /* ---- PDF viewer (Phase 16 H, Decision 121) ---- */
 #viewer-screen.pdf-mode #viewer-body, body.overlay-open #viewer-screen.pdf-mode #viewer-body { position: relative; padding: 0; overflow: hidden; }
+#viewer-screen.file-mode #viewer-body, body.overlay-open #viewer-screen.file-mode #viewer-body { position: relative; padding: 0; overflow: hidden; } /* Files opened in Arkly (Decision 333) */
+body.overlay-open #viewer-screen.file-mode #viewer-body .ev-media, body.overlay-open #viewer-screen.file-mode #viewer-body .ev-text-wrap { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* clear of the floating Back bar */
 #viewer-screen.pdf-mode .editor-bar { padding: 4px 6px; gap: 2px; }
 #viewer-screen.pdf-mode #viewer-title { font-size: 14px; font-weight: 600; }
 .pdf-scroll { position: absolute; inset: 0; overflow: auto; background: #2a2a38; -webkit-overflow-scrolling: touch;
