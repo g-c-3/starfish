@@ -1,0 +1,5 @@
+/* Keyboard open (Decision 336): the dialogs use the whole space above the keyboard. The floating nav is hidden meanwhile, so its reserved
+   space (76px in the dialog rules) is given back. !important: the dialog rules are body.overlay-open #id selectors. */
+body.kb-open #bottom-nav { display: none !important; }
+body.kb-open .modal-overlay { padding-top: 8px !important; padding-bottom: 8px !important; }
+body.kb-open .modal-box { max-height: calc(100vh - 16px) !important; }
