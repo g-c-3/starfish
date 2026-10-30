@@ -19,6 +19,7 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Risks: the first CI run must compile `ArklyScreenBridge.java` and stay green; if it fails, the build log names the line. Immersive mode after a swipe from the edge is untested.
 - Decision 327, from a screen recording: full screen left the page displaced after exit (title bar, lock and shutdown buttons) and the landscape band stayed. Cause: window flags written and reset by hand. Bridge rewritten on the standard inset calls with an exact restore.
 - Risks: the Java uses `androidx.core.view` classes (expected on the build classpath through the app's base activity, not yet compiled); the landscape band is not confirmed fixed.
+- Decision 328, from device screenshots: 327 still left the page with stale insets (controls off-centre, title bar and fixed buttons displaced, also in the Gallery). The bridge now only hides and shows the system bars, blackens the window behind the page and turns wide video to landscape; layout and cutout mode are no longer touched. The cutout band stays (black, not grey).
 - Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP165; fix what fails; then the owner names the next phase.
 
 ---

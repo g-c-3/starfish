@@ -3462,3 +3462,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The full-screen class in the page no longer sets an explicit width and height; it fills the real viewport by its edges.
 - The landscape band may still need a further change if the first fix does not remove it; the cutout is now drawn into on short edges with the decor not fitting system windows, which is what browsers do. Reported after the next device run (DP165).
 - Files: `scripts/java/ArklyScreenBridge.java`, `src/css/videoplayer.css`. `vite build` passes; the Java is not compiled yet, not run through CI, not device-tested.
+
+**328. Full screen bridge: bars only.** Device screenshots after 327: after a full screen round trip the controls had uneven side margins, the title bar sat one status-bar height too low, and the lock and shutdown buttons overlapped the Phone button, in the Gallery too.
+- Cause: 327 still changed how the window lays out its content (`setDecorFitsSystemWindows`, cutout mode). The page then kept stale safe-area values after the window was put back, and the page's own top, left and right insets were applied on top of the window's.
+- Fix: the bridge no longer touches layout or cutout mode. It hides and shows the system bars through the inset controller, turns the window behind the page black, and turns a wide video to landscape; it records the previous orientation and window background and restores exactly those. Off with no On before it does nothing.
+- The page no longer calls the browser's full screen or its orientation lock (the WebView does not support them here); the window-filling class and the bridge are the whole mechanism.
+- Decision: the display cutout is not drawn into. Beside it the display stays black instead of grey. Filling it would need the layout change that caused this fault; reopen only with a device-tested way to keep the page's insets correct.
+- Files: `scripts/java/ArklyScreenBridge.java`, `src/js/videoplayer.js`. `vite build` passes; the Java is not compiled yet, not run through CI, not device-tested (DP165).
