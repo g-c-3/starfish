@@ -678,13 +678,14 @@ Search and Trash rows keep the category name and ordering is unchanged (created 
 ### Video loading (Decision 329)
 A Home video is read, decrypted by `filestore.readParts` (six chunks at a time, chunk list) and turned into a Blob URL by `homeVideoUrl` in `app.js`.
 The URL is kept for the next open: at most 3 videos and 256 MiB, oldest first. `clearVideoCache` runs when the app goes to the background, when the
-app lock shows, and for an entry moved or deleted from the viewer. Vault videos use the Vault store's own path and are never kept.
+app lock shows, and for an entry moved or deleted from the viewer. Vault videos use the Vault store's own path and are never kept. The kept copy is
+memory only, so a video loads again after the app is closed; decrypted video is never stored.
 
-### Video player (Decisions 324, 326 to 330)
+### Video player (Decisions 324, 326 to 328, 331)
 `src/js/videoplayer.js` draws the controls over the stage of a viewer and turns the native controls off: centre play, pause or replay with 10 s
 skips, a bottom bar with seek, elapsed and remaining time, speed, loop, mute, fit or fill, full screen. Gestures sit on a layer over the picture (pointer
 events, `touch-action: none`): tap shows or hides, double-tap on a half skips 10 s, a vertical drag on the right half sets the volume. Controls hide 3 s
-after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars through the inset controller, blackens the window behind the page, landscape for a wide video; the earlier orientation and background are restored on exit; layout and cutout mode change only when the Edge button asks, Decision 330; off at every start), adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
+after play starts. Full screen (Decision 326) calls `window.ArklyScreen.immersive` (hides the system bars through the inset controller, blackens the window behind the page, landscape for a wide video; the earlier orientation and background are restored on exit; layout and cutout mode are never changed, Decisions 328, 331), adds a window-filling class (`vp-full`, body `vp-fs` hides the viewer header). One
 instance per video, destroyed on item change, close and lock. Used by `openImageViewer` (Home, Vault) and the Phone viewer. Settings are not stored.
 
 ### Gallery: Add, Capture, Phone (Decisions 316, 317, 323)

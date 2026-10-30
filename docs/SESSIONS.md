@@ -21,9 +21,10 @@ Start: "Go". Tier 1 docs read; DECISIONS tail and ARCHITECTURE headings read; DE
 - Risks: the Java uses `androidx.core.view` classes (expected on the build classpath through the app's base activity, not yet compiled); the landscape band is not confirmed fixed.
 - Decision 328, from device screenshots: 327 still left the page with stale insets (controls off-centre, title bar and fixed buttons displaced, also in the Gallery). The bridge now only hides and shows the system bars, blackens the window behind the page and turns wide video to landscape; layout and cutout mode are no longer touched. The cutout band stays (black, not grey).
 - Decision 329, owner report: every Home video open loaded, longer for a larger file. Chunks are now decrypted six at a time and kept as a list; the decrypted video is kept in memory (3 videos, 256 MiB, cleared on background, app lock, move, delete). Vault videos are not kept.
-- Decision 330, owner report: landscape camera area. Drawing there caused the earlier layout fault, so it is an Edge button in full screen, off after every start, never stored.
-- Risks: first CI run compiles the new Java; memory use with several large videos is untested; a large first open is faster but not instant.
-- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP167; fix what fails; then the owner names the next phase.
+- Decision 330 (Edge button) was built, then withdrawn by Decision 331 after a device recording: it widened the picture but left the Gallery with a black strip afterwards. The bridge is bars-only again; the landscape camera area stays unused.
+- Decision 331 also: loading label `Decrypting… n%`; a Home video loads again after the app is closed (the kept copy is memory only, by design). Playing before the whole file is decrypted is not built; it needs a separate phase.
+- Risks: first CI run compiles the Java; memory use with several large videos is untested; a large first open after a restart is faster but not instant.
+- Next-session start: owner reports CI result and DP157 to DP159, DP161 to DP166; fix what fails; then the owner names the next phase.
 
 ---
 
