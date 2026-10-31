@@ -3572,3 +3572,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Same pattern as Decisions 281 and 102: a plugin source patch, idempotent, fails loudly if the plugin line changes.
 - Limit: a cold GPS start outdoors still takes its own time; the patch removes the app's delay only.
 - Files: `scripts/patch-geolocation.js`, `.github/workflows/build-android.yml`, `src/js/locfix.js`. `vite build` passes; patch idempotent on a copy of the plugin file; not run through CI, not device-tested (DP173).
+
+**345. Optional map provider for saved locations.** Owner approval of the exception Decision 342 left open: a location setting for a service of the person's choice, free or paid.
+- Privacy: a third tap-started network call beyond Decision 1's list. It is off until a provider is set, it runs only on a tap of Show map, and the provider is the person's own choice. The provider sees the tile numbers (about where the saved place is) and the phone's address. The dialog says so in plain words. Capture itself (Decisions 340 to 344) makes no call.
+- Provider: a tile URL template (`{z}`, `{x}`, `{y}`, optional `{key}`, https only) and a key. Presets prefill the template and say where to register; the person checks the provider's current terms. Saved in the settings table (`map_provider_template`, `map_provider_key`), not in `APP_SETTINGS_KEYS`: neither is in any backup or export.
+- Entry points: the gear in the Home Location title (Home only) opens the dialog; Show map in a Home location's detail draws a 3 x 3 tile mosaic at zoom 16 with a pin and zoom buttons, nothing before the tap. A Vault location never uses a provider.
+- Not built: a provider that returns coordinates for the phone (the phone's own service already gives them with no call from the app); tile caching; an offline map.
+- Files: `src/js/mapprov.js`, `src/css/mapprov.css`, `src/js/app.js`, `docs/ARCHITECTURE.md`. `vite build` passes; tile math and URL building tested apart from the page; presets' URLs not checked against the providers; not run through CI, not device-tested (DP174).
+- Risks: a preset template may be out of date; tiles under a provider's terms need its attribution (the sheet carries a general line).

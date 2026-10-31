@@ -17,7 +17,10 @@ Start: "Go". Tier 1 docs read; Decisions 335 to 339 and ARCHITECTURE headings re
 - Decision 343: the accuracy at the tap is prefilled as the Save dialog's description, "Accurate to N meters"; editable.
 - Decision 344: slow fixes outdoors. Cause: the plugin's watch request has a fixed 10 s interval and delays delivery by the `timeout` option, which the sheet set to 60 s. Fix: `scripts/patch-geolocation.js` (CI step) sets the interval to 1 s; the sheet passes `timeout` 1000 and `minimumUpdateInterval` 1000, and adds a high accuracy one-shot request beside the coarse one and the watch. Why correct: fixes are no longer held back; a cold GPS start still takes its own time. `vite build` passes; patch idempotent on a copy of the plugin file; not run through CI.
 - Owner reported the fix speed and the sheet working (DP173 checked). No incomplete roadmap phase remains; open: DP170 items 4 to 10 (unreported), Decision 342 (owner's decision pending).
-- Next-session start: confirm the `main` build is green, then the owner picks: DP170 device pass, Decision 342, or a new phase.
+- Owner reported DP170 working. Owner approved Decision 342's open item: Phase 49, Decision 345.
+- Decision 345: optional map provider. `mapprov.js`, `mapprov.css`; gear in the Home Location title (provider dialog); Show map in a Home location's detail (9 tiles, pin, zoom). Tile math and URL building tested apart from the page; `vite build` passes; not run through CI; not device-tested (DP174). Network rule in ARCHITECTURE updated: a third tap-started call, off until a provider is set.
+- Not built: a computed position from the provider (a location API that returns coordinates); the Vault never uses a provider.
+- Next-session start: confirm the `main` build is green, then DP174 on device.
 
 ---
 

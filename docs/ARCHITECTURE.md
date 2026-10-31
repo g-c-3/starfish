@@ -12,9 +12,9 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 ## 1. Core principles
 - 100% local storage (SQLite) by default. No account or server is required for capture, search,
   reminders, expenses, or local backup/restore.
-- The only network calls this app will ever make are Google Drive backup (§4b, opt-in), and two actions
-  the person starts with a tap: Check for updates (public repo, no token, Decision 214) and Verify link (short map link, Decision 117). None is reachable from, or
-  required by, local-only use.
+- The only network calls this app will ever make are Google Drive backup (§4b, opt-in), and three actions
+  the person starts with a tap: Check for updates (public repo, no token, Decision 214), Verify link (short map link, Decision 117) and Show map (a provider
+  the person set up, off until then, Decision 345). None is reachable from, or required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
@@ -520,7 +520,7 @@ Delete — shared between main and Vault, category-grouped with per-item size sh
 - **Offer, not silent action (Decisions 175, 178)** — typed note text is always saved as a note. When it reads as a
   reminder with a time still ahead, a Yes/No sheet after the Save dialog offers a reminder in addition (parsed label and
   time; Set reminder too / Note only). Back or No keeps the note only. Every action traces to a visible rule.
-- **Map view for saved locations** — dropped (Decision 262): a map that loads tiles would be a third network call.
+- **Map view for saved locations** — dropped (Decision 262), then built as an opt-in exception (Decision 345, §Location map provider).
 - **Label autocomplete from history** — implemented via the `label_history` table in `db.js` (also what powers
   batch-numbering, above). Previously used labels for a given entry type surface as tap-to-select suggestions at
   capture time ("Invoice", "Payment Screenshot", "Receipt"...), so a personal taxonomy builds up naturally
@@ -624,6 +624,10 @@ is not offered here because leaving the app triggers the background lock.
 ### Location capture: live fix (Decisions 113, 340, 341, 343, 344)
 Save current location first checks the phone's location switch: `window.ArklyLocation` (`ArklyLocationBridge.java`, written by `scripts/patch-location.js`) asks the system's own "turn on location" dialog; declined shows a notice and saves nothing (Decision 340). The quick-capture widget uses the same check.
 The live sheet (`src/js/locfix.js`, `src/css/locfix.css`, `#loc-fix-dialog`) then shows "Accurate to N meters", quality, trend, coordinates and a vector plot drawn to scale: the accuracy circle and the last 24 fixes around the estimate, no map data, no network. A coarse fix, a high accuracy one-shot request and a high accuracy watch run together, one fix per second (`patch-geolocation.js` sets the plugin's 10 s interval to 1 s; the watch's `timeout` is its delivery delay and stays 1 s; Decision 344); the best reported accuracy is shown, positions are blended by 1/accuracy² (`fuse`). Nothing is saved until Use this location; the Save dialog then opens with the description "Accurate to N meters", editable (Decision 343). Cancel, Back and a lock close the sheet (`activeLocFix` in `app.js`). Accuracy is not stored (Decision 341). No location provider setting and no map tiles (Decision 342).
+
+
+### Location map provider (Decision 345)
+Off until the person sets one: the gear in the Home Location title opens the provider dialog (`src/js/mapprov.js`, `src/css/mapprov.css`): a tile URL template with `{z}`, `{x}`, `{y}` and optional `{key}`, a key, and prefilled presets with where to register. Template and key are in the settings table (`map_provider_template`, `map_provider_key`); neither is in `APP_SETTINGS_KEYS`, so neither is in any backup. Show map in a Home location's detail (never on open, never in the Vault) fetches 9 image tiles at zoom 16 from that provider, drawn as a mosaic with a pin and zoom buttons. The provider sees the tile numbers and the phone's address. `activeLocProv` closes the dialog on a lock or Back. No other call; tiles are not stored.
 
 ### Location detail (Decision 93)
 Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG
