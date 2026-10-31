@@ -34,8 +34,8 @@ import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
-import { Geolocation } from '@capacitor/geolocation';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
+import { openLiveFix } from './locfix.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -411,6 +411,7 @@ const appLockShowing = () => !document.getElementById('lock-screen')?.classList.
 function backAction() {
   if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
+  if (activeLocFix) return () => activeLocFix.finish(null); // Back cancels the live location sheet
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
   if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
   if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
@@ -2122,6 +2123,7 @@ let activeText = null;       // { finish, isVault } — the in-app single-field 
 let activeCompose = null;    // { finish, isVault } — the order sheet of Merge PDFs and Make a PDF (Decision 168)
 let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
+let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
@@ -2304,6 +2306,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeCompose && (!vaultOnly || activeCompose.isVault)) activeCompose.finish(null);
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
   if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
+  if (activeLocFix && (!vaultOnly || activeLocFix.isVault)) activeLocFix.finish(null); // a pending fix is dropped, nothing saved
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
@@ -4650,26 +4653,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (source === 'current') {
       if (locationFetching) return null; // a fix is already in progress
       locationFetching = true;
-      const newBtns = (isVault ? ['vault-folder-new-btn', 'vault-universal-new-btn'] : ['folder-new-btn', 'universal-new-btn']).map((id) => document.getElementById(id)).filter(Boolean);
-      newBtns.forEach((b) => { b.disabled = true; });
-      toast('Fetching location…', true);
-      let coords;
+      let fix;
       try {
-        await Geolocation.requestPermissions();
-        coords = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
-        hideToast();
+        // Live sheet (Decision 341): accuracy improves until the person taps Use this location.
+        fix = await openLiveFix({
+          formatCoords,
+          beforeLaunch: beginPickerLaunch,
+          register: (h) => { activeLocFix = h ? { ...h, isVault } : null; },
+        });
       } catch (err) {
-        toast(`Could not get your location: ${err.message || err}`);
+        toast(err.message || 'Could not get your location');
         return null;
       } finally {
         locationFetching = false;
-        newBtns.forEach((b) => { b.disabled = false; });
       }
+      if (!fix) return null;
       if (isVault && !privateSessionKey) return null; // the Vault locked during the fix
-      draft.set('fix', { lat: coords.latitude, lng: coords.longitude }); // the fix counts as work to keep
+      draft.set('fix', { lat: fix.lat, lng: fix.lng }); // the fix counts as work to keep
       draft.mark();
       const d = await openSaveDialog({ heading, defaultName: fallbackName, isVault, discardLabel: 'Discard', draft });
-      return d ? { d, lat: coords.latitude, lng: coords.longitude } : null;
+      return d ? { d, lat: fix.lat, lng: fix.lng } : null;
     }
     // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
     let text = '', d = null, pick = null;

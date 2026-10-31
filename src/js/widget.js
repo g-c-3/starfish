@@ -4,6 +4,7 @@
 import { App } from '@capacitor/app';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { Geolocation } from '@capacitor/geolocation';
+import { ensureLocationServices } from './locfix.js';
 import { scheduleReminder, cancelReminder } from './notifications.js';
 import { saveBase64, removeFile } from './files.js';
 import { addToInbox, inboxCount, transferInbox } from './widget-inbox.js';
@@ -262,6 +263,7 @@ function buildLocation(el, ctx) {
     try {
       ctx.beginPickerLaunch(); // the permission prompt pauses the page; that must not count as leaving
       await Geolocation.requestPermissions();
+      if (!(await ensureLocationServices({ beforeLaunch: ctx.beginPickerLaunch }))) throw new Error('Location is off');
       const c = (await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })).coords;
       if (!gone) fix = { lat: c.latitude, lng: c.longitude };
     } catch (err) { if (!gone) fail(`Could not get your location: ${err.message || err}`); }
