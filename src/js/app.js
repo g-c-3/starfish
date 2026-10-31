@@ -36,6 +36,7 @@ import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
+import { openProviderDialog, loadProvider, renderMap } from './mapprov.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -412,6 +413,7 @@ function backAction() {
   if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
   if (activeLocFix) return () => activeLocFix.finish(null); // Back cancels the live location sheet
+  if (activeLocProv) return () => activeLocProv.finish(); // Back closes the map provider dialog
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
   if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
   if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
@@ -2124,6 +2126,7 @@ let activeCompose = null;    // { finish, isVault } — the order sheet of Merge
 let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
+let activeLocProv = null;    // { finish } — map provider dialog (Decision 345)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
@@ -2307,6 +2310,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
   if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
   if (activeLocFix && (!vaultOnly || activeLocFix.isVault)) activeLocFix.finish(null); // a pending fix is dropped, nothing saved
+  if (activeLocProv && !vaultOnly) activeLocProv.finish(); // nothing typed is saved
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
@@ -5077,7 +5081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
     if (type === 'voice') await loadVoiceOut();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -5925,8 +5929,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           ${has ? `<div class="detail-actions">
             <button id="lv-maps-btn">Open in Maps</button>
             <button id="lv-copy-btn" class="secondary-btn">Copy</button>
-          </div>` : ''}`;
+          </div>
+          ${isVault ? '' : '<div class="detail-actions"><button id="lv-map-btn" class="secondary-btn">Show map</button></div><div id="lv-map-box"></div>'}` : ''}`;
         if (!has) return;
+        // Optional map (Decision 345): only on a tap, only for a Home entry, only with a provider the person set.
+        const mapBtn = document.getElementById('lv-map-btn');
+        if (mapBtn) mapBtn.onclick = async () => {
+          const prov = await loadProvider(metaGet);
+          if (!prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
+          mapBtn.classList.add('hidden');
+          renderMap(document.getElementById('lv-map-box'), { lat: row.latitude, lng: row.longitude }, prov);
+        };
         document.getElementById('lv-copy-btn').onclick = async () => {
           try { await navigator.clipboard.writeText(`${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`); toast('Coordinates copied'); }
           catch { toast('Could not copy'); }
@@ -6080,10 +6093,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadThumbsInto(box, items, isVault);
     paintSelection();
   }
+  // Map provider (Decision 345): the gear in the Home Location title. Optional; nothing is fetched here.
+  document.getElementById('folder-title').addEventListener('click', async (e) => {
+    if (!e.target.closest('.loc-prov-btn') || activeLocProv) return;
+    await openProviderDialog({ metaGet, metaSet, toast, register: (h) => { activeLocProv = h; updateBackButtonState(); } });
+    updateBackButtonState();
+    armAppAutoLock();
+  });
   for (const isVault of [false, true]) {
     const redraw = () => (isVault ? renderVault() : renderMainTimeline());
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
-      if (!e.target.closest('.title-act')) return;
+      if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn')) return;
       galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
       paintGalleryBtn(isVault);
