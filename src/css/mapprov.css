@@ -1,5 +1,6 @@
 /* Optional map provider (Decisions 345, 347): provider dialog and the tile mosaic. */
-.mp-box { max-height: calc(100vh - 16px); overflow-y: auto; }
+.mp-box { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; } /* scrolls when the two providers do not fit */
+.mp-h { font-size: 14px; margin: 14px 0 0; text-align: left; }
 .mp-note, .mp-reg { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
 .mp-l { display: block; font-size: 13px; margin: 8px 0; text-align: left; }
 .mp-l input, .mp-l select { display: block; width: 100%; margin-top: 4px; }
