@@ -621,8 +621,9 @@ plot before Continue opens the Save dialog. A short map link shows Verify link: 
 `CapacitorHttp` (redirects read one hop at a time, Google https hosts only, stops at the first hop with coordinates). Open in Maps
 is not offered here because leaving the app triggers the background lock.
 
-### Location capture progress (Decision 113)
-While the fix is pending a sticky "Fetching location…" message shows and the Home New buttons are disabled.
+### Location capture: live fix (Decisions 113, 340, 341)
+Save current location first checks the phone's location switch: `window.ArklyLocation` (`ArklyLocationBridge.java`, written by `scripts/patch-location.js`) asks the system's own "turn on location" dialog; declined shows a notice and saves nothing (Decision 340). The quick-capture widget uses the same check.
+The live sheet (`src/js/locfix.js`, `src/css/locfix.css`, `#loc-fix-dialog`) then shows "Accurate to N meters", quality, trend, coordinates and a vector plot drawn to scale: the accuracy circle and the last 24 fixes around the estimate, no map data, no network. A coarse fix comes first, then a high accuracy stream; the best reported accuracy is shown, positions are blended by 1/accuracy² (`fuse`). Nothing is saved until Use this location. Cancel, Back and a lock close the sheet (`activeLocFix` in `app.js`). Accuracy is not stored (Decision 341). No location provider setting and no map tiles (Decision 342).
 
 ### Location detail (Decision 93)
 Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG

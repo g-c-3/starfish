@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 160**
+
+Start: "Go". Tier 1 docs read; Decisions 335 to 339 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).
+- Owner reported everything working on device: Phase 47 and DP171 checked.
+- Phase 48, Decision 340: `window.ArklyLocation` (`ArklyLocationBridge.java`, `patch-location.js`, CI step). Location off on Save current location: the system's own "turn on location" dialog (Play services settings check, high accuracy); no dialog available: the phone's location settings open. `build.gradle` gets the Play services location library the plugin already ships.
+- Decision 341: live fix sheet (`locfix.js`, `locfix.css`) replaces the "Fetching location…" toast. "Accurate to N meters", quality and trend, coordinates, vector plot of the accuracy circle and the recent fixes to scale, no tiles. A coarse fix first, then a high accuracy stream; the estimate improves until Use this location. Blend rule tested apart from the page.
+- `app.js`: sheet wired into Home and Vault Location capture, lock and Back close it; `widget.js`: the location dialog before the quick-capture fix. `vite build` passes; patch script idempotent on a stand-in `MainActivity.java`/`build.gradle`; Java not compiled here; not run through CI; nothing device-tested (DP172).
+- Decision 342: location provider setting, a map or map tiles: not built. Each would be a third network call and a stored credential; awaiting the owner's decision.
+- Risks: first CI run compiles the Java (`androidx.activity`, Play services classes on the app's classpath); the activity-result launcher is registered in `onCreate()`; the system dialog pausing the page against the app lock (`beginPickerLaunch` is called first); watch timeout and error callbacks on the plugin untested.
+- Next-session start: confirm the `main` build is green, then DP172 on device.
+
+---
+
 **Session 159**
 
 Start: "Go". Tier 1 docs read; Decision 334, the video player code and the screen bridge read; DECISIONS and ARCHITECTURE not read in full. CI status not checked.

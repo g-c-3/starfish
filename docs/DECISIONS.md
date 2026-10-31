@@ -3542,3 +3542,22 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **339. Pinned dialog buttons: built, not adopted.** While the keyboard is open, the action row of the Save, Money and Repayment dialogs was pinned to the bottom of the dialog (sticky, with scroll padding). It worked with the keyboard's extra toolbar row open, but the owner chose not to merge it. It is not in the code; Save and Cancel are reached by scrolling the dialog, as before.
 
+**340. The phone's own "turn on location" dialog.** Cause: with location off, Save current location showed a toast with the plugin's error and nothing else.
+- `window.ArklyLocation` (`scripts/java/ArklyLocationBridge.java`, `scripts/patch-location.js`, CI step after the cutout step): `isEnabled()`, `request()`, `state()` (`idle`, `pending`, `on`, `off`, `settings`). `request()` runs the Play services settings check for high accuracy and launches its resolution; the answer comes back through an activity-result launcher registered in `onCreate()`. Without a resolvable dialog the phone's location settings open and the page re-checks on return.
+- Page: `ensureLocationServices()` (`locfix.js`) asks before any fix, in Home and Vault Location capture and in the quick-capture widget. Declined: a notice, nothing saved. No bridge (browser, older build): the plugin reports as before.
+- `patch-location.js` adds `com.google.android.gms:play-services-location` to `android/app/build.gradle`; the plugin already ships it, so nothing new is in the APK. No permission. Reads and changes only the location switch, on the person's tap. R8 keeps it through the `Arkly*` rule.
+- Files: `scripts/java/ArklyLocationBridge.java`, `scripts/patch-location.js`, `.github/workflows/build-android.yml`, `src/js/locfix.js`, `src/js/app.js`, `src/js/widget.js`. `vite build` passes; the patch script is idempotent on a stand-in; Java not compiled here; not run through CI, not device-tested (DP172).
+- Risks: the first CI run compiles the Java; the system dialog pauses the page (`beginPickerLaunch` is called first).
+
+**341. Live fix sheet for Save current location.** Replaces the sticky "Fetching location…" toast and the single `getCurrentPosition` call.
+- Sheet (`locfix.js`, `locfix.css`): "Accurate to N meters" (kilometers from 1000), quality (Precise up to 5 m, Good up to 20, Fair up to 100, Rough up to 1000, Approximate above), improving or steady, age of the last fix, coordinates, a hint when the signal is weak or only approximate location is allowed. Use this location is enabled from the first fix. Cancel, Back and a lock close it and save nothing; a Vault lock closes only a Vault sheet.
+- Plot: vector only. Rings, north mark and a ring scale from a fixed list of distances; the accuracy circle and the last 24 fixes drawn to scale around the estimate; a sweep runs while accuracy is above 100 m. No map data, no tiles, no network.
+- Source: a coarse fix first (not older than two minutes), then `watchPosition` with high accuracy, until Use this location or close. Nothing is saved before the tap.
+- Estimate (`fuse`): the accuracy shown is the best one the phone reported, never a computed claim. An overlapping fix at most twice as inaccurate is blended by 1/accuracy² weights; a fix that does not overlap and is at most three times as inaccurate, or any fix once the estimate is 20 s old, replaces it; anything else is drawn only. Saved coordinates: the estimate at the tap.
+- Not stored: accuracy. The entries table, backup format and Vault index are unchanged.
+- Files: `src/js/locfix.js`, `src/css/locfix.css`, `src/js/app.js`. `vite build` passes; the blend rule tested apart from the page; not run through CI, not device-tested (DP172).
+- Risks: watch timeout and error callbacks of the plugin on a phone untested; trail and ring scale untuned.
+
+**342. Location provider setting, a map and map tiles: not built.** Owner request: a settings icon in the Location title bar for a location service of the person's choice, and an in-app map.
+- Each is a network call beyond the two Decision 1 allows (the update check on tap; the optional Drive backup) and a stored key or credential. A map that loads tiles was already dropped for that reason (Decision 262).
+- Not in the code. The phone's own service (GPS, Wi-Fi, mobile network, as the system combines them) is what Decision 341 uses, with no call from the app. Needs the owner's explicit approval and a decision of its own before any work.
