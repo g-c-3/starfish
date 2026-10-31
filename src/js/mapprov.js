@@ -8,7 +8,6 @@ import { cachedTile, storeTile, clearAllTiles, countTiles } from './maptiles.js'
 
 const K_TPL = 'map_provider_template', K_KEY = 'map_provider_key';
 const TILE = 256, MIN_Z = 3, MAX_Z = 19, START_Z = 16;
-const NICE = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000];
 
 // Prefill only. Templates and sign-up pages change; the person checks the provider's own documentation.
 const PRESETS = [
@@ -106,7 +105,7 @@ async function fetchDataUrl(url) {
   return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(blob); });
 }
 
-// Fills `host` (a box with the grid plot's 2:1 shape) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
+// Fills `host` (a box sized by CSS) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
 // Tiles come from the saved copy first; the provider is asked only while `online` is true (after the person's tap); each tile fetched
 // is saved with the location. Returns { goOnline(provider) }.
 export function renderMap(host, { lat, lng }, { db, entryId, provider, online }) {
@@ -116,16 +115,10 @@ export function renderMap(host, { lat, lng }, { db, entryId, provider, online })
   const mosaic = document.createElement('div'); mosaic.className = 'mp-mosaic';
   const pin = document.createElement('div'); pin.className = 'mp-pin';
   const label = document.createElement('div'); label.className = 'mp-label';
-  const bar = document.createElement('i'); const txt = document.createElement('span');
-  label.append(bar, txt);
   host.append(mosaic, pin, label);
 
   function paintLabel() {
-    const mpp = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** st.zf; // metres per css pixel
-    let d = NICE[0];
-    for (const n of NICE) if (n / mpp <= 90) d = n;
-    bar.style.width = `${Math.max(8, Math.round(d / mpp))}px`;
-    txt.textContent = `Zoom ${st.zf.toFixed(1)} · ${d >= 1000 ? `${d / 1000} km` : `${d} m`}${st.online ? '' : ' · saved'}${st.noStore ? ' · not saved' : ''}`;
+    label.textContent = `Zoom ${st.zf.toFixed(1)}${st.online ? '' : ' · saved'}${st.noStore ? ' · not saved' : ''}`;
   }
 
   async function loadTile(img, z, tx, ty, token) {

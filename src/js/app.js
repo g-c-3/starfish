@@ -5913,15 +5913,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
         const has = row.latitude != null && row.longitude != null;
         const coords = has ? formatCoords(row.latitude, row.longitude) : '';
+        // The default name is "Location" plus the time; the Saved row already shows it. A name the person chose stays, as a row (Decision 347).
+        const customLabel = row.label && !/^Location \d{1,2}[:.]\d{2}([:.]\d{2})?(\s?[ap]\.?m\.?)?$/i.test(row.label.trim()) ? row.label : '';
         body.innerHTML = `
           <div class="detail-hero" data-type="location">
             <span class="row-icon">${iconSvg('location')}</span>
             <div class="hero-when hero-coords">${has ? escapeHtml(coords) : 'No coordinates saved'}</div>
-            <div class="hero-sub">${escapeHtml(row.label)}</div>
+            <div class="hero-sub" id="lv-note">${has ? 'Grid plot, 30° lines. No map data is stored.' : escapeHtml(row.label)}</div>
             ${has ? `<div id="lv-plot-host">${locationPlotSvg(row.latitude, row.longitude)}</div>` : ''}
-            ${has ? '<div class="hero-note">Grid plot, 30° lines. No map data is stored.</div>' : ''}
           </div>
+          ${has && !isVault ? '<div id="lv-map-wrap" class="lv-map-wrap hidden"><div id="lv-map-host"></div></div>' : ''}
           <dl class="detail-list">
+            ${has && customLabel ? `<div><dt>Label</dt><dd>${escapeHtml(customLabel)}</dd></div>` : ''}
             ${has ? `<div><dt>Decimal</dt><dd>${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}</dd></div>` : ''}
             ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
@@ -5937,11 +5940,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // only after a tap, for the tiles in view, and Home only.
         const mapBtn = document.getElementById('lv-map-btn');
         if (mapBtn) {
-          const host = document.getElementById('lv-plot-host');
-          const note = body.querySelector('.hero-note');
+          const plotHost = document.getElementById('lv-plot-host');
+          const wrap = document.getElementById('lv-map-wrap');
+          const host = document.getElementById('lv-map-host');
+          const note = document.getElementById('lv-note');
           const prov = await loadProvider(metaGet);
           let ctl = null;
           const open = (online) => {
+            plotHost.classList.add('hidden'); // the map takes the plot's place, outside the card and edge to edge (Decision 347)
+            wrap.classList.remove('hidden');
             host.innerHTML = '';
             ctl = renderMap(host, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: prov, online });
             note.textContent = online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
