@@ -39,6 +39,7 @@ import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProviders, renderMap } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
 import { groupedHtml } from './dategroup.js';
+import { parseFind, hasFind, dateMatches, nameMatches } from './folderfind.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -382,6 +383,16 @@ async function leaveIfClean(ids) {
 // ---- Multi-select inside a folder or a search list: long press a row to start (Decision 122). ----
 let selection = null; // { isVault, ids: Set } while selecting, else null
 const SELECTABLE_ROOTS = ['folder-list', 'timeline', 'vault-folder-list'];
+const PDF_TYPES = ['image', 'pdf', 'file'];
+const PDF_IMG_EXTS = new Set(['jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp', 'bmp', 'avif']);
+// 'img' (a picture, never a video), 'pdf', or null. A Files row counts by its extension.
+function pdfKind(type, ext) {
+  const e = String(ext || '').replace(/^\./, '').toLowerCase();
+  if (type === 'pdf') return 'pdf';
+  if (type === 'image') return isVideoExt(e) ? null : 'img';
+  if (type === 'file') return e === 'pdf' ? 'pdf' : PDF_IMG_EXTS.has(e) ? 'img' : null;
+  return null;
+}
 function paintSelection() {
   const ids = selection ? selection.ids : null;
   for (const rootId of SELECTABLE_ROOTS) {
@@ -391,10 +402,12 @@ function paintSelection() {
   const count = document.getElementById('sel-count');
   if (count) count.innerHTML = ids ? `${ids.size}<span class="sel-word"> selected</span>` : '';
   document.querySelectorAll('#select-bar .sel-act').forEach((b) => { b.disabled = !ids || ids.size === 0; });
-  const pdfBtn = document.getElementById('sel-pdf'); // Make a PDF has nothing to act on when only voice recordings are selected (Decision 284)
+  const pdfBtn = document.getElementById('sel-pdf'); // Make a PDF only in Gallery, PDF and Files, and only for two or more of one kind (Decision 351)
   if (pdfBtn) {
-    const picked = [...document.querySelectorAll('.entry-row.is-selected')];
-    pdfBtn.classList.toggle('hidden', !!ids && picked.length > 0 && picked.every((el) => el.dataset.type === 'voice'));
+    const picked = ids ? SELECTABLE_ROOTS.flatMap((r) => [...document.querySelectorAll(`#${r} .entry-row.is-selected, #${r} .thumb-tile.is-selected`)]) : [];
+    const kinds = picked.map((el) => pdfKind(el.dataset.type, el.dataset.ext));
+    pdfBtn.classList.toggle('hidden', !!ids && picked.length > 0 && !picked.every((el) => PDF_TYPES.includes(el.dataset.type)));
+    pdfBtn.disabled = !ids || ids.size < 2 || picked.length !== ids.size || !kinds[0] || kinds.some((k) => k !== kinds[0]);
   }
   const mv = document.getElementById('sel-move'); // the direction follows the screen the selection started on (Decision 185)
   if (mv && selection) { const t = selection.isVault ? 'Move to Home' : 'Move to Vault'; mv.title = t; mv.setAttribute('aria-label', t); }
@@ -1393,9 +1406,9 @@ async function setAutoLockMinutes(minutes) {
   await armAppAutoLock(); // re-arm immediately with the new duration if currently unlocked with a password set
 }
 
-async function showMainTimeline(types = null) {
+async function showMainTimeline(types = null, limit = 200) {
   const typeClause = types ? ` AND type IN (${types.map(() => '?').join(',')})` : '';
-  const sql = `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0${typeClause} ORDER BY created_at DESC LIMIT 200`;
+  const sql = `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0${typeClause} ORDER BY created_at DESC LIMIT ${Number(limit) | 0}`;
   const rows = types ? await db.query(sql, types) : await db.query(sql);
   const entries = rows.values || [];
   // One extra query for all tags at once (GROUP_CONCAT) rather than one per row — same bulk
@@ -1982,6 +1995,11 @@ function escapeHtml(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function typeLabelFor(type) { return VAULT_TYPE_LABELS[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : ''); }
+// The saved or changed time of a row: year and seconds included (Decision 351).
+function formatSavedDate(ms) {
+  if (!ms) return '';
+  return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
 function formatEntryDate(ms) {
   if (!ms) return '';
   return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
@@ -2006,7 +2024,7 @@ function rowMeta(row, inFolder = false) {
     const d = Money.fromRow(row);
     if (d) return moneyRowMeta(d);
   }
-  if (row.type !== 'reminder') return { meta: [inFolder ? '' : typeLabelFor(row.type), formatEntryDate(row.updated_at || row.created_at)].filter(Boolean).join(' · '), done: false };
+  if (row.type !== 'reminder') return { meta: [inFolder ? '' : typeLabelFor(row.type), formatSavedDate(row.updated_at || row.created_at)].filter(Boolean).join(' · '), done: false };
   const st = reminderStatus(row);
   const when = formatEntryDate(reminderNextDue(row));
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
@@ -2030,7 +2048,7 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
     ? `<span class="row-icon row-thumb${isVideoExt(ext) ? ' is-video' : ''}" data-id="${escapeHtml(id)}">${iconSvg('image')}</span>`
     : rowIconHtml(type, ext);
   return `
-    <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
+    <div class="entry-row${done ? ' is-done' : ''}" data-type="${escapeHtml(type)}" data-ext="${escapeHtml(ext)}" data-id="${escapeHtml(id)}">
       ${icon}
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
@@ -2819,7 +2837,7 @@ function loadThumbsInto(container, items, isVault) {
 }
 function thumbGridHtml(items, cols = DEFAULT_COLS, dateOf = null) {
   const dense = cols >= 7 ? 2 : cols >= 5 ? 1 : 0;
-  return `<div class="thumb-grid" style="--cols:${cols}" data-cols="${cols}" data-dense="${dense}">${groupedHtml(items, dateOf, (i) => `<button type="button" class="thumb-tile${isVideoExt(i.extension) ? ' is-video' : ''}" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg(isVideoExt(i.extension) ? 'play' : 'image')}</button>`)}</div>`;
+  return `<div class="thumb-grid" style="--cols:${cols}" data-cols="${cols}" data-dense="${dense}">${groupedHtml(items, dateOf, (i) => `<button type="button" class="thumb-tile${isVideoExt(i.extension) ? ' is-video' : ''}" data-id="${escapeHtml(i.id)}" data-type="${escapeHtml(i.type || 'image')}" data-ext="${escapeHtml(i.extension || '')}" aria-label="${escapeHtml(i.label)}">${iconSvg(isVideoExt(i.extension) ? 'play' : 'image')}</button>`)}</div>`;
 }
 
 // Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
@@ -3958,8 +3976,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e, inFolder) : rowMeta({ type: e.type, created_at: e.createdAt, updated_at: e.updatedAt }, inFolder);
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
-  function vaultRowsHtml(items) {
-    return groupedHtml(items, (e) => e.createdAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml('folder');
+  function vaultRowsHtml(items, finding = false) {
+    return groupedHtml(items, (e) => e.createdAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml(finding ? 'search' : 'folder');
   }
 
   function renderVaultCounts() {
@@ -3973,12 +3991,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderVaultFolderList() {
     const container = document.getElementById('vault-folder-list');
-    const items = browseVault(openVaultFolderType);
+    const items = applyVaultFind(browseVault(openVaultFolderType));
     if (openVaultFolderType === 'image') { // Gallery, decoded in memory only (Decisions 105, 306)
       renderGallery(container, items, true, async () => renderVault());
       return;
     }
-    container.innerHTML = vaultRowsHtml(items);
+    container.innerHTML = vaultRowsHtml(items, !!folderFind.vault);
     if (openVaultFolderType === 'voice') { voiceFolderItems.vault = items; paintRowPlay(); }
     container.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async (e) => {
       if (e.target.closest('.row-actions')) return;
@@ -4137,8 +4155,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const vTitle = document.getElementById('vault-folder-title');
     vTitle.dataset.vaultType = type;
+    closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}`;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${findBtnHtml()}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
@@ -4992,19 +5011,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   refreshHome = () => { renderMainTimeline().catch(() => {}); };
+  // Search inside one category (Decision 351): name and tags, text content, and year or month as tags on the saved date.
+  const folderFind = { home: '', vault: '' };
+  let vaultFindIds = new Set(), vaultFindSeq = 0;
+  async function applyHomeFind(rows) {
+    const f = parseFind(folderFind.home);
+    if (!hasFind(f)) return rows;
+    let hits = new Set();
+    if (f.text) { try { hits = new Set((await searchEntries(db, f.text, { limit: 5000 })).map((r) => r.id)); } catch { /* name and tag matches stay */ } }
+    return rows.filter((r) => dateMatches(r.created_at, f) && (!f.words.length || nameMatches(r.label, r.tags, f.words) || hits.has(r.id)));
+  }
+  function applyVaultFind(items) {
+    const f = parseFind(folderFind.vault);
+    if (!hasFind(f)) return items;
+    return items.filter((e) => dateMatches(e.createdAt, f) && (!f.words.length || nameMatches(e.label, e.tags, f.words) || vaultFindIds.has(e.id)));
+  }
+  function closeFolderFind(isVault, redraw = false) {
+    document.getElementById(isVault ? 'vault-folder-find' : 'folder-find')?.remove();
+    const had = !!folderFind[isVault ? 'vault' : 'home'];
+    folderFind[isVault ? 'vault' : 'home'] = ''; vaultFindIds = new Set(); vaultFindSeq++;
+    if (redraw && had) (isVault ? (privateSessionKey && renderVault()) : renderMainTimeline());
+  }
+  function toggleFolderFind(isVault) {
+    const id = isVault ? 'vault-folder-find' : 'folder-find';
+    if (document.getElementById(id)) { closeFolderFind(isVault, true); return; }
+    const bar = document.createElement('div');
+    bar.id = id; bar.className = 'folder-find';
+    bar.innerHTML = '<input type="search" placeholder="Name, text, year or month" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" aria-label="Search this category">';
+    document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').insertAdjacentElement('afterend', bar);
+    const input = bar.querySelector('input');
+    let t = 0;
+    input.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const term = input.value.trim(), seq = ++vaultFindSeq;
+        if (!isVault) { folderFind.home = term; await renderMainTimeline(); return; }
+        if (!privateSessionKey) return;
+        armVaultAutoLock();
+        folderFind.vault = term; vaultFindIds = new Set();
+        renderVault();
+        const f = parseFind(term);
+        if (!f.text) return;
+        try { // text inside Vault items, decrypted in memory
+          const more = await searchVaultBodies(db, privateSessionKey, f.text, new Set());
+          if (seq !== vaultFindSeq || !privateSessionKey || folderFind.vault !== term) return;
+          vaultFindIds = new Set(more.map((e) => e.id)); renderVault();
+        } catch { /* name matches stay */ }
+      }, 200);
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    input.focus();
+  }
+  const findBtnHtml = () => `<button type="button" class="title-act title-search" aria-label="Search this category" title="Search">${iconSvg('search')}</button>`;
   async function renderMainTimeline() {
     await renderFolderCounts();
     await loadCurrencySymbol();
     await renderMoneySummary();
     if (!openFolderType) return;
-    const rows = await showMainTimeline(FOLDER_TYPES[openFolderType]);
+    const finding = hasFind(parseFind(folderFind.home));
+    const rows = await applyHomeFind(await showMainTimeline(FOLDER_TYPES[openFolderType], finding ? 5000 : 200));
     if (openFolderType === 'image') { // Gallery: grid or list (Decisions 105, 306)
       renderGallery(document.getElementById('folder-list'), rows, false, renderMainTimeline);
       return;
     }
     document.getElementById('folder-list').innerHTML = groupedHtml(rows, (r) => r.created_at, (row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
-    }, 'main')) || emptyStateHtml('folder');
+    }, 'main')) || emptyStateHtml(finding ? 'search' : 'folder');
     if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -5084,8 +5156,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
+    closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -5276,10 +5349,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       let rows;
       if (isVault) { if (!privateSessionKey) return; const idx = getVaultIndex() || []; rows = ids.map((id) => idx.find((e) => e.id === id)).filter(Boolean); }
       else rows = (await Promise.all(ids.map(async (id) => ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [id])).values || [])[0]))).filter(Boolean);
-      const types = new Set(rows.map((r) => r.type));
-      const pdfs = types.size === 1 && types.has('pdf'), pics = types.size === 1 && types.has('image');
-      if (!pdfs && !pics) { toast('Select PDFs to merge, or pictures to make a PDF.'); return; }
-      if (pdfs && rows.length < 2) { toast('Select two or more PDFs to merge.'); return; }
+      const kinds = rows.map((r) => pdfKind(r.type, r.extension));
+      const pdfs = rows.length > 1 && kinds.every((k) => k === 'pdf'), pics = rows.length > 1 && kinds.every((k) => k === 'img');
+      if (!pdfs && !pics) { toast('Select two or more pictures, or two or more PDFs.'); return; }
       const compose = await import('./pdfcompose-ui.js');
       const first = rows[0].label || (pdfs ? 'PDF' : 'Pictures');
       const res = await compose.askCompose({
@@ -6134,7 +6206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderGallery(box, items, isVault, reopen) {
     const list = galleryView === 'list';
     const dateOf = isVault ? (i) => i.createdAt : (i) => i.created_at; // soft date separators (Decision 350)
-    box.innerHTML = !items.length ? emptyStateHtml('folder')
+    box.innerHTML = !items.length ? emptyStateHtml(folderFind[isVault ? 'vault' : 'home'] ? 'search' : 'folder')
       : list ? groupedHtml(items, dateOf, (i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) }))
       : thumbGridHtml(items, galleryCols, dateOf);
     box.querySelectorAll(list ? '.entry-row' : '.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
@@ -6154,6 +6226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   for (const isVault of [false, true]) {
     const redraw = () => (isVault ? renderVault() : renderMainTimeline());
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
+      if (e.target.closest('.title-search')) { if (isVault) armVaultAutoLock(); toggleFolderFind(isVault); return; }
       if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn')) return;
       galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
