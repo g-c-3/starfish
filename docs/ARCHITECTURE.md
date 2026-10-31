@@ -13,8 +13,8 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - 100% local storage (SQLite) by default. No account or server is required for capture, search,
   reminders, expenses, or local backup/restore.
 - The only network calls this app will ever make are Google Drive backup (§4b, opt-in), and three actions
-  the person starts with a tap: Check for updates (public repo, no token, Decision 214), Verify link (short map link, Decision 117) and Show map (a provider
-  the person set up, off until then, Decision 345). None is reachable from, or required by, local-only use.
+  the person starts with a tap: Check for updates (public repo, no token, Decision 214), Verify link (short map link, Decision 117) and Show map (up to two providers
+  the person set up, off until then, Decisions 345, 348). None is reachable from, or required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
 - Voice recordings and generic files are searchable by **label only** (no transcription/parsing).
@@ -621,19 +621,21 @@ plot before Continue opens the Save dialog. A short map link shows Verify link: 
 `CapacitorHttp` (redirects read one hop at a time, Google https hosts only, stops at the first hop with coordinates). Open in Maps
 is not offered here because leaving the app triggers the background lock.
 
-### Location capture: live fix (Decisions 113, 340, 341, 343, 344)
+### Location capture: live fix (Decisions 113, 340, 341, 343, 344, 349)
 Save current location first checks the phone's location switch: `window.ArklyLocation` (`ArklyLocationBridge.java`, written by `scripts/patch-location.js`) asks the system's own "turn on location" dialog; declined shows a notice and saves nothing (Decision 340). The quick-capture widget uses the same check.
-The live sheet (`src/js/locfix.js`, `src/css/locfix.css`, `#loc-fix-dialog`) then shows "Accurate to N meters", quality, trend, coordinates and a vector plot drawn to scale: the accuracy circle and the last 24 fixes around the estimate, no map data, no network. A coarse fix, a high accuracy one-shot request and a high accuracy watch run together, one fix per second (`patch-geolocation.js` sets the plugin's 10 s interval to 1 s; the watch's `timeout` is its delivery delay and stays 1 s; Decision 344); the best reported accuracy is shown, positions are blended by 1/accuracy² (`fuse`). Nothing is saved until Use this location; the Save dialog then opens with the description "Accurate to N meters", editable (Decision 343). Cancel, Back and a lock close the sheet (`activeLocFix` in `app.js`). Accuracy is not stored (Decision 341). No location provider setting and no map tiles (Decision 342).
+The live sheet (`src/js/locfix.js`, `src/css/locfix.css`, `#loc-fix-dialog`) then shows "Accurate to N meters", quality, trend, coordinates and a vector plot drawn to scale: the accuracy circle and the last 24 fixes around the estimate, no map data, no network. A coarse fix, a high accuracy one-shot request and a high accuracy watch run together, one fix per second (`patch-geolocation.js` sets the plugin's 10 s interval to 1 s; the watch's `timeout` is its delivery delay and stays 1 s; Decision 344); the best reported accuracy is shown, positions are blended by 1/accuracy² (`fuse`). Nothing is saved until Use this location; the Save dialog then opens with the description "Accurate to N meters", editable (Decision 343). Cancel, Back and a lock close the sheet (`activeLocFix` in `app.js`). Accuracy is not stored (Decision 341). No location provider setting and no map tiles in the sheet (Decision 342).
+North follows the phone's magnetometer (Decision 349): `deviceorientationabsolute` readings give where the phone points (top edge flat, back upright, summed and smoothed), the plot's group `.lf-rot` turns by the heading and the "N" mark moves to north on the ring, upright; the scale label stays. No reading: north stays at the top. Used for drawing only, never stored or sent; the listeners go when the sheet closes.
 
 
-### Location map provider (Decisions 345, 346)
-Off until the person sets one: the gear in the Home Location title opens the provider dialog (`src/js/mapprov.js`, `src/css/mapprov.css`): a tile URL template with `{z}`, `{x}`, `{y}` and optional `{key}`, a key, prefilled presets with where to register, and Delete all saved maps (two taps). Template and key are in the settings table (`map_provider_template`, `map_provider_key`); neither is in `APP_SETTINGS_KEYS`, so neither is in any backup.
-In a Home location's detail the map replaces the grid plot in place (same 2:1 box), centred on the saved point. Pinch zooms continuously from 3 to 19; a label at the bottom left shows the zoom and a scale bar ("saved" when only saved tiles are used, "not saved" when the provider does not allow reading its tiles). A 5 x 3 tile mosaic is drawn at the whole zoom level and scaled between levels. Tiles come from the saved copy first; the provider is asked only after the person taps Show map (or Load more detail), for the tiles in view, never on open and never in the background; the provider sees the tile numbers and the phone's address.
-Saved tiles (`src/js/maptiles.js`, table `location_tiles`: entry id, z, x, y, the location's coordinates, `data` as a data URL): every tile viewed is stored, up to 150 per location. A location with saved tiles opens on its map with no network. Editing the coordinates drops that location's tiles. Permanent delete (`permanentlyDeleteEntry`, backup overwrite) and Delete all saved maps remove them. Not in a backup: a restored location shows its map again after a tap with a provider set. The Vault never uses a provider or saves tiles. A tile an error image would replace (wrong key, HTTP error) is shown and never saved. `activeLocProv` closes the dialog on a lock or Back.
+### Location map providers (Decisions 345, 346, 347, 348)
+Off until the person sets one: the gear in the Home Location title opens the provider dialog (`src/js/mapprov.js`, `src/css/mapprov.css`; it scrolls, capped at 80% of the screen height). Provider 1 and Provider 2 (optional) each have a preset (with where to register), a tile URL template with `{z}`, `{x}`, `{y}` and optional `{key}`, and a key; Delete all saved maps (two taps) empties both providers' tiles; Remove all providers clears both. Settings keys: `map_provider_template`, `map_provider_key`, `map_provider2_template`, `map_provider2_key`; none is in `APP_SETTINGS_KEYS`, so none is in any backup. Saving with only the second filled makes it the one provider and moves its saved tiles to slot 1; saving with both empty is refused.
+In a Home location's detail the map sits below the coordinates card, edge to edge in a square box (smaller of the screen width and 420 px high, at most 1024 px wide), and replaces the grid plot while shown. The card's note reads "Saved map. Pinch to zoom." (or the online line, prefixed "Map N." with two providers) and "Current zoom: N" sits under it (" · not saved" when the provider does not allow reading its tiles). Pinch zooms continuously from 3 to 19; a 5 x 3 tile mosaic is drawn at the whole zoom level and scaled between levels. Tiles come from the saved copy first; a provider is asked only after the person taps a map button, for the tiles in view, never on open and never in the background; the provider sees the tile numbers and the phone's address.
+Buttons: one provider, Show map then Load more detail. Two providers, two equal buttons: the map on screen shows "Showing map N" (disabled) while online and "Load more detail" on saved tiles; the other shows "Show map N" and switches to that map (a fresh map box each time). A location opens on the map last used for it (`map_last:<entry id>` in the settings table, written on a tap with two providers; removed with the location, after a backup overwrite and when providers are removed or the second becomes the first; not in a backup), else on the first map with saved tiles.
+Saved tiles (`src/js/maptiles.js`; slot 1 in `location_tiles`, slot 2 in `location_tiles2`, same columns: entry id, z, x, y, the location's coordinates, `data` as a data URL): every tile viewed is stored in its provider's table, up to 150 per location each. A location with saved tiles opens on its map with no network. Editing the coordinates drops that slot's tiles when the location is next opened. Permanent delete (`permanentlyDeleteEntry`, backup overwrite) and Delete all saved maps remove both tables' rows. Not in a backup: a restored location shows its map again after a tap with a provider set. The Vault never uses a provider or saves tiles. A tile an error image would replace (wrong key, HTTP error) is shown and never saved. `activeLocProv` closes the dialog on a lock or Back.
 
 ### Location detail (Decision 93)
 Opens on the shared viewer shell: coordinates as degrees with hemisphere letters, decimal values, and an inline SVG
-grid plot (30° lines, no map data). Open in Maps hands a `geo:` URI to the phone's maps app; Copy writes the decimal
+grid plot (30° lines, no map data; a map replaces it when shown, see Location map providers). The Saved row shows the full date with year and seconds; a name the person typed shows as a Label row. Open in Maps hands a `geo:` URI to the phone's maps app; Copy writes the decimal
 pair to the clipboard. Arkly makes no network request for either. Main entries only; an entry with no coordinates
 shows a notice and no actions.
 
@@ -661,6 +663,10 @@ after a Done. `reminders.js` holds the occurrence math and `reminderNextDue`, sh
 ### Search (Decision 106)
 `entries_fts` stores its columns (id, label, body text plus description; non-private rows only). `searchEntries` ranks
 word-prefix matches, then adds substring matches from `entries`, so Home matches like the Vault's in-memory search.
+
+### Date separators (Decision 350)
+`src/js/dategroup.js` (`dayLabel`, `groupedHtml`) and `src/css/dategroup.css`. A label depends only on an item's day and today; weeks start on Sunday. Priority: Today, Yesterday, This Week, Last Week, This Month, Last Month, then "Month Year". A broader label with no days of its own joins the group holding its oldest day (broad to narrow, "This Month/This Week/Today"). Last Week is dropped when this week starts on the 1st. Week labels are not cut at a month boundary. A date ahead of today reads Today.
+`groupedHtml(items, dateOf, itemHtml)` inserts `<div class="date-sep">` wherever the label changes; `dateOf` null (a list not in date order) inserts none. Used by the Home and Vault category lists (saved date), the Gallery list and grid (`thumbGridHtml`, the separator spans the grid row), Search (Newest and Oldest only) and Trash and Vault Trash (deleted date; Recently deleted and Deleting soonest only). Separators are not `.entry-row` or `.thumb-tile`, so open, select and drag skip them. Computed on each draw and app reopen; no timer. The phone's file explorer is unchanged.
 
 ### Gallery: grid, list, viewer (Decisions 105, 109, 162, 254, 306, 307, 308, 310, 311)
 The Gallery folder (Home and Vault; entry type `image`) holds any image or video. A video is told by its extension (`isVideoExt` in
@@ -852,6 +858,10 @@ arkly/
       pdfopen.js        -> opens a PDF, asking for a password only when needed (memory only; testable in Node)
       widget.js         -> capture-only screen for the home-screen widget (Decision 266)
       widget-inbox.js   -> widget_inbox table: add, count, move to Home, clear (Decision 266)
+      locfix.js         -> live location sheet; north follows the magnetometer (Decisions 341, 349)
+      mapprov.js        -> optional map providers (up to two) and the pinch-zoom map (Decisions 345 to 348)
+      maptiles.js       -> saved map tiles per provider slot (Decisions 346, 348)
+      dategroup.js      -> soft date separators for lists (Decision 350)
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.

@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 161**
+
+Start: "Go". Tier 1 docs read; Decisions 345, 346 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).
+- Owner reported DP175 working: Phase 49's saved maps confirmed.
+- Decision 347: the map leaves the coordinates card and spans the screen; the note under the coordinates replaces the duplicate name and time; "Current zoom: N" under it; the on-map label and scale bar removed; Saved shows the full date with year and seconds; a typed name shows as a Label row; a gap above the map buttons.
+- Decision 348: optional second map provider (own template and key, own saved tiles in `location_tiles2`); dialog scrolls with room above and below; only the second filled becomes the one provider and its tiles move; two equal buttons (Show map N, Showing map N, Load more detail); the last map used is remembered per location and cleared with the location. Cause of the first wrong labels (Load more detail 2 beside Showing map 1): the labels followed saved tiles, not the map on screen. Fixed: the map on screen owns the state, the other is always Show map N.
+- Decision 349: north in the live location ring follows the magnetometer. Heading arithmetic first used the camera direction only and was degenerate with the phone flat; replaced with the top edge flat and the back upright, summed.
+- Decision 350: soft date separators in every list (Home and Vault categories, Gallery list and grid, Search by date, Trash and Vault Trash by date). Labels tested apart from the page against the owner's calendar examples and the weeks that straddle two months; the owner chose that week labels are not cut at a month boundary.
+- Files: `src/js/mapprov.js`, `src/css/mapprov.css`, `src/js/maptiles.js`, `src/js/db.js`, `src/js/backup.js`, `src/js/locfix.js`, `src/js/dategroup.js` (new), `src/css/dategroup.css` (new), `src/js/app.js`, docs. `vite build` passes after each change; not run through CI; layout of 347 and 348 shown working in the owner's screenshots; the rest not device-tested.
+- Decisions 347 to 350 recorded. DP175 confirmed; DP176 (Decisions 347 to 349) and DP177 (Decision 350) added; Phase 49 extended; Phase 50 added.
+- Next session start point: owner runs DP176 and DP177 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first (index order), flip to newest first if wanted; the "Last Week" header shows twice when last week straddles two months.
+
+---
+
 **Session 160**
 
 Start: "Go". Tier 1 docs read; Decisions 335 to 339 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).
