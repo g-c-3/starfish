@@ -101,6 +101,7 @@ export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
     };
     q('.mp-remove').onclick = async () => {
       for (const k of KEYS) { await metaSet(k.tpl, ''); await metaSet(k.key, ''); }
+      if (db) await db.run(`DELETE FROM meta WHERE key LIKE 'map_last:%'`);
       toast('Map providers removed'); finish(true);
     };
     q('.mp-save').onclick = async () => {
@@ -120,6 +121,7 @@ export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
         await db.run(`INSERT OR REPLACE INTO location_tiles (entry_id, z, x, y, lat, lng, data) SELECT entry_id, z, x, y, lat, lng, data FROM location_tiles2`);
         await db.run(`DELETE FROM location_tiles2`);
       }
+      if (!two && db) await db.run(`DELETE FROM meta WHERE key LIKE 'map_last:%'`); // slot numbers changed or only one map is left
       const second = two ? v[1] : none;
       await metaSet(KEYS[0].tpl, first.tpl); await metaSet(KEYS[0].key, first.key);
       await metaSet(KEYS[1].tpl, second.tpl); await metaSet(KEYS[1].key, second.key);

@@ -427,6 +427,7 @@ async function permanentlyDeleteEntry(db, id) {
   await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [id]); // explicit — see purgeOldTrash's own note
   await db.run(`DELETE FROM location_tiles WHERE entry_id = ?`, [id]); // saved map tiles go with the location (Decisions 346, 348)
   await db.run(`DELETE FROM location_tiles2 WHERE entry_id = ?`, [id]);
+  await db.run(`DELETE FROM meta WHERE key = ?`, [`map_last:${id}`]); // the last-used map choice goes too
   await db.run(`DELETE FROM entries WHERE id = ?`, [id]);
   if (row?.file_path) { // the file goes with its entry (Decision 162); after the row, so a failed delete never orphans an entry
     try { const files = await import('./files.js'); files.initFiles(db); await files.removeFile(row); } catch { /* file already gone */ }

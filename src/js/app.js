@@ -5972,7 +5972,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             paint();
           };
           for (const it of items) it.saved = await hasTiles(db, row.id, row.latitude, row.longitude, it.slot).catch(() => false);
-          const first = items.find((it) => it.saved);
+          // Opens on the map last used for this location (kept per location, on this phone); else the first with saved tiles (Decision 348).
+          const lastKey = `map_last:${row.id}`;
+          const last = two ? Number(await metaGet(lastKey, 0)) : 0;
+          const first = items.find((it) => it.saved && it.slot === last) || items.find((it) => it.saved);
           if (first) show(first, false); else paint();
           items.forEach((it) => {
             if (!it.btn) return;
@@ -5980,6 +5983,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               if (!it.prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
               if (cur === it && ctl) { ctl.goOnline(it.prov); it.online = true; note.textContent = noteFor(it); } else show(it, true);
               it.saved = true; paint();
+              if (two) Promise.resolve(metaSet(lastKey, String(it.slot))).catch(() => {});
             };
           });
         }
