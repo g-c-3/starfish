@@ -97,6 +97,11 @@ jobs:
       - name: Patch voice recorder (noise reduction)
         run: node scripts/patch-voice.js
 
+      # Decision 344 — one location fix per second for the live location sheet. Patches the plugin source in node_modules (its watch
+      # interval is fixed at 10 s); no other change.
+      - name: Patch location plugin (1 s watch interval)
+        run: node scripts/patch-geolocation.js
+
       # Decision 283 — speaker or earpiece for voice playback: window.ArklyAudioRoute. Needs the onCreate() that
       # patch-screenlock.js guarantees, so it runs after it.
       - name: Add the playback output bridge (native)
