@@ -5954,7 +5954,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           };
           const paint = () => items.forEach((it) => {
             if (!it.btn) return;
-            if (two) { it.btn.textContent = it.online ? `Showing map ${it.slot}` : it.saved ? `Load more detail ${it.slot}` : `Show map ${it.slot}`; it.btn.disabled = it.online; }
+            if (two) { // the map on screen: "Showing map N" (disabled) while online, "Load more detail" while saved; the other: "Show map N"
+              const on = cur === it;
+              it.btn.textContent = on ? (it.online ? `Showing map ${it.slot}` : 'Load more detail') : `Show map ${it.slot}`;
+              it.btn.disabled = on && it.online;
+            }
             else { it.btn.textContent = it.saved ? 'Load more detail' : 'Show map'; it.btn.classList.toggle('hidden', it.online || (it.saved && !it.prov)); }
           });
           const show = (it, online) => {

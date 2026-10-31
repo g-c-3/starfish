@@ -57,14 +57,26 @@ export function fuse(est, fix, now) {
 
 const NS = 'http://www.w3.org/2000/svg';
 const PLOT = `<svg class="lf-plot" viewBox="0 0 320 320" role="img" aria-label="Your position and its accuracy, drawn to scale">
+  <g class="lf-rot">
   <g class="lf-rings"><circle cx="160" cy="160" r="140"/><circle cx="160" cy="160" r="93.3"/><circle cx="160" cy="160" r="46.7"/></g>
   <line class="lf-axis" x1="20" y1="160" x2="300" y2="160"/><line class="lf-axis" x1="160" y1="20" x2="160" y2="300"/>
   <g class="lf-sweep"><path d="M160 160 L160 20 A140 140 0 0 1 281.2 90 Z"/></g>
   <circle class="lf-acc" cx="160" cy="160" r="0"/>
   <g class="lf-trail"></g>
+  </g>
   <circle class="lf-halo" cx="160" cy="160" r="11"/><circle class="lf-pin" cx="160" cy="160" r="5"/>
-  <text class="lf-n" x="160" y="15">N</text><text class="lf-scale" x="300" y="154" text-anchor="end"></text>
+  <text class="lf-n" x="160" y="14" dominant-baseline="central">N</text><text class="lf-scale" x="300" y="154" text-anchor="end"></text>
 </svg>`;
+
+// Heading (radians clockwise from north) of where the phone points, from an absolute orientation reading.
+// Lying flat that is its top edge; held upright, its back. The two horizontal directions are summed, so it holds in between.
+function compassHeading(alpha, beta, gamma) {
+  const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
+  const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b), sg = Math.sin(g), cg = Math.cos(g);
+  const east = -sa * cb + (-sg * ca - cg * sb * sa);
+  const north = ca * cb + (-sg * sa + cg * sb * ca);
+  return Math.atan2(east, north);
+}
 
 // Opens the sheet and resolves { lat, lng, accuracy } when the person taps Use this location, null on Cancel, Back or a lock.
 // Throws an Error with a plain message when no fix can be tried (permission or location switch off).
@@ -99,6 +111,29 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
     const accLine = q('.lf-acc-line'), stateEl = q('.lf-state'), coordsEl = q('.lf-coords'), hintEl = q('.lf-hint');
     const useBtn = q('.lf-use'), accCircle = q('.lf-acc'), trailG = q('.lf-trail'), scaleEl = q('.lf-scale');
     const box = q('.lf-box');
+    const rot = q('.lf-rot'), nEl = q('.lf-n');
+
+    // North follows the phone's magnetometer: the plot turns so N sits where north is. No sensor reading = north stays at the top.
+    // Read on the phone only, nothing stored or sent (Decision 349).
+    let hx = 0, hy = 0, haveHeading = false, frame = 0;
+    function drawNorth() {
+      frame = 0;
+      const h = Math.atan2(hx, hy); // phone heading, radians clockwise from north
+      rot.setAttribute('transform', `rotate(${(-h * 180 / Math.PI).toFixed(1)} 160 160)`);
+      nEl.setAttribute('x', (160 - 146 * Math.sin(h)).toFixed(1));
+      nEl.setAttribute('y', (160 - 146 * Math.cos(h)).toFixed(1));
+    }
+    function onOrient(e) {
+      if (done || e.alpha == null || e.beta == null || e.gamma == null) return;
+      if (e.type === 'deviceorientation' && !e.absolute) return; // a relative reading has no north
+      const h = compassHeading(e.alpha, e.beta, e.gamma);
+      const k = haveHeading ? 0.15 : 1; // smoothed on the circle, so 359° to 1° does not swing round
+      hx += (Math.sin(h) - hx) * k; hy += (Math.cos(h) - hy) * k;
+      haveHeading = true;
+      if (!frame) frame = requestAnimationFrame(drawNorth);
+    }
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true);
 
     let est = null, trail = [], lastFixAt = 0, lastBetterAt = 0, errorText = '', watchId = null, done = false;
     const startedAt = Date.now();
@@ -173,6 +208,9 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
       if (done) return;
       done = true;
       clearInterval(tick);
+      window.removeEventListener('deviceorientationabsolute', onOrient, true);
+      window.removeEventListener('deviceorientation', onOrient, true);
+      if (frame) cancelAnimationFrame(frame);
       if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
       el.remove();
       if (register) register(null);

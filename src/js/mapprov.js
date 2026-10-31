@@ -105,12 +105,24 @@ export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
     };
     q('.mp-save').onclick = async () => {
       const v = secs.map((o) => ({ tpl: o.tpl.value.trim(), key: o.key.value.trim() }));
-      let bad = validateTemplate(v[0].tpl, v[0].key);
-      if (bad) { err.textContent = `Provider 1: ${bad}`; return; }
-      const two = !!(v[1].tpl || v[1].key); // empty second provider = none
-      if (two) { bad = validateTemplate(v[1].tpl, v[1].key); if (bad) { err.textContent = `Provider 2: ${bad}`; return; } }
-      await metaSet(KEYS[0].tpl, v[0].tpl); await metaSet(KEYS[0].key, v[0].key);
-      await metaSet(KEYS[1].tpl, two ? v[1].tpl : ''); await metaSet(KEYS[1].key, two ? v[1].key : '');
+      const filled = v.map((x) => !!(x.tpl || x.key)); // an empty provider is none
+      if (!filled[0] && !filled[1]) { err.textContent = validateTemplate('', ''); return; }
+      for (let i = 0; i < 2; i++) {
+        if (!filled[i]) continue;
+        const bad = validateTemplate(v[i].tpl, v[i].key);
+        if (bad) { err.textContent = `Provider ${i + 1}: ${bad}`; return; }
+      }
+      const two = filled[0] && filled[1];
+      const none = { tpl: '', key: '' };
+      const first = filled[0] ? v[0] : v[1]; // only the second filled: it becomes the one provider (Decision 348)
+      if (!filled[0] && db) {
+        // its saved tiles move with it
+        await db.run(`INSERT OR REPLACE INTO location_tiles (entry_id, z, x, y, lat, lng, data) SELECT entry_id, z, x, y, lat, lng, data FROM location_tiles2`);
+        await db.run(`DELETE FROM location_tiles2`);
+      }
+      const second = two ? v[1] : none;
+      await metaSet(KEYS[0].tpl, first.tpl); await metaSet(KEYS[0].key, first.key);
+      await metaSet(KEYS[1].tpl, second.tpl); await metaSet(KEYS[1].key, second.key);
       toast(two ? 'Map providers saved' : 'Map provider saved');
       finish(true);
     };
