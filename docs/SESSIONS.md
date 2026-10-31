@@ -20,7 +20,9 @@ Start: "Go". Tier 1 docs read; Decisions 335 to 339 and ARCHITECTURE headings re
 - Owner reported DP170 working. Owner approved Decision 342's open item: Phase 49, Decision 345.
 - Decision 345: optional map provider. `mapprov.js`, `mapprov.css`; gear in the Home Location title (provider dialog); Show map in a Home location's detail (9 tiles, pin, zoom). Tile math and URL building tested apart from the page; `vite build` passes; not run through CI; not device-tested (DP174). Network rule in ARCHITECTURE updated: a third tap-started call, off until a provider is set.
 - Not built: a computed position from the provider (a location API that returns coordinates); the Vault never uses a provider.
-- Next-session start: confirm the `main` build is green, then DP174 on device.
+- Owner reported the map working (DP174). Decision 346: the map replaces the grid plot in the detail view; pinch zoom (3 to 19) replaces the buttons; zoom and scale label bottom left; viewed tiles saved with the location (`maptiles.js`, table `location_tiles`, 150 per location) and shown with no network; Delete all saved maps in the provider dialog; deletes cascade on permanent delete and backup overwrite. Tile storage rules tested on a mock database; `vite build` passes; not run through CI; not device-tested (DP175).
+- Gaps: saved tiles are not in backups (a restored location needs a provider to show its map again); saved tiles may be restricted by a provider's terms; one finger does not scroll over the map (pinch only, no pan).
+- Next-session start: confirm the `main` build is green, then DP175 on device.
 
 ---
 
