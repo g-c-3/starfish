@@ -1084,3 +1084,9 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Two independent automatic backups, phone and Drive, each with a frequency (daily, weekly, monthly) and a time of day; meta keys `auto_phone_*` and `auto_backup_*` (enabled, frequency, time). `autoschedule.js` decides when one is due: the next occurrence of the time after the last backup, plus 6 days for weekly and 29 for monthly; due at once when there has been none. The last time is `credentials.last_backup_at` (any backup to the phone, manual too) and `last_drive_backup_at`.
 - They run when the app is open and a banner asks the backup passkey once for every target due; the passkey is never stored. Enabling, changing the schedule and running from the banner need the access check of Decisions 202 and 271.
 
+## Category search and Make a PDF rules (Decision 351)
+- Search icon in each Home and Vault category title opens one field under it (`#folder-find`, `#vault-folder-find`); state is `folderFind` in `app.js`, cleared when a category opens or the field closes. No stored value, no call.
+- `folderfind.js`: `parseFind` splits a term into years, months and words; `dateMatches` tests the saved date; `nameMatches` tests name and tags. Home filters the rows of the open category after `showMainTimeline` (limit raised to 5000 while a term is typed) and adds text hits from `searchEntries`. Vault filters the in-memory index and adds `searchVaultBodies` hits; the Vault never leaves memory.
+- Make a PDF: `pdfKind(type, extension)` returns `img`, `pdf` or null; `paintSelection` hides the button unless every selected row is Gallery, PDF or Files, and enables it for two or more of one kind. Rows carry `data-ext`; Gallery tiles carry `data-type` and `data-ext`.
+- Row time: `formatSavedDate` (day, month, year, time with seconds).
+

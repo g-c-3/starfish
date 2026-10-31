@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 162**
+
+Start: "Go". Tier 1 docs read; Decision 350 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).
+- DP177 item 7 run in code against `dategroup.js`: the calendar cases hold. Owner screenshots: a row saved earlier and edited on 1 Nov sits under "Last Month" with a 1 Nov time. Cause: the separator and the sort use the saved date, the row shows the last change (Decision 306). Not changed; recorded in Decision 351 as an open choice.
+- Decision 351: Make a PDF only in Gallery, PDF and Files and only for two or more of one kind (video disables; Files by extension); row time with year and seconds in every category; search icon in every Home and Vault category title with year and month as tags on the saved date, plus name, tags and text.
+- Files: `src/js/folderfind.js` (new), `src/css/folderfind.css` (new), `src/js/app.js`, docs. `vite build` passes; parsing, date matching and the PDF rule tested apart from the page; not run through CI; nothing device-tested (DP178).
+- Risks: Gallery tiles and rows gained data attributes the selection reads; the search field sits between the title and the lists in two screens; Vault text matches arrive after the name matches.
+- Decisions 351 recorded. DP178 added; Phase 51 added.
+- Next session start point: owner runs DP176, DP177 and DP178 and reports; check the `main` build is green; fix what fails first. Open choices: the separator date versus the row's last-change time; Vault lists run oldest first; the "Last Week" header twice across a month boundary.
+
+---
+
 **Session 161**
 
 Start: "Go". Tier 1 docs read; Decisions 345, 346 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).

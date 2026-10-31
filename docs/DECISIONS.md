@@ -3622,3 +3622,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Labels are worked out each time a list is drawn and when the app reopens; there is no timer. No call, no stored value.
 - Files: `src/js/dategroup.js` (new), `src/css/dategroup.css` (new), `src/js/app.js`, `docs/ARCHITECTURE.md`. `vite build` passes; the labels tested apart from the page against the owner's calendar examples and the weeks that straddle two months; not run through CI, not device-tested (DP177).
 - Risks: when last week straddles two months the header "Last Week" shows twice with different joined labels; a Vault list that is not strictly in date order repeats a header.
+
+**351. Make a PDF rules, full saved date, search inside a category.** Owner request.
+- Make a PDF (Decision 168) shows only in Gallery, PDF and Files (a selection that holds any other type hides the button). It is enabled only with two or more selected items of one kind: pictures (a video disables it), or PDFs. In Files a row counts by its extension: pdf, or jpg, jpeg, jfif, png, gif, webp, bmp, avif. Pictures and PDFs mixed are not combined. One picture alone no longer makes a PDF. `runMakePdf` checks the same rule again on the loaded rows.
+- Rows carry `data-ext`, and Gallery tiles `data-type` and `data-ext`, so the rule reads the screen only.
+- A row's time (the last change, Decision 306) is written with year and seconds, in every category, Vault and Search included: `formatSavedDate`. Reminder times and Money dates are not changed.
+- The separator (Decision 350) and the sort use the saved date; the row shows the last change. An item saved earlier and edited today sits under its saved date's label with today's time. Not changed; awaiting the owner's choice.
+- Search icon in the title of every Home and Vault category (`.title-search`, after the Gallery and Voice buttons). It opens a field under the title; the icon closes it and clears the term. Opening another category clears it. The field filters the open category only.
+- Terms: a year (1900 to 2099) and a month (full name, three letters, `sept`) are tags on the saved date; several years or several months are alternatives, and a year with a month must both hold. Every other word must be found in the name or the tags. A word that is not a date also matches inside the text (Home: `searchEntries`, limit 5000; Vault: `searchVaultBodies`, decrypted in memory, added when it finishes). A typed month name is always a month, never a name word. Two-letter words are words.
+- Home reads up to 5000 rows of the category while a term is typed (200 otherwise). Money summary and counts are not filtered. An empty result reads "No matches".
+- Files: `src/js/folderfind.js` (new), `src/css/folderfind.css` (new), `src/js/app.js`, `docs/ARCHITECTURE.md`. `vite build` passes; parsing, date matching and the Make a PDF rule tested apart from the page; not run through CI, not device-tested (DP178).
+- Risks: the Vault text search runs after the name matches; a Files row without an extension never enables Make a PDF.
+
