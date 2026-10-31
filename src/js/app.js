@@ -38,6 +38,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProviders, renderMap } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
+import { groupedHtml } from './dategroup.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -2816,9 +2817,9 @@ function loadThumbsInto(container, items, isVault) {
   }, { rootMargin: '200px' });
   container.querySelectorAll('.thumb-tile, .row-thumb').forEach((t) => thumbObserver.observe(t));
 }
-function thumbGridHtml(items, cols = DEFAULT_COLS) {
+function thumbGridHtml(items, cols = DEFAULT_COLS, dateOf = null) {
   const dense = cols >= 7 ? 2 : cols >= 5 ? 1 : 0;
-  return `<div class="thumb-grid" style="--cols:${cols}" data-cols="${cols}" data-dense="${dense}">${items.map((i) => `<button type="button" class="thumb-tile${isVideoExt(i.extension) ? ' is-video' : ''}" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg(isVideoExt(i.extension) ? 'play' : 'image')}</button>`).join('')}</div>`;
+  return `<div class="thumb-grid" style="--cols:${cols}" data-cols="${cols}" data-dense="${dense}">${groupedHtml(items, dateOf, (i) => `<button type="button" class="thumb-tile${isVideoExt(i.extension) ? ' is-video' : ''}" data-id="${escapeHtml(i.id)}" aria-label="${escapeHtml(i.label)}">${iconSvg(isVideoExt(i.extension) ? 'play' : 'image')}</button>`)}</div>`;
 }
 
 // Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
@@ -3665,7 +3666,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rows = browse(trashRows, { ...trashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
     document.getElementById('trash-toolbar').innerHTML = trashRows.length
       ? toolbarHtml({ types, total: trashRows.length, type: trashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: trashState.sort, periods: PERIODS, period: trashState.period }) : '';
-    document.getElementById('trash-list').innerHTML = rows.map((row) => {
+    const tDated = trashState.sort === 'new' || trashState.sort === 'old'; // separators only while the list runs by date (Decision 350)
+    document.getElementById('trash-list').innerHTML = groupedHtml(rows, tDated ? (r) => r.deleted_at : null, (row) => {
       const left = Math.max(0, Math.ceil((row.deleted_at + TRASH_KEEP_MS - Date.now()) / 86400000));
       const when = new Date(row.deleted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
       return `
@@ -3680,7 +3682,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="icon-btn trash-purge-btn warning-text" data-id="${escapeHtml(row.id)}" aria-label="Delete permanently" title="Delete permanently">${iconSvg('trash')}</button>
         </span>
       </div>`;
-    }).join('') || (trashRows.length
+    }) || (trashRows.length
       ? emptyStateHtml('search')
       : `<div class="empty-state">${iconSvg('trash')}<strong>Trash is empty</strong><span>Deleted items wait here for 30 days.</span></div>`);
   }
@@ -3957,7 +3959,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items) {
-    return items.map((e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')).join('') || emptyStateHtml('folder');
+    return groupedHtml(items, (e) => e.createdAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml('folder');
   }
 
   function renderVaultCounts() {
@@ -4157,7 +4159,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rows = browse(vaultTrashRows, { ...vaultTrashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
     document.getElementById('vault-trash-toolbar').innerHTML = vaultTrashRows.length
       ? toolbarHtml({ types, total: vaultTrashRows.length, type: vaultTrashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: vaultTrashState.sort, periods: PERIODS, period: vaultTrashState.period }) : '';
-    document.getElementById('vault-trash-list').innerHTML = rows.map((row) => {
+    const vtDated = vaultTrashState.sort === 'new' || vaultTrashState.sort === 'old';
+    document.getElementById('vault-trash-list').innerHTML = groupedHtml(rows, vtDated ? (r) => r.deleted_at : null, (row) => {
       const left = Math.max(0, Math.ceil((row.deleted_at + TRASH_KEEP_MS - Date.now()) / 86400000));
       const when = new Date(row.deleted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
       return `
@@ -4172,7 +4175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button class="icon-btn vtrash-purge-btn warning-text" data-id="${escapeHtml(row.id)}" aria-label="Delete permanently" title="Delete permanently">${iconSvg('trash')}</button>
         </span>
       </div>`;
-    }).join('') || (vaultTrashRows.length
+    }) || (vaultTrashRows.length
       ? emptyStateHtml('search')
       : `<div class="empty-state">${iconSvg('trash')}<strong>Vault Trash is empty</strong><span>Deleted Vault items wait here for 30 days.</span></div>`);
   }
@@ -4999,9 +5002,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderGallery(document.getElementById('folder-list'), rows, false, renderMainTimeline);
       return;
     }
-    document.getElementById('folder-list').innerHTML = rows.map((row) => entryRowHtml({
+    document.getElementById('folder-list').innerHTML = groupedHtml(rows, (r) => r.created_at, (row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
-    }, 'main')).join('') || emptyStateHtml('folder');
+    }, 'main')) || emptyStateHtml('folder');
     if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -6130,9 +6133,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   function renderGallery(box, items, isVault, reopen) {
     const list = galleryView === 'list';
+    const dateOf = isVault ? (i) => i.createdAt : (i) => i.created_at; // soft date separators (Decision 350)
     box.innerHTML = !items.length ? emptyStateHtml('folder')
-      : list ? items.map((i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) })).join('')
-      : thumbGridHtml(items, galleryCols);
+      : list ? groupedHtml(items, dateOf, (i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) }))
+      : thumbGridHtml(items, galleryCols, dateOf);
     box.querySelectorAll(list ? '.entry-row' : '.thumb-tile').forEach((t) => t.addEventListener('click', async () => {
       await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), isVault);
       await reopen();
@@ -6608,9 +6612,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? toolbarHtml({ types, total: searchRows.length, type: searchState.type, labelOf: typeLabelFor, sorts: SEARCH_SORTS, sort: searchState.sort, periods: PERIODS, period: searchState.period }) : '';
     const rows = browse(searchRows, { ...searchState, dateOf: sDate, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
     const inVault = searchMode === 'vault';
-    timeline.innerHTML = rows.map((row) => entryRowHtml(inVault ? vaultRowProps(row) : {
+    const dated = searchState.sort === 'new' || searchState.sort === 'old'; // separators only while the list runs by date (Decision 350)
+    timeline.innerHTML = groupedHtml(rows, dated ? sDate : null, (row) => entryRowHtml(inVault ? vaultRowProps(row) : {
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, ...rowMeta(row)
-    })).join('') || emptyStateHtml('search');
+    })) || emptyStateHtml('search');
     timeline.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async () => {
       await openEntry(r.dataset.id, inVault, rows.find((x) => x.id === r.dataset.id));
       if (inVault && privateSessionKey) renderVault();
