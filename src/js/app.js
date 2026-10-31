@@ -5920,6 +5920,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="row-icon">${iconSvg('location')}</span>
             <div class="hero-when hero-coords">${has ? escapeHtml(coords) : 'No coordinates saved'}</div>
             <div class="hero-sub" id="lv-note">${has ? 'Grid plot, 30° lines. No map data is stored.' : escapeHtml(row.label)}</div>
+            ${has && !isVault ? '<div class="hero-sub hidden" id="lv-zoom"></div>' : ''}
             ${has ? `<div id="lv-plot-host">${locationPlotSvg(row.latitude, row.longitude)}</div>` : ''}
           </div>
           ${has && !isVault ? '<div id="lv-map-wrap" class="lv-map-wrap hidden"><div id="lv-map-host"></div></div>' : ''}
@@ -5928,13 +5929,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${has ? `<div><dt>Decimal</dt><dd>${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}</dd></div>` : ''}
             ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
-            <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(row.created_at))}</dd></div>
+            <div><dt>Saved</dt><dd>${escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '')}</dd></div>
           </dl>
           ${has ? `<div class="detail-actions">
             <button id="lv-maps-btn">Open in Maps</button>
             <button id="lv-copy-btn" class="secondary-btn">Copy</button>
           </div>
-          ${isVault ? '' : '<div class="detail-actions"><button id="lv-map-btn" class="secondary-btn">Show map</button></div>'}` : ''}`;
+          ${isVault ? '' : '<div class="detail-actions lv-actions2"><button id="lv-map-btn" class="secondary-btn">Show map</button></div>'}` : ''}`;
         if (!has) return;
         // Optional map (Decisions 345, 346): replaces the grid plot in place. Saved tiles show with no network, on open; the provider is asked
         // only after a tap, for the tiles in view, and Home only.
@@ -5944,13 +5945,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const wrap = document.getElementById('lv-map-wrap');
           const host = document.getElementById('lv-map-host');
           const note = document.getElementById('lv-note');
+          const zoomEl = document.getElementById('lv-zoom');
           const prov = await loadProvider(metaGet);
           let ctl = null;
           const open = (online) => {
             plotHost.classList.add('hidden'); // the map takes the plot's place, outside the card and edge to edge (Decision 347)
             wrap.classList.remove('hidden');
             host.innerHTML = '';
-            ctl = renderMap(host, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: prov, online });
+            ctl = renderMap(host, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: prov, online, onZoom: (t) => { zoomEl.textContent = t; zoomEl.classList.remove('hidden'); } });
             note.textContent = online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
           };
           if (await hasTiles(db, row.id, row.latitude, row.longitude).catch(() => false)) {

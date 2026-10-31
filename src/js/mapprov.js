@@ -105,20 +105,19 @@ async function fetchDataUrl(url) {
   return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(blob); });
 }
 
-// Fills `host` (a box sized by CSS) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
+// Fills `host` (a box sized by CSS; the zoom text goes to onZoom) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
 // Tiles come from the saved copy first; the provider is asked only while `online` is true (after the person's tap); each tile fetched
 // is saved with the location. Returns { goOnline(provider) }.
-export function renderMap(host, { lat, lng }, { db, entryId, provider, online }) {
+export function renderMap(host, { lat, lng }, { db, entryId, provider, online, onZoom }) {
   const st = { zf: START_Z, provider: provider || null, online: !!online, noStore: false, builtZ: null, token: 0 };
   host.textContent = '';
   host.classList.add('mp-host');
   const mosaic = document.createElement('div'); mosaic.className = 'mp-mosaic';
   const pin = document.createElement('div'); pin.className = 'mp-pin';
-  const label = document.createElement('div'); label.className = 'mp-label';
-  host.append(mosaic, pin, label);
+  host.append(mosaic, pin);
 
   function paintLabel() {
-    label.textContent = `Zoom ${st.zf.toFixed(1)}${st.online ? '' : ' · saved'}${st.noStore ? ' · not saved' : ''}`;
+    if (onZoom) onZoom(`Current zoom: ${st.zf.toFixed(1)}${st.noStore ? ' · not saved' : ''}`); // shown by the caller, outside the map
   }
 
   async function loadTile(img, z, tx, ty, token) {
