@@ -127,6 +127,12 @@ jobs:
       - name: Add the display cutout bridge (native)
         run: node scripts/patch-cutout.js
 
+      # Decision 340 — window.ArklyLocation: the phone's "turn on location" dialog for Location capture. Copies the bridge, registers it
+      # in onCreate() and adds the Play services location library to build.gradle. Needs the onCreate() that patch-screenlock.js
+      # guarantees. No permission.
+      - name: Add the location switch bridge (native)
+        run: node scripts/patch-location.js
+
       - name: Set version code/name for this build
         run: node scripts/patch-version.js
         env:
