@@ -13,7 +13,10 @@ Start: "Go". Tier 1 docs read; Decisions 335 to 339 and ARCHITECTURE headings re
 - `app.js`: sheet wired into Home and Vault Location capture, lock and Back close it; `widget.js`: the location dialog before the quick-capture fix. `vite build` passes; patch script idempotent on a stand-in `MainActivity.java`/`build.gradle`; Java not compiled here; not run through CI; nothing device-tested (DP172).
 - Decision 342: location provider setting, a map or map tiles: not built. Each would be a third network call and a stored credential; awaiting the owner's decision.
 - Risks: first CI run compiles the Java (`androidx.activity`, Play services classes on the app's classpath); the activity-result launcher is registered in `onCreate()`; the system dialog pausing the page against the app lock (`beginPickerLaunch` is called first); watch timeout and error callbacks on the plugin untested.
-- Next-session start: confirm the `main` build is green, then DP172 on device.
+- Owner reported Phase 48 working on device (DP172). Two follow-ups:
+- Decision 343: the accuracy at the tap is prefilled as the Save dialog's description, "Accurate to N meters"; editable.
+- Decision 344: slow fixes outdoors. Cause: the plugin's watch request has a fixed 10 s interval and delays delivery by the `timeout` option, which the sheet set to 60 s. Fix: `scripts/patch-geolocation.js` (CI step) sets the interval to 1 s; the sheet passes `timeout` 1000 and `minimumUpdateInterval` 1000, and adds a high accuracy one-shot request beside the coarse one and the watch. Why correct: fixes are no longer held back; a cold GPS start still takes its own time. `vite build` passes; patch idempotent on a copy of the plugin file; not run through CI.
+- Next-session start: confirm the `main` build is green, then DP173 on device.
 
 ---
 

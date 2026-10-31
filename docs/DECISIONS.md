@@ -3561,3 +3561,14 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 **342. Location provider setting, a map and map tiles: not built.** Owner request: a settings icon in the Location title bar for a location service of the person's choice, and an in-app map.
 - Each is a network call beyond the two Decision 1 allows (the update check on tap; the optional Drive backup) and a stored key or credential. A map that loads tiles was already dropped for that reason (Decision 262).
 - Not in the code. The phone's own service (GPS, Wi-Fi, mobile network, as the system combines them) is what Decision 341 uses, with no call from the app. Needs the owner's explicit approval and a decision of its own before any work.
+
+**343. The accuracy at the tap goes in the description.** Save current location prefills the Save dialog's description with "Accurate to N meters" (kilometers from 1000), the figure the sheet showed at Use this location (Decision 341).
+- Editable: the person can change or clear it; what the dialog returns is saved. Same in the Vault (encrypted description, Decision 142). Pasted coordinates are unchanged.
+- No schema change; the description is the existing field.
+- Files: `src/js/locfix.js` (exports `accWords`), `src/js/app.js`. `vite build` passes; not run through CI, not device-tested (DP173).
+
+**344. One fix per second for the live sheet.** Cause: outdoors with a clear sky the sheet took minutes to improve ("updated 127 s ago"). The plugin builds its watch request with a fixed 10 s interval and holds deliveries for up to the `timeout` option; Decision 341's sheet passed 60 s.
+- Fix: `scripts/patch-geolocation.js` (CI step after the voice patch) sets the plugin's interval to 1 s in `node_modules`; the sheet's watch passes `timeout: 1000` and `minimumUpdateInterval: 1000`. A high accuracy one-shot request runs beside the coarse one and the watch; the first fix to arrive shows, the rest refine (`fuse`, Decision 341).
+- Same pattern as Decisions 281 and 102: a plugin source patch, idempotent, fails loudly if the plugin line changes.
+- Limit: a cold GPS start outdoors still takes its own time; the patch removes the app's delay only.
+- Files: `scripts/patch-geolocation.js`, `.github/workflows/build-android.yml`, `src/js/locfix.js`. `vite build` passes; patch idempotent on a copy of the plugin file; not run through CI, not device-tested (DP173).
