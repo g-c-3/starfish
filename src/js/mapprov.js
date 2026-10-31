@@ -1,4 +1,4 @@
-// mapprov.js — optional map provider for saved Location entries (Decisions 345, 346). Off until the person sets one.
+// mapprov.js — optional map providers (up to two) for saved Location entries (Decisions 345, 346, 348). Off until the person sets one.
 // The only code that fetches map data. It fetches only after a tap of Show map (or Load more detail) in a Home location's detail,
 // never on open and never in the background, and only the tiles in view. The provider sees those tile numbers (roughly the place) and
 // the phone's address. Tiles viewed are saved with the location (maptiles.js) and shown later with no network. The template and key
@@ -6,7 +6,8 @@
 import '../css/mapprov.css';
 import { cachedTile, storeTile, clearAllTiles, countTiles } from './maptiles.js';
 
-const K_TPL = 'map_provider_template', K_KEY = 'map_provider_key';
+// Slot 1 keeps the original keys. Slot 2 is optional. Neither is in any backup.
+const KEYS = [{ tpl: 'map_provider_template', key: 'map_provider_key' }, { tpl: 'map_provider2_template', key: 'map_provider2_key' }];
 const TILE = 256, MIN_Z = 3, MAX_Z = 19, START_Z = 16;
 
 // Prefill only. Templates and sign-up pages change; the person checks the provider's own documentation.
@@ -18,10 +19,15 @@ const PRESETS = [
   { id: 'mapbox', name: 'Mapbox', site: 'mapbox.com', where: 'Account > Tokens (public token)', tpl: 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token={key}' },
 ];
 
-export async function loadProvider(metaGet) {
-  const tpl = (await metaGet(K_TPL, '')) || '';
-  const key = (await metaGet(K_KEY, '')) || '';
-  return tpl ? { tpl, key } : null;
+// The providers that are set, in slot order: [{ slot, tpl, key }].
+export async function loadProviders(metaGet) {
+  const out = [];
+  for (let i = 0; i < KEYS.length; i++) {
+    const tpl = (await metaGet(KEYS[i].tpl, '')) || '';
+    const key = (await metaGet(KEYS[i].key, '')) || '';
+    if (tpl) out.push({ slot: i + 1, tpl, key });
+  }
+  return out;
 }
 
 export function validateTemplate(tpl, key) {
@@ -41,37 +47,47 @@ export function tilePos(lat, lng, z) {
   return { x: ((lng + 180) / 360) * n, y: ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n };
 }
 
-// Provider dialog. register({ finish }) / register(null) lets a lock or Back close it. Resolves true when saved or removed.
+// Provider dialog: two providers, the second optional. register({ finish }) / register(null) lets a lock or Back close it.
+// Resolves true when saved or removed.
 export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
   return new Promise(async (resolve) => {
-    const cur = await loadProvider(metaGet);
+    const cur = await loadProviders(metaGet);
     const el = document.createElement('div');
     el.id = 'map-provider-dialog';
     el.className = 'modal-overlay';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
-    el.innerHTML = `<div class="modal-box mp-box">
-      <h3>Map provider</h3>
-      <p class="mp-note">Optional, off by default. Arkly uses it only when you tap Show map on a saved location. Each tap asks the provider you choose for the tiles in view, so that provider sees the tile numbers (about where the place is) and your phone’s address. Tiles you view are saved on this phone with that location, so its map shows later with no provider and no connection; check your provider’s terms on saving tiles. Saved maps and the key are not in a backup. Vault locations never use a provider.</p>
+    const section = (n) => `<section class="mp-sec">
+      <h4 class="mp-h">${n === 1 ? 'Provider 1' : 'Provider 2 (optional)'}</h4>
       <label class="mp-l">Provider<select class="mp-preset"><option value="">Custom</option>${PRESETS.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select></label>
       <p class="mp-reg"></p>
-      <label class="mp-l">Tile URL template<input type="url" class="mp-tpl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png?key={key}"></label>
+      <label class="mp-l">Tile URL template<input type="url" class="mp-tpl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${n === 1 ? 'https://…/{z}/{x}/{y}.png?key={key}' : 'Leave empty for none'}"></label>
       <label class="mp-l">Key<input type="password" class="mp-key" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Only if the template has {key}"></label>
+    </section>`;
+    el.innerHTML = `<div class="modal-box mp-box">
+      <h3>Map providers</h3>
+      <p class="mp-note">Optional, off by default. Arkly uses a provider only when you tap Show map on a saved location. Each tap asks the provider you choose for the tiles in view, so that provider sees the tile numbers (about where the place is) and your phone’s address. Tiles you view are saved on this phone with that location, so its map shows later with no provider and no connection; check your provider’s terms on saving tiles. A second provider is optional; each keeps its own saved tiles. Saved maps and the keys are not in a backup. Vault locations never use a provider.</p>
+      ${section(1)}${section(2)}
       <p class="mp-err" aria-live="polite"></p>
       <button type="button" class="mp-save">Save</button>
-      <button type="button" class="secondary-btn mp-remove">Remove provider</button>
+      <button type="button" class="secondary-btn mp-remove">Remove all providers</button>
       <button type="button" class="secondary-btn mp-clear">Delete all saved maps</button>
       <button type="button" class="secondary-btn mp-cancel">Cancel</button>
     </div>`;
     const q = (s) => el.querySelector(s);
-    const preset = q('.mp-preset'), reg = q('.mp-reg'), tplEl = q('.mp-tpl'), keyEl = q('.mp-key'), err = q('.mp-err');
-    if (cur) { tplEl.value = cur.tpl; keyEl.value = cur.key; const m = PRESETS.find((p) => p.tpl === cur.tpl); if (m) preset.value = m.id; }
-    const paintReg = () => {
-      const p = PRESETS.find((x) => x.id === preset.value);
-      reg.textContent = p ? `Register at ${p.site} (free plan available; check its current terms). Key: ${p.where}. Then paste the key below.` : 'Any provider that serves 256 px image tiles by {z}/{x}/{y} works. Register with it, create a key and paste its tile URL.';
-    };
-    preset.onchange = () => { const p = PRESETS.find((x) => x.id === preset.value); if (p) tplEl.value = p.tpl; paintReg(); };
-    paintReg();
+    const err = q('.mp-err');
+    const secs = [...el.querySelectorAll('.mp-sec')].map((s, i) => {
+      const o = { preset: s.querySelector('.mp-preset'), reg: s.querySelector('.mp-reg'), tpl: s.querySelector('.mp-tpl'), key: s.querySelector('.mp-key') };
+      const c = cur.find((p) => p.slot === i + 1);
+      if (c) { o.tpl.value = c.tpl; o.key.value = c.key; const m = PRESETS.find((p) => p.tpl === c.tpl); if (m) o.preset.value = m.id; }
+      const paintReg = () => {
+        const p = PRESETS.find((x) => x.id === o.preset.value);
+        o.reg.textContent = p ? `Register at ${p.site} (free plan available; check its current terms). Key: ${p.where}. Then paste the key below.` : 'Any provider that serves 256 px image tiles by {z}/{x}/{y} works. Register with it, create a key and paste its tile URL.';
+      };
+      o.preset.onchange = () => { const p = PRESETS.find((x) => x.id === o.preset.value); if (p) o.tpl.value = p.tpl; paintReg(); };
+      paintReg();
+      return o;
+    });
     let done = false;
     const finish = (v) => { if (done) return; done = true; el.remove(); if (register) register(null); resolve(v); };
     q('.mp-cancel').onclick = () => finish(false);
@@ -83,13 +99,19 @@ export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
       try { await clearAllTiles(db); toast('Saved maps deleted'); clr.disabled = true; } catch { toast('Could not delete saved maps'); }
       armed = false; clr.textContent = 'Delete all saved maps';
     };
-    q('.mp-remove').onclick = async () => { await metaSet(K_TPL, ''); await metaSet(K_KEY, ''); toast('Map provider removed'); finish(true); };
+    q('.mp-remove').onclick = async () => {
+      for (const k of KEYS) { await metaSet(k.tpl, ''); await metaSet(k.key, ''); }
+      toast('Map providers removed'); finish(true);
+    };
     q('.mp-save').onclick = async () => {
-      const tpl = tplEl.value.trim(), key = keyEl.value.trim();
-      const bad = validateTemplate(tpl, key);
-      if (bad) { err.textContent = bad; return; }
-      await metaSet(K_TPL, tpl); await metaSet(K_KEY, key);
-      toast('Map provider saved');
+      const v = secs.map((o) => ({ tpl: o.tpl.value.trim(), key: o.key.value.trim() }));
+      let bad = validateTemplate(v[0].tpl, v[0].key);
+      if (bad) { err.textContent = `Provider 1: ${bad}`; return; }
+      const two = !!(v[1].tpl || v[1].key); // empty second provider = none
+      if (two) { bad = validateTemplate(v[1].tpl, v[1].key); if (bad) { err.textContent = `Provider 2: ${bad}`; return; } }
+      await metaSet(KEYS[0].tpl, v[0].tpl); await metaSet(KEYS[0].key, v[0].key);
+      await metaSet(KEYS[1].tpl, two ? v[1].tpl : ''); await metaSet(KEYS[1].key, two ? v[1].key : '');
+      toast(two ? 'Map providers saved' : 'Map provider saved');
       finish(true);
     };
     if (register) register({ finish: () => finish(false) });
@@ -107,8 +129,8 @@ async function fetchDataUrl(url) {
 
 // Fills `host` (a box sized by CSS; the zoom text goes to onZoom) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
 // Tiles come from the saved copy first; the provider is asked only while `online` is true (after the person's tap); each tile fetched
-// is saved with the location. Returns { goOnline(provider) }.
-export function renderMap(host, { lat, lng }, { db, entryId, provider, online, onZoom }) {
+// is saved with the location, in the table of `slot` (1 or 2, one per provider). Returns { goOnline(provider) }.
+export function renderMap(host, { lat, lng }, { db, entryId, provider, online, onZoom, slot = 1 }) {
   const st = { zf: START_Z, provider: provider || null, online: !!online, noStore: false, builtZ: null, token: 0 };
   host.textContent = '';
   host.classList.add('mp-host');
@@ -121,13 +143,13 @@ export function renderMap(host, { lat, lng }, { db, entryId, provider, online, o
   }
 
   async function loadTile(img, z, tx, ty, token) {
-    const c = await cachedTile(db, entryId, z, tx, ty).catch(() => null);
+    const c = await cachedTile(db, entryId, z, tx, ty, slot).catch(() => null);
     if (c) { if (token === st.token) img.src = c; return; }
     if (!st.online || !st.provider) { img.classList.add('mp-blank'); return; }
     const url = tileUrl(st.provider.tpl, st.provider.key, z, tx, ty);
     try {
       const data = await fetchDataUrl(url);
-      await storeTile(db, entryId, lat, lng, z, tx, ty, data);
+      await storeTile(db, entryId, lat, lng, z, tx, ty, data, slot);
       if (token === st.token) img.src = data;
     } catch (e) {
       if (token !== st.token) return;

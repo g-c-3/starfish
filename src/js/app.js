@@ -36,7 +36,7 @@ import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
-import { openProviderDialog, loadProvider, renderMap } from './mapprov.js';
+import { openProviderDialog, loadProviders, renderMap } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
@@ -5913,6 +5913,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
         const has = row.latitude != null && row.longitude != null;
         const coords = has ? formatCoords(row.latitude, row.longitude) : '';
+        const provs = has && !isVault ? await loadProviders(metaGet) : []; // the providers that are set (Decision 348)
         // The default name is "Location" plus the time; the Saved row already shows it. A name the person chose stays, as a row (Decision 347).
         const customLabel = row.label && !/^Location \d{1,2}[:.]\d{2}([:.]\d{2})?(\s?[ap]\.?m\.?)?$/i.test(row.label.trim()) ? row.label : '';
         body.innerHTML = `
@@ -5935,36 +5936,48 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="lv-maps-btn">Open in Maps</button>
             <button id="lv-copy-btn" class="secondary-btn">Copy</button>
           </div>
-          ${isVault ? '' : '<div class="detail-actions lv-actions2"><button id="lv-map-btn" class="secondary-btn">Show map</button></div>'}` : ''}`;
+          ${isVault ? '' : `<div class="detail-actions lv-actions2">${provs.length > 1 ? provs.map((p) => `<button id="lv-map-btn${p.slot}" class="secondary-btn">Show map ${p.slot}</button>`).join('') : '<button id="lv-map-btn" class="secondary-btn">Show map</button>'}</div>`}` : ''}`;
         if (!has) return;
-        // Optional map (Decisions 345, 346): replaces the grid plot in place. Saved tiles show with no network, on open; the provider is asked
-        // only after a tap, for the tiles in view, and Home only.
-        const mapBtn = document.getElementById('lv-map-btn');
-        if (mapBtn) {
+        // Optional maps (Decisions 345, 346, 348): the map replaces the grid plot in place. Saved tiles show with no network, on open; a provider
+        // is asked only after a tap, for the tiles in view, and Home only. Two providers: two buttons, each with its own saved tiles.
+        if (!isVault) {
           const plotHost = document.getElementById('lv-plot-host');
           const wrap = document.getElementById('lv-map-wrap');
-          const host = document.getElementById('lv-map-host');
           const note = document.getElementById('lv-note');
           const zoomEl = document.getElementById('lv-zoom');
-          const prov = await loadProvider(metaGet);
-          let ctl = null;
-          const open = (online) => {
+          const two = provs.length > 1;
+          const items = (two ? provs : [provs[0] || null]).map((p) => ({ slot: p ? p.slot : 1, prov: p, btn: document.getElementById(two ? `lv-map-btn${p.slot}` : 'lv-map-btn'), saved: false, online: false }));
+          let ctl = null, cur = null;
+          const noteFor = (it) => {
+            const base = it.online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
+            return two ? `Map ${it.slot}. ${base}` : base;
+          };
+          const paint = () => items.forEach((it) => {
+            if (!it.btn) return;
+            if (two) { it.btn.textContent = it.online ? `Showing map ${it.slot}` : it.saved ? `Load more detail ${it.slot}` : `Show map ${it.slot}`; it.btn.disabled = it.online; }
+            else { it.btn.textContent = it.saved ? 'Load more detail' : 'Show map'; it.btn.classList.toggle('hidden', it.online || (it.saved && !it.prov)); }
+          });
+          const show = (it, online) => {
             plotHost.classList.add('hidden'); // the map takes the plot's place, outside the card and edge to edge (Decision 347)
             wrap.classList.remove('hidden');
-            host.innerHTML = '';
-            ctl = renderMap(host, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: prov, online, onZoom: (t) => { zoomEl.textContent = t; zoomEl.classList.remove('hidden'); } });
-            note.textContent = online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
+            wrap.innerHTML = '<div id="lv-map-host"></div>'; // a fresh box per map: renderMap puts its pinch handlers on it
+            items.forEach((x) => { x.online = false; });
+            it.online = online; cur = it;
+            ctl = renderMap(wrap.firstChild, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: it.prov, online, slot: it.slot, onZoom: (t) => { zoomEl.textContent = t; zoomEl.classList.remove('hidden'); } });
+            note.textContent = noteFor(it);
+            paint();
           };
-          if (await hasTiles(db, row.id, row.latitude, row.longitude).catch(() => false)) {
-            open(false);
-            if (prov) mapBtn.textContent = 'Load more detail'; else mapBtn.classList.add('hidden');
-          }
-          mapBtn.onclick = () => {
-            if (!prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
-            if (ctl) ctl.goOnline(prov); else open(true);
-            mapBtn.classList.add('hidden');
-            note.textContent = 'Pinch to zoom. Tiles you view are saved with this location.';
-          };
+          for (const it of items) it.saved = await hasTiles(db, row.id, row.latitude, row.longitude, it.slot).catch(() => false);
+          const first = items.find((it) => it.saved);
+          if (first) show(first, false); else paint();
+          items.forEach((it) => {
+            if (!it.btn) return;
+            it.btn.onclick = () => {
+              if (!it.prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
+              if (cur === it && ctl) { ctl.goOnline(it.prov); it.online = true; note.textContent = noteFor(it); } else show(it, true);
+              it.saved = true; paint();
+            };
+          });
         }
         document.getElementById('lv-copy-btn').onclick = async () => {
           try { await navigator.clipboard.writeText(`${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`); toast('Coordinates copied'); }

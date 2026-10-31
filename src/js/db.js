@@ -137,6 +137,17 @@ CREATE TABLE IF NOT EXISTS location_tiles (
   data TEXT NOT NULL,
   PRIMARY KEY (entry_id, z, x, y)
 );
+-- Same shape, for the second map provider (Decision 348)
+CREATE TABLE IF NOT EXISTS location_tiles2 (
+  entry_id TEXT NOT NULL,
+  z INTEGER NOT NULL,
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  data TEXT NOT NULL,
+  PRIMARY KEY (entry_id, z, x, y)
+);
 
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
@@ -414,7 +425,8 @@ async function permanentlyDeleteEntry(db, id) {
   const row = ((await db.query(`SELECT file_path FROM entries WHERE id = ?`, [id])).values || [])[0];
   await db.run(`DELETE FROM entries_fts WHERE id = ?`, [id]);
   await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [id]); // explicit — see purgeOldTrash's own note
-  await db.run(`DELETE FROM location_tiles WHERE entry_id = ?`, [id]); // saved map tiles go with the location (Decision 346)
+  await db.run(`DELETE FROM location_tiles WHERE entry_id = ?`, [id]); // saved map tiles go with the location (Decisions 346, 348)
+  await db.run(`DELETE FROM location_tiles2 WHERE entry_id = ?`, [id]);
   await db.run(`DELETE FROM entries WHERE id = ?`, [id]);
   if (row?.file_path) { // the file goes with its entry (Decision 162); after the row, so a failed delete never orphans an entry
     try { const files = await import('./files.js'); files.initFiles(db); await files.removeFile(row); } catch { /* file already gone */ }
