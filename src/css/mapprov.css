@@ -11,4 +11,5 @@
 .mp-mosaic img { position: absolute; display: block; width: 256px; height: 256px; max-width: none; }
 .mp-mosaic img.mp-blank { background: var(--surface-2); }
 .mp-pin { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: rgb(var(--tc-rgb, 91 74 222)); border: 3px solid #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
-.mp-label { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.86); color: #1a1a2e; font-size: 11px; font-weight: 600; }
+
+.lv-actions2 { margin-top: 10px; } /* Show map / Load more detail clear of Open in Maps and Copy (Decision 347) */
