@@ -33,7 +33,7 @@ export async function ensureLocationServices({ beforeLaunch } = {}) {
 }
 
 const meters = (m) => (m < 1000 ? `${Math.max(1, Math.round(m))} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`);
-const accWords = (m) => (m < 1000 ? `${Math.max(1, Math.round(m))} ${Math.round(m) <= 1 ? 'meter' : 'meters'}` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`);
+export const accWords = (m) => (m < 1000 ? `${Math.max(1, Math.round(m))} ${Math.round(m) <= 1 ? 'meter' : 'meters'}` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`);
 const quality = (m) => (m <= 5 ? ['a', 'Precise'] : m <= 20 ? ['a', 'Good'] : m <= 100 ? ['b', 'Fair'] : m <= 1000 ? ['c', 'Rough'] : ['d', 'Approximate']);
 // Metres from a to b: east, north.
 const offset = (a, b) => ({ x: (b.lng - a.lng) * Math.cos((a.lat * Math.PI) / 180) * M_LNG, y: (b.lat - a.lat) * M_LAT });
@@ -185,8 +185,11 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
     document.body.appendChild(el);
     paint();
     // A quick coarse fix first (network or cached, under two minutes old), then the high accuracy stream refines it.
+    // Three sources at once: the first fix to arrive shows at once and the rest refine it (Decision 344).
     Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 }).then(onFix).catch(() => {});
-    Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 60000, maximumAge: 0 }, (pos, err) => { if (err) onErr(err); else onFix(pos); })
+    Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }).then(onFix).catch(() => {});
+    // timeout is the plugin's delivery delay on Android: 1 s means no batching (60 s held fixes back for a minute).
+    Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 1000, minimumUpdateInterval: 1000, maximumAge: 0 }, (pos, err) => { if (err) onErr(err); else onFix(pos); })
       .then((id) => { if (done) Geolocation.clearWatch({ id }).catch(() => {}); else watchId = id; })
       .catch(onErr);
   });

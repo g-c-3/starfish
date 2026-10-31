@@ -35,7 +35,7 @@ import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
-import { openLiveFix } from './locfix.js';
+import { openLiveFix, accWords } from './locfix.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -4671,7 +4671,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isVault && !privateSessionKey) return null; // the Vault locked during the fix
       draft.set('fix', { lat: fix.lat, lng: fix.lng }); // the fix counts as work to keep
       draft.mark();
-      const d = await openSaveDialog({ heading, defaultName: fallbackName, isVault, discardLabel: 'Discard', draft });
+      // The accuracy at the tap goes in as the description (Decision 343); the person can edit or clear it.
+      const d = await openSaveDialog({ heading, defaultName: fallbackName, description: `Accurate to ${accWords(fix.accuracy)}`, isVault, discardLabel: 'Discard', draft });
       return d ? { d, lat: fix.lat, lng: fix.lng } : null;
     }
     // Paste dialog, then the Save dialog. Backing out of the Save dialog returns to the paste dialog with the text kept.
