@@ -516,6 +516,7 @@ async function wipeCategories(db, categories, onStep) {
     if (full && preds.some((match) => match(full))) {
       await db.run(`DELETE FROM entries_fts WHERE id=?`, [row.id]);
       await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
+      await db.run(`DELETE FROM location_tiles WHERE entry_id=?`, [row.id]); // saved map tiles go with the location (Decision 346)
       await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
       await removeFile(full); // the file goes with its entry (Decision 162)
     }

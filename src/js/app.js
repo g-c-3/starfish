@@ -37,6 +37,7 @@ import { Preferences } from '@capacitor/preferences';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProvider, renderMap } from './mapprov.js';
+import { hasTiles } from './maptiles.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
@@ -5917,7 +5918,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="row-icon">${iconSvg('location')}</span>
             <div class="hero-when hero-coords">${has ? escapeHtml(coords) : 'No coordinates saved'}</div>
             <div class="hero-sub">${escapeHtml(row.label)}</div>
-            ${has ? locationPlotSvg(row.latitude, row.longitude) : ''}
+            ${has ? `<div id="lv-plot-host">${locationPlotSvg(row.latitude, row.longitude)}</div>` : ''}
             ${has ? '<div class="hero-note">Grid plot, 30° lines. No map data is stored.</div>' : ''}
           </div>
           <dl class="detail-list">
@@ -5930,16 +5931,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="lv-maps-btn">Open in Maps</button>
             <button id="lv-copy-btn" class="secondary-btn">Copy</button>
           </div>
-          ${isVault ? '' : '<div class="detail-actions"><button id="lv-map-btn" class="secondary-btn">Show map</button></div><div id="lv-map-box"></div>'}` : ''}`;
+          ${isVault ? '' : '<div class="detail-actions"><button id="lv-map-btn" class="secondary-btn">Show map</button></div>'}` : ''}`;
         if (!has) return;
-        // Optional map (Decision 345): only on a tap, only for a Home entry, only with a provider the person set.
+        // Optional map (Decisions 345, 346): replaces the grid plot in place. Saved tiles show with no network, on open; the provider is asked
+        // only after a tap, for the tiles in view, and Home only.
         const mapBtn = document.getElementById('lv-map-btn');
-        if (mapBtn) mapBtn.onclick = async () => {
+        if (mapBtn) {
+          const host = document.getElementById('lv-plot-host');
+          const note = body.querySelector('.hero-note');
           const prov = await loadProvider(metaGet);
-          if (!prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
-          mapBtn.classList.add('hidden');
-          renderMap(document.getElementById('lv-map-box'), { lat: row.latitude, lng: row.longitude }, prov);
-        };
+          let ctl = null;
+          const open = (online) => {
+            host.innerHTML = '';
+            ctl = renderMap(host, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: prov, online });
+            note.textContent = online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
+          };
+          if (await hasTiles(db, row.id, row.latitude, row.longitude).catch(() => false)) {
+            open(false);
+            if (prov) mapBtn.textContent = 'Load more detail'; else mapBtn.classList.add('hidden');
+          }
+          mapBtn.onclick = () => {
+            if (!prov) { toast('Set a map provider first: gear icon in the Location title'); return; }
+            if (ctl) ctl.goOnline(prov); else open(true);
+            mapBtn.classList.add('hidden');
+            note.textContent = 'Pinch to zoom. Tiles you view are saved with this location.';
+          };
+        }
         document.getElementById('lv-copy-btn').onclick = async () => {
           try { await navigator.clipboard.writeText(`${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}`); toast('Coordinates copied'); }
           catch { toast('Could not copy'); }
@@ -6096,7 +6113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Map provider (Decision 345): the gear in the Home Location title. Optional; nothing is fetched here.
   document.getElementById('folder-title').addEventListener('click', async (e) => {
     if (!e.target.closest('.loc-prov-btn') || activeLocProv) return;
-    await openProviderDialog({ metaGet, metaSet, toast, register: (h) => { activeLocProv = h; updateBackButtonState(); } });
+    await openProviderDialog({ db, metaGet, metaSet, toast, register: (h) => { activeLocProv = h; updateBackButtonState(); } });
     updateBackButtonState();
     armAppAutoLock();
   });

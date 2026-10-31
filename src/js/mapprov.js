@@ -1,11 +1,14 @@
-// mapprov.js — optional map provider for saved Location entries (Decision 345). Off until the person sets one.
-// The only code that fetches map data. It runs on a tap of Show map in a Home location's detail, never on open and never in the
-// background. Each tap requests 9 image tiles from the provider the person chose: the tile numbers (roughly the place) and the
-// phone's address reach that provider. The template and key live in the app's settings on this phone; neither is in any backup.
+// mapprov.js — optional map provider for saved Location entries (Decisions 345, 346). Off until the person sets one.
+// The only code that fetches map data. It fetches only after a tap of Show map (or Load more detail) in a Home location's detail,
+// never on open and never in the background, and only the tiles in view. The provider sees those tile numbers (roughly the place) and
+// the phone's address. Tiles viewed are saved with the location (maptiles.js) and shown later with no network. The template and key
+// live in the app's settings on this phone; neither is in any backup.
 import '../css/mapprov.css';
+import { cachedTile, storeTile, clearAllTiles, countTiles } from './maptiles.js';
 
 const K_TPL = 'map_provider_template', K_KEY = 'map_provider_key';
 const TILE = 256, MIN_Z = 3, MAX_Z = 19, START_Z = 16;
+const NICE = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000];
 
 // Prefill only. Templates and sign-up pages change; the person checks the provider's own documentation.
 const PRESETS = [
@@ -40,7 +43,7 @@ export function tilePos(lat, lng, z) {
 }
 
 // Provider dialog. register({ finish }) / register(null) lets a lock or Back close it. Resolves true when saved or removed.
-export function openProviderDialog({ metaGet, metaSet, toast, register }) {
+export function openProviderDialog({ metaGet, metaSet, toast, register, db }) {
   return new Promise(async (resolve) => {
     const cur = await loadProvider(metaGet);
     const el = document.createElement('div');
@@ -50,7 +53,7 @@ export function openProviderDialog({ metaGet, metaSet, toast, register }) {
     el.setAttribute('aria-modal', 'true');
     el.innerHTML = `<div class="modal-box mp-box">
       <h3>Map provider</h3>
-      <p class="mp-note">Optional, off by default. Arkly uses it only when you tap Show map on a saved location. Each tap asks the provider you choose for 9 map tiles, so that provider sees the tile numbers (about where the place is) and your phone’s address. The key stays on this phone and is never in a backup. Vault locations never use it.</p>
+      <p class="mp-note">Optional, off by default. Arkly uses it only when you tap Show map on a saved location. Each tap asks the provider you choose for the tiles in view, so that provider sees the tile numbers (about where the place is) and your phone’s address. Tiles you view are saved on this phone with that location, so its map shows later with no provider and no connection; check your provider’s terms on saving tiles. Saved maps and the key are not in a backup. Vault locations never use a provider.</p>
       <label class="mp-l">Provider<select class="mp-preset"><option value="">Custom</option>${PRESETS.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select></label>
       <p class="mp-reg"></p>
       <label class="mp-l">Tile URL template<input type="url" class="mp-tpl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png?key={key}"></label>
@@ -58,6 +61,7 @@ export function openProviderDialog({ metaGet, metaSet, toast, register }) {
       <p class="mp-err" aria-live="polite"></p>
       <button type="button" class="mp-save">Save</button>
       <button type="button" class="secondary-btn mp-remove">Remove provider</button>
+      <button type="button" class="secondary-btn mp-clear">Delete all saved maps</button>
       <button type="button" class="secondary-btn mp-cancel">Cancel</button>
     </div>`;
     const q = (s) => el.querySelector(s);
@@ -72,6 +76,14 @@ export function openProviderDialog({ metaGet, metaSet, toast, register }) {
     let done = false;
     const finish = (v) => { if (done) return; done = true; el.remove(); if (register) register(null); resolve(v); };
     q('.mp-cancel').onclick = () => finish(false);
+    const clr = q('.mp-clear');
+    let armed = false;
+    countTiles(db).then((n) => { if (!n) clr.disabled = true; }).catch(() => {});
+    clr.onclick = async () => {
+      if (!armed) { armed = true; clr.textContent = 'Tap again to delete all saved maps'; return; }
+      try { await clearAllTiles(db); toast('Saved maps deleted'); clr.disabled = true; } catch { toast('Could not delete saved maps'); }
+      armed = false; clr.textContent = 'Delete all saved maps';
+    };
     q('.mp-remove').onclick = async () => { await metaSet(K_TPL, ''); await metaSet(K_KEY, ''); toast('Map provider removed'); finish(true); };
     q('.mp-save').onclick = async () => {
       const tpl = tplEl.value.trim(), key = keyEl.value.trim();
@@ -86,54 +98,99 @@ export function openProviderDialog({ metaGet, metaSet, toast, register }) {
   });
 }
 
-// Draws a 3 x 3 tile mosaic centred on the point, with zoom buttons. Nothing is fetched until this is called.
-export function renderMap(box, { lat, lng }, provider) {
-  let z = START_Z;
-  box.textContent = '';
-  const view = document.createElement('div');
-  view.className = 'mp-view';
-  const mosaic = document.createElement('div');
-  mosaic.className = 'mp-mosaic';
-  const pin = document.createElement('div');
-  pin.className = 'mp-pin';
-  view.append(mosaic, pin);
-  const bar = document.createElement('div');
-  bar.className = 'mp-bar';
-  const minus = document.createElement('button'); minus.type = 'button'; minus.className = 'secondary-btn'; minus.textContent = '−'; minus.setAttribute('aria-label', 'Zoom out');
-  const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'secondary-btn'; plus.textContent = '+'; plus.setAttribute('aria-label', 'Zoom in');
-  const msg = document.createElement('span'); msg.className = 'mp-msg';
-  bar.append(minus, msg, plus);
-  const credit = document.createElement('div');
-  credit.className = 'mp-credit';
-  credit.textContent = 'Map data and tiles come from your provider; its attribution terms apply.';
-  box.append(view, bar, credit);
+async function fetchDataUrl(url) {
+  const res = await fetch(url, { referrerPolicy: 'no-referrer' });
+  if (!res.ok) throw new Error(`http ${res.status}`); // an error image (wrong key) is shown, never saved
+  const blob = await res.blob();
+  if (!/^image\//.test(blob.type)) throw new Error('not an image');
+  return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(blob); });
+}
 
-  function draw() {
-    const w = Math.min(box.clientWidth || 320, 2 * TILE - 8), h = 260;
-    view.style.width = `${w}px`; view.style.height = `${h}px`;
-    const n = 2 ** z, p = tilePos(lat, lng, z), ix = Math.floor(p.x), iy = Math.floor(p.y);
-    mosaic.textContent = '';
-    mosaic.style.left = `${w / 2 - (p.x - (ix - 1)) * TILE}px`;
-    mosaic.style.top = `${h / 2 - (p.y - (iy - 1)) * TILE}px`;
-    pin.style.left = `${w / 2}px`; pin.style.top = `${h / 2}px`;
-    let loaded = 0, failed = 0;
-    msg.textContent = `Zoom ${z}`;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const img = document.createElement('img');
-        img.width = TILE; img.height = TILE; img.alt = '';
-        img.referrerPolicy = 'no-referrer';
-        img.style.left = `${(dx + 1) * TILE}px`; img.style.top = `${(dy + 1) * TILE}px`;
-        img.onload = () => { loaded++; };
-        img.onerror = () => { failed++; if (failed === 9) msg.textContent = 'Tiles did not load. Check the template, key and connection.'; };
-        const tx = ((ix + dx) % n + n) % n, ty = iy + dy;
-        if (ty < 0 || ty >= n) { failed++; continue; }
-        img.src = tileUrl(provider.tpl, provider.key, z, tx, ty);
-        mosaic.appendChild(img);
-      }
+// Fills `host` (a box with the grid plot's 2:1 shape) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
+// Tiles come from the saved copy first; the provider is asked only while `online` is true (after the person's tap); each tile fetched
+// is saved with the location. Returns { goOnline(provider) }.
+export function renderMap(host, { lat, lng }, { db, entryId, provider, online }) {
+  const st = { zf: START_Z, provider: provider || null, online: !!online, noStore: false, builtZ: null, token: 0 };
+  host.textContent = '';
+  host.classList.add('mp-host');
+  const mosaic = document.createElement('div'); mosaic.className = 'mp-mosaic';
+  const pin = document.createElement('div'); pin.className = 'mp-pin';
+  const label = document.createElement('div'); label.className = 'mp-label';
+  const bar = document.createElement('i'); const txt = document.createElement('span');
+  label.append(bar, txt);
+  host.append(mosaic, pin, label);
+
+  function paintLabel() {
+    const mpp = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** st.zf; // metres per css pixel
+    let d = NICE[0];
+    for (const n of NICE) if (n / mpp <= 90) d = n;
+    bar.style.width = `${Math.max(8, Math.round(d / mpp))}px`;
+    txt.textContent = `Zoom ${st.zf.toFixed(1)} · ${d >= 1000 ? `${d / 1000} km` : `${d} m`}${st.online ? '' : ' · saved'}${st.noStore ? ' · not saved' : ''}`;
+  }
+
+  async function loadTile(img, z, tx, ty, token) {
+    const c = await cachedTile(db, entryId, z, tx, ty).catch(() => null);
+    if (c) { if (token === st.token) img.src = c; return; }
+    if (!st.online || !st.provider) { img.classList.add('mp-blank'); return; }
+    const url = tileUrl(st.provider.tpl, st.provider.key, z, tx, ty);
+    try {
+      const data = await fetchDataUrl(url);
+      await storeTile(db, entryId, lat, lng, z, tx, ty, data);
+      if (token === st.token) img.src = data;
+    } catch (e) {
+      if (token !== st.token) return;
+      img.src = url; // shown straight from the provider; saved only when the provider allows reading it
+      if (e instanceof TypeError && !st.noStore) { st.noStore = true; paintLabel(); }
     }
   }
-  minus.onclick = () => { if (z > MIN_Z) { z--; draw(); } };
-  plus.onclick = () => { if (z < MAX_Z) { z++; draw(); } };
+
+  function draw() {
+    const w = host.clientWidth || 320, h = host.clientHeight || 160;
+    const zi = Math.max(MIN_Z, Math.min(MAX_Z, Math.floor(st.zf + 1e-6)));
+    const n = 2 ** zi, p = tilePos(lat, lng, zi), ix = Math.floor(p.x), iy = Math.floor(p.y);
+    const px = (p.x - (ix - 2)) * TILE, py = (p.y - (iy - 1)) * TILE; // the point inside the 5 x 3 mosaic
+    mosaic.style.left = `${w / 2 - px}px`; mosaic.style.top = `${h / 2 - py}px`;
+    mosaic.style.transformOrigin = `${px}px ${py}px`;
+    mosaic.style.transform = `scale(${2 ** (st.zf - zi)})`;
+    if (st.builtZ !== zi) {
+      st.builtZ = zi; st.token++;
+      mosaic.textContent = '';
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const ty = iy + dy;
+          if (ty < 0 || ty >= n) continue;
+          const img = document.createElement('img');
+          img.width = TILE; img.height = TILE; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.draggable = false;
+          img.style.left = `${(dx + 2) * TILE}px`; img.style.top = `${(dy + 1) * TILE}px`;
+          mosaic.appendChild(img);
+          loadTile(img, zi, (((ix + dx) % n) + n) % n, ty, st.token);
+        }
+      }
+    }
+    paintLabel();
+  }
+
+  // Two-finger pinch: the zoom follows the finger distance.
+  const ptrs = new Map();
+  let d0 = 0, z0 = 0;
+  const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  host.addEventListener('pointerdown', (e) => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { host.setPointerCapture(e.pointerId); } catch { /* the gesture still works */ }
+    if (ptrs.size === 2) { d0 = dist() || 1; z0 = st.zf; }
+  });
+  host.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size !== 2) return;
+    st.zf = Math.max(MIN_Z, Math.min(MAX_Z, z0 + Math.log2(dist() / d0)));
+    draw();
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size === 2) { d0 = dist() || 1; z0 = st.zf; } };
+  host.addEventListener('pointerup', up);
+  host.addEventListener('pointercancel', up);
+
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { if (st.builtZ !== null) draw(); }).observe(host); // placed again if the box is sized after the first draw
   draw();
+  return { goOnline(prov) { st.provider = prov; st.online = true; st.builtZ = null; draw(); } };
 }
