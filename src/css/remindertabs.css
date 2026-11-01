@@ -1,0 +1,5 @@
+/* Reminder tabs: All, Upcoming, Completed (Decision 357). Same segmented look as the other small switches. */
+.rem-tabs { display: flex; gap: 2px; padding: 2px; margin: 0 0 10px; border-radius: 12px; background: var(--surface-2); }
+.rem-tabs.hidden { display: none; }
+.rem-tabs button { flex: 1 1 0; min-width: 0; min-height: 0; height: 34px; padding: 0 8px; margin: 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 0.9rem; box-shadow: none; }
+.rem-tabs button.active { background: var(--surface); color: var(--tc-ink, var(--brand-ink)); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
