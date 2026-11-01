@@ -484,7 +484,6 @@ input[type="search"], #search-input, #vault-search-input {
 }
 .tile-chev { color: var(--muted); width: 18px; height: 18px; }
 #search-input, #vault-search-input { margin: 0 0 10px; }
-#select-files-btn, #vault-select-files-btn { margin: 0 0 6px; }
 #timeline, #vault-list { margin-top: 14px; }
 
 /* Screen titles */
