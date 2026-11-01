@@ -1093,6 +1093,6 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - The field (`.folder-find`) animates with grid rows 0fr to 1fr; `closeFolderFind(isVault, redraw, animate)` folds it, removing it on `transitionend` (fallback 450 ms).
 
 ## Top bars in light mode (Decision 353)
-- `src/css/topbar.css`, imported by `app.js`. Tokens `--bar-bg`, `--bar-fg`, `--bar-soft` on `:root:not([data-theme="dark"])`. One selector list (`#select-bar`, `#explorer-selbar`, `.editor-bar`, the explorer viewer header, `.ph-head`) sets the bar, its icons, titles and counts; Save inverts; `.warning-text` icons get a light pill so red reads on purple.
+- `src/css/topbar.css`, imported by `app.js`. Tokens `--bar-bg`, `--bar-fg`, `--bar-soft` on `:root:not([data-theme="dark"])`. One selector list (`#select-bar`, `#explorer-selbar`, `.editor-bar`, the explorer viewer header, `.ph-head`) sets the bar, its icons, titles and counts; Save inverts; `.warning-text` icons turn neon red with a glow (no box) so red reads on purple.
 - A new top bar joins by using `.editor-bar` or by being added to that list.
 
