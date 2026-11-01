@@ -1408,7 +1408,7 @@ async function setAutoLockMinutes(minutes) {
 
 async function showMainTimeline(types = null, limit = 200) {
   const typeClause = types ? ` AND type IN (${types.map(() => '?').join(',')})` : '';
-  const sql = `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0${typeClause} ORDER BY created_at DESC LIMIT ${Number(limit) | 0}`;
+  const sql = `SELECT * FROM entries WHERE deleted_at IS NULL AND is_private=0${typeClause} ORDER BY COALESCE(updated_at, created_at) DESC LIMIT ${Number(limit) | 0}`;
   const rows = types ? await db.query(sql, types) : await db.query(sql);
   const entries = rows.values || [];
   // One extra query for all tags at once (GROUP_CONCAT) rather than one per row — same bulk
@@ -1995,6 +1995,9 @@ function escapeHtml(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function typeLabelFor(type) { return VAULT_TYPE_LABELS[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : ''); }
+// The date a row shows, and the one its group, its order and the category search follow: the last change, else the saved time (Decision 352).
+const savedAt = (r) => r.updated_at || r.created_at;
+const vSavedAt = (e) => e.updatedAt || e.createdAt;
 // The saved or changed time of a row: year and seconds included (Decision 351).
 function formatSavedDate(ms) {
   if (!ms) return '';
@@ -3977,7 +3980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
   }
   function vaultRowsHtml(items, finding = false) {
-    return groupedHtml(items, (e) => e.createdAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml(finding ? 'search' : 'folder');
+    return groupedHtml(items, vSavedAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml(finding ? 'search' : 'folder');
   }
 
   function renderVaultCounts() {
@@ -3991,7 +3994,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderVaultFolderList() {
     const container = document.getElementById('vault-folder-list');
-    const items = applyVaultFind(browseVault(openVaultFolderType));
+    const items = applyVaultFind(browseVault(openVaultFolderType)).slice().sort((a, b) => vSavedAt(a) - vSavedAt(b)); // oldest first (Decisions 350, 352)
     if (openVaultFolderType === 'image') { // Gallery, decoded in memory only (Decisions 105, 306)
       renderGallery(container, items, true, async () => renderVault());
       return;
@@ -5019,31 +5022,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!hasFind(f)) return rows;
     let hits = new Set();
     if (f.text) { try { hits = new Set((await searchEntries(db, f.text, { limit: 5000 })).map((r) => r.id)); } catch { /* name and tag matches stay */ } }
-    return rows.filter((r) => dateMatches(r.created_at, f) && (!f.words.length || nameMatches(r.label, r.tags, f.words) || hits.has(r.id)));
+    return rows.filter((r) => dateMatches(savedAt(r), f) && (!f.words.length || nameMatches(r.label, r.tags, f.words) || hits.has(r.id)));
   }
   function applyVaultFind(items) {
     const f = parseFind(folderFind.vault);
     if (!hasFind(f)) return items;
-    return items.filter((e) => dateMatches(e.createdAt, f) && (!f.words.length || nameMatches(e.label, e.tags, f.words) || vaultFindIds.has(e.id)));
+    return items.filter((e) => dateMatches(vSavedAt(e), f) && (!f.words.length || nameMatches(e.label, e.tags, f.words) || vaultFindIds.has(e.id)));
   }
-  function closeFolderFind(isVault, redraw = false) {
-    document.getElementById(isVault ? 'vault-folder-find' : 'folder-find')?.remove();
+  // Folding (animate) lets the field shrink before it is removed; opening another category removes it at once.
+  function closeFolderFind(isVault, redraw = false, animate = false) {
+    const bar = document.getElementById(isVault ? 'vault-folder-find' : 'folder-find');
+    if (bar) {
+      if (animate) {
+        bar.dataset.closing = '1';
+        bar.classList.remove('open');
+        bar.querySelector('input')?.blur();
+        const rm = () => bar.remove();
+        bar.addEventListener('transitionend', (e) => { if (e.target === bar && e.propertyName === 'grid-template-rows') rm(); });
+        setTimeout(rm, 450);
+      } else bar.remove();
+    }
     const had = !!folderFind[isVault ? 'vault' : 'home'];
     folderFind[isVault ? 'vault' : 'home'] = ''; vaultFindIds = new Set(); vaultFindSeq++;
     if (redraw && had) (isVault ? (privateSessionKey && renderVault()) : renderMainTimeline());
   }
   function toggleFolderFind(isVault) {
     const id = isVault ? 'vault-folder-find' : 'folder-find';
-    if (document.getElementById(id)) { closeFolderFind(isVault, true); return; }
+    const cur = document.getElementById(id);
+    if (cur && !cur.dataset.closing) { closeFolderFind(isVault, true, true); return; }
+    if (cur) cur.remove(); // still folding from a moment ago
     const bar = document.createElement('div');
     bar.id = id; bar.className = 'folder-find';
-    bar.innerHTML = '<input type="search" placeholder="Name, text, year or month" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" aria-label="Search this category">';
+    bar.innerHTML = '<div class="folder-find-in"><input type="search" placeholder="Type File Name, Tag, Date, Month or Year" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" aria-label="Search this category"></div>';
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').insertAdjacentElement('afterend', bar);
     const input = bar.querySelector('input');
     let t = 0;
     input.addEventListener('input', () => {
       clearTimeout(t);
       t = setTimeout(async () => {
+        if (!bar.isConnected || bar.dataset.closing) return;
         const term = input.value.trim(), seq = ++vaultFindSeq;
         if (!isVault) { folderFind.home = term; await renderMainTimeline(); return; }
         if (!privateSessionKey) return;
@@ -5060,7 +5077,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 200);
     });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
-    input.focus();
+    void bar.offsetHeight; // the closed state is drawn once, so the drop animates
+    requestAnimationFrame(() => bar.classList.add('open'));
+    setTimeout(() => { if (bar.isConnected && !bar.dataset.closing) input.focus({ preventScroll: true }); }, 140); // the keyboard rises as the field settles
   }
   const findBtnHtml = () => `<button type="button" class="title-act title-search" aria-label="Search this category" title="Search">${iconSvg('search')}</button>`;
   async function renderMainTimeline() {
@@ -5074,7 +5093,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderGallery(document.getElementById('folder-list'), rows, false, renderMainTimeline);
       return;
     }
-    document.getElementById('folder-list').innerHTML = groupedHtml(rows, (r) => r.created_at, (row) => entryRowHtml({
+    document.getElementById('folder-list').innerHTML = groupedHtml(rows, savedAt, (row) => entryRowHtml({
       id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
     }, 'main')) || emptyStateHtml(finding ? 'search' : 'folder');
     if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
@@ -6205,7 +6224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   function renderGallery(box, items, isVault, reopen) {
     const list = galleryView === 'list';
-    const dateOf = isVault ? (i) => i.createdAt : (i) => i.created_at; // soft date separators (Decision 350)
+    const dateOf = isVault ? vSavedAt : savedAt; // soft date separators (Decision 350)
     box.innerHTML = !items.length ? emptyStateHtml(folderFind[isVault ? 'vault' : 'home'] ? 'search' : 'folder')
       : list ? groupedHtml(items, dateOf, (i) => entryRowHtml({ id: i.id, type: i.type, label: i.label, ext: i.extension, thumb: true, ...(isVault ? vaultRowProps(i, true) : rowMeta(i, true)) }))
       : thumbGridHtml(items, galleryCols, dateOf);
@@ -6670,7 +6689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ---- Search (Decision 146): a full-screen layer that grows out of its tile, with type filter, period and sort ----
   const searchState = { type: 'all', sort: 'default', period: 'any' };
   const SEARCH_SORTS = [['default', 'Best match'], ['new', 'Newest'], ['old', 'Oldest'], ['az', 'Name A–Z'], ['za', 'Name Z–A'], ['type', 'Type']];
-  const sDate = (r) => (searchMode === 'vault' ? r.createdAt : r.created_at);
+  const sDate = (r) => (searchMode === 'vault' ? vSavedAt(r) : savedAt(r));
   function drawSearch() {
     const term = document.getElementById('search-input').value;
     const toolbar = document.getElementById('search-toolbar'), timeline = document.getElementById('timeline');
