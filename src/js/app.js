@@ -2876,8 +2876,10 @@ function clampPan(tx, ty, scale, stage, img) {
   const my = Math.max(0, (img.clientHeight * scale - stage.clientHeight) / 2);
   return [Math.min(mx, Math.max(-mx, tx)), Math.min(my, Math.max(-my, ty))];
 }
-function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity = null } = {}) {
-  let scale = 1, tx = 0, ty = 0, swipeDx = 0, leaving = false;
+// carousel (optional, Decision 361): { gap, has(step), drag(dx), commit(step, ms, ease), cancel() }. While a swipe is dragged the
+// neighbouring picture sits beside this one and follows the finger; on release both slide together, so there is no empty frame.
+function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity = null, carousel = null } = {}) {
+  let scale = 1, tx = 0, ty = 0, swipeDx = 0, leaving = false, vx = 0, lastT = 0, lastX = 0; // vx: finger speed in px/ms
   const pts = new Map();
   let pinch = null, lastTap = null, moved = false;
   const apply = (animate = false) => {
@@ -2892,6 +2894,7 @@ function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity
     stage.setPointerCapture?.(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
     moved = false;
+    vx = 0; lastT = performance.now(); lastX = e.clientX;
     if (pts.size === 2) pinch = { d: dist(), scale, m: mid(), tx, ty };
     if (onActivity) onActivity();
   };
@@ -2908,7 +2911,13 @@ function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity
       apply();
     } else if (pts.size === 1) {
       if (scale > 1) { [tx, ty] = clampPan(tx + dx, ty + dy, scale, stage, img); apply(); }
-      else if (Math.abs(e.clientX - p.sx) > Math.abs(e.clientY - p.sy)) { swipeDx = e.clientX - p.sx; apply(); }
+      else if (Math.abs(e.clientX - p.sx) > Math.abs(e.clientY - p.sy)) {
+        swipeDx = e.clientX - p.sx; apply();
+        const now = performance.now();
+        vx = vx * 0.6 + ((e.clientX - lastX) / Math.max(1, now - lastT)) * 0.4;
+        lastT = now; lastX = e.clientX;
+        if (carousel) carousel.drag(swipeDx);
+      }
     }
     if (onActivity) onActivity();
   };
@@ -2923,13 +2932,25 @@ function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity
     const dx = swipeDx;
     swipeDx = 0;
     const step = dx < 0 ? 1 : -1;
-    if (scale === 1 && Math.abs(dx) > stage.clientWidth * 0.2 && onSwipe && (!canSwipe || canSwipe(step))) {
+    const fling = !!carousel && Math.abs(dx) > 36 && Math.abs(vx) > 0.5 && Math.sign(vx) === Math.sign(dx); // a quick flick counts, however short
+    if (scale === 1 && (Math.abs(dx) > stage.clientWidth * 0.2 || fling) && onSwipe && (!canSwipe || canSwipe(step))) {
       leaving = true; // the picture carries on off the screen from where the finger left it; the next one slides in
+      if (carousel && carousel.has(step)) {
+        const span = stage.clientWidth + carousel.gap;
+        const ms = Math.round(Math.min(230, Math.max(110, (span - Math.abs(dx)) / Math.max(Math.abs(vx), 1.2))));
+        const ease = 'cubic-bezier(0.22, 0.8, 0.3, 1)';
+        img.style.transition = `transform ${ms}ms ${ease}`;
+        img.style.transform = `translate(${-step * span}px, 0px) scale(1)`;
+        carousel.commit(step, ms, ease);
+        setTimeout(() => onSwipe(step), ms + 16);
+        return;
+      }
       img.style.transition = `transform ${SLIDE_MS}ms ease-out`;
       img.style.transform = `translate(${dx < 0 ? -stage.clientWidth : stage.clientWidth}px, 0px) scale(1)`;
       setTimeout(() => onSwipe(step), SLIDE_MS);
       return;
     }
+    if (carousel) carousel.cancel(); // not committed: the neighbour slides back out
     if (!moved) { // a tap: a second one close by is a double tap
       const now = Date.now();
       if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
@@ -2944,7 +2965,7 @@ function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity
     }
     apply(true);
   };
-  const cancel = (e) => { pts.delete(e.pointerId); pinch = null; swipeDx = 0; if (!pts.size) apply(true); };
+  const cancel = (e) => { pts.delete(e.pointerId); pinch = null; swipeDx = 0; if (carousel) carousel.cancel(); if (!pts.size) apply(true); };
   stage.addEventListener('pointerdown', down);
   stage.addEventListener('pointermove', move);
   stage.addEventListener('pointerup', up);
@@ -6419,14 +6440,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openImageViewer(list, startIndex, isVault) {
     const items = list.slice();
     let index = Math.max(0, Math.min(startIndex, items.length - 1));
-    let url = null, zoom = null, token = 0, openViewerRefresh = () => {}, enterDir = 0, shut = false;
-    const drop = () => { if (url) { releaseUrl(url); url = null; } };
+    let url = null, urlId = null, zoom = null, token = 0, openViewerRefresh = () => {}, enterDir = 0, shut = false;
+    let handoff = null; // { el, id }: the neighbour picture already on screen when a swipe commits; the next render takes it over (Decision 361)
+    const ahead = new Map(), making = new Set(), aheadImg = new Map(); // aheadImg: the same pictures as decoded elements, ready to slide in
+    const warm = (it, u) => { const el = new Image(); el.src = u; aheadImg.set(it.id, el); if (el.decode) el.decode().catch(() => {}); };
+    // The picture just left stays ready as the neighbour on the way back.
+    const drop = () => {
+      if (!url) return;
+      const k = urlId ? items.findIndex((x) => x.id === urlId) : -1;
+      if (!shut && k >= 0 && !isVideoExt(items[k].extension) && Math.abs(k - index) === 1 && !ahead.has(urlId)) { ahead.set(urlId, url); warm(items[k], url); }
+      else releaseUrl(url);
+      url = null; urlId = null;
+    };
     let vplayer = null; // the video controls of the item on screen (Decision 324)
     const dropPlayer = () => { if (vplayer) { vplayer.destroy(); vplayer = null; } };
     // The pictures either side are made ahead (images only), so a swipe shows the next one at once.
-    const ahead = new Map(), making = new Set();
     const takeUrl = async (item, onProgress) => {
-      const u = ahead.get(item.id); if (u) { ahead.delete(item.id); return u; }
+      const u = ahead.get(item.id); if (u) { ahead.delete(item.id); aheadImg.delete(item.id); return u; }
       if (!isVault && isVideoExt(item.extension)) return homeVideoUrl(item, onProgress);
       return imageBlobUrl(item, isVault);
     };
@@ -6436,11 +6466,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       making.add(it.id);
       imageBlobUrl(it, isVault).then((u) => {
         making.delete(it.id);
-        if (!shut && Math.abs(i - index) === 1) ahead.set(it.id, u); else URL.revokeObjectURL(u);
+        if (!shut && Math.abs(i - index) === 1) { ahead.set(it.id, u); warm(it, u); } else URL.revokeObjectURL(u);
       }).catch(() => making.delete(it.id));
     };
     const trimAhead = () => {
-      for (const [id, u] of ahead) { if (Math.abs(items.findIndex((x) => x.id === id) - index) !== 1) { URL.revokeObjectURL(u); ahead.delete(id); } }
+      for (const [id, u] of ahead) { if (Math.abs(items.findIndex((x) => x.id === id) - index) !== 1) { URL.revokeObjectURL(u); ahead.delete(id); aheadImg.delete(id); } }
     };
     const viewerScreen = document.getElementById('viewer-screen');
     viewerScreen.classList.add('image-mode'); // image fills the screen below the header (Decision 105)
@@ -6450,7 +6480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openViewer({
       title: items[index]?.label || 'Image', isVault,
       onEdit: async () => { await editEntryUI(await fresh(items[index]), isVault); },
-      onClose: () => { token++; shut = true; dropPlayer(); for (const u of ahead.values()) URL.revokeObjectURL(u); ahead.clear(); viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
+      onClose: () => { token++; shut = true; dropPlayer(); for (const u of ahead.values()) URL.revokeObjectURL(u); ahead.clear(); aheadImg.clear(); viewerScreen.classList.remove('image-mode'); viewerScreen.querySelectorAll('.img-hdr').forEach((n) => n.remove()); if (zoom) { zoom.destroy(); zoom = null; } drop(); },
       render: async (body, { close, refresh }) => {
         openViewerRefresh = refresh;
         if (!items.length) { close(); return; }
@@ -6475,7 +6505,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
-        const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return false; } index = n; enterDir = step; arm(); render2(); return true; };
+        // Carousel (Decision 361): image next to image. The neighbour is placed beside this picture on the first sideways move.
+        const GAP = 16;
+        let ghost = null, ghostStep = 0;
+        const span = () => stage.clientWidth + GAP;
+        const neighbour = (step) => { const it = items[index + step]; return it && !isVideoExt(it.extension) && ahead.has(it.id) && aheadImg.has(it.id) ? it : null; };
+        const putGhost = (step, it) => {
+          ghost = aheadImg.get(it.id); ghostStep = step;
+          ghost.className = 'img-full';
+          Object.assign(ghost.style, { position: 'absolute', inset: '0', margin: 'auto', transition: 'none', transform: `translate(${step * span()}px, 0px)` });
+          stage.appendChild(ghost);
+        };
+        const carousel = isVid ? null : {
+          gap: GAP,
+          has: (step) => !!neighbour(step),
+          drag: (dx) => {
+            const step = dx < 0 ? 1 : -1;
+            if (ghost && ghostStep !== step) { ghost.remove(); ghost = null; }
+            if (!ghost) { const it = neighbour(step); if (!it) return; putGhost(step, it); }
+            ghost.style.transform = `translate(${step * span() + dx}px, 0px)`;
+          },
+          commit: (step, ms, ease) => {
+            if (!ghost || ghostStep !== step) { if (ghost) ghost.remove(); ghost = null; const it = neighbour(step); if (!it) return; putGhost(step, it); ghost.getBoundingClientRect(); }
+            ghost.style.transition = `transform ${ms}ms ${ease}`;
+            ghost.style.transform = 'translate(0px, 0px)';
+            handoff = { el: ghost, id: items[index + step].id };
+            ghost = null;
+          },
+          cancel: () => {
+            if (!ghost) return;
+            const g = ghost; ghost = null;
+            g.style.transition = 'transform 0.18s ease-out';
+            g.style.transform = `translate(${ghostStep * span()}px, 0px)`;
+            setTimeout(() => { if (g.parentNode === stage) g.remove(); }, 200);
+          }
+        };
+        const carried = handoff && handoff.id === item.id ? handoff.el : null; // the picture that slid in: stays on screen until this one has loaded
+        handoff = null;
+        if (carried) {
+          Object.assign(carried.style, { position: 'absolute', inset: '0', margin: 'auto', transition: 'none', transform: 'translate(0px, 0px)' });
+          stage.appendChild(carried);
+          img.style.visibility = 'hidden';
+          loading.style.display = 'none';
+        }
+        const go = (step) => { const n = index + step; if (n < 0 || n >= items.length) { zoom?.reset(); return false; } index = n; enterDir = handoff ? 0 : step; arm(); render2(); return true; };
         const enter = enterDir; enterDir = 0;
         if (enter) img.style.transform = `translate(${enter * stage.clientWidth}px, 0px)`; // waits off screen, slides in once loaded
         const slideIn = () => {
@@ -6486,7 +6559,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         const render2 = () => body.isConnected && openViewerRefresh();
         if (zoom) zoom.destroy();
-        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, canSwipe: (s) => index + s >= 0 && index + s < items.length, onActivity: arm }); // a video keeps its own controls: no pinch on it
+        zoom = isVid ? null : attachZoomPan(stage, img, { onSwipe: go, canSwipe: (s) => index + s >= 0 && index + s < items.length, onActivity: arm, carousel }); // a video keeps its own controls: no pinch on it
         if (isVid) { // a horizontal swipe above the player's controls moves on, as on an image
           let sx = 0, sy = 0, live = false;
           stage.addEventListener('touchstart', (e) => {
@@ -6525,7 +6598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           const u = await takeUrl(item, (f) => { if (mine === token && loading.isConnected) loading.textContent = `Decrypting… ${Math.round(f * 100)}%`; });
           if (mine !== token) { releaseUrl(u); return; } // moved on or closed while loading
-          url = u;
+          url = u; urlId = item.id;
           if (isVid) { // a poster keeps the WebView's stretched play icon off the screen (Decision 320)
             const pst = await cachedThumb(item, isVault);
             if (pst && mine === token) img.poster = pst;
@@ -6533,6 +6606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
           if (isVid) { try { img.currentTime = 0.05; } catch { /* the poster stays */ } } // paints the first real frame
           loading.remove();
+          if (carried) { img.style.visibility = ''; carried.remove(); aheadImg.delete(item.id); } // same pixels: no change on screen
           if (isVid) {
             vplayer = attachVideoPlayer(stage, img, {
               onActivity: arm,
@@ -6549,6 +6623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           trimAhead(); makeAhead(index + 1); makeAhead(index - 1);
         } catch (err) {
           if (mine !== token) return;
+          if (carried) { img.style.visibility = ''; carried.remove(); loading.style.display = ''; }
           slideIn();
           // A format the WebView cannot decode (for example HEIC or some video codecs): offer the phone's own app.
           loading.classList.add('img-fail');
