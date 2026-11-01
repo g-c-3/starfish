@@ -1096,3 +1096,6 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `src/css/topbar.css`, imported by `app.js`. Tokens `--bar-bg`, `--bar-fg`, `--bar-soft` on `:root:not([data-theme="dark"])`. One selector list (`#select-bar`, `#explorer-selbar`, `.editor-bar`, the explorer viewer header, `.ph-head`) sets the bar, its icons, titles and counts; Save inverts; `.warning-text` icons turn neon red with a glow (no box) so red reads on purple.
 - A new top bar joins by using `.editor-bar` or by being added to that list.
 
+## Note colours and map zoom (Decision 354)
+- `--ns-r`, `--ns-g`, `--ns-b` in `style.css`: vivid on light, bright on dark; blue is a sea blue.
+- `renderMap(host, point, { zoom, onZoomed, ... })`: starts at `zoom` (clamped 3 to 19, else `START_Z` = 16); `onZoomed(zoom, done)` runs on each pinch move (`done` false) and when a pinch ends (`done` true). The Location view keeps `curZoom`, saves it to `meta` `map_zoom:<id>` on `done`, and passes it to every `renderMap` it makes, so the second provider opens at the same zoom. The key is deleted with the location (`db.js`) and on a restore that replaces it (`backup.js`).

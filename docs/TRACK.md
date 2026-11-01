@@ -362,3 +362,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-01 | Session 163 | Decision 352 | Phases 49 to 51 confirmed on device (DP176 to DP178); Phase 52 added and built (one row date, folding search field, date tags); DP179 added; not run through CI |
 | 2026-11-01 | Session 163 (continued: top bars) | Decision 353 | DP179 confirmed; Phase 52 closed; Phase 53 added and built (purple top bars in light mode); DP180 added; not run through CI |
 | 2026-11-01 | Session 163 (continued: trash icon) | Decision 353 amended | Trash in the purple bars: no white box, neon red with a glow; DP180 item 1 and 2 to check the look; not run through CI |
+| 2026-11-01 | Session 163 (continued: colours and map zoom) | Decision 354 | DP180 confirmed; Phase 53 closed; Phase 54 added and built (sea blue and vivid note colours, kept map zoom); DP181 added; not run through CI |

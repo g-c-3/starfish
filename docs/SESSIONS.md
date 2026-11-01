@@ -14,8 +14,9 @@ Start: "Go" carried on from the previous session; Tier 1 docs known; DECISIONS a
 - Risks: a background step that sets `updated_at` moves an item to the top; the fold needs WebView support for animated grid rows.
 - Owner reported DP179 working. Decision 353: purple top bars in light mode (Option A, owner's choice): selection bars, editor and viewer headers, File explorer bars and the Phone gallery header, white text and icons, Save white, trash red. Cause of the dark trash in the image viewer header: `.editor-bar .icon-btn` out-ranked `.warning-text`. `src/css/topbar.css` (new), `src/js/app.js` (one import). `vite build` passes, rules present in the built CSS; not run through CI; not device-tested (DP180).
 - Owner saw the first purple bars on the phone: the white box behind the trash looked odd. Replaced by a plain neon red icon with a glow and a thin dark edge (`topbar.css` only).
-- Decisions 352 and 353 recorded. DP176 to DP179 confirmed; DP180 and Phases 52, 53 added.
-- Next session start point: owner runs DP180 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first; the "Last Week" header twice across a month boundary.
+- Owner reported DP180 working. Decision 354: the note colours (sea blue; vivid in light mode, brighter in dark mode) and the zoom of a Home location map saved per location and shared by both providers (`renderMap` takes `zoom` and `onZoomed`; `meta` key `map_zoom:<id>`). The pinch, save, restore and clamp logic was run in a simulated page; `vite build` passes; not run through CI; not device-tested (DP181).
+- Decisions 352, 353 and 354 recorded. DP176 to DP180 confirmed; DP181 and Phases 52, 53, 54 added.
+- Next session start point: owner runs DP181 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first; the "Last Week" header twice across a month boundary.
 
 ---
 
