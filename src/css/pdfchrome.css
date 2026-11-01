@@ -1,0 +1,17 @@
+/* PDF viewer chrome (Decision 362): the four tools sit in two columns at the bottom, fold away on a tap of the page and return on the next. */
+.pdf-tools { position: absolute; left: 12px; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 3; display: grid; grid-template-columns: 44px 1fr 44px; grid-auto-rows: 44px; gap: 8px; pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease; }
+.pdf-tools > button { pointer-events: auto; width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
+.pdf-tools .pdf-pages-btn { grid-column: 1; grid-row: 1; }
+.pdf-tools .pdf-pg-btn { grid-column: 1; grid-row: 2; }
+.pdf-tools .pdf-find-btn { grid-column: 3; grid-row: 1; }
+.pdf-tools .pdf-mark-btn { grid-column: 3; grid-row: 2; }
+#explorer-viewer .pdf-tools { bottom: 20px; }
+.pdf-tools-hidden .pdf-tools, .pdf-marking .pdf-tools { opacity: 0; transform: translateY(12px); }
+.pdf-tools-hidden .pdf-tools > button, .pdf-marking .pdf-tools > button { pointer-events: none; }
+/* panels and the find bar glide in instead of appearing */
+.pdf-panel { animation: pdf-rise .24s ease; }
+.pdf-searchbar { animation: pdf-drop .2s ease; }
+@keyframes pdf-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pdf-drop { from { transform: translateY(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pdf-tools, .pdf-panel, .pdf-searchbar { transition: none; animation: none; } }

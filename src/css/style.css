@@ -977,9 +977,6 @@ body.overlay-open #viewer-screen.file-mode #viewer-body .ev-media, body.overlay-
 .pdf-page { position: relative; flex: none; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
 .pdf-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .pdf-msg { min-height: 60%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; color: #cfcfe6; font-size: 14px; }
-.pdf-zoom { position: absolute; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; }
-.pdf-zoom button { width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; font-size: 22px; line-height: 1;
-  background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
 
 /* ---- PDF reading tools (Decision 153) ---- */
 .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; -webkit-text-size-adjust: none; text-size-adjust: none; transform-origin: 0 0; -webkit-user-select: text; user-select: text; z-index: 0; }
@@ -991,8 +988,6 @@ body.overlay-open #viewer-screen.file-mode #viewer-body .ev-media, body.overlay-
 .textLayer.selecting .endOfContent { top: 0; }
 .textLayer span.pdf-hit { background: rgba(255, 214, 0, 0.45); border-radius: 2px; }
 .textLayer span.pdf-hit.pdf-hit-cur { background: rgba(255, 120, 0, 0.6); outline: 2px solid rgba(255, 120, 0, 0.9); }
-.pdf-tools { position: absolute; left: 12px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; z-index: 3; }
-.pdf-tools button { width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 14px; background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: none; display: grid; place-items: center; }
 .pdf-searchbar { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; align-items: center; gap: 4px; padding: 6px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .pdf-searchbar input { flex: 1; min-width: 0; width: auto; margin: 0; }
 .pdf-find-count { flex: none; max-width: 36%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
@@ -1189,7 +1184,6 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .ev-media.ev-audio audio { width: 100%; }
 .ev-media-msg { padding: 24px; text-align: center; color: var(--muted); line-height: 1.5; }
 body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* the Back bar floats over every overlay */
-#explorer-viewer .pdf-zoom, #explorer-viewer .pdf-tools { bottom: 20px; }
 
 /* Office viewers (Decisions 226, 227): docx page, xlsx grid, pptx slides; view only. The viewer has its own theme
    (data-theme on .eo-host, set from the viewer's switch), so every colour below comes from the variables set here. */
@@ -1295,13 +1289,6 @@ body.ev-full #bottom-nav { display: none !important; }
 #explorer-viewer.ev-full .editor-bar .icon-btn .ic { width: 20px; height: 20px; }
 #explorer-viewer.ev-full #ev-title { font-size: 14.5px; font-weight: 600; }
 #explorer-viewer.ev-full .img-count { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); font-size: 11.5px; }
-/* PDF: the find, pages, mark-up and edit-pages buttons live in the menu; zoom is by pinch */
-#ev-body.pdf-full .pdf-tools, #ev-body.pdf-full .pdf-zoom { display: none; }
-#ev-body.pdf-full.pdf-menu-open .pdf-tools, #ev-body.pdf-full.pdf-menu-open .pdf-zoom { display: flex; flex-direction: row; top: 8px; bottom: auto; z-index: 6; padding: 6px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
-#ev-body.pdf-full .pdf-tools button, #ev-body.pdf-full .pdf-zoom button { background: var(--surface); color: var(--fg); }
-/* the menu dock sits in the middle of the screen; Open with is a wide button with its words */
-#ev-body.pdf-full.pdf-menu-open .pdf-tools { left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100% - 24px); }
-#ev-body.pdf-full .pdf-tools .pdf-ow-btn { width: auto; padding: 0 16px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 #explorer-viewer.ev-full .pdf-scroll { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .ev-office > .eo-bar { display: none; position: absolute; top: 0; left: 8px; right: 8px; z-index: 8; border: 1px solid var(--border); border-top: none; border-radius: 0 0 16px 16px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35); }
 .ev-office.eo-menu-open > .eo-bar { display: flex; }
