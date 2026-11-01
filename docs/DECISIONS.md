@@ -3705,3 +3705,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The list slides 36 px and fades out toward the side it came from (120 ms), then the new tab slides in from the other side (200 ms). A newer tab change cancels the one still sliding. Skipped when the phone asks for reduced motion. The same transition runs for a tap on a tab.
 - Files: `src/js/app.js`, `src/css/remindertabs.css`. `vite build` passes; not device-tested (DP186).
 
+**361. Image viewer: a carousel swipe.** Owner request, from a side-by-side recording of the phone's gallery app and Arkly's viewer.
+- Cause of the slow, black-gapped change: on release the picture slid off, the whole viewer body was rebuilt, and the next picture waited off screen until loaded and decoded before sliding in (about half a second, with an empty frame).
+- Now, image next to image: the neighbouring picture (already prepared, Decision 105) is decoded ahead and placed beside the current one, 16 px apart, on the first sideways move and follows the finger. On release both slide together, 110 to 230 ms depending on the distance left and the finger speed, on a decelerating curve. A quick flick (over 36 px at over 0.5 px/ms) counts without reaching 20% of the width. Not past the threshold: the neighbour slides back out.
+- The neighbour stays on screen through the rebuild and is removed only once the new picture has loaded, so nothing changes on screen at the handover. The picture just left stays ready for the way back.
+- Unchanged: videos, zoomed pictures, the first and last picture, and the other viewers (Explorer, recordings). When the neighbour is not ready yet (the first swipe right after opening) or is a video, the previous slide-out then slide-in is used.
+- Files: `src/js/app.js` (`attachZoomPan` takes an optional `carousel`; `openImageViewer`). `vite build` passes; not device-tested (DP187).
+

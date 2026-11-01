@@ -369,3 +369,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-01 | Session 164 | Decision 357 | Phase 57 approved and built (Reminder tabs, completion log); DP184 added; Phase 58 line corrected (Decision 96 only); not run through CI |
 | 2026-11-01 | Session 164 (continued: swipe, reminder sound) | Decisions 358, 359 | DP184 confirmed; Phase 57 closed; Phases 58 (Reminder sound, native code) and 59 (swipe between Reminder tabs) built; DP185 and DP186 added; not compiled by Gradle, not run through CI |
 | 2026-11-01 | Session 164 (continued: tab swipe fix) | Decision 360 | Swipe works from empty space; slide transition between Reminder tabs; native sound step found missing from the live workflow | 
+| 2026-11-01 | Session 164 (continued: image viewer) | Decision 361 | Image viewer swipe rebuilt as a carousel; DP187 added; not device-tested |

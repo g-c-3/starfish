@@ -17,6 +17,7 @@ Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part (reminder, bac
 - Files: `scripts/patch-reminder-sound.js`, `scripts/java/ArklyReminderSound.java`, `scripts/java/ArklyReminderSoundService.java`, `scripts/java/ArklySoundBridge.java`, `.github/workflows/build-android.yml` (delivered as `A.github`; rename to `.github`), `src/js/remindersound.js`, `src/js/notifications.js`, `src/js/app.js`, `src/css/remindertabs.css`, `docs/ARCHITECTURE.md`. `vite build` passes.
 - Device report: the sound dialog showed its no-bridge message. Cause: the live `build-android.yml` had no "Add reminder sound (native)" step (the `A.github` copy was not applied), so CI never wrote the native classes. Fix: add the step to the live workflow.
 - Decision 360: the tab swipe now works from empty space (listeners moved from the folder view to the whole screen) and tab changes slide and fade. `src/js/app.js`, `src/css/remindertabs.css`.
+- Decision 361: image viewer carousel swipe (neighbour beside the current picture, both slide together, handover without an empty frame). `src/js/app.js` only. Not device-tested (DP187).
 - Next-session start point: owner commits and runs CI; if the Java fails to compile, the error text is the first task. Then DP185 and DP186.
 
 ---
