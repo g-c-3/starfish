@@ -1,4 +1,4 @@
-/* Light mode top bars (Decision 353): purple bar, white title, count and icons; the trash stays red, in a light pill so it reads on purple.
+/* Light mode top bars (Decision 353): purple bar, white title, count and icons; the trash stays red (neon red with a glow, no box).
    Covers the selection bars (Home, Vault, Search, File explorer), the viewer and editor headers (text, image, PDF, file, File explorer
    viewer) and the Phone gallery header. Dark mode keeps its own bars. */
 :root:not([data-theme="dark"]) {
@@ -17,9 +17,10 @@
 /* Save: white button, purple text. */
 :root:not([data-theme="dark"]) :is(.editor-bar) .editor-save { background: #fff; color: var(--brand-ink); box-shadow: none; }
 :root:not([data-theme="dark"]) :is(.editor-bar) .editor-save:disabled { opacity: 0.55; }
-/* Trash: red, on a light pill. */
-:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text { background: rgba(255, 255, 255, 0.95); color: var(--danger); }
-:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text:active { background: #fff; }
+/* Trash: plain like the other icons, in neon red with a glow. A thin dark edge keeps it clear against the purple. */
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text { color: #ff3b57; background: transparent; }
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text .ic { filter: drop-shadow(0 0 1px rgba(30, 10, 80, 0.95)) drop-shadow(0 0 5px rgba(255, 59, 87, 0.95)) drop-shadow(0 0 10px rgba(255, 59, 87, 0.6)); }
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text:active { background: var(--bar-soft); }
 /* Phone gallery header */
 :root:not([data-theme="dark"]) .ph-head button { background: var(--bar-soft); color: var(--bar-fg); border: 0; }
 :root:not([data-theme="dark"]) .ph-head .ph-add { background: #fff; color: var(--brand-ink); }
