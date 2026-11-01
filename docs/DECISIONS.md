@@ -3643,3 +3643,12 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/folderfind.js`, `src/css/folderfind.css`, `src/js/app.js`, `docs/ARCHITECTURE.md`. `vite build` passes; the tags tested apart from the page; not run through CI, not device-tested (DP179).
 - Risks: an item changed by a background step that sets `updated_at` (a moved or restored item) moves to the top; the fold depends on the WebView supporting animated grid rows; an old saved date can no longer be searched once the item has been changed.
 
+**353. Purple top bars in light mode.** Owner request, Option A.
+- Light mode only (`:root:not([data-theme="dark"])`, `src/css/topbar.css`): every top bar is purple (the brand gradient) with a white title, count and icons. Dark mode is unchanged.
+- Bars covered: the selection bar (Home, Vault, Search), the File explorer header and selection bar, the headers of the text editor, the entry viewer (image, PDF, file, details) and the File explorer viewer (also its full-screen header), and the Phone gallery header. The Home and Vault page titles, the bottom Back bar and the dark image overlay on the Phone gallery viewer are not top bars of this kind and are unchanged.
+- Save is a white button with purple text. A pressed icon shows a soft white wash.
+- Trash is red inside and outside selection: a red icon on a light pill, so it reads on purple. Cause of the dark trash in the image viewer header: `.editor-bar .icon-btn` set the icon colour and out-ranked the red of `.warning-text`; the new rule out-ranks both.
+- A disabled icon keeps its dimmed look (opacity), now white.
+- Files: `src/css/topbar.css` (new), `src/js/app.js` (one import), `docs/ARCHITECTURE.md`. `vite build` passes and the rules are in the built CSS; not run through CI, not device-tested (DP180).
+- Risks: contrast of the pills and the dimmed white icons is judged by eye on the phone; a bar added later needs `.editor-bar` or an entry in the list at the top of `topbar.css`.
+

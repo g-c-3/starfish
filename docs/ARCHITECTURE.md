@@ -1092,3 +1092,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Row date (Decision 352): `savedAt` (`updated_at`, else `created_at`) is the shown time and the date of the group, the order (Home category lists, Search, period filter) and the category search. Vault: `vSavedAt`, oldest first. Trash keeps the deleted date.
 - The field (`.folder-find`) animates with grid rows 0fr to 1fr; `closeFolderFind(isVault, redraw, animate)` folds it, removing it on `transitionend` (fallback 450 ms).
 
+## Top bars in light mode (Decision 353)
+- `src/css/topbar.css`, imported by `app.js`. Tokens `--bar-bg`, `--bar-fg`, `--bar-soft` on `:root:not([data-theme="dark"])`. One selector list (`#select-bar`, `#explorer-selbar`, `.editor-bar`, the explorer viewer header, `.ph-head`) sets the bar, its icons, titles and counts; Save inverts; `.warning-text` icons get a light pill so red reads on purple.
+- A new top bar joins by using `.editor-bar` or by being added to that list.
+
