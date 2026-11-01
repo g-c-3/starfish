@@ -3700,3 +3700,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `scripts/patch-reminder-sound.js`, `scripts/java/ArklyReminderSound.java`, `scripts/java/ArklyReminderSoundService.java`, `scripts/java/ArklySoundBridge.java`, `.github/workflows/build-android.yml`, `src/js/remindersound.js`, `src/js/notifications.js`, `src/js/app.js`, `src/css/remindertabs.css`.
 - Not verified: the Java was syntax-checked only (no Android SDK here) and the patch script was run against a generated Android project; nothing has been compiled by Gradle, run through CI, or tried on a device (DP185). Open risks: the service start from the alarm broadcast on the owner's Android version, the alarm volume being zero, and a vendor battery manager stopping the service.
 
+**360. Reminder tab swipe: whole-screen area and a slide transition.** Owner report from a device check of Decision 358: the swipe worked only over reminder rows, and the tab change was abrupt.
+- Cause: the touch listeners sat on the folder view, whose height is its content, so empty space below the list was outside it. Fix: the listeners sit on the whole Home and Vault screens; touches that start in the bottom bar or in a dialog are ignored.
+- The list slides 36 px and fades out toward the side it came from (120 ms), then the new tab slides in from the other side (200 ms). A newer tab change cancels the one still sliding. Skipped when the phone asks for reduced motion. The same transition runs for a tap on a tab.
+- Files: `src/js/app.js`, `src/css/remindertabs.css`. `vite build` passes; not device-tested (DP186).
+
