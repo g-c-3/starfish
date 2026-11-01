@@ -5,4 +5,7 @@
 .folder-find.open .folder-find-in { padding: 4px; margin: -4px; } /* room for the focus ring inside the clip */
 .folder-find input[type="search"] { width: 100%; box-sizing: border-box; }
 .title-act ~ .title-act { margin-left: 0; }
+#trash-title:has(.title-act), #vault-trash-title:has(.title-act) { padding-right: 130px; } /* clear of the lock and power buttons */
+/* Trash rows: Restore and Delete sit on the row, at the right, not under a separator (Decision 355). */
+.trash-row .row-actions { flex: 0 0 auto; padding-top: 0; border-top: 0; }
 @media (prefers-reduced-motion: reduce) { .folder-find { transition: none; } }
