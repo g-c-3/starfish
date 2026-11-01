@@ -367,3 +367,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-01 | Session 163 (continued: alignment fixes) | Decision 356 | Phase 56 added and built (Trash title alignment, Select tile size, no highlight of other matches); DP183 added; DP182 still open; not run through CI |
 | 2026-11-01 | Session 163 (continued: plan) | none | DP182 and DP183 confirmed, all device checks closed; Phases 55 and 56 closed; Phases 57 and 58 (Reminder tabs, Reminder sound settings) planned, awaiting approval |
 | 2026-11-01 | Session 164 | Decision 357 | Phase 57 approved and built (Reminder tabs, completion log); DP184 added; Phase 58 line corrected (Decision 96 only); not run through CI |
+| 2026-11-01 | Session 164 (continued: swipe, reminder sound) | Decisions 358, 359 | DP184 confirmed; Phase 57 closed; Phases 58 (Reminder sound, native code) and 59 (swipe between Reminder tabs) built; DP185 and DP186 added; not compiled by Gradle, not run through CI |

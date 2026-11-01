@@ -11,7 +11,11 @@ Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part (reminder, bac
 - Decision 357: Reminder tabs (All, Upcoming, Completed) and the `reminder_log` table. Log rows only for repeating reminders; the log travels inside each reminder's backup record, so the archive formats and categories did not change.
 - Roadmap correction: the Phase 58 plan named Decisions 96 and 98; Decision 98 is the Play Store deferral, so the line now names Decision 96 only.
 - Files: `src/js/reminders.js`, `src/js/reminderlog.js` (new), `src/js/db.js`, `src/js/backup.js`, `src/js/app.js`, `src/index.html`, `src/css/remindertabs.css` (new), `docs/ARCHITECTURE.md`. `vite build` passes; not run through CI; not device-tested (DP184).
-- Next-session start point: owner commits, CI result and DP184; then Phase 58 (needs approval; native code).
+- Owner confirmed DP184 (Phase 57). Owner approved Phase 58 including native code, and asked for a swipe between Reminder tabs.
+- Decision 358: swipe left or right between the Reminder tabs, Home and Vault.
+- Decision 359: Reminder sound. Dialog from a gear in the Reminder title; phone notification sound, phone alarm sound or an audio file; optional rising volume. Native: three Java classes written by `scripts/patch-reminder-sound.js` (new CI step, after the reminder-actions and audio-route patches), a media-playback service, hooks in the plugin's publisher and dismiss receiver by reflection. The patch script was run (twice, idempotent) against a generated Android project; the Java was syntax-checked with a JDK but not compiled against the Android SDK.
+- Files: `scripts/patch-reminder-sound.js`, `scripts/java/ArklyReminderSound.java`, `scripts/java/ArklyReminderSoundService.java`, `scripts/java/ArklySoundBridge.java`, `.github/workflows/build-android.yml` (delivered as `A.github`; rename to `.github`), `src/js/remindersound.js`, `src/js/notifications.js`, `src/js/app.js`, `src/css/remindertabs.css`, `docs/ARCHITECTURE.md`. `vite build` passes.
+- Next-session start point: owner commits and runs CI; if the Java fails to compile, the error text is the first task. Then DP185 and DP186.
 
 ---
 
