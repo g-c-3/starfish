@@ -5253,23 +5253,45 @@ document.addEventListener('DOMContentLoaded', async () => {
       setReminderTab(isVault, b.dataset.tab);
     });
   }
+  const REMINDER_TAB_ORDER = ['all', 'upcoming', 'completed'];
+  let tabAnimSeq = 0; // a newer tab change cancels the one still sliding
+  // The old list slides and fades out toward the side it came from, the new one slides in from the other side (Decision 360).
   function setReminderTab(isVault, tab) {
-    reminderTab[isVault ? 'vault' : 'home'] = tab;
+    const key = isVault ? 'vault' : 'home';
+    const dir = Math.sign(REMINDER_TAB_ORDER.indexOf(tab) - REMINDER_TAB_ORDER.indexOf(reminderTab[key]));
+    if (!dir) return;
+    reminderTab[key] = tab;
     exitSelection();
     paintReminderTabs(isVault);
-    if (isVault) { armVaultAutoLock(); if (privateSessionKey) renderVaultFolderList(); } else renderMainTimeline().catch(() => {});
+    if (isVault) { armVaultAutoLock(); if (!privateSessionKey) return; }
+    const redraw = () => (isVault ? Promise.resolve(renderVaultFolderList()) : renderMainTimeline().catch(() => {}));
+    const list = document.getElementById(isVault ? 'vault-folder-list' : 'folder-list');
+    const view = document.getElementById(isVault ? 'vault-folder-view' : 'folder-view');
+    if (!list.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { redraw(); return; }
+    const my = ++tabAnimSeq;
+    list.getAnimations().forEach((a) => a.cancel());
+    view.classList.add('rem-sliding');
+    const out = list.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-dir * 36}px)` }], { duration: 120, easing: 'ease-in', fill: 'forwards' });
+    out.finished.catch(() => {})
+      .then(() => (my === tabAnimSeq ? redraw() : null))
+      .then(() => {
+        if (my !== tabAnimSeq) return;
+        list.getAnimations().forEach((a) => a.cancel());
+        const end = () => { if (my === tabAnimSeq) view.classList.remove('rem-sliding'); };
+        const inn = list.animate([{ opacity: 0, transform: `translateX(${dir * 36}px)` }, { opacity: 1, transform: 'translateX(0)' }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        inn.onfinish = end; inn.oncancel = end;
+      });
   }
   // Swipe left for the next tab, right for the previous (Decision 358). Ignored while selecting, near the screen edges (the
   // system Back gesture), inside a field, and for slow or mostly vertical drags, so scrolling the list is untouched.
-  const REMINDER_TAB_ORDER = ['all', 'upcoming', 'completed'];
   for (const isVault of [false, true]) {
-    const view = document.getElementById(isVault ? 'vault-folder-view' : 'folder-view');
+    const view = document.getElementById(isVault ? 'vault-screen' : 'main-screen'); // the whole screen, so empty space below the list counts too
     let sx = 0, sy = 0, t0 = 0, live = false;
     view.addEventListener('touchstart', (e) => {
       live = false;
       if (e.touches.length !== 1 || selection || (isVault ? openVaultFolderType : openFolderType) !== 'reminder') return;
       const t = e.touches[0];
-      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || e.target.closest('input, textarea, select, .folder-find')) return;
+      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || e.target.closest('input, textarea, select, .folder-find, #bottom-nav, .modal-overlay')) return;
       sx = t.clientX; sy = t.clientY; t0 = Date.now(); live = true;
     }, { passive: true });
     view.addEventListener('touchend', (e) => {
