@@ -655,6 +655,9 @@ guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back f
 
 **Unsaved work (Decision 133).** Back and every Cancel ask "Discard changes?" before dropping typed or chosen input; with nothing changed they close at once. Covered: Save/edit dialog (compared with its values at open), text editor, Money form and repayment dialog, coordinates paste, auto-backup passkey, Settings and Vault Settings fields (passkeys, hint, currency symbol, confirm password or PIN). Capture dialogs (new recording, reminder, location, files) always ask. Passkey fields are cleared after a backup or restore succeeds, so a finished action is not unsaved.
 
+### Reminder tabs and the completion log (Decision 357)
+The Reminder folder, in Home and the Vault, lists one tab at a time: All, Upcoming (default), Completed. `reminderTabItems()` (`reminders.js`, pure) builds each list from the reminder rows and the log. `reminder_log (id, entry_id, due_at, closed_at, UNIQUE (entry_id, due_at))` holds one row per closed occurrence of a repeating reminder, written by `logClosedOccurrence()` (`reminderlog.js`) on Done: in the app, or from the queued notification tap with its own time. A one-off needs no row (`completed_at` / `fire_at`). Rows are deleted with the reminder (`permanentlyDeleteEntry`, `wipeCategories`) and carried in its backup record as `reminder_log`, written back by `insertRestoredEntry`. The Vault's Completed tab reads the log into memory only while unlocked; it holds ids and times, no labels.
+
 ### Repeating reminders (Decisions 107, 108)
 A repeating reminder is its next occurrences (daily 30, weekly 26, monthly 12), each an exact wake-from-idle one-off, ids
 hash(`<entryId>:r<k>`), at most 30 per reminder. The window is topped up on launch, on resume (at most every 6 hours) and
@@ -841,7 +844,7 @@ arkly/
     css/style.css
     css/widget.css
     js/
-      db.js             -> SQLite schema + FTS5 setup
+      db.js             -> SQLite schema + FTS5 setup (includes reminder_log)
       crypto.js         -> KDF + AES helpers for private notes & backups
       intents.js         -> rule-based reminder/expense detector (label suggestion unused, Decision 192)
       notifications.js  -> local notification scheduling (banner channel, snooze/done actions)

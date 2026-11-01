@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 164**
+
+Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part (reminder, backup and schema sections). CI status not checked: the API call was rate-limited.
+- Phase 57 approved by the owner with the three proposed rules (queued Done, Vault, log table).
+- Decision 357: Reminder tabs (All, Upcoming, Completed) and the `reminder_log` table. Log rows only for repeating reminders; the log travels inside each reminder's backup record, so the archive formats and categories did not change.
+- Roadmap correction: the Phase 58 plan named Decisions 96 and 98; Decision 98 is the Play Store deferral, so the line now names Decision 96 only.
+- Files: `src/js/reminders.js`, `src/js/reminderlog.js` (new), `src/js/db.js`, `src/js/backup.js`, `src/js/app.js`, `src/index.html`, `src/css/remindertabs.css` (new), `docs/ARCHITECTURE.md`. `vite build` passes; not run through CI; not device-tested (DP184).
+- Next-session start point: owner commits, CI result and DP184; then Phase 58 (needs approval; native code).
+
+---
+
 **Session 163**
 
 Start: "Go" carried on from the previous session; Tier 1 docs known; DECISIONS and ARCHITECTURE not read in full. CI status not checked.
