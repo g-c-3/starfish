@@ -8,6 +8,7 @@ import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel, reminderTabItems } from './reminders.js';
 import { logClosedOccurrence, loadReminderLog } from './reminderlog.js';
+import { openSoundDialog, stopSound } from './remindersound.js';
 import '../css/remindertabs.css';
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
@@ -433,6 +434,7 @@ function backAction() {
   if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
   if (activeLocFix) return () => activeLocFix.finish(null); // Back cancels the live location sheet
+  if (activeRemSound) return () => activeRemSound.finish(); // Back closes the Reminder sound dialog
   if (activeLocProv) return () => activeLocProv.finish(); // Back closes the map provider dialog
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
   if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
@@ -2171,6 +2173,7 @@ let activeCompose = null;    // { finish, isVault } — the order sheet of Merge
 let activeLocSource = null;  // { finish, isVault } — New location: current fix or coordinates
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
+let activeRemSound = null;   // { finish } — Reminder sound dialog (Decision 359)
 let activeLocProv = null;    // { finish } — map provider dialog (Decision 345)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
@@ -2356,6 +2359,7 @@ function dismissOverlays(vaultOnly = false) {
   if (activeLocSource && (!vaultOnly || activeLocSource.isVault)) activeLocSource.finish(null);
   if (activeLocFix && (!vaultOnly || activeLocFix.isVault)) activeLocFix.finish(null); // a pending fix is dropped, nothing saved
   if (activeLocProv && !vaultOnly) activeLocProv.finish(); // nothing typed is saved
+  if (activeRemSound && !vaultOnly) activeRemSound.finish();
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
@@ -3131,6 +3135,7 @@ async function toggleRowPlay(id, isVault) {
 // Done: a one-off is finished and cancelled. A repeating reminder is only done for this time (Decision 108): its
 // snooze is cleared and the later occurrences stay scheduled.
 async function markReminderDone(id) {
+  stopSound(); // a reminder sound still playing ends with Done (Decision 359)
   const row = ((await db.query(`SELECT id, fire_at, repeat_rule FROM entries WHERE id = ?`, [id])).values || [])[0];
   if (row && row.repeat_rule) {
     await logClosedOccurrence(db, row, Date.now()); // the occurrence closed goes in the Completed tab (Decision 357)
@@ -4204,7 +4209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(true);
     closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${findBtnHtml()}`;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound" title="Reminder sound">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
@@ -5245,10 +5250,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById(isVault ? 'vault-reminder-tabs' : 'reminder-tabs').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-tab]');
       if (!b) return;
-      reminderTab[isVault ? 'vault' : 'home'] = b.dataset.tab;
-      exitSelection();
-      paintReminderTabs(isVault);
-      if (isVault) { armVaultAutoLock(); if (privateSessionKey) renderVaultFolderList(); } else renderMainTimeline().catch(() => {});
+      setReminderTab(isVault, b.dataset.tab);
+    });
+  }
+  function setReminderTab(isVault, tab) {
+    reminderTab[isVault ? 'vault' : 'home'] = tab;
+    exitSelection();
+    paintReminderTabs(isVault);
+    if (isVault) { armVaultAutoLock(); if (privateSessionKey) renderVaultFolderList(); } else renderMainTimeline().catch(() => {});
+  }
+  // Swipe left for the next tab, right for the previous (Decision 358). Ignored while selecting, near the screen edges (the
+  // system Back gesture), inside a field, and for slow or mostly vertical drags, so scrolling the list is untouched.
+  const REMINDER_TAB_ORDER = ['all', 'upcoming', 'completed'];
+  for (const isVault of [false, true]) {
+    const view = document.getElementById(isVault ? 'vault-folder-view' : 'folder-view');
+    let sx = 0, sy = 0, t0 = 0, live = false;
+    view.addEventListener('touchstart', (e) => {
+      live = false;
+      if (e.touches.length !== 1 || selection || (isVault ? openVaultFolderType : openFolderType) !== 'reminder') return;
+      const t = e.touches[0];
+      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || e.target.closest('input, textarea, select, .folder-find')) return;
+      sx = t.clientX; sy = t.clientY; t0 = Date.now(); live = true;
+    }, { passive: true });
+    view.addEventListener('touchend', (e) => {
+      if (!live) return;
+      live = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - t0 > 700) return;
+      const next = REMINDER_TAB_ORDER.indexOf(reminderTab[isVault ? 'vault' : 'home']) + (dx < 0 ? 1 : -1);
+      if (next >= 0 && next < REMINDER_TAB_ORDER.length) setReminderTab(isVault, REMINDER_TAB_ORDER[next]);
+    }, { passive: true });
+    view.addEventListener('touchcancel', () => { live = false; }, { passive: true });
+  }
+  // Reminder sound (Decision 359): every live reminder is scheduled again, so it goes out on the channel of the saved choice.
+  async function applyReminderSound() {
+    const live = (await db.query(`SELECT * FROM entries WHERE type = 'reminder' AND deleted_at IS NULL AND completed_at IS NULL`)).values || [];
+    for (const r of live) if (r.repeat_rule || r.fire_at > Date.now()) await scheduleReminder(r);
+  }
+  for (const isVault of [false, true]) {
+    document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
+      if (!e.target.closest('.rem-sound-btn') || activeRemSound) return;
+      if (isVault) armVaultAutoLock();
+      await openSoundDialog({ toast, leaving: beginPickerLaunch, onApplied: applyReminderSound, register: (h) => { activeRemSound = h; updateBackButtonState(); } });
     });
   }
   async function openFolder(type, btn) {
@@ -5262,7 +5306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(false);
     closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound" title="Reminder sound">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -6335,7 +6379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const redraw = () => (isVault ? renderVault() : renderMainTimeline());
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
       if (e.target.closest('.title-search')) { if (isVault) armVaultAutoLock(); toggleFolderFind(isVault); return; }
-      if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn')) return;
+      if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn') || e.target.closest('.rem-sound-btn')) return;
       galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
       paintGalleryBtn(isVault);
