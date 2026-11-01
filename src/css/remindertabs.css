@@ -3,3 +3,14 @@
 .rem-tabs.hidden { display: none; }
 .rem-tabs button { flex: 1 1 0; min-width: 0; min-height: 0; height: 34px; padding: 0 8px; margin: 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 0.9rem; box-shadow: none; }
 .rem-tabs button.active { background: var(--surface); color: var(--tc-ink, var(--brand-ink)); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
+
+/* Reminder sound dialog (Decision 359). */
+.rs-box { max-height: 88vh; overflow-y: auto; }
+.rs-opt { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.rs-box select { width: 100%; box-sizing: border-box; margin: 2px 0 6px; }
+.rs-filerow { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+.rs-fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.rs-note { margin: 10px 0; font-size: 0.85rem; color: var(--muted); }
+.rs-err { min-height: 1.2em; margin: 4px 0; color: var(--danger, #c0392b); font-size: 0.9rem; }
+.rs-box > button { display: block; width: 100%; margin-top: 8px; }
+.title-act.rem-sound-btn { margin-left: auto; }
