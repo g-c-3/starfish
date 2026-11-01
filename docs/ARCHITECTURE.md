@@ -1099,3 +1099,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 ## Note colours and map zoom (Decision 354)
 - `--ns-r`, `--ns-g`, `--ns-b` in `style.css`: vivid on light, bright on dark; blue is a sea blue.
 - `renderMap(host, point, { zoom, onZoomed, ... })`: starts at `zoom` (clamped 3 to 19, else `START_Z` = 16); `onZoomed(zoom, done)` runs on each pinch move (`done` false) and when a pinch ends (`done` true). The Location view keeps `curZoom`, saves it to `meta` `map_zoom:<id>` on `done`, and passes it to every `renderMap` it makes, so the second provider opens at the same zoom. The key is deleted with the location (`db.js`) and on a restore that replaces it (`backup.js`).
+
+## Trash search, Trash rows, colour with bold, Today chips (Decision 355)
+- `folderFind` has four scopes (`home`, `vault`, `trash`, `vtrash`); `FIND_CFG` names each title and field; `closeFolderFind` and `toggleFolderFind` take a scope (a boolean still means Vault or Home). `applyTrashFind` filters Trash rows by name, type label and `deleted_at`. The Trash titles get the icon when the Trash opens.
+- `.trash-row .row-actions` sits on the row (no wrap, no top border).
+- `notestyle-cm.js` `toggle`: a colour set also sets bold in one transaction.
+- `showDigest` groups by type and extension; an image entry with a video extension counts as `video`.
+

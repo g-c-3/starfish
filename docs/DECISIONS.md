@@ -3658,3 +3658,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Tiles are saved per provider and are cached only for what was viewed: a provider shown at a zoom it never loaded shows blank tiles until its button loads them online, as before.
 - Files: `src/css/style.css`, `src/js/mapprov.js` (`renderMap` takes `zoom` and `onZoomed`; exports `START_Z`), `src/js/app.js`, `src/js/db.js`, `src/js/backup.js`, `docs/ARCHITECTURE.md`. `vite build` passes; the pinch, save, restore and clamp logic run in a simulated page; not run through CI, not device-tested (DP181).
 - Risks: the vivid light green and sea blue are lighter than before on small text, judged by eye on the phone; a pinch ended by lifting both fingers at once saves once, a pinch cancelled by the system saves the last value on the next completed pinch only.
+
+**355. A colour comes with bold; Trash search and inline actions; Today chips split videos.** Owner request.
+- Choosing a colour on selected text also makes it bold, in the same step (one undo). Bold is removed with the Bold button as usual. Tapping the colour that is on removes the colour only and leaves bold. Switching colour keeps bold. Nothing selected: no change, as before. Saved notes already hold colour and bold as separate styles, so no format change (`notestyle-cm.js`).
+- Trash and Vault Trash: the same search icon and folding field as the categories (Decisions 351, 352), hint "Type File Name, Tag, Date, Month or Year". It matches the name, the type label (a typed word such as `gallery` matches that type) and the date the row shows, which is the deleted date (`2026`, `oct`, `1 nov`, `01/11/2026`). Text inside items and tags are not searched in Trash. The term clears when the Trash opens. The type chips, Sort and When keep working with it.
+- Trash rows: Restore and Delete permanently sit on the row at the right, on the line of the name and the days left, with no separator and no second line (`.trash-row .row-actions`).
+- Today chips on Home: a video (an image entry with a video extension) is counted as its own kind. Two pictures and a video read "2 images", "1 video"; the video chip takes the Gallery colour. The Gallery folder and its count are unchanged.
+- All open device checks (DP176 to DP181) closed as confirmed by the owner.
+- Files: `src/js/notestyle-cm.js`, `src/js/app.js`, `src/css/folderfind.css`, `docs/ARCHITECTURE.md`. `vite build` passes; the colour and bold rules run in a simulated editor; not run through CI; not device-tested (DP182).
+- Risks: with long names the Trash title ellipsis and the two buttons share the row; the Today chip count keeps counting only what was saved today.
+
