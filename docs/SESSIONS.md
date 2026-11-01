@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 163**
+
+Start: "Go" carried on from the previous session; Tier 1 docs known; DECISIONS and ARCHITECTURE not read in full. CI status not checked.
+- Owner reported all pending device passes working, DP178 included (DP176, DP177, DP178 confirmed).
+- Decision 352: one date per row, the last change. Cause of the owner's report: a row showed the last change while its group, its order and the category search used the saved date, so a note saved in October and renamed on 1 Nov sat under Last Month and was found by Oct, not by Nov. Fix: `savedAt` and `vSavedAt` used by Home lists (query order too), Gallery, Search, the period filter, Vault lists (oldest first by that date) and the category search.
+- The search field folds and drops (grid rows 0fr to 1fr); the hint reads "Type File Name, Tag, Date, Month or Year"; day and full-date tags added.
+- Files: `src/js/folderfind.js`, `src/css/folderfind.css`, `src/js/app.js`, docs. `vite build` passes; the tags tested apart from the page; not run through CI; nothing device-tested (DP179).
+- Risks: a background step that sets `updated_at` moves an item to the top; the fold needs WebView support for animated grid rows.
+- Decision 352 recorded. DP176 to DP178 confirmed; DP179 and Phase 52 added.
+- Next session start point: owner runs DP179 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first; the "Last Week" header twice across a month boundary.
+
+---
+
 **Session 162**
 
 Start: "Go". Tier 1 docs read; Decision 350 and ARCHITECTURE headings read; DECISIONS and ARCHITECTURE not read in full. CI status not checked (release API rate-limited, 403).

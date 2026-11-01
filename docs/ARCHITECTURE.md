@@ -1086,7 +1086,9 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 ## Category search and Make a PDF rules (Decision 351)
 - Search icon in each Home and Vault category title opens one field under it (`#folder-find`, `#vault-folder-find`); state is `folderFind` in `app.js`, cleared when a category opens or the field closes. No stored value, no call.
-- `folderfind.js`: `parseFind` splits a term into years, months and words; `dateMatches` tests the saved date; `nameMatches` tests name and tags. Home filters the rows of the open category after `showMainTimeline` (limit raised to 5000 while a term is typed) and adds text hits from `searchEntries`. Vault filters the in-memory index and adds `searchVaultBodies` hits; the Vault never leaves memory.
+- `folderfind.js`: `parseFind` splits a term into years, months, days and words (Decision 352: a day beside a month, or a full date); `dateMatches` tests the row's date (the last change, `savedAt`); `nameMatches` tests name and tags. Home filters the rows of the open category after `showMainTimeline` (limit raised to 5000 while a term is typed) and adds text hits from `searchEntries`. Vault filters the in-memory index and adds `searchVaultBodies` hits; the Vault never leaves memory.
 - Make a PDF: `pdfKind(type, extension)` returns `img`, `pdf` or null; `paintSelection` hides the button unless every selected row is Gallery, PDF or Files, and enables it for two or more of one kind. Rows carry `data-ext`; Gallery tiles carry `data-type` and `data-ext`.
 - Row time: `formatSavedDate` (day, month, year, time with seconds).
+- Row date (Decision 352): `savedAt` (`updated_at`, else `created_at`) is the shown time and the date of the group, the order (Home category lists, Search, period filter) and the category search. Vault: `vSavedAt`, oldest first. Trash keeps the deleted date.
+- The field (`.folder-find`) animates with grid rows 0fr to 1fr; `closeFolderFind(isVault, redraw, animate)` folds it, removing it on `transitionend` (fallback 450 ms).
 
