@@ -3668,3 +3668,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Files: `src/js/notestyle-cm.js`, `src/js/app.js`, `src/css/folderfind.css`, `docs/ARCHITECTURE.md`. `vite build` passes; the colour and bold rules run in a simulated editor; not run through CI; not device-tested (DP182).
 - Risks: with long names the Trash title ellipsis and the two buttons share the row; the Today chip count keeps counting only what was saved today.
 
+**356. Trash title on the lock and power line; Select tile size; no highlight of other matches.** Owner report.
+- Trash and Vault Trash titles: the heading and the search icon sat lower than the lock and power buttons. Cause: the Trash titles kept their own margin (4px above) and had no upward offset, while the category titles use margin 0 and `top: -3px` (the centre of the lock and power buttons). The Trash titles now use the same margin and offset (`folderfind.css`).
+- Select tile on Home and Vault landing pages was smaller and higher than Search, Trash and Settings. Cause: a leftover rule gave `#select-files-btn` and `#vault-select-files-btn` a 6px bottom margin from the time they were plain buttons; as a grid item it shortened the tile. Rule removed (`style.css`); `.tool-tile` sets its own margin.
+- Selecting text no longer highlights the other places where the same text occurs (the green marks). Cause: the editor's selection-match highlight. It is removed from every editor (notes, code, text files); the editor's own Find still marks its matches (`codeeditor.js`).
+- Files: `src/css/style.css`, `src/css/folderfind.css`, `src/js/codeeditor.js`, `docs/ARCHITECTURE.md`. `vite build` passes; not run through CI; the alignment and tile size are not device-tested (DP183).
+

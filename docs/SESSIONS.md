@@ -16,8 +16,9 @@ Start: "Go" carried on from the previous session; Tier 1 docs known; DECISIONS a
 - Owner saw the first purple bars on the phone: the white box behind the trash looked odd. Replaced by a plain neon red icon with a glow and a thin dark edge (`topbar.css` only).
 - Owner reported DP180 working. Decision 354: the note colours (sea blue; vivid in light mode, brighter in dark mode) and the zoom of a Home location map saved per location and shared by both providers (`renderMap` takes `zoom` and `onZoomed`; `meta` key `map_zoom:<id>`). The pinch, save, restore and clamp logic was run in a simulated page; `vite build` passes; not run through CI; not device-tested (DP181).
 - Owner reported DP181 working and asked to close all device checks. Decision 355: a colour comes with bold in one step; Trash and Vault Trash get the category search and Restore and Delete on the row; the Today chips count a video apart from images. `vite build` passes; the colour and bold rules run in a simulated editor; not run through CI; not device-tested (DP182).
-- Decisions 352, 353, 354 and 355 recorded. DP176 to DP181 confirmed and closed; DP182 and Phases 52 to 55 added.
-- Next session start point: owner runs DP182 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first; the "Last Week" header twice across a month boundary.
+- Owner's screenshots show the Trash search icon and inline actions, the "videos" chip and the colour with bold in place; DP182 stays open until the owner confirms it. Owner reported three faults. Decision 356: the Trash titles sat below the lock and power line (own margin, no offset); the Select tile was smaller than its neighbours (a leftover 6px margin rule); selecting text highlighted every other match in green (the selection-match highlight, removed). `vite build` passes; not run through CI; not device-tested (DP183).
+- Decisions 352, 353, 354, 355 and 356 recorded. DP176 to DP181 confirmed and closed; DP182, DP183 and Phases 52 to 56 added.
+- Next session start point: owner runs DP182 and DP183 and reports; check the `main` build is green; fix what fails first. Open choices: Vault lists run oldest first; the "Last Week" header twice across a month boundary.
 
 ---
 

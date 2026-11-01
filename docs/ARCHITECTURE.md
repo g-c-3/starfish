@@ -1106,3 +1106,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `notestyle-cm.js` `toggle`: a colour set also sets bold in one transaction.
 - `showDigest` groups by type and extension; an image entry with a video extension counts as `video`.
 
+## Trash title, Select tile, editor highlight (Decision 356)
+- `#trash-title` and `#vault-trash-title` share the category title offset (margin 0, `top: -3px`) so the heading, the search icon, lock and power sit on one line.
+- `.tool-tile` carries its own margin; no id rule overrides it.
+- The editor has no selection-match highlight; Find keeps `.cm-searchMatch`.
+
