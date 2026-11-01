@@ -6,7 +6,7 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder, gutter, GutterMarker } from '@codemirror/view';
 import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput, StreamLanguage } from '@codemirror/language';
-import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen, highlightSelectionMatches } from '@codemirror/search';
+import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { noteStyle } from './notestyle-cm.js';
 import { javascript } from '@codemirror/lang-javascript';
@@ -182,7 +182,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     doc: text,
     extensions: [
       ...(note ? [placeholder('Start typing\u2026'), rowGutter()] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
-      history(), ...(ns ? [ns.extension] : []), highlightSelectionMatches(), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
+      history(), ...(ns ? [ns.extension] : []), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
       keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
       languageFor(note ? '' : name),
       wrapC.of(prefs.wrap ? EditorView.lineWrapping : []), sizeC.of(sizeTheme()), editC.of(editExt(false)),
