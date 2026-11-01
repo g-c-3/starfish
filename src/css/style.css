@@ -1441,8 +1441,8 @@ mark.eo-cur { background: #ff9f1a; outline: 2px solid #ff9f1a; }
 #editor-screen .editor-count { padding: 5px 12px calc(7px + env(safe-area-inset-bottom, 0px)); text-align: center; }
 body.overlay-open #editor-screen { padding-bottom: 0; }
 body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the editor has its own Back */
-:root { --ns-r: #a31621; --ns-g: #14612a; --ns-b: #1240a8; } /* darker on the light page */
-:root[data-theme="dark"] { --ns-r: #ff8f96; --ns-g: #7fe3a0; --ns-b: #92b8ff; } /* lighter on the dark page */
+:root { --ns-r: #e3173a; --ns-g: #0a9148; --ns-b: #0687b0; } /* vivid on the light page; blue is a sea blue (Decision 354) */
+:root[data-theme="dark"] { --ns-r: #ff7b88; --ns-g: #52e88f; --ns-b: #4ad6f5; } /* bright on the dark page */
 .cm-content .ns-bold { font-weight: 700; }
 .cm-content .ns-ital { font-style: italic; }
 .cm-content .ns-und { text-decoration: underline; text-underline-offset: 2px; }
