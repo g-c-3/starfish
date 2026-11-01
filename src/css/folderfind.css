@@ -1,3 +1,8 @@
-.folder-find { margin: 6px 0 10px; }
+/* The search field drops down and folds up (Decision 352): the row height grows from 0 to its content. */
+.folder-find { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(-8px); margin: 0; transition: grid-template-rows .28s cubic-bezier(.2, .8, .2, 1), opacity .2s ease, transform .28s cubic-bezier(.2, .8, .2, 1), margin .28s cubic-bezier(.2, .8, .2, 1); }
+.folder-find.open { grid-template-rows: 1fr; opacity: 1; transform: none; margin: 6px 0 10px; }
+.folder-find-in { overflow: hidden; min-height: 0; padding: 0 4px; margin: 0 -4px; }
+.folder-find.open .folder-find-in { padding: 4px; margin: -4px; } /* room for the focus ring inside the clip */
 .folder-find input[type="search"] { width: 100%; box-sizing: border-box; }
 .title-act ~ .title-act { margin-left: 0; }
+@media (prefers-reduced-motion: reduce) { .folder-find { transition: none; } }
