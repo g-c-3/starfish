@@ -95,7 +95,9 @@ export function noteStyle(initial = []) {
     const { from, to } = view.state.selection.main;
     if (from === to) return false;
     const on = coverage(view.state, kind, from, to) === (kind === 'c' ? value : true);
-    view.dispatch({ effects: styleEffect.of({ kind, value: on ? null : (kind === 'c' ? value : 1), from, to }) });
+    const effects = [styleEffect.of({ kind, value: on ? null : (kind === 'c' ? value : 1), from, to })];
+    if (kind === 'c' && !on) effects.push(styleEffect.of({ kind: 'b', value: 1, from, to })); // a colour comes with bold, in the same step; bold is removed with its own button (Decision 355)
+    view.dispatch({ effects });
     return true;
   };
   // With a selection: what covers all of it. With only a cursor: what is on the character before it (else after it), for display.

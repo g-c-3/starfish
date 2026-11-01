@@ -1064,11 +1064,19 @@ async function onUnlocked() {
 async function showDigest() {
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const rows = await db.query(
-    `SELECT type, COUNT(*) as cnt, SUM(amount) as total FROM entries
-     WHERE created_at >= ? AND deleted_at IS NULL AND is_private=0 GROUP BY type`,
+    `SELECT type, extension, COUNT(*) as cnt, SUM(amount) as total FROM entries
+     WHERE created_at >= ? AND deleted_at IS NULL AND is_private=0 GROUP BY type, extension`,
     [startOfDay.getTime()]
   );
-  return rows.values || [];
+  // A video is saved as an image entry: it counts as its own kind, so "2 images, 1 video" (Decision 355).
+  const by = new Map();
+  for (const r of rows.values || []) {
+    const type = r.type === 'image' && isVideoExt(r.extension) ? 'video' : r.type;
+    const cur = by.get(type) || { type, cnt: 0, total: 0 };
+    cur.cnt += r.cnt; cur.total += r.total || 0;
+    by.set(type, cur);
+  }
+  return [...by.values()];
 }
 
 // "1 month/year ago you saved..." — pure rule-based date-diff, no automated inference (ARCHITECTURE
@@ -3685,7 +3693,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function drawTrash() {
     const types = typeCounts(trashRows, browseType, VAULT_TYPES);
     if (trashState.type !== 'all' && !types.some((t) => t.type === trashState.type)) trashState.type = 'all';
-    const rows = browse(trashRows, { ...trashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    const rows = applyTrashFind(browse(trashRows, { ...trashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES }), 'trash');
     document.getElementById('trash-toolbar').innerHTML = trashRows.length
       ? toolbarHtml({ types, total: trashRows.length, type: trashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: trashState.sort, periods: PERIODS, period: trashState.period }) : '';
     const tDated = trashState.sort === 'new' || trashState.sort === 'old'; // separators only while the list runs by date (Decision 350)
@@ -3713,6 +3721,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await flushPurge();
     trashOpen = true;
     Object.assign(trashState, { type: 'all', sort: 'new', period: 'any' });
+    closeFolderFind('trash');
+    const tt = document.getElementById('trash-title');
+    if (!tt.querySelector('.title-search')) tt.insertAdjacentHTML('beforeend', findBtnHtml());
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('trash-view').classList.remove('hidden');
     updateBackButtonState();
@@ -3720,6 +3731,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   bindToolbar(document.getElementById('trash-toolbar'), trashState, drawTrash);
   document.getElementById('open-trash-btn').addEventListener('click', openTrash);
+  document.getElementById('trash-title').addEventListener('click', (e) => { if (e.target.closest('.title-search')) toggleFolderFind('trash'); });
+  document.getElementById('vault-trash-title').addEventListener('click', (e) => { if (e.target.closest('.title-search')) { armVaultAutoLock(); toggleFolderFind('vtrash'); } });
   document.getElementById('trash-list').addEventListener('click', async (e) => {
     const restore = e.target.closest('.trash-restore-btn'), purge = e.target.closest('.trash-purge-btn');
     if (restore) {
@@ -4179,7 +4192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function drawVaultTrash() {
     const types = typeCounts(vaultTrashRows, browseType, VAULT_TYPES);
     if (vaultTrashState.type !== 'all' && !types.some((t) => t.type === vaultTrashState.type)) vaultTrashState.type = 'all';
-    const rows = browse(vaultTrashRows, { ...vaultTrashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES });
+    const rows = applyTrashFind(browse(vaultTrashRows, { ...vaultTrashState, dateOf: (r) => r.deleted_at, nameOf: (r) => r.label, typeOf: browseType, typeOrder: VAULT_TYPES }), 'vtrash');
     document.getElementById('vault-trash-toolbar').innerHTML = vaultTrashRows.length
       ? toolbarHtml({ types, total: vaultTrashRows.length, type: vaultTrashState.type, labelOf: typeLabelFor, sorts: TRASH_SORTS, sort: vaultTrashState.sort, periods: PERIODS, period: vaultTrashState.period }) : '';
     const vtDated = vaultTrashState.sort === 'new' || vaultTrashState.sort === 'old';
@@ -4211,6 +4224,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await flushPurge();
     vaultTrashOpen = true;
     Object.assign(vaultTrashState, { type: 'all', sort: 'new', period: 'any' });
+    closeFolderFind('vtrash');
+    const vtt = document.getElementById('vault-trash-title');
+    if (!vtt.querySelector('.title-search')) vtt.insertAdjacentHTML('beforeend', findBtnHtml());
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-trash-view').classList.remove('hidden');
     updateBackButtonState();
@@ -5016,7 +5032,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   refreshHome = () => { renderMainTimeline().catch(() => {}); };
   // Search inside one category (Decision 351): name and tags, text content, and year or month as tags on the saved date.
-  const folderFind = { home: '', vault: '' };
+  const folderFind = { home: '', vault: '', trash: '', vtrash: '' };
+  const FIND_CFG = { home: { title: 'folder-title', bar: 'folder-find' }, vault: { title: 'vault-folder-title', bar: 'vault-folder-find' }, trash: { title: 'trash-title', bar: 'trash-find' }, vtrash: { title: 'vault-trash-title', bar: 'vault-trash-find' } };
+  const findScope = (s) => (s === true ? 'vault' : s === false ? 'home' : s); // the callers of the two categories pass isVault
+  // Trash and Vault Trash: name and type, and the day it was deleted (the date its row shows).
+  function applyTrashFind(rows, scope) {
+    const f = parseFind(folderFind[scope]);
+    if (!hasFind(f)) return rows;
+    return rows.filter((r) => dateMatches(r.deleted_at, f) && nameMatches(`${r.label} ${typeLabelFor(browseType(r))}`, [], f.words));
+  }
   let vaultFindIds = new Set(), vaultFindSeq = 0;
   async function applyHomeFind(rows) {
     const f = parseFind(folderFind.home);
@@ -5031,8 +5055,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return items.filter((e) => dateMatches(vSavedAt(e), f) && (!f.words.length || nameMatches(e.label, e.tags, f.words) || vaultFindIds.has(e.id)));
   }
   // Folding (animate) lets the field shrink before it is removed; opening another category removes it at once.
-  function closeFolderFind(isVault, redraw = false, animate = false) {
-    const bar = document.getElementById(isVault ? 'vault-folder-find' : 'folder-find');
+  function closeFolderFind(scopeArg, redraw = false, animate = false) {
+    const scope = findScope(scopeArg), isVault = scope === 'vault';
+    const bar = document.getElementById(FIND_CFG[scope].bar);
     if (bar) {
       if (animate) {
         bar.dataset.closing = '1';
@@ -5043,19 +5068,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(rm, 450);
       } else bar.remove();
     }
-    const had = !!folderFind[isVault ? 'vault' : 'home'];
-    folderFind[isVault ? 'vault' : 'home'] = ''; vaultFindIds = new Set(); vaultFindSeq++;
-    if (redraw && had) (isVault ? (privateSessionKey && renderVault()) : renderMainTimeline());
+    const had = !!folderFind[scope];
+    folderFind[scope] = ''; if (isVault) vaultFindIds = new Set(); vaultFindSeq++;
+    if (redraw && had) {
+      if (scope === 'home') renderMainTimeline(); else if (scope === 'vault') { if (privateSessionKey) renderVault(); }
+      else if (scope === 'trash') drawTrash(); else if (privateSessionKey) drawVaultTrash();
+    }
   }
-  function toggleFolderFind(isVault) {
-    const id = isVault ? 'vault-folder-find' : 'folder-find';
+  function toggleFolderFind(scopeArg) {
+    const scope = findScope(scopeArg), isVault = scope === 'vault', id = FIND_CFG[scope].bar;
     const cur = document.getElementById(id);
-    if (cur && !cur.dataset.closing) { closeFolderFind(isVault, true, true); return; }
+    if (cur && !cur.dataset.closing) { closeFolderFind(scope, true, true); return; }
     if (cur) cur.remove(); // still folding from a moment ago
     const bar = document.createElement('div');
     bar.id = id; bar.className = 'folder-find';
     bar.innerHTML = '<div class="folder-find-in"><input type="search" placeholder="Type File Name, Tag, Date, Month or Year" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" aria-label="Search this category"></div>';
-    document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').insertAdjacentElement('afterend', bar);
+    document.getElementById(FIND_CFG[scope].title).insertAdjacentElement('afterend', bar);
     const input = bar.querySelector('input');
     let t = 0;
     input.addEventListener('input', () => {
@@ -5063,8 +5091,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       t = setTimeout(async () => {
         if (!bar.isConnected || bar.dataset.closing) return;
         const term = input.value.trim(), seq = ++vaultFindSeq;
-        if (!isVault) { folderFind.home = term; await renderMainTimeline(); return; }
+        if (scope === 'home') { folderFind.home = term; await renderMainTimeline(); return; }
+        if (scope === 'trash') { folderFind.trash = term; drawTrash(); return; }
         if (!privateSessionKey) return;
+        if (scope === 'vtrash') { armVaultAutoLock(); folderFind.vtrash = term; drawVaultTrash(); return; }
         armVaultAutoLock();
         folderFind.vault = term; vaultFindIds = new Set();
         renderVault();
@@ -5492,7 +5522,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (rows.length === 0) { el.innerHTML = '<span class="empty-line">Nothing yet today.</span>'; return; }
     el.innerHTML = rows.map((r) => {
       const text = r.total ? `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''} ($${r.total.toFixed(2)})` : `${r.cnt} ${r.type}${r.cnt > 1 ? 's' : ''}`;
-      return `<span class="chip" data-type="${escapeHtml(r.type)}">${escapeHtml(text)}</span>`;
+      return `<span class="chip" data-type="${escapeHtml(r.type === 'video' ? 'image' : r.type)}">${escapeHtml(text)}</span>`; // a video chip takes the Gallery colour
     }).join('');
   }
   await renderDigest();
