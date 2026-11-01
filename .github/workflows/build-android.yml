@@ -107,6 +107,12 @@ jobs:
       - name: Add the playback output bridge (native)
         run: node scripts/patch-audioroute.js
 
+      # Decision 359 — reminder sound: the phone's notification sound, alarm sound or an audio file, optionally rising. Writes the
+      # sound classes and bridge (window.ArklySound), the media-playback service and its permission, and hooks the plugin's
+      # publisher and dismiss receiver and the action receiver. Needs patch-reminder-actions.js and patch-audioroute.js first.
+      - name: Add reminder sound (native)
+        run: node scripts/patch-reminder-sound.js
+
       # Decision 287 — window.ArklyNav: whether Back is a button or a swipe gesture, to word the "again to exit" notice. Needs the
       # onCreate() that patch-screenlock.js guarantees. No permission, no Gradle change.
       - name: Add the Back style bridge (native)
