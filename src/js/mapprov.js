@@ -8,7 +8,8 @@ import { cachedTile, storeTile, clearAllTiles, countTiles } from './maptiles.js'
 
 // Slot 1 keeps the original keys. Slot 2 is optional. Neither is in any backup.
 const KEYS = [{ tpl: 'map_provider_template', key: 'map_provider_key' }, { tpl: 'map_provider2_template', key: 'map_provider2_key' }];
-const TILE = 256, MIN_Z = 3, MAX_Z = 19, START_Z = 16;
+export const START_Z = 16; // the zoom of a location never opened before
+const TILE = 256, MIN_Z = 3, MAX_Z = 19;
 
 // Prefill only. Templates and sign-up pages change; the person checks the provider's own documentation.
 const PRESETS = [
@@ -144,8 +145,8 @@ async function fetchDataUrl(url) {
 // Fills `host` (a box sized by CSS; the zoom text goes to onZoom) with the map, centred on the point. Pinch zooms between 3 and 19, continuously.
 // Tiles come from the saved copy first; the provider is asked only while `online` is true (after the person's tap); each tile fetched
 // is saved with the location, in the table of `slot` (1 or 2, one per provider). Returns { goOnline(provider) }.
-export function renderMap(host, { lat, lng }, { db, entryId, provider, online, onZoom, slot = 1 }) {
-  const st = { zf: START_Z, provider: provider || null, online: !!online, noStore: false, builtZ: null, token: 0 };
+export function renderMap(host, { lat, lng }, { db, entryId, provider, online, onZoom, slot = 1, zoom, onZoomed }) {
+  const st = { zf: Number.isFinite(zoom) ? Math.max(MIN_Z, Math.min(MAX_Z, zoom)) : START_Z, provider: provider || null, online: !!online, noStore: false, builtZ: null, token: 0 };
   host.textContent = '';
   host.classList.add('mp-host');
   const mosaic = document.createElement('div'); mosaic.className = 'mp-mosaic';
@@ -213,8 +214,14 @@ export function renderMap(host, { lat, lng }, { db, entryId, provider, online, o
     if (ptrs.size !== 2) return;
     st.zf = Math.max(MIN_Z, Math.min(MAX_Z, z0 + Math.log2(dist() / d0)));
     draw();
+    if (onZoomed) onZoomed(st.zf, false); // the caller keeps the live zoom, so another provider opens at the same one
   });
-  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size === 2) { d0 = dist() || 1; z0 = st.zf; } };
+  const up = (e) => {
+    const pinching = ptrs.size === 2;
+    ptrs.delete(e.pointerId);
+    if (ptrs.size === 2) { d0 = dist() || 1; z0 = st.zf; }
+    if (pinching && onZoomed) onZoomed(st.zf, true); // the pinch ended: the caller saves it
+  };
   host.addEventListener('pointerup', up);
   host.addEventListener('pointercancel', up);
 

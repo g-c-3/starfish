@@ -36,7 +36,7 @@ import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
-import { openProviderDialog, loadProviders, renderMap } from './mapprov.js';
+import { openProviderDialog, loadProviders, renderMap, START_Z } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
 import { groupedHtml } from './dategroup.js';
 import '../css/topbar.css';
@@ -6043,6 +6043,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           const two = provs.length > 1;
           const items = (two ? provs : [provs[0] || null]).map((p) => ({ slot: p ? p.slot : 1, prov: p, btn: document.getElementById(two ? `lv-map-btn${p.slot}` : 'lv-map-btn'), saved: false, online: false }));
           let ctl = null, cur = null;
+          // The zoom last used on this location (Decision 354): kept per location, shared by both providers, restored on open.
+          const zoomKey = `map_zoom:${row.id}`;
+          let curZoom = START_Z;
+          try { const z = Number(await metaGet(zoomKey, START_Z)); if (Number.isFinite(z) && z >= 3 && z <= 19) curZoom = z; } catch { /* starts at the default */ }
           const noteFor = (it) => {
             const base = it.online ? 'Pinch to zoom. Tiles you view are saved with this location.' : 'Saved map. Pinch to zoom.';
             return two ? `Map ${it.slot}. ${base}` : base;
@@ -6062,7 +6066,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             wrap.innerHTML = '<div id="lv-map-host"></div>'; // a fresh box per map: renderMap puts its pinch handlers on it
             items.forEach((x) => { x.online = false; });
             it.online = online; cur = it;
-            ctl = renderMap(wrap.firstChild, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: it.prov, online, slot: it.slot, onZoom: (t) => { zoomEl.textContent = t; zoomEl.classList.remove('hidden'); } });
+            ctl = renderMap(wrap.firstChild, { lat: row.latitude, lng: row.longitude }, { db, entryId: row.id, provider: it.prov, online, slot: it.slot, zoom: curZoom, onZoomed: (z, done) => { curZoom = z; if (done) Promise.resolve(metaSet(zoomKey, z.toFixed(2))).catch(() => {}); }, onZoom: (t) => { zoomEl.textContent = t; zoomEl.classList.remove('hidden'); } });
             note.textContent = noteFor(it);
             paint();
           };

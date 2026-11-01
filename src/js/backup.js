@@ -519,6 +519,7 @@ async function wipeCategories(db, categories, onStep) {
       await db.run(`DELETE FROM location_tiles WHERE entry_id=?`, [row.id]); // saved map tiles go with the location (Decisions 346, 348)
       await db.run(`DELETE FROM location_tiles2 WHERE entry_id=?`, [row.id]);
       await db.run(`DELETE FROM meta WHERE key=?`, [`map_last:${row.id}`]);
+      await db.run(`DELETE FROM meta WHERE key=?`, [`map_zoom:${row.id}`]);
       await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
       await removeFile(full); // the file goes with its entry (Decision 162)
     }
