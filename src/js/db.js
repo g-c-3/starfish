@@ -149,6 +149,15 @@ CREATE TABLE IF NOT EXISTS location_tiles2 (
   PRIMARY KEY (entry_id, z, x, y)
 );
 
+-- ===== Closed occurrences of repeating reminders (Decision 357) =====
+CREATE TABLE IF NOT EXISTS reminder_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entry_id TEXT NOT NULL,
+  due_at INTEGER NOT NULL,
+  closed_at INTEGER NOT NULL,
+  UNIQUE (entry_id, due_at)
+);
+
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT
@@ -427,6 +436,7 @@ async function permanentlyDeleteEntry(db, id) {
   await db.run(`DELETE FROM entry_tags WHERE entry_id = ?`, [id]); // explicit — see purgeOldTrash's own note
   await db.run(`DELETE FROM location_tiles WHERE entry_id = ?`, [id]); // saved map tiles go with the location (Decisions 346, 348)
   await db.run(`DELETE FROM location_tiles2 WHERE entry_id = ?`, [id]);
+  await db.run(`DELETE FROM reminder_log WHERE entry_id = ?`, [id]); // closed occurrences go with the reminder (Decision 357)
   await db.run(`DELETE FROM meta WHERE key = ?`, [`map_last:${id}`]); // the last-used map choice goes too
   await db.run(`DELETE FROM meta WHERE key = ?`, [`map_zoom:${id}`]); // and the last-used zoom (Decision 354)
   await db.run(`DELETE FROM entries WHERE id = ?`, [id]);

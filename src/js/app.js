@@ -6,7 +6,9 @@ import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, in
 import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, createVaultWrap, unwrapVault, wrapVmk, vmkToKey, vmkMatchesWrap, VAULT_WRAP_ITERATIONS, toBase64, fromBase64, encryptPrivateNote, decryptPrivateNote } from './crypto.js';
 import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
-import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel } from './reminders.js';
+import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel, reminderTabItems } from './reminders.js';
+import { logClosedOccurrence, loadReminderLog } from './reminderlog.js';
+import '../css/remindertabs.css';
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
 import { initWidgetCapture, handleWidgetBack, closeWidgetCapture } from './widget.js';
@@ -295,6 +297,8 @@ function closeVaultSettings() {
   updateBackButtonState();
 }
 let openVaultFolderType = null; // which Vault folder (card type) is open, or null for the card grid (Decision 85)
+const reminderTab = { home: 'upcoming', vault: 'upcoming' }; // the Reminder tab shown in each store; opening the folder resets it (Decision 357)
+let vaultReminderLog = []; // closed occurrences, read for the Vault's Completed tab; emptied when the Vault locks
 function closeVaultFolder() {
   exitSelection();
   stopRowPlay();
@@ -1319,6 +1323,7 @@ function lockVault() {
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
+  vaultReminderLog = [];
   clearVaultThumbs();
   clearVaultIndex();
   if (vaultAutoLockTimer) clearTimeout(vaultAutoLockTimer);
@@ -2042,6 +2047,14 @@ function rowMeta(row, inFolder = false) {
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
   const timing = st === 'snoozed' ? `Snoozed until ${formatEntryDate(row.snoozed_until)}` : `${lead} ${when}`;
   return { meta: [inFolder ? '' : 'Reminder', timing, row.repeat_rule ? repeatLabel(row.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: st === 'done' || st === 'fired' };
+}
+// A row in a Reminder tab (Decision 357): a closed occurrence names when it was closed and when it was due; a one-off marked done
+// names both too; every other row reads as in any list.
+function reminderItemMeta(it) {
+  const r = it.row;
+  if (it.kind === 'occurrence') return { meta: [`Done ${formatEntryDate(it.closed_at)}`, `Was due ${formatEntryDate(it.due_at)}`, repeatLabel(r.repeat_rule).toLowerCase()].filter(Boolean).join(' · '), done: true };
+  if (r.completed_at) return { meta: [`Done ${formatEntryDate(r.completed_at)}`, r.fire_at ? `Was due ${formatEntryDate(r.fire_at)}` : '', r.repeat_rule ? repeatLabel(r.repeat_rule).toLowerCase() : ''].filter(Boolean).join(' · '), done: true };
+  return rowMeta(r, true);
 }
 // Files show their extension (PDF, DOCX, ZIP) in place of the folder icon; no extension keeps the icon.
 function rowIconHtml(type, ext) {
@@ -3118,8 +3131,9 @@ async function toggleRowPlay(id, isVault) {
 // Done: a one-off is finished and cancelled. A repeating reminder is only done for this time (Decision 108): its
 // snooze is cleared and the later occurrences stay scheduled.
 async function markReminderDone(id) {
-  const row = ((await db.query(`SELECT repeat_rule FROM entries WHERE id = ?`, [id])).values || [])[0];
+  const row = ((await db.query(`SELECT id, fire_at, repeat_rule FROM entries WHERE id = ?`, [id])).values || [])[0];
   if (row && row.repeat_rule) {
+    await logClosedOccurrence(db, row, Date.now()); // the occurrence closed goes in the Completed tab (Decision 357)
     await db.run(`UPDATE entries SET snoozed_until = NULL, updated_at = ? WHERE id = ?`, [Date.now(), id]);
     try { await cancelSnooze(id); } catch { /* no snooze pending */ }
     return;
@@ -3156,6 +3170,10 @@ async function drainQueuedReminderActions() {
     }
     items.sort((x, y) => x.t - y.t);
     for (const it of items) {
+      if (it.a === 'done') {
+        const r = ((await db.query(`SELECT id, fire_at, repeat_rule FROM entries WHERE id = ? AND deleted_at IS NULL`, [it.e])).values || [])[0];
+        if (r && r.repeat_rule) await logClosedOccurrence(db, r, it.t); // tap time, not drain time (Decision 357)
+      }
       if (it.a === 'done') await db.run(`UPDATE entries SET completed_at = CASE WHEN repeat_rule IS NULL THEN ? ELSE NULL END, snoozed_until = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t, it.t, it.e]);
       else if (it.a === 'snooze') await db.run(`UPDATE entries SET snoozed_until = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, [it.t + SNOOZE_MS, it.t, it.e]);
     }
@@ -4013,7 +4031,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderGallery(container, items, true, async () => renderVault());
       return;
     }
-    container.innerHTML = vaultRowsHtml(items, !!folderFind.vault);
+    const tabItems = openVaultFolderType === 'reminder' ? reminderTabItems(items, vaultReminderLog, reminderTab.vault, { savedAt: vSavedAt, newestFirst: false }) : null; // Decision 357
+    container.innerHTML = tabItems
+      ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? null : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it) }, 'vault')) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
+      : vaultRowsHtml(items, !!folderFind.vault);
+    if (tabItems) { // the log is read from the database; the list redraws once if it differs from the copy drawn
+      loadReminderLog(db).then((l) => {
+        if (!privateSessionKey || openVaultFolderType !== 'reminder' || JSON.stringify(l) === JSON.stringify(vaultReminderLog)) return;
+        vaultReminderLog = l; renderVaultFolderList();
+      }).catch(() => {});
+    }
     if (openVaultFolderType === 'voice') { voiceFolderItems.vault = items; paintRowPlay(); }
     container.querySelectorAll('.entry-row').forEach((r) => r.addEventListener('click', async (e) => {
       if (e.target.closest('.row-actions')) return;
@@ -4172,6 +4199,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateBackButtonState();
     const vTitle = document.getElementById('vault-folder-title');
     vTitle.dataset.vaultType = type;
+    if (type === 'reminder') { reminderTab.vault = 'upcoming'; vaultReminderLog = []; }
+    document.getElementById('vault-reminder-tabs').classList.toggle('hidden', type !== 'reminder');
+    paintReminderTabs(true);
     closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
     vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${findBtnHtml()}`;
@@ -5124,9 +5154,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderGallery(document.getElementById('folder-list'), rows, false, renderMainTimeline);
       return;
     }
-    document.getElementById('folder-list').innerHTML = groupedHtml(rows, savedAt, (row) => entryRowHtml({
-      id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
-    }, 'main')) || emptyStateHtml(finding ? 'search' : 'folder');
+    const tabItems = openFolderType === 'reminder' ? reminderTabItems(rows, await loadReminderLog(db), reminderTab.home, { savedAt }) : null; // Upcoming, Completed or All (Decision 357)
+    document.getElementById('folder-list').innerHTML = (tabItems
+      ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? null : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it) }, 'main'))
+      : groupedHtml(rows, savedAt, (row) => entryRowHtml({
+        id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
+      }, 'main'))) || emptyStateHtml(finding ? 'search' : 'folder');
     if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -5200,12 +5233,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       toggleRowPlay(b.dataset.id, isVault);
     }, true);
   }
+  // Reminder tabs (Decision 357): All, Upcoming (the default), Completed. Home and the Vault each keep their own.
+  function paintReminderTabs(isVault) {
+    const on = reminderTab[isVault ? 'vault' : 'home'];
+    document.querySelectorAll(`#${isVault ? 'vault-reminder-tabs' : 'reminder-tabs'} button[data-tab]`).forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === on);
+      b.setAttribute('aria-selected', b.dataset.tab === on ? 'true' : 'false');
+    });
+  }
+  for (const isVault of [false, true]) {
+    document.getElementById(isVault ? 'vault-reminder-tabs' : 'reminder-tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tab]');
+      if (!b) return;
+      reminderTab[isVault ? 'vault' : 'home'] = b.dataset.tab;
+      exitSelection();
+      paintReminderTabs(isVault);
+      if (isVault) { armVaultAutoLock(); if (privateSessionKey) renderVaultFolderList(); } else renderMainTimeline().catch(() => {});
+    });
+  }
   async function openFolder(type, btn) {
     openFolderType = type;
     if (type === 'money') moneyMonth = null; // the month header starts on the current month
     updateBackButtonState();
     const hTitle = document.getElementById('folder-title');
     hTitle.dataset.type = type;
+    if (type === 'reminder') reminderTab.home = 'upcoming';
+    document.getElementById('reminder-tabs').classList.toggle('hidden', type !== 'reminder');
+    paintReminderTabs(false);
     closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
     hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;

@@ -43,8 +43,47 @@ function reminderNextDue(row, now = Date.now()) {
   return nextOccurrences(row.fire_at, row.repeat_rule, now, 1)[0] || row.fire_at;
 }
 
+// The latest occurrence at or before `t` (ms), or null when the series has not started. Names the occurrence a Done tap closes.
+function lastOccurrenceAtOrBefore(fireAt, rule, t) {
+  if (!fireAt || !rule || fireAt > t) return null;
+  const per = { daily: 1, weekly: 7, monthly: 28 }[rule];
+  if (!per) return null;
+  const count = Math.min(5000, Math.floor((t - fireAt) / (per * 86400000)) + 2);
+  const all = nextOccurrences(fireAt, rule, fireAt - 1, count).filter((x) => x <= t);
+  return all.length ? all[all.length - 1] : null;
+}
+
+// What each Reminder tab lists (Decision 357). Pure. `rows`: reminder entries (Home rows or Vault index entries, same schedule
+// fields). `log`: [{ entry_id, due_at, closed_at }], one per closed occurrence of a repeating reminder.
+//   upcoming  - reminders still open, soonest first; a repeating one shows its next date.
+//   completed - one item per closed reminder: a one-off marked done or fired, and each logged occurrence of a repeating one.
+//   all       - every reminder once, open or closed.
+// Item: { row, kind: 'entry' | 'occurrence', at, due_at?, closed_at? }. Date order follows `newestFirst`; Upcoming is always soonest first.
+function reminderTabItems(rows, log, tab, { now = Date.now(), savedAt = (r) => r.updated_at || r.created_at, newestFirst = true } = {}) {
+  const dir = newestFirst ? -1 : 1;
+  if (tab === 'upcoming') {
+    return rows.filter((r) => isReminderActive(r, now)).map((row) => ({ row, kind: 'entry', at: reminderNextDue(row, now) }))
+      .sort((a, b) => (a.at || 0) - (b.at || 0));
+  }
+  if (tab === 'completed') {
+    const items = [];
+    for (const row of rows) {
+      const st = reminderStatus(row, now);
+      if (st === 'done') items.push({ row, kind: 'entry', at: row.completed_at });
+      else if (st === 'fired') items.push({ row, kind: 'entry', at: row.fire_at });
+    }
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const l of log || []) {
+      const row = byId.get(l.entry_id);
+      if (row) items.push({ row, kind: 'occurrence', at: l.closed_at, due_at: l.due_at, closed_at: l.closed_at });
+    }
+    return items.sort((a, b) => dir * ((a.at || 0) - (b.at || 0)));
+  }
+  return rows.map((row) => ({ row, kind: 'entry', at: savedAt(row) })).sort((a, b) => dir * ((a.at || 0) - (b.at || 0)));
+}
+
 const isReminderInactive = (row, now = Date.now()) => ['done', 'fired'].includes(reminderStatus(row, now));
 const isReminderActive = (row, now = Date.now()) => !isReminderInactive(row, now);
 const repeatLabel = (rule) => REPEAT_LABELS[rule] || 'Does not repeat';
 
-export { nextOccurrences, reminderNextDue, reminderStatus, isReminderInactive, isReminderActive, repeatLabel, REPEAT_LABELS };
+export { nextOccurrences, lastOccurrenceAtOrBefore, reminderTabItems, reminderNextDue, reminderStatus, isReminderInactive, isReminderActive, repeatLabel, REPEAT_LABELS };

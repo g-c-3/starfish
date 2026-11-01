@@ -18,6 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { Device } from '@capacitor/device';
 import { decryptBackup, deriveAesKey, encryptChunk, decryptChunk, fromBase64, toBase64, BACKUP_KDF_ITERATIONS } from './crypto.js';
 import { VAULT_PLACEHOLDER_LABEL } from './db.js';
+import { readReminderLog, restoreReminderLog } from './reminderlog.js';
 import { plainNoteText } from './notestyle.js';
 import { planVaultRestore, applyVaultPlan } from './vaultrestore.js';
 
@@ -134,6 +135,7 @@ async function buildBackupPayload(db, categories) {
         [row.id]
       )).values || [];
       out.tags = tagRows.map((t) => t.name); // entry_tags is a join table, not a column — carried separately
+      if (row.type === 'reminder') out.reminder_log = await readReminderLog(db, row.id); // closed occurrences of a repeating reminder travel with it (Decision 357)
       payload.entries.push(out);
     }
   }
@@ -321,6 +323,7 @@ async function createBackup(db, { passphrase, hint = '', categories = ALL_CATEGO
         `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`, [row.id]
       )).values || [];
       out.tags = tagRows.map((t) => t.name); // entry_tags is a join table, not a column — carried separately
+      if (row.type === 'reminder') out.reminder_log = await readReminderLog(db, row.id); // closed occurrences of a repeating reminder travel with it (Decision 357)
 
       let pieces = null;
       if (typeof out.encrypted_body === 'string' && out.encrypted_body.length > INLINE_BODY_CHARS) {
@@ -518,6 +521,7 @@ async function wipeCategories(db, categories, onStep) {
       await db.run(`DELETE FROM entry_tags WHERE entry_id=?`, [row.id]); // cascade not relied on — see db.js
       await db.run(`DELETE FROM location_tiles WHERE entry_id=?`, [row.id]); // saved map tiles go with the location (Decisions 346, 348)
       await db.run(`DELETE FROM location_tiles2 WHERE entry_id=?`, [row.id]);
+      await db.run(`DELETE FROM reminder_log WHERE entry_id=?`, [row.id]); // closed occurrences go with the reminder (Decision 357)
       await db.run(`DELETE FROM meta WHERE key=?`, [`map_last:${row.id}`]);
       await db.run(`DELETE FROM meta WHERE key=?`, [`map_zoom:${row.id}`]);
       await db.run(`DELETE FROM entries WHERE id=?`, [row.id]);
@@ -607,6 +611,7 @@ async function insertRestoredEntry(db, entry, targetId, label, opts, summary) {
     const tagRow = (await db.query(`SELECT id FROM tags WHERE name = ?`, [tagName])).values[0];
     await db.run(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)`, [targetId, tagRow.id]);
   }
+  if (entry.type === 'reminder') await restoreReminderLog(db, targetId, entry.reminder_log); // a backup from before Decision 357 has none
   summary.added += 1;
 }
 
