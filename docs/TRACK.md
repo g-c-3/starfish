@@ -370,3 +370,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-01 | Session 164 (continued: swipe, reminder sound) | Decisions 358, 359 | DP184 confirmed; Phase 57 closed; Phases 58 (Reminder sound, native code) and 59 (swipe between Reminder tabs) built; DP185 and DP186 added; not compiled by Gradle, not run through CI |
 | 2026-11-01 | Session 164 (continued: tab swipe fix) | Decision 360 | Swipe works from empty space; slide transition between Reminder tabs; native sound step found missing from the live workflow | 
 | 2026-11-01 | Session 164 (continued: image viewer) | Decision 361 | Image viewer swipe rebuilt as a carousel; DP187 added; not device-tested |
+| 2026-11-02 | Session 165 | Decision 362 | Phase 61: PDF viewer layout shared by Home, Vault and File explorer; tap to fold tools; edit mode with selectable marks, picture opacity, stamp shapes; Save in the title bar; DP188 added; not run through CI or a device |

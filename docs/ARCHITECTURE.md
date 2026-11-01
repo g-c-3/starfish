@@ -957,13 +957,16 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - The app is Arkly (Decisions 165, 273). Package id `com.arkly.app`, database file `arkly.db`, channel ids `arkly_reminders*`, biometric entry names `arkly.app-password` and `arkly.vault-pin`, Drive folder `Arkly Backups`. Kept: keystore alias `dumpzone` (only inside the keystore and the `KEY_ALIAS` secret), the `.dz` backup extension and the format magic bytes (existing backups must keep restoring). The old package `com.dumpzone.app` is a different app to Android: it keeps its own data and is replaced by restoring a backup into the new one.
 - CI (`build-android.yml`) does not run for pushes that change only `docs/**`, `**/*.md` or `android-notes/**`.
 
-## PDF mark-up (Decision 166)
-- `src/js/pdfmark-ui.js` (screen, loaded after the viewer) and `src/js/pdfmark.js` (export on `pdf-lib`, loaded when Mark up is tapped). Shared constants in `pdfmarkconst.js`. The viewer exposes `pageEls()` only.
-- Marks: `{ page, kind, ... }` in fractions of the displayed page, origin top-left. Layers sit over each page box, redrawn from the mark list at the page's current size.
-- Export maps displayed fractions to PDF space with rotation and crop box (`toPdf`), draws into the page content, fills form fields through the form API. Password-protected files are refused before mark-up opens.
-- Save goes through `captureFile` (Home) or `captureToVault`; Replace writes first, then `permanentlyDelete`.
-- Bytes are read again when mark-up starts (pdf.js consumes the viewer's copy) and dropped when it ends.
-- Picture mark (Decision 169): `{ page, kind: 'sign', x, y, w, ratio, png, url }`. `buildPicture` (in `pdfmark-ui.js`) converts the picked file to PNG on a canvas, with optional clearing of light pixels; `pdfmark.js` embeds each distinct `png` once and draws it with the page rotation. The picker is `pickImage` in the mark-up context in `app.js`, launched after `beginPickerLaunch()`.
+## PDF edit mode (Decisions 166, 169, 362)
+- `src/js/pdfmark-ui.js` (screen, loaded after the viewer) and `src/js/pdfmark.js` (export on `pdf-lib`, loaded when Edit is first tapped). Shared constants and `stampGeometry` in `pdfmarkconst.js`. The viewer exposes `pageEls()` only.
+- Layout shared by Home, Vault and the File explorer: `pdfchrome.js` folds and restores the tool buttons on a tap of the page (class `pdf-tools-hidden` on the viewer body); `pdfchrome.css` places them in a two-column grid. Each host (`openPdf` in `app.js`, `showPdf` in `explorer-view.js`) mounts chrome, reading tools, edit mode and page tools, and gives edit mode a Save button for its title bar (`saveButton`).
+- Session: created on first Edit tap, lives until Save, discard or the viewer closes. The panel (`open`) can be closed without ending it; marks stay drawn and the Save button stays. Back: form, then panel, then the unsaved-edits question.
+- Marks: `{ id, page, kind, ... }` in fractions of the displayed page, origin top-left. Layers sit over each page box and are redrawn from the mark list at the page's current size. Each layer also holds a selection box (move by dragging, resize by the corner dot). History is whole-list snapshots (shallow copies; `pts` arrays are replaced, never edited), at most 100.
+- Export maps displayed fractions to PDF space with rotation and crop box (`toPdf`), draws into the page content, fills form fields through the form API. Password-protected files are refused before editing opens.
+- Save goes through `captureFile` (Home) or `captureToVault`; Save to this PDF writes first, then `permanentlyDelete`. In the File explorer, a copy is written next to the file, or the file is written over.
+- Bytes are read again when editing starts (pdf.js consumes the viewer's copy) and dropped when it ends.
+- Picture mark: `{ kind: 'sign', x, y, w, ratio, png, url, alpha }`. `buildPicture` converts the picked file to PNG on a canvas (long side limited); `pdfmark.js` embeds each distinct `png` once and draws it with the page rotation and `alpha` as opacity. The picker is `pickImage` in the edit context, launched after `beginPickerLaunch()` in `app.js`.
+- Stamp mark: `{ kind: 'stamp', x, y, label, shape, fs, color }`; shape is rect, round, oval or circle. The on-screen box and the export use `stampGeometry` with the text width measured on a canvas and by the PDF font respectively.
 
 ## PDF page tools (Decision 167)
 - `src/js/pdfpages-ui.js` (editor screen, loaded after the mark-up) and `src/js/pdfpages.js` (pure: bytes in, bytes out, loaded when Edit pages is tapped). Styles in `src/css/pdfpages.css`.

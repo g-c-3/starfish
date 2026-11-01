@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 165**
+
+Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part. CI status not checked: the API call was rate-limited. Session 164's Java and the three device passes (DP185 to DP187) are still open.
+- Owner request, built as Phase 61 (Decision 362): PDF viewer layout, tap to fold, edit mode, Save in the title bar, same viewer in the File explorer.
+- New: `src/js/pdfchrome.js`, `src/css/pdfchrome.css`. Replaced: `pdfmark-ui.js`, `pdfmark.js`, `pdfmarkconst.js`, `pdfmark.css`, `app.js` (`openPdf`), `explorer-view.js` (`showPdf`), `style.css` (old zoom and tool rules removed).
+- Checked in the sandbox: all changed files parse; the export draws every mark kind, the four stamp shapes and picture opacity on normal and rotated pages (rendered and viewed). Not run: `vite build`, the screen code on a device.
+- Interpretation to confirm: the right column holds Find then Edit, the left column Pages then Edit pages, so the rows are aligned.
+- Decision 362 changes parts of Decisions 166 and 169 (see its entry).
+- Open: DP188; DP185 to DP187; CI result for the Session 164 Java.
+- Next start: check the CI run; on failure, fix it first. Then DP188 on a device. Open choices from Session 163 and the other viewers' layout wait for approval.
+
 **Session 164**
 
 Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part (reminder, backup and schema sections). CI status not checked: the API call was rate-limited.
