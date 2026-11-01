@@ -2,9 +2,10 @@
 // Marks live in the displayed page: x, y and sizes are fractions of the displayed page width and height, origin top-left,
 // so they do not depend on zoom. Display rotation, crop box and media box are applied here, once, on export.
 // Marks are drawn into the page content (they cannot be edited again after saving). Form fields stay fillable.
+// Decision 362: stamps have a shape (rect, round, oval, circle) and any text; pictures carry an opacity.
 
 import { PDFDocument, StandardFonts, rgb, degrees, LineCapStyle, EncryptedPDFError, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup, PDFOptionList } from 'pdf-lib';
-import { COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, PEN_WIDTH, BASELINE_TEXT, BASELINE_STAMP, STAMP_PAD } from './pdfmarkconst.js';
+import { COLORS, STAMPS, HIGHLIGHT_OPACITY, MAX_MARKS, PEN_WIDTH, BASELINE_TEXT, STAMP_BASELINE, stampGeometry } from './pdfmarkconst.js';
 
 // Displayed size and origin of a pdf-lib page: crop box when present, then the page rotation.
 function pageGeometry(page) {
@@ -93,6 +94,20 @@ function applyForm(doc, values, font) {
   return failed;
 }
 
+// Closed outline of a stamp in points from the stamp's top-left, centre line inset by `ins`.
+function outline(geo, OW, OH, ins, size) {
+  const x0 = ins, y0 = ins, w = OW - 2 * ins, h = OH - 2 * ins, pts = [];
+  if (geo.ellipse) {
+    for (let i = 0; i < 64; i++) { const a = (i / 64) * Math.PI * 2; pts.push([x0 + w / 2 + (w / 2) * Math.cos(a), y0 + h / 2 + (h / 2) * Math.sin(a)]); }
+    return pts;
+  }
+  const r = Math.min(geo.radius * size, w / 2, h / 2);
+  if (!r) return [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]];
+  const corner = (cx, cy, from) => { for (let i = 0; i <= 8; i++) { const a = from + (i / 8) * (Math.PI / 2); pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
+  corner(x0 + w - r, y0 + r, -Math.PI / 2); corner(x0 + w - r, y0 + h - r, 0); corner(x0 + r, y0 + h - r, Math.PI / 2); corner(x0 + r, y0 + r, Math.PI);
+  return pts;
+}
+
 function drawMarks(doc, marks, font, bold, images) {
   const pages = doc.getPages();
   let changed = false;
@@ -128,20 +143,22 @@ function drawMarks(doc, marks, font, bold, images) {
       if (!img) continue;
       const w = m.w * g.Wd, h = w * m.ratio;
       const p = toPdf(g, m.x, m.y + h / g.Hd); // the picture's own bottom-left corner in the displayed page
-      page.drawImage(img, { x: p[0], y: p[1], width: w, height: h, rotate: degrees(g.rot) });
+      const opacity = Math.min(1, Math.max(0, m.alpha == null ? 1 : m.alpha));
+      page.drawImage(img, { x: p[0], y: p[1], width: w, height: h, rotate: degrees(g.rot), opacity });
     } else if (m.kind === 'stamp') {
       const size = Math.max(4, m.fs * g.Wd);
       const label = safeText(bold, String(m.label || '').toUpperCase());
       if (label.changed) changed = true;
-      const pad = size * STAMP_PAD, tw = bold.widthOfTextAtSize(label.text, size);
-      const bw = (tw + 2 * pad) / g.Wd, bh = (size + 2 * pad) / g.Hd;
-      const c = [[m.x, m.y], [m.x + bw, m.y], [m.x + bw, m.y + bh], [m.x, m.y + bh]].map(([u, v]) => toPdf(g, u, v));
-      const thickness = Math.max(0.8, size * 0.1);
-      for (let i = 0; i < 4; i++) {
-        const a = c[i], b = c[(i + 1) % 4];
-        page.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness, color, lineCap: LineCapStyle.Projecting });
+      const geo = stampGeometry(m.shape || 'rect', bold.widthOfTextAtSize(label.text, size) / size);
+      const OW = geo.w * size, OH = geo.h * size, ins = (geo.t * size) / 2; // outer box in points; the outline's centre line sits half a thickness inside
+      const pts = outline(geo, OW, OH, ins, size).map(([px, py]) => toPdf(g, m.x + px / g.Wd, m.y + py / g.Hd));
+      const thickness = Math.max(0.8, geo.t * size);
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        page.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness, color, lineCap: LineCapStyle.Round });
       }
-      const p = toPdf(g, m.x + pad / g.Wd, m.y + (pad + size * BASELINE_STAMP) / g.Hd);
+      const tw = bold.widthOfTextAtSize(label.text, size);
+      const p = toPdf(g, m.x + (OW - tw) / 2 / g.Wd, m.y + (OH / 2 + STAMP_BASELINE * size) / g.Hd);
       page.drawText(label.text, { x: p[0], y: p[1], size, font: bold, color, rotate: degrees(g.rot) });
     }
   }

@@ -6696,8 +6696,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
-    let view = null, tools = null, token = 0, pwResolve = null;
+    let view = null, tools = null, chrome = null, token = 0, pwResolve = null;
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
+    // Save button in the title bar (Decision 362): shown by the edit mode while there are unsaved edits.
+    const saveBtn = Object.assign(document.createElement('button'), { type: 'button', className: 'pdf-hdr editor-save hidden', textContent: 'Save' });
     const fresh = async () => isVault
       ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
       : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
@@ -6725,7 +6727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const clearHeader = () => viewerScreen.querySelectorAll('.pdf-hdr').forEach((n) => n.remove());
     // Mark-up (Decision 166): bytes are read again when it starts, so the viewer's copy (consumed by pdf.js) is not kept.
     const markupCtx = {
-      isVault, onActivity: arm, askText, askYesNo, askDiscard, toast,
+      isVault, onActivity: arm, askText, askYesNo, toast, saveButton: saveBtn,
       // Picture tool (Decision 169): one picture from the phone's picker; resolves null when none is chosen.
       pickImage: () => new Promise((resolve) => {
         const input = document.createElement('input');
@@ -6753,7 +6755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       title: item.label || 'PDF', isVault,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       guard: async () => !(tools && await tools.closeTop()), // Back closes the form or mark-up, then the Pages panel, then Find, before it leaves the viewer (Decisions 153, 166)
-      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } },
+      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (view) { view.destroy(); view = null; } },
       render: async (body) => {
         const row = await fresh();
         document.getElementById('viewer-title').textContent = row.label || 'PDF';
@@ -6783,10 +6785,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (mine !== token || !body.isConnected) { next.destroy(); return; } // closed or locked while loading
           view = next;
           clearHeader();
-          viewerScreen.querySelector('#viewer-edit-btn').parentNode.append(Object.assign(document.createElement('span'), { className: 'pdf-hdr img-count pdf-count', textContent: `1/${view.pageCount}` }));
-          body.insertAdjacentHTML('beforeend', `<div class="pdf-zoom"><button type="button" class="pdf-zin" aria-label="Zoom in">+</button><button type="button" class="pdf-zout" aria-label="Zoom out">−</button></div>`);
-          body.querySelector('.pdf-zin').onclick = () => { arm(); view?.zoomIn(); };
-          body.querySelector('.pdf-zout').onclick = () => { arm(); view?.zoomOut(); };
+          viewerScreen.querySelector('#viewer-edit-btn').parentNode.append(saveBtn, Object.assign(document.createElement('span'), { className: 'pdf-hdr img-count pdf-count', textContent: `1/${view.pageCount}` }));
+          const { mountPdfChrome } = await import('./pdfchrome.js'); // tap the page to fold or bring back the tools; zoom is by pinch (Decision 362)
+          if (mine !== token || !body.isConnected) return;
+          chrome = mountPdfChrome(body, scroll, { onActivity: arm });
           const { mountPdfTools } = await import('./pdftools.js');
           if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
           tools = mountPdfTools(body, view, { onActivity: arm });

@@ -4,7 +4,6 @@
 
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
-import { chromeOnScroll } from './chrome-scroll.js';
 
 export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
 export const TEXT_MAX = 10 * 1024 * 1024; // larger text goes to another app; the whole file is read into memory
@@ -182,12 +181,10 @@ export function openFileViewer(file, ctx) {
     body.innerHTML = '<div class="pdf-scroll"><div class="pdf-msg">Loading…</div></div>';
     const scroll = body.querySelector('.pdf-scroll');
     body.classList.add('pdf-full');
-    enterFull(() => body.classList.toggle('pdf-menu-open'));
-    stopScroll = chromeOnScroll(body, (h) => { if (h) closeMenus(); setChrome(h); }, '.pdf-scroll');
-    scroll.addEventListener('pointerdown', closeMenus);
-    body.addEventListener('click', (e) => { if (e.target.closest('.pdf-find-btn, .pdf-pages-btn, .pdf-mark-btn, .pdf-pg-btn')) closeMenus(); });
-    let view = null, tools = null;
-    cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (view) { view.destroy(); view = null; } };
+    enterFull(() => {});
+    if (menuBtn) menuBtn.classList.add('hidden'); // the tools are always at hand: a tap on the page folds or brings them back, as in Home and Vault (Decision 362)
+    let view = null, tools = null, chrome = null;
+    cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (view) { view.destroy(); view = null; } };
     guard = async () => !(tools && await tools.closeTop());
     try {
       const res = await fetch(mediaSrc(toUri(f.path)));
@@ -202,20 +199,16 @@ export function openFileViewer(file, ctx) {
       if (mine !== token || closed) { next.destroy(); return; }
       view = next;
       countEl.textContent = `1/${view.pageCount}`;
+      const { mountPdfChrome } = await import('./pdfchrome.js');
+      if (mine !== token || closed) return;
+      chrome = mountPdfChrome(body, scroll, { onActivity: ui.onActivity });
       const { mountPdfTools } = await import('./pdftools.js');
       if (mine !== token || closed) return;
       tools = mountPdfTools(body, view, { onActivity: ui.onActivity });
-      // Open with: the last button of the menu, same look as the others; always lists the apps that can open the PDF
-      const ow = document.createElement('button'); ow.type = 'button'; ow.className = 'pdf-ow-btn';
-      ow.setAttribute('aria-label', 'Open with another app'); ow.title = 'Open with';
-      ow.textContent = 'Open with';
-      ow.onclick = () => { closeMenus(); ui.onActivity(); if (!closed) external(current, true); };
-      body.querySelector('.pdf-tools').append(ow);
-      // Mark up and Edit pages (Decisions 166, 167) save a new PDF next to this one; Replace writes over it. Zoom is by pinch.
+      // Edit and Edit pages (Decisions 166, 167, 362) save a new PDF next to this one, or write over it. Zoom is by pinch. Open with is the title bar's button.
       const dir = f.path.slice(0, f.path.lastIndexOf('/'));
       const pdfCtx = {
-        isVault, onActivity: ui.onActivity, askText: ui.askText, askYesNo: ui.askYesNo, toast,
-        askDiscard: () => ui.askYesNo({ title: 'Discard changes?', text: 'Your changes have not been saved.', yes: 'Yes, discard', no: 'No, keep editing' }),
+        isVault, onActivity: ui.onActivity, askText: ui.askText, askYesNo: ui.askYesNo, toast, saveButton: saveBtn,
         pickImage: () => new Promise((resolve) => {
           const input = document.createElement('input');
           input.type = 'file'; input.accept = 'image/*';
@@ -251,7 +244,6 @@ export function openFileViewer(file, ctx) {
         const pg = mountPageTools(body, view, { ...pdfCtx, save: (bytes, { suffix }) => pdfCtx.save(bytes, { replace: false, suffix }) });
         tools = { closeTop: async () => (await pg.closeTop()) || base.closeTop(), destroy: () => { pg.destroy(); base.destroy(); } };
       } catch { /* tools so far only */ }
-      body.querySelector('.pdf-tools')?.append(ow); // Open with stays the last button
     } catch (err) {
       if (mine !== token) return;
       const msg = err && err.name === 'PasswordException' ? err.message : 'This PDF cannot be shown here. Use Open with app.';
