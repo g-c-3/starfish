@@ -1,0 +1,25 @@
+/* Light mode top bars (Decision 353): purple bar, white title, count and icons; the trash stays red, in a light pill so it reads on purple.
+   Covers the selection bars (Home, Vault, Search, File explorer), the viewer and editor headers (text, image, PDF, file, File explorer
+   viewer) and the Phone gallery header. Dark mode keeps its own bars. */
+:root:not([data-theme="dark"]) {
+  --bar-bg: linear-gradient(135deg, #7766ee, #5b47e0);
+  --bar-fg: #ffffff;
+  --bar-soft: rgba(255, 255, 255, 0.18);
+}
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, #explorer-viewer .editor-bar, #explorer-viewer.ev-full .editor-bar, .editor-bar, .ph-head) {
+  background: var(--bar-bg); color: var(--bar-fg); border-bottom-color: rgba(255, 255, 255, 0.16); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn { color: var(--bar-fg); }
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn:active { background: var(--bar-soft); }
+:root:not([data-theme="dark"]) :is(#sel-count, #explorer-sel-count, #editor-title, #viewer-title, #explorer-title, #ev-title, .ph-head h2) { color: var(--bar-fg); }
+:root:not([data-theme="dark"]) :is(.editor-bar, #explorer-viewer.ev-full .editor-bar) .img-count { color: rgba(255, 255, 255, 0.88); background: transparent; }
+:root:not([data-theme="dark"]) #explorer-viewer.ev-full .editor-bar .img-count { background: var(--bar-soft); }
+/* Save: white button, purple text. */
+:root:not([data-theme="dark"]) :is(.editor-bar) .editor-save { background: #fff; color: var(--brand-ink); box-shadow: none; }
+:root:not([data-theme="dark"]) :is(.editor-bar) .editor-save:disabled { opacity: 0.55; }
+/* Trash: red, on a light pill. */
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text { background: rgba(255, 255, 255, 0.95); color: var(--danger); }
+:root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn.warning-text:active { background: #fff; }
+/* Phone gallery header */
+:root:not([data-theme="dark"]) .ph-head button { background: var(--bar-soft); color: var(--bar-fg); border: 0; }
+:root:not([data-theme="dark"]) .ph-head .ph-add { background: #fff; color: var(--brand-ink); }
