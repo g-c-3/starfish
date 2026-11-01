@@ -14,3 +14,6 @@
 .rs-err { min-height: 1.2em; margin: 4px 0; color: var(--danger, #c0392b); font-size: 0.9rem; }
 .rs-box > button { display: block; width: 100%; margin-top: 8px; }
 .title-act.rem-sound-btn { margin-left: auto; }
+
+/* While a tab change slides, the page never scrolls sideways (Decision 360). */
+.rem-sliding { overflow-x: clip; }
