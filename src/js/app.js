@@ -39,6 +39,7 @@ import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProviders, renderMap } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
 import { groupedHtml } from './dategroup.js';
+import '../css/topbar.css';
 import { parseFind, hasFind, dateMatches, nameMatches } from './folderfind.js';
 import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
