@@ -174,10 +174,11 @@ public final class ArklyReminderSound {
             } else return;
         } catch (Throwable t) { return; }
         if (vib) vibrate(c);
-        notification = withLockScreen(c, notificationId, notification);
+        shown = notification; shownId = notificationId;
+        wakeScreen(c);
         boolean isFile = "file".equals(mode);
-        if (!isFile && !"alarm".equals(mode)) { postAgain(c, notificationId, notification); return; }
-        if (src.isEmpty()) { postAgain(c, notificationId, notification); return; }
+        if (!isFile && !"alarm".equals(mode)) return;
+        if (src.isEmpty()) return;
         try {
             pending = notification; pendingId = notificationId;
             Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_PLAY)
@@ -185,7 +186,6 @@ public final class ArklyReminderSound {
             ContextCompat.startForegroundService(c, i);
         } catch (Throwable t) {
             pending = null;
-            postAgain(c, notificationId, notification);
             // The service could not start (background limits): the phone's own ringtone player, once, at full volume.
             try {
                 stopFallback();
@@ -195,10 +195,11 @@ public final class ArklyReminderSound {
         }
     }
 
-    // The fired notification again with a full-screen intent: with the phone locked or the screen off it turns the screen on and shows
-    // ArklyAlarmActivity over the lock screen (Decision 368); with the screen on it stays a banner. Returns the notification unchanged when
-    // this is not possible (older Android, or full-screen notifications switched off for the app).
-    private static Notification withLockScreen(Context c, int id, Notification n) {
+    // Called by the patched publisher just BEFORE it posts the reminder notification (Decision 370): returns it with a full-screen intent,
+    // so it is posted once, as a new notification. With the phone locked or the screen off, Android then turns the screen on and opens
+    // ArklyAlarmActivity over the lock screen; with the screen on it stays a banner. Returned unchanged when this is not possible (older
+    // Android, or full-screen notifications switched off for the app).
+    public static Notification prepare(Context c, int id, Notification n) {
         shown = n; shownId = id;
         try {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || n == null) return n;
@@ -210,19 +211,22 @@ public final class ArklyReminderSound {
             Intent i = new Intent(c, ArklyAlarmActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 .putExtra("nid", id).putExtra("title", title == null ? "" : title.toString()).putExtra("text", text == null ? "" : text.toString());
             PendingIntent pi = PendingIntent.getActivity(c, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            Notification.Builder b = Notification.Builder.recoverBuilder(c, n).setFullScreenIntent(pi, true).setOnlyAlertOnce(true);
-            Notification out = b.build();
+            Notification out = Notification.Builder.recoverBuilder(c, n).setFullScreenIntent(pi, true).build();
             shown = out;
             return out;
         } catch (Throwable t) { return n; }
     }
 
-    // Posts the notification again under the same id so it carries the full-screen intent (the service does this itself for the sound modes).
-    private static void postAgain(Context c, int id, Notification n) {
+    // If the screen is off, turns it on for ten seconds, so the reminder is on the lock screen even when the phone does not open the
+    // full-screen reminder. (Needs the WAKE_LOCK permission, already added.)
+    private static void wakeScreen(Context c) {
         try {
-            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null && n != null) nm.notify(id, n);
-        } catch (Throwable ignored) { /* the first posting stands */ }
+            PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            if (pm == null || pm.isInteractive()) return;
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock w = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE, "arkly:reminder-screen");
+            w.acquire(10000L);
+        } catch (Throwable ignored) { /* the screen stays off */ }
     }
 
     public static Notification shownNotification(int id) { return shownId == id ? shown : null; }
