@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Reminder sound (Decision 359): the phone's notification sound, the phone's alarm sound, or an audio file, optionally rising.
+// Reminder sound (Decisions 359, 363): the phone's notification sound, the phone's alarm sound, or an audio file, optionally rising.
 // android/ and node_modules/ are never committed, so CI writes all of it here, after patch-reminder-actions.js and
 // patch-audioroute.js (it needs the receiver the first one writes and the onCreate() patch-screenlock.js guarantees). Idempotent.
 //   1. writes ArklyReminderSound, ArklyReminderSoundService and ArklySoundBridge next to MainActivity.java (package filled in),
@@ -83,7 +83,7 @@ function patchPlugin(file, anchor, insertAfter, code) {
   fs.writeFileSync(p, s, 'utf8');
 }
 patchPlugin('TimedNotificationPublisher.java', '        notificationManager.notify(id, notification);', true,
-  `        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class).invoke(null, context, id); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
+  `        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class, String.class).invoke(null, context, id, android.os.Build.VERSION.SDK_INT >= 26 ? notification.getChannelId() : null); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 patchPlugin('NotificationDismissReceiver.java', '        int intExtra = intent.getIntExtra(LocalNotificationManager.NOTIFICATION_INTENT_KEY, Integer.MIN_VALUE);', false,
   `        try { Class.forName("${cls}").getMethod("stop", Context.class).invoke(null, context); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 
