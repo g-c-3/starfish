@@ -4,6 +4,14 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 171**
+
+Start: owner asked for a one-minute vibration with longer pauses and a reminder screen over the lock screen with Snooze and Stop.
+- Decision 368. New: `scripts/java/ArklyAlarmActivity.java`. Replaced: `ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`.
+- Not compiled, not run on a device. The reminder screen takes its buttons from the notification's own Snooze and Done actions, so the app handles them as it does from the notification.
+- Open: DP194 and earlier; CI result for the Java of Sessions 164, 166, 168 to 171.
+- Next start: check the CI run; DP194; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 170**
 
 Start: owner reported vibration works, also with the screen off, but stops after three buzzes. Cause: the pattern was three buzzes with no repeat, by design in Decision 366.

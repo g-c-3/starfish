@@ -3759,3 +3759,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The app's vibration is a 0.6 s buzz and a 0.7 s pause, 22 times (about 29 s), on the alarm vibration channel. It is finite, so it ends by itself; Done, Snooze and the sound's Stop cancel it. The channel's own vibration stays three buzzes.
 - Files: `scripts/java/ArklyReminderSound.java`. Not run through CI or a device (DP193).
 
+**368. Reminder screen over the lock screen; one-minute vibration schedule.** Owner request. Replaces the vibration pattern of Decision 367. Native code, not compiled.
+- When a reminder fires, the app posts its notification again with a full-screen intent. With the phone locked or the screen off, Android turns the screen on and opens `ArklyAlarmActivity` over the lock screen, without unlocking. It shows the notification's title and text, a Snooze button and a Stop button. The buttons fire the notification's own Snooze and Done actions, so the app handles them as before, and they end the sound and vibration. With the screen on it stays a banner. A reminder that was already dismissed closes the screen.
+- The screen shows only what the notification already shows on the lock screen ("Vault Reminder" for Vault reminders). The app-open password still guards everything inside the app.
+- Needs the USE_FULL_SCREEN_INTENT permission (added by the patch script). On Android 14 and later the user can switch it off for the app; then the reminder stays a notification. No other network or data access.
+- Vibration: one minute, starting with a 3 s wait; each burst is three 0.6 s buzzes with 0.7 s between them, then a 3 s pause. Channels no longer vibrate (new channel version), so the pattern is the only vibration.
+- Files: `scripts/java/ArklyAlarmActivity.java` (new), `scripts/java/ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP194).
+
