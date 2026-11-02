@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 174**
+
+Start: owner confirmed the lock-screen reminder works. Requests: swipe gestures for Snooze and Stop, clearer labels, a short test vibration, and a working Test when the reminder follows all reminders. Answered: the sound is also limited to one minute, like the vibration; the other sound modes play once.
+- Decision 371. Native: `ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`. App: `remindersound.js`. Not compiled, not run on a device.
+- Open: DP197 and earlier; CI result for the Java of Sessions 164, 166, 168 to 174.
+- Next start: check the CI run; DP197; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 173**
 
 Start: owner device test of Phase 68. The switch was on, the screen still did not turn on; turned on by hand, the lock screen showed the notification with Snooze and Done, and they worked.

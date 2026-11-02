@@ -3777,3 +3777,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Fallback: when the screen is off at fire time, a ten-second screen-on wake lock turns it on, so the lock screen shows the reminder with Snooze and Done even if the phone does not open the full-screen reminder.
 - Files: `scripts/java/ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP196).
 
+**371. Swipe Snooze and Stop; short test vibration; Test follows the setting for all reminders.** Owner device test. Refines Decision 368.
+- The lock-screen reminder replaces its two buttons with one track holding a round handle. Dragging the handle to the left end snoozes for 10 minutes (the notification's Snooze action), to the right end stops (the notification's Done action). Letting go before the end springs it back. The left side lights purple, the right side red; labels read "Snooze for 10 mins" and "Stop".
+- The sound is limited to one minute, as the vibration is; a notification sound and the other non-looping sounds play once.
+- The Test button's vibration is two buzzes of 0.3 s with 0.3 s between them, then it stops (it used the one-minute pattern before).
+- In a reminder's own sound dialog with Same as all reminders chosen, Test plays the setting for all reminders, with its vibration, instead of showing a message.
+- Files: `scripts/java/ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`, `src/js/remindersound.js`. Not run through CI or a device (DP197).
+
