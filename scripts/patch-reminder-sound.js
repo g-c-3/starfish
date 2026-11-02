@@ -2,7 +2,7 @@
 // Reminder sound (Decisions 359, 363): the phone's notification sound, the phone's alarm sound, or an audio file, optionally rising.
 // android/ and node_modules/ are never committed, so CI writes all of it here, after patch-reminder-actions.js and
 // patch-audioroute.js (it needs the receiver the first one writes and the onCreate() patch-screenlock.js guarantees). Idempotent.
-//   1. writes ArklyReminderSound, ArklyReminderSoundService and ArklySoundBridge next to MainActivity.java (package filled in),
+//   1. writes ArklyReminderSound, ArklyReminderSoundService, ArklySoundBridge and ArklyAlarmActivity (the reminder screen over the lock screen, Decision 368) next to MainActivity.java (package filled in),
 //   2. registers the bridge as window.ArklySound,
 //   3. manifest: FOREGROUND_SERVICE_MEDIA_PLAYBACK and the service (type mediaPlayback, not exported),
 //   4. patches the plugin's TimedNotificationPublisher to start the sound when a reminder is posted, and its
@@ -18,7 +18,7 @@ const JAVA_ROOT = process.env.PATCH_JAVA_ROOT || path.join(ROOT, 'android', 'app
 const MANIFEST = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const PLUGIN_DIR = path.join(ROOT, 'node_modules', '@capacitor', 'local-notifications', 'android', 'src', 'main', 'java',
   'com', 'capacitorjs', 'plugins', 'localnotifications');
-const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge'];
+const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge', 'ArklyAlarmActivity'];
 const MARK = 'arkly-reminder-sound';
 
 const die = (msg) => { console.error(`patch-reminder-sound.js: ${msg}`); process.exit(1); };
@@ -65,7 +65,7 @@ if (!manifest.includes('FOREGROUND_SERVICE_MEDIA_PLAYBACK')) {
   if (!m) die('<application> not found in AndroidManifest.xml.');
   manifest = manifest.slice(0, m.index) + '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    ' + manifest.slice(m.index);
 }
-for (const perm of ['VIBRATE', 'WAKE_LOCK']) { // vibration, and keeping the phone awake while the sound plays with the screen off (Decision 365)
+for (const perm of ['VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT']) { // vibration; keeping the phone awake while the sound plays; the reminder screen over the lock screen (Decisions 365, 368)
   if (!manifest.includes(`android.permission.${perm}`)) {
     const m = manifest.match(/<application\b/);
     if (!m) die('<application> not found in AndroidManifest.xml.');
@@ -75,6 +75,9 @@ for (const perm of ['VIBRATE', 'WAKE_LOCK']) { // vibration, and keeping the pho
 if (!manifest.includes('ArklyReminderSoundService')) {
   if (!manifest.includes('</application>')) die('</application> not found in AndroidManifest.xml.');
   manifest = manifest.replace('</application>', '    <service android:name=".ArklyReminderSoundService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>');
+}
+if (!manifest.includes('ArklyAlarmActivity')) {
+  manifest = manifest.replace('</application>', '    <activity android:name=".ArklyAlarmActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true" android:launchMode="singleTask" android:excludeFromRecents="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />\n    </application>');
 }
 fs.writeFileSync(MANIFEST, manifest, 'utf8');
 
