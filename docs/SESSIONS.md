@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 167**
+
+Start: owner review of the PDF edit panel from device screenshots, with a list of changes, taken one at a time.
+- Phase 63 (Decision 364): the edit panel, colours, picture flow, tap-to-select with the panel closed, stretch handles, folding translucent title bars.
+- Replaced: `pdfmark-ui.js`, `pdfmarkconst.js`, `pdfchrome.js`, `pdfmark.css`, `app.js`, `explorer-view.js`, `style.css`, `topbar.css`.
+- Checked in the sandbox: all changed JavaScript parses and the export still draws every mark kind. Not run: `vite build`, a device.
+- Not done, by choice: marks that stay editable after Save and reopen. It needs the edits stored inside the PDF and hidden while the viewer draws them as marks; the design is for the owner to approve. Also not done: the floating, folding bar for the other document viewers and the text editors.
+- Open: DP190; DP185 to DP189; CI result for the Java of Sessions 164 and 166.
+- Next start: check the CI run; then DP190; then the editable-after-save design.
+
 **Session 166**
 
 Start: owner feedback on Session 164 and a new request. DP185 so far: the sound and the reminder both worked, but the sound's own notice showed as a second notification.
