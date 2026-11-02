@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 
 // Plays the reminder's alarm sound or audio file (patch-reminder-sound.js, Decisions 359, 363). A foreground service of type
 // mediaPlayback, so the phone lets it run while the app is closed. Android requires such a service to show a notice; it is kept
@@ -29,9 +30,10 @@ public class ArklyReminderSoundService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private MediaPlayer player;
+    private PowerManager.WakeLock wake; // keeps the phone awake while the sound is prepared and played, so it also sounds with the screen off
     private long startedAt;
     private boolean rise;
-    private final Runnable stopper = this::stopSelf;
+    private final Runnable stopper = this::finish;
     private final Runnable ramp = new Runnable() {
         @Override public void run() {
             if (player == null) return;
@@ -46,11 +48,12 @@ public class ArklyReminderSoundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || ACTION_STOP.equals(intent.getAction())) { stopSelf(); return START_NOT_STICKY; }
-        showNotice();
+        if (intent == null || ACTION_STOP.equals(intent.getAction())) { finish(); return START_NOT_STICKY; }
+        holdAwake();
+        showNotice(intent.getIntExtra("nid", 0));
         release();
         String src = intent.getStringExtra("src");
-        if (src == null || src.isEmpty()) { stopSelf(); return START_NOT_STICKY; }
+        if (src == null || src.isEmpty()) { finish(); return START_NOT_STICKY; }
         rise = intent.getBooleanExtra("rise", false);
         try {
             player = new MediaPlayer();
@@ -58,23 +61,34 @@ public class ArklyReminderSoundService extends Service {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
             if ("file".equals(intent.getStringExtra("kind"))) player.setDataSource(src); else player.setDataSource(this, Uri.parse(src));
             player.setLooping(true);
+            player.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
             player.setVolume(rise ? 0f : 1f, rise ? 0f : 1f);
             player.setOnPreparedListener((m) -> {
                 m.start();
                 startedAt = System.currentTimeMillis();
                 if (rise) handler.post(ramp);
             });
-            player.setOnErrorListener((m, what, extra) -> { stopSelf(); return true; });
+            player.setOnErrorListener((m, what, extra) -> { finish(); return true; });
             player.prepareAsync();
             handler.removeCallbacks(stopper);
             handler.postDelayed(stopper, CAP_MS);
         } catch (Throwable t) {
-            stopSelf();
+            finish();
         }
         return START_NOT_STICKY;
     }
 
-    private void showNotice() {
+    // The reminder's own notification runs the service in the foreground, so there is one notification, not two (Decision 365).
+    // Only when it is not available does the service show a small notice of its own.
+    private void showNotice(int nid) {
+        Notification own = nid != 0 ? ArklyReminderSound.takePending(nid) : null;
+        if (own != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(nid, own, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                else startForeground(nid, own);
+                return;
+            } catch (Throwable ignored) { /* fall back to the service's own notice */ }
+        }
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
             NotificationChannel ch = new NotificationChannel(ArklyReminderSound.PLAYING_CHANNEL, "Reminder sound playing", NotificationManager.IMPORTANCE_MIN);
@@ -96,6 +110,22 @@ public class ArklyReminderSoundService extends Service {
         else startForeground(NOTICE_ID, n);
     }
 
+    private void holdAwake() {
+        try {
+            if (wake == null) {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null) wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "arkly:reminder-sound");
+            }
+            if (wake != null) wake.acquire(CAP_MS + 5000L);
+        } catch (Throwable ignored) { /* no wake lock: the sound may wait for the screen */ }
+    }
+
+    // Ends the sound; the reminder notification stays (detached from the service) unless the app removes it.
+    private void finish() {
+        try { stopForeground(Service.STOP_FOREGROUND_DETACH); } catch (Throwable ignored) { /* not in the foreground */ }
+        stopSelf();
+    }
+
     private void release() {
         handler.removeCallbacks(ramp);
         if (player != null) {
@@ -109,6 +139,8 @@ public class ArklyReminderSoundService extends Service {
     public void onDestroy() {
         handler.removeCallbacks(stopper);
         release();
+        try { stopForeground(Service.STOP_FOREGROUND_DETACH); } catch (Throwable ignored) { /* already out of the foreground */ }
+        try { if (wake != null && wake.isHeld()) wake.release(); } catch (Throwable ignored) { /* released */ }
         super.onDestroy();
     }
 }

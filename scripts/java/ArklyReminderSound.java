@@ -1,5 +1,6 @@
 package __PACKAGE__;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
@@ -11,6 +12,9 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.provider.Settings;
 import android.os.Build;
+import android.os.PowerManager;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import androidx.core.content.ContextCompat;
 import java.io.File;
 import java.util.ArrayList;
@@ -38,6 +42,8 @@ public final class ArklyReminderSound {
     static final String OLD_SILENT_CHANNEL = "arkly_rem_silent_v1";
     static final String PLAYING_CHANNEL = "arkly_rem_playing_v2"; // the service's own notice; never removed here
     private static Ringtone fallback;
+    private static Notification pending; // the fired reminder notification, handed to the sound service to run in the foreground
+    private static int pendingId;
 
     private ArklyReminderSound() {}
 
@@ -94,7 +100,7 @@ public final class ArklyReminderSound {
         String mode = cfg.optString("mode", "default");
         boolean rise = cfg.optBoolean("rise", false);
         try {
-            alerts(c).edit().putString("chan_" + id, new JSONObject().put("mode", mode).put("src", sourceOf(c, cfg)).put("rise", rise).toString()).apply();
+            alerts(c).edit().putString("chan_" + id, new JSONObject().put("mode", mode).put("src", sourceOf(c, cfg)).put("rise", rise).put("vib", cfg.optBoolean("vibrate", false)).toString()).apply();
         } catch (Throwable ignored) { /* the service then follows the global setting */ }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return id;
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -110,9 +116,7 @@ public final class ArklyReminderSound {
         } else {
             ch.setSound(null, null); // the service plays it, or there is no sound
         }
-        boolean vib = cfg.optBoolean("vibrate", false);
-        ch.enableVibration(vib);
-        if (vib) ch.setVibrationPattern(new long[] { 0, 400, 200, 400 });
+        ch.enableVibration(false); // vibration is done by onFire, so it works the same on every phone and with the screen off
         nm.createNotificationChannel(ch);
         return id;
     }
@@ -152,27 +156,31 @@ public final class ArklyReminderSound {
         prefs(c).edit().putString("file", path == null ? "" : path).putString("file_title", title == null ? "" : title).apply();
     }
 
-    // Called by the patched TimedNotificationPublisher right after a reminder notification is posted; channelId is the one it was posted on.
-    public static void onFire(Context c, int notificationId, String channelId) {
-        String mode, src; boolean rise;
+    // Called by the patched TimedNotificationPublisher right after a reminder notification is posted; channelId is the one it was
+    // posted on, notification the posted notification itself.
+    public static void onFire(Context c, int notificationId, String channelId, Notification notification) {
+        String mode, src; boolean rise, vib;
         String stored = channelId == null ? "" : alerts(c).getString("chan_" + channelId, "");
         try {
             if (!stored.isEmpty()) {
                 JSONObject j = new JSONObject(stored);
-                mode = j.optString("mode", "default"); src = j.optString("src", ""); rise = j.optBoolean("rise", false);
+                mode = j.optString("mode", "default"); src = j.optString("src", ""); rise = j.optBoolean("rise", false); vib = j.optBoolean("vib", false);
             } else if (OLD_SILENT_CHANNEL.equals(channelId)) { // posted before Decision 363: the global setting
                 JSONObject g = globalConfig(c);
-                mode = g.optString("mode", "default"); src = sourceOf(c, g); rise = g.optBoolean("rise", false);
+                mode = g.optString("mode", "default"); src = sourceOf(c, g); rise = g.optBoolean("rise", false); vib = g.optBoolean("vibrate", false);
             } else return;
         } catch (Throwable t) { return; }
+        if (vib) vibrate(c);
         boolean isFile = "file".equals(mode);
         if (!isFile && !"alarm".equals(mode)) return;
         if (src.isEmpty()) return;
         try {
+            pending = notification; pendingId = notificationId;
             Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_PLAY)
-                .putExtra("kind", isFile ? "file" : "uri").putExtra("src", src).putExtra("rise", rise);
+                .putExtra("kind", isFile ? "file" : "uri").putExtra("src", src).putExtra("rise", rise).putExtra("nid", notificationId);
             ContextCompat.startForegroundService(c, i);
         } catch (Throwable t) {
+            pending = null;
             // The service could not start (background limits): the phone's own ringtone player, once, at full volume.
             try {
                 stopFallback();
@@ -180,6 +188,28 @@ public final class ArklyReminderSound {
                 if (fallback != null) fallback.play();
             } catch (Throwable ignored) { /* no sound; the banner still shows */ }
         }
+    }
+
+    // The fired notification for the service to show as its foreground notice, so only one notification appears. Null when none is waiting.
+    public static Notification takePending(int id) {
+        Notification n = pendingId == id ? pending : null;
+        pending = null;
+        return n;
+    }
+
+    // Three buzzes on the alarm vibration channel, so a silent or vibrate ringer setting does not mute them.
+    private static void vibrate(Context c) {
+        try {
+            Vibrator v = (Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return;
+            long[] pattern = { 0, 500, 250, 500, 250, 500 };
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build();
+                v.vibrate(VibrationEffect.createWaveform(pattern, -1), aa);
+            } else {
+                v.vibrate(pattern, -1);
+            }
+        } catch (Throwable ignored) { /* no vibrator or no permission */ }
     }
 
     private static void stopFallback() {
