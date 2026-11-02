@@ -199,8 +199,7 @@ public final class ArklyReminderSound {
         return n;
     }
 
-    // Three buzzes on the alarm vibration channel, so a silent or vibrate ringer setting does not mute them.
-    public static void vibrate(Context c) {
+    private static Vibrator vibrator(Context c) {
         Vibrator v = null;
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -208,8 +207,19 @@ public final class ArklyReminderSound {
                 if (vm != null) v = vm.getDefaultVibrator();
             }
             if (v == null) v = (Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
-            if (v == null || !v.hasVibrator()) return;
-            long[] pattern = { 0, 500, 250, 500, 250, 500 };
+        } catch (Throwable ignored) { /* none */ }
+        return v != null && v.hasVibrator() ? v : null;
+    }
+
+    // Buzzes for about half a minute (a 0.6 s buzz and a 0.7 s pause, repeated) on the alarm vibration channel, so a silent ringer does not
+    // mute it. Done, Snooze and the Stop of the sound cancel it (stop below). The pattern is finite, so it ends by itself.
+    public static void vibrate(Context c) {
+        try {
+            Vibrator v = vibrator(c);
+            if (v == null) return;
+            int cycles = 22;
+            long[] pattern = new long[1 + cycles * 2];
+            for (int i = 0; i < cycles; i++) { pattern[1 + i * 2] = 600; pattern[2 + i * 2] = 700; }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 VibrationEffect e = VibrationEffect.createWaveform(pattern, -1);
                 try {
@@ -228,9 +238,10 @@ public final class ArklyReminderSound {
         fallback = null;
     }
 
-    // Done, Snooze, a swipe-away or the Stop button end the sound.
+    // Done, Snooze, a swipe-away or the Stop button end the sound and the vibration.
     public static void stop(Context c) {
         stopFallback();
+        try { Vibrator v = vibrator(c); if (v != null) v.cancel(); } catch (Throwable ignored) { /* not vibrating */ }
         try { c.stopService(new Intent(c, ArklyReminderSoundService.class)); } catch (Throwable ignored) { /* not running */ }
     }
 }
