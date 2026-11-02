@@ -14,6 +14,20 @@
 .rs-err { min-height: 1.2em; margin: 4px 0; color: var(--danger, #c0392b); font-size: 0.9rem; }
 .rs-box > button { display: block; width: 100%; margin-top: 8px; }
 .title-act.rem-sound-btn { margin-left: auto; }
+.rs-group { transition: opacity .2s ease; }
+.rs-group.rs-dim { opacity: 0.45; }
+.rs-vib { margin-top: 10px; }
+
+/* The speaker on a reminder row and the button in the reminder's Save dialog (Decision 363). */
+.entry-row .row-alert { flex: 0 0 auto; align-self: center; position: relative; width: 38px; height: 38px; min-height: 0; margin: 0 0 0 4px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 12px; background: transparent; color: var(--muted); box-shadow: none; transition: background .2s ease, color .2s ease; }
+.entry-row .row-alert .ic { width: 20px; height: 20px; }
+.entry-row .row-alert.custom { color: var(--tc-ink, var(--brand-ink)); background: var(--surface-2); }
+.entry-row .row-alert.silent { opacity: 0.6; }
+.entry-row .row-alert.silent::after { content: ''; position: absolute; width: 22px; height: 2px; border-radius: 1px; background: currentColor; transform: rotate(-45deg); }
+.entry-row .row-alert:active { background: var(--surface-2); }
+.sd-alert-btn { display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 6px; text-align: left; }
+.sd-alert-btn .ic { width: 20px; height: 20px; flex: 0 0 auto; }
+.sd-alert-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* While a tab change slides, the page never scrolls sideways (Decision 360). */
 .rem-sliding { overflow-x: clip; }
