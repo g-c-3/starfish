@@ -100,7 +100,7 @@ function mountMarkup(body, view, ctx) {
       if (m.kind === 'highlight') svg += `<rect ${id} x="${m.x * w}" y="${m.y * h}" width="${m.w * w}" height="${m.h * h}" fill="${css(m.color)}" fill-opacity="${HIGHLIGHT_OPACITY}"/>`;
       else if (m.kind === 'draw') svg += `<polyline ${id} points="${m.pts.map((p) => `${(p[0] * w).toFixed(1)},${(p[1] * h).toFixed(1)}`).join(' ')}" fill="none" stroke="${css(m.color)}" stroke-width="${Math.max(1, m.width * w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
       else if (m.kind === 'text') html += `<div ${id} class="pdf-mk-text" style="left:${m.x * 100}%;top:${m.y * 100}%;font-size:calc(var(--pw) * ${m.fs});color:${css(m.color)}">${esc(m.text)}</div>`;
-      else if (m.kind === 'sign') html += `<img ${id} class="pdf-mk-sign" alt="" src="${m.url}" style="left:${m.x * 100}%;top:${m.y * 100}%;width:${m.w * 100}%;opacity:${m.alpha == null ? 1 : m.alpha}">`;
+      else if (m.kind === 'sign') html += `<img ${id} class="pdf-mk-sign" alt="" src="${m.url}" style="left:${m.x * 100}%;top:${m.y * 100}%;width:${m.w * 100}%;height:${((m.w * m.ratio * w) / h) * 100}%;opacity:${m.alpha == null ? 1 : m.alpha}">`;
       else if (m.kind === 'stamp') {
         const b = stampBox(m);
         const rad = b.ellipse ? '50%' : `${b.radius}em`;
@@ -123,7 +123,7 @@ function mountMarkup(body, view, ctx) {
     st.layers = els.map((el, i) => {
       const root = document.createElement('div');
       root.className = 'pdf-mark-layer';
-      root.innerHTML = '<svg class="pdf-mk-svg" preserveAspectRatio="none" aria-hidden="true"></svg><div class="pdf-mk-items"></div><div class="pdf-mk-sel hidden"><span class="pdf-mk-h" aria-hidden="true"></span></div>';
+      root.innerHTML = '<svg class="pdf-mk-svg" preserveAspectRatio="none" aria-hidden="true"></svg><div class="pdf-mk-items"></div><div class="pdf-mk-sel hidden"><span class="pdf-mk-h pdf-mk-hl" data-h="l" aria-hidden="true"></span><span class="pdf-mk-h pdf-mk-ht" data-h="t" aria-hidden="true"></span><span class="pdf-mk-h pdf-mk-hb" data-h="br" aria-hidden="true"></span></div>';
       el.append(root);
       const L = { n: i + 1, el, root, svg: root.querySelector('svg'), items: root.querySelector('.pdf-mk-items'), selEl: root.querySelector('.pdf-mk-sel'), had: false };
       L.ro = new ResizeObserver(() => renderLayer(L));
@@ -248,7 +248,7 @@ function mountMarkup(body, view, ctx) {
       const wf = b.w * STAMP_SIZE, hf = (b.h * STAMP_SIZE * W) / H;
       addMark({ page: L.n, kind: 'stamp', x: clamp(u - wf / 2, 0, Math.max(0, 1 - wf)), y: clamp(v - hf / 2, 0, Math.max(0, 1 - hf)), label: st.stamp, shape: st.shape, fs: STAMP_SIZE, color: st.ink });
     } else if (st.tool === 'sign') {
-      if (!st.sig) { choosePicture(); return; }
+      if (!st.sig) { await choosePicture(); if (!st || !st.sig) return; } // the first tap picks the picture, then places it here
       const w = SIGN_DEFAULT_W, hf = (w * st.sig.ratio * W) / H;
       addMark({ page: L.n, kind: 'sign', x: clamp(u - w / 2, 0, 1 - w), y: clamp(v - hf / 2, 0, Math.max(0, 1 - hf)), w, ratio: st.sig.ratio, png: st.sig.png, url: st.sig.url, alpha: st.alpha });
     }
@@ -309,7 +309,31 @@ function mountMarkup(body, view, ctx) {
     L.root.addEventListener('pointercancel', end);
   }
 
-  // Drag the box to move the mark; drag the corner dot to resize it.
+  // Resizing from a handle. `box` is the mark's box in pixels on its page at the start of the drag; dx, dy the finger's travel in pixels.
+  //   br  the corner: everything scales evenly from the top-left (a highlight by width and height).
+  //   l   the left edge: stretches sideways, the right edge stays.   t   the top edge: stretches up or down, the bottom edge stays.
+  // Text and stamps keep their shape (the size changes); pictures, highlights and drawings stretch.
+  function resizedBy(base, handle, box, dx, dy, W, H) {
+    const MIN = 8;
+    if (handle === 'br') {
+      if (base.kind === 'highlight') return { w: Math.max(0.004, base.w + dx / W), h: Math.max(0.003, base.h + dy / H) };
+      return scaledBy(base, Math.max(0.1, ((box.w + dx) * box.w + (box.h + dy) * box.h) / (box.w * box.w + box.h * box.h)));
+    }
+    if (handle === 'l') {
+      const nw = Math.max(MIN, box.w - dx), sx = nw / box.w, xr = box.x + box.w;
+      if (base.kind === 'highlight') return { x: (xr - nw) / W, w: nw / W };
+      if (base.kind === 'sign') return { x: (xr - nw) / W, w: clamp(nw / W, SIGN_W_MIN, SIGN_W_MAX), ratio: box.h / nw };
+      if (base.kind === 'draw') { const xm = Math.max(...base.pts.map((p) => p[0])); return { pts: base.pts.map((p) => [xm - (xm - p[0]) * sx, p[1]]) }; }
+      return { fs: clamp(base.fs * sx, FS_MIN, FS_MAX), x: clamp((xr - box.w * sx) / W, 0, 1) };
+    }
+    const nh = Math.max(MIN, box.h - dy), sy = nh / box.h, yb = box.y + box.h;
+    if (base.kind === 'highlight') return { y: (yb - nh) / H, h: nh / H };
+    if (base.kind === 'sign') return { y: (yb - nh) / H, ratio: nh / box.w };
+    if (base.kind === 'draw') { const ym = Math.max(...base.pts.map((p) => p[1])); return { pts: base.pts.map((p) => [p[0], ym - (ym - p[1]) * sy]) }; }
+    return { fs: clamp(base.fs * sy, FS_MIN, FS_MAX), y: clamp((yb - box.h * sy) / H, 0, 1) };
+  }
+
+  // Drag the box to move the mark; drag a handle to resize it.
   function bindSel(L) {
     const el = L.selEl;
     let g = null;
@@ -319,7 +343,8 @@ function mountMarkup(body, view, ctx) {
       if (!m || !r) return;
       e.stopPropagation(); e.preventDefault();
       ctx.onActivity();
-      g = { id: e.pointerId, resize: !!e.target.closest('.pdf-mk-h'), cx: e.clientX, cy: e.clientY, base: cloneMark(m), before: snapshot(), w0: Math.max(1, r.w), h0: Math.max(1, r.h), moved: false };
+      const h = e.target.closest('.pdf-mk-h');
+      g = { id: e.pointerId, handle: h ? h.dataset.h : '', cx: e.clientX, cy: e.clientY, base: cloneMark(m), before: snapshot(), box: { x: r.x, y: r.y, w: Math.max(1, r.w), h: Math.max(1, r.h) }, moved: false };
       el.setPointerCapture?.(e.pointerId);
     });
     el.addEventListener('pointermove', (e) => {
@@ -330,9 +355,7 @@ function mountMarkup(body, view, ctx) {
       const m = markById(st.sel);
       if (!m) return;
       const W = L.el.clientWidth, H = L.el.clientHeight;
-      if (!g.resize) Object.assign(m, movedBy(g.base, dx / W, dy / H));
-      else if (g.base.kind === 'highlight') Object.assign(m, { w: Math.max(0.004, g.base.w + dx / W), h: Math.max(0.003, g.base.h + dy / H) });
-      else Object.assign(m, scaledBy(g.base, Math.max(0.1, ((g.w0 + dx) * g.w0 + (g.h0 + dy) * g.h0) / (g.w0 * g.w0 + g.h0 * g.h0))));
+      Object.assign(m, g.handle ? resizedBy(g.base, g.handle, g.box, dx, dy, W, H) : movedBy(g.base, dx / W, dy / H));
       renderSoon(L);
     });
     const end = (e) => {
@@ -361,7 +384,7 @@ function mountMarkup(body, view, ctx) {
       bar.innerHTML = `<div class="pdf-mk-menu">
         <div class="pdf-mk-grid"><div class="pdf-mk-line">${TOOLS.slice(0, 3).map(([k, l]) => `<button type="button" data-tool="${k}" class="pdf-mk-tool">${l}</button>`).join('')}</div>
         <div class="pdf-mk-line">${TOOLS.slice(3).map(([k, l]) => `<button type="button" data-tool="${k}" class="pdf-mk-tool">${l}</button>`).join('')}${form}</div></div>
-        <button type="button" data-act="close" class="pdf-mk-close">Close</button></div>`;
+        <div class="pdf-mk-line pdf-mk-closeline"><button type="button" data-act="close" class="pdf-mk-tool pdf-mk-close">Close</button></div></div>`;
       return;
     }
     const m = st.sel != null ? markById(st.sel) : null;
@@ -373,13 +396,13 @@ function mountMarkup(body, view, ctx) {
       opts += `<div class="pdf-mk-line">${STAMP_SHAPES.map(([k, l]) => chip(`data-shape="${k}"`, l, k === st.shape)).join('')}</div>`;
       opts += `<div class="pdf-mk-line">${STAMPS.map((s) => chip(`data-stamp="${esc(s)}"`, s, s === st.stamp)).join('')}${chip('data-act="custom"', STAMPS.includes(st.stamp) ? 'Custom text…' : `“${st.stamp}”`, !STAMPS.includes(st.stamp))}</div>`;
     }
-    if (palette.length) opts += `<div class="pdf-mk-line">${palette.map((c) => dot(c, c === current)).join('')}</div>`;
+    if (palette.length) opts += `<div class="pdf-mk-line pdf-mk-dots">${palette.map((c) => dot(c, c === current)).join('')}</div>`;
     if (t === 'sign') {
       const a = Math.round((m && m.kind === 'sign' ? (m.alpha == null ? 1 : m.alpha) : st.alpha) * 100);
       opts += `<div class="pdf-mk-line">${chip('data-act="pick"', st.sig ? 'Change picture' : 'Choose picture', !st.sig)}</div>
         <label class="pdf-mk-opacity"><span>Opacity <b>${a}%</b></span><input type="range" min="${Math.round(SIGN_MIN_ALPHA * 100)}" max="100" step="5" value="${a}" aria-label="Picture opacity"></label>`;
     }
-    const hint = t === 'highlight' ? 'Drag on the page. Tap ‹ Tools to scroll.' : t === 'draw' ? 'Draw on the page. Tap ‹ Tools to scroll.' : t === 'text' ? 'Tap the page to add text.' : t === 'stamp' ? 'Pick a shape and text, then tap the page.' : (st.sig ? 'Tap the page to place the picture.' : 'Choose a picture, such as a photo of a signature.');
+    const hint = t === 'highlight' ? 'Drag on the page. Tap ‹ Tools to scroll.' : t === 'draw' ? 'Draw on the page. Tap ‹ Tools to scroll.' : t === 'text' ? 'Tap the page to add text.' : t === 'stamp' ? 'Pick a shape and text, then tap the page.' : (st.sig ? 'Tap the page to place the picture.' : 'Tap the page, then choose a picture.');
     bar.innerHTML = `<div class="pdf-mk-head"><button type="button" data-act="back" class="pdf-mk-back">‹ Tools</button><strong>${TOOL_NAME[t]}</strong><span class="pdf-mk-gap"></span>
         <button type="button" data-act="undo" ${st.undo.length ? '' : 'disabled'}>Undo</button><button type="button" data-act="redo" ${st.redo.length ? '' : 'disabled'}>Redo</button></div>
       <div class="pdf-mk-opts">${selRow}${opts}<div class="pdf-mk-hint">${m ? 'Drag to move, drag the dot to resize.' : hint}</div></div>`;
@@ -412,7 +435,7 @@ function mountMarkup(body, view, ctx) {
     const b = e.target.closest('button');
     if (!b || !st || b.disabled) return;
     ctx.onActivity();
-    if (b.dataset.tool) { st.tool = b.dataset.tool; st.sel = null; paintBar(); placeSel(); if (st.tool === 'sign' && !st.sig) choosePicture(); return; }
+    if (b.dataset.tool) { st.tool = b.dataset.tool; st.sel = null; paintBar(); placeSel(); return; }
     if (b.dataset.color) { applyColor(b.dataset.color); return; }
     if (b.dataset.shape) { applyStamp({ def: { shape: b.dataset.shape }, mark: { shape: b.dataset.shape } }); return; }
     if (b.dataset.stamp) { applyStamp({ def: { stamp: b.dataset.stamp }, mark: { label: b.dataset.stamp } }); return; }
@@ -535,9 +558,9 @@ function mountMarkup(body, view, ctx) {
   async function save() {
     if (!st || saving || !dirty()) return false;
     if (st.formEl) closeForm();
-    const choice = await ctx.askYesNo({ title: 'Save your edits', text: 'Keep the original as it is, or put the edits into it.', yes: 'Save as a copy', extra: 'Save to this PDF', no: 'Cancel' });
+    const choice = await ctx.askYesNo({ title: 'Save your edits', text: 'Keep the original as it is, or put the edits into it.', yes: 'Save to this PDF', extra: 'Save as a copy', no: 'Cancel' });
     if (!choice || !st) return false;
-    const replace = choice === 'extra';
+    const replace = choice === true;
     if (replace && !(await ctx.askYesNo({ title: 'Save to this PDF?', text: 'The edits replace the original PDF, which cannot be restored. Its date is not kept.', yes: 'Save to this PDF', no: 'Cancel' }))) return false;
     if (!st) return false;
     saving = true; syncSave();
@@ -564,14 +587,27 @@ function mountMarkup(body, view, ctx) {
 
   // Back with unsaved edits. Resolves true when Back must stay, false when the viewer may close.
   async function leavePrompt() {
-    const c = await ctx.askYesNo({ title: 'Save your edits?', text: 'They are not in the PDF yet.', yes: 'Save…', extra: 'Discard edits', no: 'Keep editing' });
-    if (c === 'extra') { end(); return false; }
-    if (c !== true) return true;
+    const c = await ctx.askYesNo({ title: 'Save your edits?', text: 'They are not in the PDF yet.', yes: 'Discard edits', extra: 'Save…', no: 'Keep editing' });
+    if (c === true) { end(); return false; }
+    if (c !== 'extra') return true;
     lastReplaced = false;
     const ok = await save();
     return lastReplaced ? true : !ok; // after Save to this PDF the viewer is already closed
   }
 
+  // A tap on the page while the panel is closed: a mark under the finger is selected (the panel opens on it); otherwise the tap folds the tools.
+  const onPageTap = (e) => {
+    if (!st || st.open || !st.marks.length) return;
+    const { x, y } = e.detail;
+    for (const L of st.layers) {
+      const r = L.el.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+      const hit = hitTest(L, (x - r.left) / r.width, (y - r.top) / r.height);
+      if (hit) { e.preventDefault(); setOpen(true); select(hit.id); }
+      return;
+    }
+  };
+  body.addEventListener('arkly-pdf-tap', onPageTap);
   openBtn.onclick = () => { if (st) setOpen(!st.open); else start(); };
   if (saveBtn) saveBtn.onclick = () => { ctx.onActivity(); save(); };
 
@@ -585,7 +621,7 @@ function mountMarkup(body, view, ctx) {
       return false;
     },
     isActive: () => !!st && st.open,
-    destroy() { destroyed = true; end(); openBtn.remove(); if (saveBtn) { saveBtn.onclick = null; saveBtn.classList.add('hidden'); } }
+    destroy() { destroyed = true; body.removeEventListener('arkly-pdf-tap', onPageTap); end(); openBtn.remove(); if (saveBtn) { saveBtn.onclick = null; saveBtn.classList.add('hidden'); } }
   };
 }
 

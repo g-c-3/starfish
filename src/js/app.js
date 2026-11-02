@@ -42,6 +42,7 @@ import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProviders, renderMap, START_Z } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
 import { groupedHtml, upcomingLabel } from './dategroup.js';
+import { chromeOnScroll } from './chrome-scroll.js';
 import '../css/topbar.css';
 import { parseFind, hasFind, dateMatches, nameMatches } from './folderfind.js';
 import { VoiceRecorder } from 'cap-voice-rec';
@@ -6739,7 +6740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function openPdf(item, isVault) {
     const viewerScreen = document.getElementById('viewer-screen');
-    let view = null, tools = null, chrome = null, token = 0, pwResolve = null;
+    let view = null, tools = null, chrome = null, foldStop = null, token = 0, pwResolve = null;
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
     // Save button in the title bar (Decision 362): shown by the edit mode while there are unsaved edits.
     const saveBtn = Object.assign(document.createElement('button'), { type: 'button', className: 'pdf-hdr editor-save hidden', textContent: 'Save' });
@@ -6798,7 +6799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       title: item.label || 'PDF', isVault,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       guard: async () => !(tools && await tools.closeTop()), // Back closes the form or mark-up, then the Pages panel, then Find, before it leaves the viewer (Decisions 153, 166)
-      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (view) { view.destroy(); view = null; } },
+      onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (foldStop) { foldStop(); foldStop = null; } viewerScreen.querySelector('.editor-bar')?.classList.remove('bar-folded'); if (view) { view.destroy(); view = null; } },
       render: async (body) => {
         const row = await fresh();
         document.getElementById('viewer-title').textContent = row.label || 'PDF';
@@ -6832,6 +6833,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { mountPdfChrome } = await import('./pdfchrome.js'); // tap the page to fold or bring back the tools; zoom is by pinch (Decision 362)
           if (mine !== token || !body.isConnected) return;
           chrome = mountPdfChrome(body, scroll, { onActivity: arm });
+          // Scrolling down folds the title bar, scrolling up a little brings it back (Decisions 235, 364).
+          foldStop = chromeOnScroll(body, (h) => viewerScreen.querySelector('.editor-bar')?.classList.toggle('bar-folded', h), '.pdf-scroll');
           const { mountPdfTools } = await import('./pdftools.js');
           if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
           tools = mountPdfTools(body, view, { onActivity: arm });

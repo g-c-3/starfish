@@ -2,6 +2,7 @@
 // image, PDF (reading tools only), audio, video, and docx, xlsx and pptx (view only, Decision 226). Files are read where they are; nothing is copied, stored or sent
 // anywhere, and no database row is written. The screen's own lock rules apply: destroy() runs on an app or Vault lock.
 
+import { chromeOnScroll } from './chrome-scroll.js';
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
@@ -182,6 +183,7 @@ export function openFileViewer(file, ctx) {
     const scroll = body.querySelector('.pdf-scroll');
     body.classList.add('pdf-full');
     enterFull(() => {});
+    stopScroll = chromeOnScroll(body, (h) => setChrome(h), '.pdf-scroll'); // Decision 364: as in Home and the Vault
     if (menuBtn) menuBtn.classList.add('hidden'); // the tools are always at hand: a tap on the page folds or brings them back, as in Home and Vault (Decision 362)
     let view = null, tools = null, chrome = null;
     cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (view) { view.destroy(); view = null; } };

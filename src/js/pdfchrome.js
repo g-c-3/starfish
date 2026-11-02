@@ -20,6 +20,8 @@ function mountPdfChrome(body, scroll, { onActivity = () => {} } = {}) {
     const sel = window.getSelection ? String(window.getSelection()) : '';
     if (sel) return; // a text selection is in progress
     onActivity();
+    // Edit mode may claim the tap (a mark was tapped): it then does not fold the tools.
+    if (!body.dispatchEvent(new CustomEvent('arkly-pdf-tap', { detail: { x: e.clientX, y: e.clientY }, cancelable: true }))) return;
     body.classList.toggle('pdf-tools-hidden');
   };
   const cancel = () => { down = null; };

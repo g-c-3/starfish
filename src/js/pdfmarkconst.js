@@ -1,8 +1,11 @@
 // pdfmarkconst.js — shared by the mark-up screen and the export (Decisions 166, 362). No imports, so the screen loads without pdf-lib.
 
-const COLORS = { yellow: [1, 0.92, 0.2], green: [0.45, 0.85, 0.35], pink: [1, 0.55, 0.75], blue: [0.2, 0.45, 0.95], red: [0.85, 0.15, 0.15], black: [0, 0, 0] };
-const HIGHLIGHT_COLORS = ['yellow', 'green', 'pink'];
-const INK_COLORS = ['blue', 'red', 'black'];
+const COLORS = {
+  yellow: [1, 0.92, 0.2], green: [0.45, 0.85, 0.35], pink: [1, 0.55, 0.75], orange: [1, 0.62, 0.15], cyan: [0.3, 0.85, 0.95], lilac: [0.75, 0.55, 1],
+  blue: [0.2, 0.45, 0.95], red: [0.85, 0.15, 0.15], black: [0, 0, 0], teal: [0.05, 0.55, 0.5], purple: [0.5, 0.2, 0.8], brown: [0.5, 0.3, 0.15]
+};
+const HIGHLIGHT_COLORS = ['yellow', 'green', 'pink', 'orange', 'cyan', 'lilac'];
+const INK_COLORS = ['blue', 'red', 'black', 'teal', 'purple', 'orange', 'brown'];
 const STAMPS = ['Approved', 'Rejected', 'Draft', 'Paid', 'Received', 'Copy', 'Confidential'];
 const STAMP_SHAPES = [['rect', 'Rectangle'], ['round', 'Rounded'], ['oval', 'Oval'], ['circle', 'Circle']];
 const STAMP_MAX_LABEL = 24;
