@@ -2,6 +2,7 @@ package __PACKAGE__;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.PendingIntent;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -44,6 +45,8 @@ public final class ArklyReminderSound {
     private static Ringtone fallback;
     private static Notification pending; // the fired reminder notification, handed to the sound service to run in the foreground
     private static int pendingId;
+    private static Notification shown; // the reminder notification as posted, for the lock-screen reminder screen to read its buttons from
+    private static int shownId;
 
     private ArklyReminderSound() {}
 
@@ -90,7 +93,7 @@ public final class ArklyReminderSound {
 
     private static String channelIdOf(Context c, JSONObject cfg) {
         String mode = cfg.optString("mode", "default");
-        String key = "v3|" + mode + "|" + sourceOf(c, cfg) + "|" + cfg.optBoolean("vibrate", false) + "|" + cfg.optBoolean("rise", false);
+        String key = "v4|" + mode + "|" + sourceOf(c, cfg) + "|" + cfg.optBoolean("vibrate", false) + "|" + cfg.optBoolean("rise", false);
         return CHANNEL_PREFIX + Integer.toHexString(key.hashCode());
     }
 
@@ -116,9 +119,7 @@ public final class ArklyReminderSound {
         } else {
             ch.setSound(null, null); // the service plays it, or there is no sound
         }
-        boolean vib = cfg.optBoolean("vibrate", false);
-        ch.enableVibration(vib); // onFire also buzzes, so a phone that ignores one of the two still vibrates
-        if (vib) ch.setVibrationPattern(new long[] { 0, 500, 250, 500, 250, 500 });
+        ch.enableVibration(false); // the pattern is played by onFire (see vibrate), so the two never overlap
         nm.createNotificationChannel(ch);
         return id;
     }
@@ -173,9 +174,10 @@ public final class ArklyReminderSound {
             } else return;
         } catch (Throwable t) { return; }
         if (vib) vibrate(c);
+        notification = withLockScreen(c, notificationId, notification);
         boolean isFile = "file".equals(mode);
-        if (!isFile && !"alarm".equals(mode)) return;
-        if (src.isEmpty()) return;
+        if (!isFile && !"alarm".equals(mode)) { postAgain(c, notificationId, notification); return; }
+        if (src.isEmpty()) { postAgain(c, notificationId, notification); return; }
         try {
             pending = notification; pendingId = notificationId;
             Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_PLAY)
@@ -183,6 +185,7 @@ public final class ArklyReminderSound {
             ContextCompat.startForegroundService(c, i);
         } catch (Throwable t) {
             pending = null;
+            postAgain(c, notificationId, notification);
             // The service could not start (background limits): the phone's own ringtone player, once, at full volume.
             try {
                 stopFallback();
@@ -191,6 +194,38 @@ public final class ArklyReminderSound {
             } catch (Throwable ignored) { /* no sound; the banner still shows */ }
         }
     }
+
+    // The fired notification again with a full-screen intent: with the phone locked or the screen off it turns the screen on and shows
+    // ArklyAlarmActivity over the lock screen (Decision 368); with the screen on it stays a banner. Returns the notification unchanged when
+    // this is not possible (older Android, or full-screen notifications switched off for the app).
+    private static Notification withLockScreen(Context c, int id, Notification n) {
+        shown = n; shownId = id;
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || n == null) return n;
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return n;
+            if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) return n;
+            CharSequence title = n.extras != null ? n.extras.getCharSequence(Notification.EXTRA_TITLE) : null;
+            CharSequence text = n.extras != null ? n.extras.getCharSequence(Notification.EXTRA_TEXT) : null;
+            Intent i = new Intent(c, ArklyAlarmActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra("nid", id).putExtra("title", title == null ? "" : title.toString()).putExtra("text", text == null ? "" : text.toString());
+            PendingIntent pi = PendingIntent.getActivity(c, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            Notification.Builder b = Notification.Builder.recoverBuilder(c, n).setFullScreenIntent(pi, true).setOnlyAlertOnce(true);
+            Notification out = b.build();
+            shown = out;
+            return out;
+        } catch (Throwable t) { return n; }
+    }
+
+    // Posts the notification again under the same id so it carries the full-screen intent (the service does this itself for the sound modes).
+    private static void postAgain(Context c, int id, Notification n) {
+        try {
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && n != null) nm.notify(id, n);
+        } catch (Throwable ignored) { /* the first posting stands */ }
+    }
+
+    public static Notification shownNotification(int id) { return shownId == id ? shown : null; }
 
     // The fired notification for the service to show as its foreground notice, so only one notification appears. Null when none is waiting.
     public static Notification takePending(int id) {
@@ -211,15 +246,24 @@ public final class ArklyReminderSound {
         return v != null && v.hasVibrator() ? v : null;
     }
 
-    // Buzzes for about half a minute (a 0.6 s buzz and a 0.7 s pause, repeated) on the alarm vibration channel, so a silent ringer does not
-    // mute it. Done, Snooze and the Stop of the sound cancel it (stop below). The pattern is finite, so it ends by itself.
+    // One minute of vibration: a 3 s wait, then a burst of three 0.6 s buzzes with 0.7 s between them (about 3 s), a 3 s pause, the next
+    // burst, and so on. The pattern is finite, so it ends by itself; Done, Snooze and the sound's Stop cancel it (stop below).
+    // Played on the alarm vibration channel, so a silent ringer does not mute it.
     public static void vibrate(Context c) {
         try {
             Vibrator v = vibrator(c);
             if (v == null) return;
-            int cycles = 22;
-            long[] pattern = new long[1 + cycles * 2];
-            for (int i = 0; i < cycles; i++) { pattern[1 + i * 2] = 600; pattern[2 + i * 2] = 700; }
+            java.util.ArrayList<Long> t = new java.util.ArrayList<>();
+            t.add(3000L); // the wait before the first buzz
+            long total = 3000;
+            while (total + 3200 <= 60000) {
+                t.add(600L); t.add(700L); t.add(600L); t.add(700L); t.add(600L); // a burst: three buzzes
+                total += 3200;
+                if (total + 3000 + 3200 > 60000) break;
+                t.add(3000L); total += 3000; // the pause before the next burst
+            }
+            long[] pattern = new long[t.size()];
+            for (int k = 0; k < pattern.length; k++) pattern[k] = t.get(k);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 VibrationEffect e = VibrationEffect.createWaveform(pattern, -1);
                 try {
@@ -242,6 +286,7 @@ public final class ArklyReminderSound {
     public static void stop(Context c) {
         stopFallback();
         try { Vibrator v = vibrator(c); if (v != null) v.cancel(); } catch (Throwable ignored) { /* not vibrating */ }
+        try { ArklyAlarmActivity.closeIfOpen(); } catch (Throwable ignored) { /* none open */ }
         try { c.stopService(new Intent(c, ArklyReminderSoundService.class)); } catch (Throwable ignored) { /* not running */ }
     }
 }
