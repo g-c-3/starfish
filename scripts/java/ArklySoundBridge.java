@@ -1,13 +1,17 @@
 package __PACKAGE__;
 
+import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.media.RingtoneManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import java.io.File;
@@ -71,6 +75,33 @@ public class ArklySoundBridge {
             return ArklyReminderSound.applyChannel(ctx);
         } catch (Throwable t) {
             return "";
+        }
+    }
+
+    // Android 14 and later: whether Arkly may turn the screen on and show the reminder over the lock screen (a user setting). True before that.
+    @JavascriptInterface
+    public boolean canFullScreen() {
+        try {
+            if (Build.VERSION.SDK_INT < 34) return true;
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            return nm == null || nm.canUseFullScreenIntent();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    // Opens the phone's own page where the person allows full-screen notifications for Arkly.
+    @JavascriptInterface
+    public void openFullScreenSettings() {
+        try {
+            Intent i = Build.VERSION.SDK_INT >= 34
+                ? new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + ctx.getPackageName()))
+                : new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.getPackageName());
+            ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Throwable t) {
+            try { // the app's notification settings, where the same switch can be found
+                ctx.startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Throwable ignored) { /* nothing to open */ }
         }
     }
 
