@@ -31,3 +31,6 @@
 
 /* While a tab change slides, the page never scrolls sideways (Decision 360). */
 .rem-sliding { overflow-x: clip; }
+
+/* The sound dialog opened from the reminder's Save dialog must sit above it (Decision 365). */
+#reminder-sound-dialog { z-index: 60; }
