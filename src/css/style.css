@@ -1452,3 +1452,10 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 .row-play.playing .play-badge { background: var(--danger); }
 #viewer-body.vv-swipe { overflow-x: hidden; touch-action: pan-y; }
 .vv-wrap { min-height: calc(100vh - 240px); } /* a tall area, so a swipe also works on the empty space */
+
+/* Decision 364: in the PDF and image viewers the title bar floats over the content, translucent, and folds away smoothly. */
+#viewer-screen.pdf-mode .editor-bar, #viewer-screen.image-mode .editor-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 9; transition: transform .26s ease, opacity .26s ease; }
+#viewer-screen .editor-bar.bar-folded { transform: translateY(-110%); opacity: 0; pointer-events: none; }
+#viewer-screen.pdf-mode .pdf-scroll { padding-top: 58px; }
+#explorer-viewer .editor-bar.ev-head-hidden { transition: transform .26s ease, opacity .26s ease; }
+@media (prefers-reduced-motion: reduce) { #viewer-screen .editor-bar { transition: none; } }

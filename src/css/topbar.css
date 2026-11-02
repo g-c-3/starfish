@@ -2,12 +2,12 @@
    Covers the selection bars (Home, Vault, Search, File explorer), the viewer and editor headers (text, image, PDF, file, File explorer
    viewer) and the Phone gallery header. Dark mode keeps its own bars. */
 :root:not([data-theme="dark"]) {
-  --bar-bg: linear-gradient(135deg, #7766ee, #5b47e0);
+  --bar-bg: linear-gradient(135deg, rgba(88, 68, 214, 0.86), rgba(52, 34, 170, 0.86)); /* darker than before so white text reads, and translucent (Decision 364) */
   --bar-fg: #ffffff;
   --bar-soft: rgba(255, 255, 255, 0.18);
 }
 :root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, #explorer-viewer .editor-bar, #explorer-viewer.ev-full .editor-bar, .editor-bar, .ph-head) {
-  background: var(--bar-bg); color: var(--bar-fg); border-bottom-color: rgba(255, 255, 255, 0.16); -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--bar-bg); color: var(--bar-fg); border-bottom-color: rgba(255, 255, 255, 0.14); -webkit-backdrop-filter: blur(16px) saturate(1.25); backdrop-filter: blur(16px) saturate(1.25);
 }
 :root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn { color: var(--bar-fg); }
 :root:not([data-theme="dark"]) :is(#select-bar, #explorer-selbar, .editor-bar) .icon-btn:active { background: var(--bar-soft); }
@@ -24,3 +24,9 @@
 /* Phone gallery header */
 :root:not([data-theme="dark"]) .ph-head button { background: var(--bar-soft); color: var(--bar-fg); border: 0; }
 :root:not([data-theme="dark"]) .ph-head .ph-add { background: #fff; color: var(--brand-ink); }
+
+/* Dark mode: the same translucent bar in the theme's own colour (Decision 364). */
+:root[data-theme="dark"] :is(.editor-bar, #select-bar, #explorer-selbar, .ph-head, #explorer-viewer.ev-full .editor-bar) {
+  background: color-mix(in srgb, var(--bg) 74%, transparent); border-bottom-color: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
+}
