@@ -4,6 +4,15 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 169**
+
+Start: owner device test of Phase 64. Confirmed: the sound dialog opens above the Save dialog; one notification; sound with the screen off. Not working: vibration. Requested: one label per date group in saved lists and Upcoming.
+- Decision 366. App: `dategroup.js`, `remindersound.js`. Native: `ArklyReminderSound.java`, `ArklySoundBridge.java`.
+- Vibration cause not known: the phone may restrict app vibration, the permission may be missing, or the earlier channels (made without vibration) were reused. All three are covered; Test now shows whether the phone buzzes at all.
+- Checked in the sandbox: labels run for several dates in both directions. Not run: the Java (never compiled), a device.
+- Open: DP192 and earlier; CI result for the Java of Sessions 164, 166, 168, 169.
+- Next start: check the CI run; DP192; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 168**
 
 Start: owner device test of Phase 62. Reported: the sound's notice still showed beside the reminder; the Upcoming labels should chain periods; the Sound and vibration dialog opened behind the Save dialog; vibration did nothing; with the screen off the sound waited until unlock.

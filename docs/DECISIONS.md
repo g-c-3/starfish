@@ -3750,3 +3750,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The sound dialog is raised above the Save dialog.
 - Files: `scripts/java/ArklyReminderSound.java`, `ArklyReminderSoundService.java`, `scripts/patch-reminder-sound.js`, `src/js/dategroup.js`, `src/css/remindertabs.css`. Not run through CI or a device (DP191).
 
+**366. One label per date group; vibration hardened.** Owner device test. Replaces the joined labels of Decisions 350, 363 and 365; refines Decision 365.
+- A date group has one name. Saved lists: Today, Yesterday, This Week, Last Week, This Month, Last Month, then month and year. Upcoming: Today, Tomorrow, This Week, Next Week, This Month, Next Month, then month and year. Last Week and Next Week are still dropped when they fall in the neighbouring month.
+- Vibration: the channel vibrates again (three buzzes) and the app also buzzes when the reminder fires, using the phone's default vibrator with the alarm usage, else without it. Channel ids carry a new version so channels made without vibration are not reused. The Test button in the sound dialog buzzes when Vibrate is ticked.
+- Files: `src/js/dategroup.js`, `remindersound.js`, `scripts/java/ArklyReminderSound.java`, `ArklySoundBridge.java`. Not run through CI or a device (DP192).
+
