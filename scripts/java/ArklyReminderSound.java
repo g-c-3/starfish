@@ -268,17 +268,29 @@ public final class ArklyReminderSound {
             }
             long[] pattern = new long[t.size()];
             for (int k = 0; k < pattern.length; k++) pattern[k] = t.get(k);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                VibrationEffect e = VibrationEffect.createWaveform(pattern, -1);
-                try {
-                    v.vibrate(e, new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build());
-                } catch (Throwable first) {
-                    v.vibrate(e); // without the alarm usage
-                }
-            } else {
-                v.vibrate(pattern, -1);
-            }
+            play(v, pattern);
         } catch (Throwable ignored) { /* no vibrator or no permission */ }
+    }
+
+    // Two short buzzes (0.3 s, 0.3 s apart) for the Test button, then it stops.
+    public static void vibrateShort(Context c) {
+        try {
+            Vibrator v = vibrator(c);
+            if (v != null) play(v, new long[] { 0, 300, 300, 300 });
+        } catch (Throwable ignored) { /* no vibrator or no permission */ }
+    }
+
+    private static void play(Vibrator v, long[] pattern) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            VibrationEffect e = VibrationEffect.createWaveform(pattern, -1);
+            try {
+                v.vibrate(e, new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build());
+            } catch (Throwable first) {
+                v.vibrate(e); // without the alarm usage
+            }
+        } else {
+            v.vibrate(pattern, -1);
+        }
     }
 
     private static void stopFallback() {

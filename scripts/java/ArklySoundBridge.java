@@ -105,10 +105,10 @@ public class ArklySoundBridge {
         }
     }
 
-    // One buzz pattern, for the Test button when Vibrate is ticked.
+    // Two short buzzes, for the Test button when Vibrate is ticked.
     @JavascriptInterface
     public void vibrateTest() {
-        ArklyReminderSound.vibrate(ctx);
+        ArklyReminderSound.vibrateShort(ctx);
     }
 
     // The channel the app schedules reminders on when they follow the global setting.
