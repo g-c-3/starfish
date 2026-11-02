@@ -3755,3 +3755,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Vibration: the channel vibrates again (three buzzes) and the app also buzzes when the reminder fires, using the phone's default vibrator with the alarm usage, else without it. Channel ids carry a new version so channels made without vibration are not reused. The Test button in the sound dialog buzzes when Vibrate is ticked.
 - Files: `src/js/dategroup.js`, `remindersound.js`, `scripts/java/ArklyReminderSound.java`, `ArklySoundBridge.java`. Not run through CI or a device (DP192).
 
+**367. Vibration lasts about half a minute.** Owner device test. Refines Decision 366.
+- The app's vibration is a 0.6 s buzz and a 0.7 s pause, 22 times (about 29 s), on the alarm vibration channel. It is finite, so it ends by itself; Done, Snooze and the sound's Stop cancel it. The channel's own vibration stays three buzzes.
+- Files: `scripts/java/ArklyReminderSound.java`. Not run through CI or a device (DP193).
+

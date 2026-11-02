@@ -375,3 +375,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-02 | Session 167 | Decision 364 | Phase 63: PDF edit panel refinements, stretch handles, translucent folding title bars; DP190 added; not run through CI or a device |
 | 2026-11-02 | Session 168 | Decision 365 | Phase 64: one notification while the sound plays, vibration by the app, sound with the screen off, chained Upcoming labels, dialog order; DP191 added; native code not compiled |
 | 2026-11-02 | Session 169 | Decision 366 | Phase 65: one label per date group; vibration hardened and testable; DP192 added; native code not compiled |
+| 2026-11-02 | Session 170 | Decision 367 | Phase 66: vibration lasts about half a minute and stops on Done or Snooze; DP193 added; native code not compiled |

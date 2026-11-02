@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 170**
+
+Start: owner reported vibration works, also with the screen off, but stops after three buzzes. Cause: the pattern was three buzzes with no repeat, by design in Decision 366.
+- Decision 367. Native: `ArklyReminderSound.java`. Not compiled, not run on a device.
+- Open: DP193 and earlier; CI result for the Java of Sessions 164, 166, 168 to 170.
+- Next start: check the CI run; DP193; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 169**
 
 Start: owner device test of Phase 64. Confirmed: the sound dialog opens above the Save dialog; one notification; sound with the screen off. Not working: vibration. Requested: one label per date group in saved lists and Upcoming.
