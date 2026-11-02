@@ -15,7 +15,7 @@ import java.io.FileOutputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-// Reminder sound settings for the app's own page only, as window.ArklySound (patch-reminder-sound.js, Decision 359).
+// Reminder sound and vibration settings for the app's own page only, as window.ArklySound (patch-reminder-sound.js, Decisions 359, 363).
 // Lists the phone's notification and alarm sounds, keeps one audio file the owner picked inside the app's private folder,
 // and saves the choice natively so it is there when a reminder fires with the app closed. No network, no extra permission.
 public class ArklySoundBridge {
@@ -45,36 +45,71 @@ public class ArklySoundBridge {
         return out.toString();
     }
 
-    // {mode, uri, title, rise, fileTitle, hasFile}
+    // {mode, uri, title, rise, vibrate, fileTitle, hasFile}
     @JavascriptInterface
     public String getConfig() {
         try {
             android.content.SharedPreferences p = ctx.getSharedPreferences(ArklyReminderSound.PREFS, Context.MODE_PRIVATE);
-            return new JSONObject().put("mode", p.getString("mode", "default")).put("uri", p.getString("uri", ""))
-                .put("title", p.getString("title", "")).put("rise", p.getBoolean("rise", false))
-                .put("fileTitle", p.getString("file_title", "")).put("hasFile", ArklyReminderSound.savedFile(ctx) != null).toString();
+            return ArklyReminderSound.globalConfig(ctx).put("fileTitle", p.getString("file_title", "")).put("hasFile", ArklyReminderSound.savedFile(ctx) != null).toString();
         } catch (Throwable t) {
             return "{\"mode\":\"default\"}";
         }
     }
 
-    // Saves the choice and makes its channel. Returns the channel id the app schedules reminders on, or "" on a refused choice.
+    private boolean valid(String mode, String uri) {
+        if (!("default".equals(mode) || "notification".equals(mode) || "alarm".equals(mode) || "file".equals(mode) || "none".equals(mode))) return false;
+        if (("notification".equals(mode) || "alarm".equals(mode)) && (uri == null || uri.isEmpty())) return false;
+        return !"file".equals(mode) || ArklyReminderSound.savedFile(ctx) != null;
+    }
+
+    // Saves the setting for all reminders and makes its channel. Returns the channel id, or "" on a refused choice.
     @JavascriptInterface
-    public String setConfig(String mode, String uri, String title, boolean rise) {
+    public String setConfig(String mode, String uri, String title, boolean rise, boolean vibrate) {
         try {
-            if (!("default".equals(mode) || "notification".equals(mode) || "alarm".equals(mode) || "file".equals(mode))) return "";
-            if (("notification".equals(mode) || "alarm".equals(mode)) && (uri == null || uri.isEmpty())) return "";
-            if ("file".equals(mode) && ArklyReminderSound.savedFile(ctx) == null) return "";
-            ArklyReminderSound.save(ctx, mode, uri, title, rise);
+            if (!valid(mode, uri)) return "";
+            ArklyReminderSound.save(ctx, mode, uri, title, rise, vibrate);
             return ArklyReminderSound.applyChannel(ctx);
         } catch (Throwable t) {
             return "";
         }
     }
 
+    // The channel the app schedules reminders on when they follow the global setting.
     @JavascriptInterface
     public String channelId() {
-        return ArklyReminderSound.channelId(ctx);
+        return ArklyReminderSound.channelForEntry(ctx, "");
+    }
+
+    // The channel for one reminder: its own setting when it has one, else the global one. Made when missing.
+    @JavascriptInterface
+    public String channelForEntry(String entryId) {
+        try { return ArklyReminderSound.channelForEntry(ctx, entryId); } catch (Throwable t) { return ""; }
+    }
+
+    // One reminder's own setting as JSON, or "" when it follows the global one.
+    @JavascriptInterface
+    public String getReminderConfig(String entryId) {
+        JSONObject j = ArklyReminderSound.reminderConfig(ctx, entryId);
+        return j == null ? "" : j.toString();
+    }
+
+    // Saves one reminder's own setting ({mode, uri, title, rise, vibrate}); "" makes it follow the global one again.
+    // Returns the channel id for it, "" on a refused choice. The app schedules that reminder again afterwards.
+    @JavascriptInterface
+    public String setReminderConfig(String entryId, String json) {
+        try {
+            if (entryId == null || entryId.isEmpty()) return "";
+            if (json == null || json.isEmpty()) { ArklyReminderSound.saveReminderConfig(ctx, entryId, null); return ArklyReminderSound.channelForEntry(ctx, entryId); }
+            JSONObject j = new JSONObject(json);
+            String mode = j.optString("mode", "default"), uri = j.optString("uri", "");
+            if (!valid(mode, uri)) return "";
+            JSONObject clean = new JSONObject().put("mode", mode).put("uri", uri).put("title", j.optString("title", ""))
+                .put("rise", j.optBoolean("rise", false) && ("alarm".equals(mode) || "file".equals(mode))).put("vibrate", j.optBoolean("vibrate", false));
+            ArklyReminderSound.saveReminderConfig(ctx, entryId, clean);
+            return ArklyReminderSound.channelFor(ctx, clean);
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     // Keeps one picked audio file (base64 from the page). Returns its name as stored, or "" when too large or unwritable.

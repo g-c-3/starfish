@@ -15,8 +15,9 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
-// Plays the reminder's alarm sound or audio file (patch-reminder-sound.js, Decision 359). A foreground service of type
-// mediaPlayback, so the phone lets it run while the app is closed; it shows one low-key notice with a Stop button. The sound
+// Plays the reminder's alarm sound or audio file (patch-reminder-sound.js, Decisions 359, 363). A foreground service of type
+// mediaPlayback, so the phone lets it run while the app is closed. Android requires such a service to show a notice; it is kept
+// as quiet as the system allows (minimum importance: no status-bar icon, no sound, hidden on the lock screen) with a Stop button. The sound
 // loops for at most CAP_MS and rises from silence over RISE_MS when the owner chose that. Plays on the alarm volume.
 public class ArklyReminderSoundService extends Service {
     public static final String ACTION_PLAY = "arkly.reminder.sound.PLAY";
@@ -76,15 +77,19 @@ public class ArklyReminderSoundService extends Service {
     private void showNotice() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
-            NotificationChannel ch = new NotificationChannel(ArklyReminderSound.PLAYING_CHANNEL, "Reminder sound playing", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel ch = new NotificationChannel(ArklyReminderSound.PLAYING_CHANNEL, "Reminder sound playing", NotificationManager.IMPORTANCE_MIN);
             ch.setSound(null, null);
+            ch.enableVibration(false);
+            ch.setShowBadge(false);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
             nm.createNotificationChannel(ch);
+            nm.deleteNotificationChannel("arkly_rem_playing_v1"); // the earlier, more visible one
         }
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
         PendingIntent stop = PendingIntent.getService(this, 0, new Intent(this, ArklyReminderSoundService.class).setAction(ACTION_STOP), flags);
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? new Notification.Builder(this, ArklyReminderSound.PLAYING_CHANNEL) : new Notification.Builder(this);
-        b.setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Reminder sound").setOngoing(true)
+        b.setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Reminder sound").setOngoing(true).setVisibility(Notification.VISIBILITY_SECRET)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stop);
         Notification n = b.build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTICE_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);

@@ -9,74 +9,134 @@ import android.media.AudioAttributes;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
+import android.provider.Settings;
 import android.os.Build;
 import androidx.core.content.ContextCompat;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.json.JSONObject;
 
-// Reminder sound (patch-reminder-sound.js, Decision 359). The chosen sound lives in app-private preferences so it is
-// readable when a reminder fires with the app closed. Modes:
-//   default       the plain banner channel made by notifications.js (Decision 96); this class stays out of the way.
-//   notification  a channel whose sound is the chosen phone notification sound; Android plays it once.
-//   alarm, file   a silent channel plus ArklyReminderSoundService, which plays the phone alarm sound or the saved audio file,
-//                 looping for at most a minute, optionally rising from silent. Done, Snooze and a swipe-away stop it.
-// Nothing here reads the network or any content of the app's data.
+// Reminder sound and vibration (patch-reminder-sound.js, Decisions 359, 363). Everything lives in app-private preferences so it is
+// readable when a reminder fires with the app closed. A setting is { mode, uri, title, rise, vibrate }:
+//   mode default       the phone's notification sound, played once by the notification channel.
+//   mode notification  a chosen phone notification sound, played once by the channel.
+//   mode alarm, file   a silent channel plus ArklyReminderSoundService, which plays the phone alarm sound or the saved audio file,
+//                      looping for at most a minute, optionally rising from silent. Done, Snooze and a swipe-away stop it.
+//   mode none          no sound; vibration only when on.
+// There is one setting for all reminders and, optionally, one per reminder (keyed by the entry id). A channel is made per distinct
+// setting (an Android channel's sound and vibration are fixed once created); its setting is stored beside it, so the service can
+// be started from the channel a fired notification was posted on. Nothing here reads the network or any content of the app's data.
 public final class ArklyReminderSound {
     static final String PREFS = "arkly_reminder_sound";
-    static final String DEFAULT_CHANNEL = "arkly_reminders_v2"; // same id as notifications.js
-    static final String SILENT_CHANNEL = "arkly_rem_silent_v1";
-    static final String TONE_PREFIX = "arkly_rem_t_";
+    static final String ALERTS = "arkly_reminder_alerts";
     static final String OWN_PREFIX = "arkly_rem_";
-    static final String PLAYING_CHANNEL = "arkly_rem_playing_v1"; // the service's own notice; never removed here
+    static final String CHANNEL_PREFIX = "arkly_rem_c_";
+    static final String OLD_SILENT_CHANNEL = "arkly_rem_silent_v1";
+    static final String PLAYING_CHANNEL = "arkly_rem_playing_v2"; // the service's own notice; never removed here
     private static Ringtone fallback;
 
     private ArklyReminderSound() {}
 
-    private static SharedPreferences prefs(Context c) {
-        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-    }
+    private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    private static SharedPreferences alerts(Context c) { return c.getSharedPreferences(ALERTS, Context.MODE_PRIVATE); }
 
-    public static String mode(Context c) {
-        return prefs(c).getString("mode", "default");
-    }
-
-    public static void save(Context c, String mode, String uri, String title, boolean rise) {
+    public static void save(Context c, String mode, String uri, String title, boolean rise, boolean vibrate) {
         prefs(c).edit().putString("mode", mode).putString("uri", uri == null ? "" : uri)
-            .putString("title", title == null ? "" : title).putBoolean("rise", rise).apply();
+            .putString("title", title == null ? "" : title).putBoolean("rise", rise).putBoolean("vibrate", vibrate).apply();
     }
 
-    public static String channelId(Context c) {
-        String mode = mode(c);
-        if ("alarm".equals(mode) || "file".equals(mode)) return SILENT_CHANNEL;
-        if ("notification".equals(mode)) return TONE_PREFIX + Integer.toHexString(prefs(c).getString("uri", "").hashCode());
-        return DEFAULT_CHANNEL;
+    public static JSONObject globalConfig(Context c) {
+        SharedPreferences p = prefs(c);
+        try {
+            return new JSONObject().put("mode", p.getString("mode", "default")).put("uri", p.getString("uri", ""))
+                .put("title", p.getString("title", "")).put("rise", p.getBoolean("rise", false)).put("vibrate", p.getBoolean("vibrate", false));
+        } catch (Throwable t) { return new JSONObject(); }
     }
 
-    // Creates the channel for the saved choice and removes the other Arkly sound channels. Notifications already
-    // scheduled on a removed channel are dropped by Android, so the app schedules every reminder again afterwards.
+    // The setting of one reminder when it has its own, else null (it follows the global one).
+    public static JSONObject reminderConfig(Context c, String entryId) {
+        if (entryId == null || entryId.isEmpty()) return null;
+        String s = alerts(c).getString(entryId, "");
+        if (s.isEmpty()) return null;
+        try { return new JSONObject(s); } catch (Throwable t) { return null; }
+    }
+
+    public static void saveReminderConfig(Context c, String entryId, JSONObject cfg) {
+        if (cfg == null) alerts(c).edit().remove(entryId).apply(); else alerts(c).edit().putString(entryId, cfg.toString()).apply();
+    }
+
+    public static JSONObject effective(Context c, String entryId) {
+        JSONObject own = reminderConfig(c, entryId);
+        return own != null ? own : globalConfig(c);
+    }
+
+    // The path of the audio file for a setting in file mode.
+    private static String sourceOf(Context c, JSONObject cfg) {
+        String mode = cfg.optString("mode", "default");
+        if ("file".equals(mode)) { File f = savedFile(c); return f == null ? "" : f.getAbsolutePath(); }
+        if ("notification".equals(mode) || "alarm".equals(mode)) return cfg.optString("uri", "");
+        return "";
+    }
+
+    private static String channelIdOf(Context c, JSONObject cfg) {
+        String mode = cfg.optString("mode", "default");
+        String key = mode + "|" + sourceOf(c, cfg) + "|" + cfg.optBoolean("vibrate", false) + "|" + cfg.optBoolean("rise", false);
+        return CHANNEL_PREFIX + Integer.toHexString(key.hashCode());
+    }
+
+    // Makes (when missing) the channel for a setting and remembers the setting beside it. Returns the channel id.
+    public static String channelFor(Context c, JSONObject cfg) {
+        String id = channelIdOf(c, cfg);
+        String mode = cfg.optString("mode", "default");
+        boolean rise = cfg.optBoolean("rise", false);
+        try {
+            alerts(c).edit().putString("chan_" + id, new JSONObject().put("mode", mode).put("src", sourceOf(c, cfg)).put("rise", rise).toString()).apply();
+        } catch (Throwable ignored) { /* the service then follows the global setting */ }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return id;
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null || nm.getNotificationChannel(id) != null) return id;
+        NotificationChannel ch = new NotificationChannel(id, "Reminders", NotificationManager.IMPORTANCE_HIGH);
+        ch.setDescription("Arkly reminder alerts");
+        ch.setLockscreenVisibility(1); // show full content, as notifications.js does
+        if ("default".equals(mode) || "notification".equals(mode)) {
+            AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+            Uri u = "notification".equals(mode) && !sourceOf(c, cfg).isEmpty() ? Uri.parse(sourceOf(c, cfg)) : Settings.System.DEFAULT_NOTIFICATION_URI;
+            ch.setSound(u, aa);
+        } else {
+            ch.setSound(null, null); // the service plays it, or there is no sound
+        }
+        boolean vib = cfg.optBoolean("vibrate", false);
+        ch.enableVibration(vib);
+        if (vib) ch.setVibrationPattern(new long[] { 0, 400, 200, 400 });
+        nm.createNotificationChannel(ch);
+        return id;
+    }
+
+    public static String channelForEntry(Context c, String entryId) { return channelFor(c, effective(c, entryId)); }
+
+    // After the global setting changed: makes its channel and removes every other Arkly sound channel that no reminder uses.
+    // Notifications already scheduled on a removed channel are dropped by Android, so the app schedules every reminder again afterwards.
     public static String applyChannel(Context c) {
-        String id = channelId(c);
+        String id = channelFor(c, globalConfig(c));
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return id;
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return id;
-        if (!DEFAULT_CHANNEL.equals(id)) {
-            NotificationChannel ch = new NotificationChannel(id, "Reminders", NotificationManager.IMPORTANCE_HIGH);
-            ch.setDescription("Arkly reminder alerts");
-            ch.setLockscreenVisibility(1); // show full content, as notifications.js does
-            if (id.startsWith(TONE_PREFIX)) {
-                AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
-                ch.setSound(Uri.parse(prefs(c).getString("uri", "")), aa);
-            } else {
-                ch.setSound(null, null); // the service plays the sound
-            }
-            nm.createNotificationChannel(ch);
+        Set<String> keep = new HashSet<>();
+        keep.add(id); keep.add(PLAYING_CHANNEL);
+        Map<String, ?> all = alerts(c).getAll();
+        for (Map.Entry<String, ?> e : all.entrySet()) {
+            if (e.getKey().startsWith("chan_") || !(e.getValue() instanceof String)) continue;
+            try { keep.add(channelFor(c, new JSONObject((String) e.getValue()))); } catch (Throwable ignored) { /* skipped */ }
         }
         List<String> drop = new ArrayList<>();
         for (NotificationChannel ch : nm.getNotificationChannels()) {
             String n = ch.getId();
-            if (n.startsWith(OWN_PREFIX) && !n.equals(id) && !n.equals(PLAYING_CHANNEL)) drop.add(n);
+            if (n.startsWith(OWN_PREFIX) && !keep.contains(n)) drop.add(n);
         }
         for (String n : drop) nm.deleteNotificationChannel(n);
         return id;
@@ -92,15 +152,22 @@ public final class ArklyReminderSound {
         prefs(c).edit().putString("file", path == null ? "" : path).putString("file_title", title == null ? "" : title).apply();
     }
 
-    // Called by the patched TimedNotificationPublisher right after a reminder notification is posted.
-    public static void onFire(Context c, int notificationId) {
-        String mode = mode(c);
+    // Called by the patched TimedNotificationPublisher right after a reminder notification is posted; channelId is the one it was posted on.
+    public static void onFire(Context c, int notificationId, String channelId) {
+        String mode, src; boolean rise;
+        String stored = channelId == null ? "" : alerts(c).getString("chan_" + channelId, "");
+        try {
+            if (!stored.isEmpty()) {
+                JSONObject j = new JSONObject(stored);
+                mode = j.optString("mode", "default"); src = j.optString("src", ""); rise = j.optBoolean("rise", false);
+            } else if (OLD_SILENT_CHANNEL.equals(channelId)) { // posted before Decision 363: the global setting
+                JSONObject g = globalConfig(c);
+                mode = g.optString("mode", "default"); src = sourceOf(c, g); rise = g.optBoolean("rise", false);
+            } else return;
+        } catch (Throwable t) { return; }
         boolean isFile = "file".equals(mode);
         if (!isFile && !"alarm".equals(mode)) return;
-        SharedPreferences p = prefs(c);
-        String src = isFile ? (savedFile(c) == null ? "" : savedFile(c).getAbsolutePath()) : p.getString("uri", "");
         if (src.isEmpty()) return;
-        boolean rise = p.getBoolean("rise", false);
         try {
             Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_PLAY)
                 .putExtra("kind", isFile ? "file" : "uri").putExtra("src", src).putExtra("rise", rise);
