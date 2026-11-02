@@ -90,7 +90,7 @@ public final class ArklyReminderSound {
 
     private static String channelIdOf(Context c, JSONObject cfg) {
         String mode = cfg.optString("mode", "default");
-        String key = mode + "|" + sourceOf(c, cfg) + "|" + cfg.optBoolean("vibrate", false) + "|" + cfg.optBoolean("rise", false);
+        String key = "v3|" + mode + "|" + sourceOf(c, cfg) + "|" + cfg.optBoolean("vibrate", false) + "|" + cfg.optBoolean("rise", false);
         return CHANNEL_PREFIX + Integer.toHexString(key.hashCode());
     }
 
@@ -116,7 +116,9 @@ public final class ArklyReminderSound {
         } else {
             ch.setSound(null, null); // the service plays it, or there is no sound
         }
-        ch.enableVibration(false); // vibration is done by onFire, so it works the same on every phone and with the screen off
+        boolean vib = cfg.optBoolean("vibrate", false);
+        ch.enableVibration(vib); // onFire also buzzes, so a phone that ignores one of the two still vibrates
+        if (vib) ch.setVibrationPattern(new long[] { 0, 500, 250, 500, 250, 500 });
         nm.createNotificationChannel(ch);
         return id;
     }
@@ -198,14 +200,23 @@ public final class ArklyReminderSound {
     }
 
     // Three buzzes on the alarm vibration channel, so a silent or vibrate ringer setting does not mute them.
-    private static void vibrate(Context c) {
+    public static void vibrate(Context c) {
+        Vibrator v = null;
         try {
-            Vibrator v = (Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                android.os.VibratorManager vm = (android.os.VibratorManager) c.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                if (vm != null) v = vm.getDefaultVibrator();
+            }
+            if (v == null) v = (Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
             if (v == null || !v.hasVibrator()) return;
             long[] pattern = { 0, 500, 250, 500, 250, 500 };
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build();
-                v.vibrate(VibrationEffect.createWaveform(pattern, -1), aa);
+                VibrationEffect e = VibrationEffect.createWaveform(pattern, -1);
+                try {
+                    v.vibrate(e, new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build());
+                } catch (Throwable first) {
+                    v.vibrate(e); // without the alarm usage
+                }
             } else {
                 v.vibrate(pattern, -1);
             }
