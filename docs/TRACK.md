@@ -371,3 +371,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-01 | Session 164 (continued: tab swipe fix) | Decision 360 | Swipe works from empty space; slide transition between Reminder tabs; native sound step found missing from the live workflow | 
 | 2026-11-01 | Session 164 (continued: image viewer) | Decision 361 | Image viewer swipe rebuilt as a carousel; DP187 added; not device-tested |
 | 2026-11-02 | Session 165 | Decision 362 | Phase 61: PDF viewer layout shared by Home, Vault and File explorer; tap to fold tools; edit mode with selectable marks, picture opacity, stamp shapes; Save in the title bar; DP188 added; not run through CI or a device |
+| 2026-11-02 | Session 166 | Decision 363 | Phase 62: speaker settings with vibration, per-reminder sound and vibration, Upcoming grouped by period, quieter sound notice; DP189 added; native code not compiled |
+

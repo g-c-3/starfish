@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 166**
+
+Start: owner feedback on Session 164 and a new request. DP185 so far: the sound and the reminder both worked, but the sound's own notice showed as a second notification.
+- Phase 62 (Decision 363). Native: `ArklyReminderSound`, `ArklyReminderSoundService`, `ArklySoundBridge`, `patch-reminder-sound.js`. App: `remindersound.js`, `notifications.js`, `dategroup.js`, `app.js`, `index.html`, `remindertabs.css`.
+- Answer given: Android requires a notice while a service plays sound, so it cannot be removed; it is now minimum importance. A reminder with a plain notification sound has none.
+- Checked in the sandbox: changed JavaScript parses; the Upcoming labels were run for a Monday, a Friday at month end and a Saturday. Not run: the Java (never compiled), `vite build`, a device.
+- Behaviour to confirm: Vibrate is off by default, as the reminder channel was before; reminders now all use channels made by the native side when it is present.
+- Open: DP189; DP185 to DP188; CI result for the Java of Sessions 164 and 166.
+- Next start: check the CI run; on failure paste the error. Then DP189 on a device.
+
 **Session 165**
 
 Start: "Go"; Tier 1 read; DECISIONS and ARCHITECTURE read in part. CI status not checked: the API call was rate-limited. Session 164's Java and the three device passes (DP185 to DP187) are still open.
