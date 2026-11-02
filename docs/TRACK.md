@@ -377,3 +377,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-02 | Session 169 | Decision 366 | Phase 65: one label per date group; vibration hardened and testable; DP192 added; native code not compiled |
 | 2026-11-02 | Session 170 | Decision 367 | Phase 66: vibration lasts about half a minute and stops on Done or Snooze; DP193 added; native code not compiled |
 | 2026-11-03 | Session 171 | Decision 368 | Phase 67: reminder screen over the lock screen with Snooze and Stop; one-minute vibration schedule; DP194 added; native code not compiled |
+| 2026-11-03 | Session 172 | Decision 369 | Phase 68: prompt to allow the lock-screen reminder on Android 14 and later; DP195 added; not compiled or run on a device |

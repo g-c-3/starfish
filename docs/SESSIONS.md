@@ -4,6 +4,14 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 172**
+
+Start: owner device test of Phase 67. Vibration pattern worked. The screen did not turn on: on Android 14 and later the app must be allowed to show full-screen notifications, and the owner asked that the app take them to the setting.
+- Decision 369. Native: `ArklySoundBridge.java`. App: `remindersound.js`, `app.js`, `remindertabs.css`.
+- Not compiled, not run on a device.
+- Open: DP195 and earlier; CI result for the Java of Sessions 164, 166, 168 to 172.
+- Next start: check the CI run; DP195; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 171**
 
 Start: owner asked for a one-minute vibration with longer pauses and a reminder screen over the lock screen with Snooze and Stop.

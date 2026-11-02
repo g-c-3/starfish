@@ -3766,3 +3766,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Vibration: one minute, starting with a 3 s wait; each burst is three 0.6 s buzzes with 0.7 s between them, then a 3 s pause. Channels no longer vibrate (new channel version), so the pattern is the only vibration.
 - Files: `scripts/java/ArklyAlarmActivity.java` (new), `scripts/java/ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP194).
 
+**369. Ask for the lock-screen switch.** Owner device test. Refines Decision 368.
+- Android 14 and later let the person switch full-screen notifications off per app, and a sideloaded app does not get them by default. While it is off, a firing reminder stays a notification and the screen does not turn on.
+- The native side reports the switch (`canFullScreen`) and opens the phone's page for it (`openFullScreenSettings`; the app's notification settings if that page is missing). After a new reminder is saved, once per app session and only while the switch is off, a dialog explains it and offers Open settings or Not now. The sound dialog shows the same state with an Allow button. Opening the settings is not mistaken for leaving the app. Nothing is read from the phone beyond that one switch.
+- Files: `scripts/java/ArklySoundBridge.java`, `src/js/remindersound.js`, `app.js`, `src/css/remindertabs.css`. Not run through CI or a device (DP195).
+
