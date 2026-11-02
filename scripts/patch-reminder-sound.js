@@ -92,8 +92,19 @@ function patchPlugin(file, anchor, insertAfter, code) {
   s = insertAfter ? s.replace(anchor, `${anchor}\n${code}`) : s.replace(anchor, `${code}\n${anchor}`);
   fs.writeFileSync(p, s, 'utf8');
 }
-patchPlugin('TimedNotificationPublisher.java', '        notificationManager.notify(id, notification);', true,
-  `        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class, String.class, android.app.Notification.class).invoke(null, context, id, android.os.Build.VERSION.SDK_INT >= 26 ? notification.getChannelId() : null, notification); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
+// The publisher: the notification is handed to prepare() just before it is posted (it gains a full-screen intent, Decision 370), and to onFire() after.
+function patchPluginReplace(file, anchor, code) {
+  const p = path.join(PLUGIN_DIR, file);
+  if (!fs.existsSync(p)) die(`${p} not found.`);
+  let s = fs.readFileSync(p, 'utf8');
+  if (s.includes(MARK)) return;
+  if (s.split(anchor).length !== 2) die(`${file}: expected exactly one "${anchor}".`);
+  fs.writeFileSync(p, s.replace(anchor, () => code), 'utf8');
+}
+patchPluginReplace('TimedNotificationPublisher.java', '        notificationManager.notify(id, notification);',
+  `        try { notification = (android.app.Notification) Class.forName("${cls}").getMethod("prepare", Context.class, int.class, android.app.Notification.class).invoke(null, context, id, notification); } catch (Throwable ignored) { /* ${MARK}: posted as it is */ }
+        notificationManager.notify(id, notification);
+        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class, String.class, android.app.Notification.class).invoke(null, context, id, android.os.Build.VERSION.SDK_INT >= 26 ? notification.getChannelId() : null, notification); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 patchPlugin('NotificationDismissReceiver.java', '        int intExtra = intent.getIntExtra(LocalNotificationManager.NOTIFICATION_INTENT_KEY, Integer.MIN_VALUE);', false,
   `        try { Class.forName("${cls}").getMethod("stop", Context.class).invoke(null, context); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 
