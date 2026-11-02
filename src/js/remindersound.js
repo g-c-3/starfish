@@ -152,13 +152,19 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
     }
     q('.rs-test').onclick = () => {
       err.textContent = '';
-      const m = mode();
-      if (m === 'same') { err.textContent = 'This reminder follows the setting for all reminders.'; return; }
-      if (q('.rs-vibck').checked) { try { b.vibrateTest(); } catch { /* an older build */ } }
-      if (m === 'none') { err.textContent = q('.rs-vibck').checked ? '' : 'No sound is played.'; return; }
-      if (m === 'default') { const first = notif[0]; if (!first || !b.preview('uri', first.u, false)) err.textContent = 'That sound could not be played.'; return; }
-      const ok = m === 'file' ? b.preview('file', '', true) : b.preview('uri', q(m === 'alarm' ? '.rs-alarm' : '.rs-notif').value, m === 'alarm');
-      if (!ok) err.textContent = m === 'file' && !glob.hasFile ? 'Choose an audio file first.' : 'That sound could not be played.';
+      // "Same as all reminders" tests the setting for all reminders; otherwise the controls as they are now.
+      const same = mode() === 'same';
+      const m = same ? (glob.mode || 'default') : mode();
+      const vib = same ? !!glob.vibrate : q('.rs-vibck').checked;
+      const uri = same ? (glob.uri || '') : (m === 'alarm' ? q('.rs-alarm').value : m === 'notification' ? q('.rs-notif').value : '');
+      const hasFile = !!glob.hasFile;
+      if (vib) { try { b.vibrateTest(); } catch { /* an older build */ } }
+      if (m === 'none') { err.textContent = vib ? '' : 'No sound is played.'; return; }
+      let ok;
+      if (m === 'default') { const first = notif[0]; ok = !!first && b.preview('uri', first.u, false); }
+      else if (m === 'file') ok = hasFile && b.preview('file', '', true);
+      else ok = b.preview('uri', uri, m === 'alarm');
+      if (!ok) err.textContent = m === 'file' && !hasFile ? 'Choose an audio file first.' : 'That sound could not be played.';
     };
     q('.rs-save').onclick = async () => {
       err.textContent = '';
