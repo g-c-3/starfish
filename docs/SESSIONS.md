@@ -4,6 +4,14 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 173**
+
+Start: owner device test of Phase 68. The switch was on, the screen still did not turn on; turned on by hand, the lock screen showed the notification with Snooze and Done, and they worked.
+- Decision 370. Native: `ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not compiled, not run on a device.
+- Cause: the full-screen intent was added by posting the notification a second time, marked to alert only once, and Android launches a full-screen intent only for a new, alerting notification.
+- Open: DP196 and earlier; CI result for the Java of Sessions 164, 166, 168 to 173.
+- Next start: check the CI run; DP196; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 172**
 
 Start: owner device test of Phase 67. Vibration pattern worked. The screen did not turn on: on Android 14 and later the app must be allowed to show full-screen notifications, and the owner asked that the app take them to the setting.

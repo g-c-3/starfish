@@ -3771,3 +3771,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The native side reports the switch (`canFullScreen`) and opens the phone's page for it (`openFullScreenSettings`; the app's notification settings if that page is missing). After a new reminder is saved, once per app session and only while the switch is off, a dialog explains it and offers Open settings or Not now. The sound dialog shows the same state with an Allow button. Opening the settings is not mistaken for leaving the app. Nothing is read from the phone beyond that one switch.
 - Files: `scripts/java/ArklySoundBridge.java`, `src/js/remindersound.js`, `app.js`, `src/css/remindertabs.css`. Not run through CI or a device (DP195).
 
+**370. Post the reminder with its full-screen intent; wake the screen as a fallback.** Owner device test. Replaces how Decision 368 adds the full-screen intent.
+- Cause of the screen not turning on: the notification was first posted by the plugin without the intent and then posted again with it, marked to alert only once. Android opens a full-screen intent for a new notification that alerts, not for such an update.
+- Now the patched publisher hands the notification to `prepare()` before it posts it, so it is posted once, with the full-screen intent. `onFire()` still runs after posting. Nothing is posted twice, so a notification sound plays once.
+- Fallback: when the screen is off at fire time, a ten-second screen-on wake lock turns it on, so the lock screen shows the reminder with Snooze and Done even if the phone does not open the full-screen reminder.
+- Files: `scripts/java/ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP196).
+
