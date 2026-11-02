@@ -4,6 +4,15 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 168**
+
+Start: owner device test of Phase 62. Reported: the sound's notice still showed beside the reminder; the Upcoming labels should chain periods; the Sound and vibration dialog opened behind the Save dialog; vibration did nothing; with the screen off the sound waited until unlock.
+- Decision 365. Native: `ArklyReminderSound.java`, `ArklyReminderSoundService.java`, `patch-reminder-sound.js`. App: `dategroup.js`, `remindertabs.css`.
+- Causes: a foreground service must show a notification, so a second one was unavoidable while the service had its own; vibration relied on the channel; the service did not hold the phone awake, so preparing the sound waited for the screen; the sound dialog's layer was below the Save dialog's.
+- Checked in the sandbox: the Upcoming labels were run for several dates; the patch script parses. Not run: the Java (never compiled), `vite build`, a device.
+- Open: DP191, DP190, DP189 and earlier; CI result for the Java of Sessions 164, 166 and 168.
+- Next start: check the CI run; then DP191; then the editable-after-save design for PDF marks (Decision 364).
+
 **Session 167**
 
 Start: owner review of the PDF edit panel from device screenshots, with a list of changes, taken one at a time.

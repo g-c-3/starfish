@@ -3742,3 +3742,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Deferred: marks that remain editable after saving. Marks are drawn into the page when saved; to edit them again they must also be stored in the PDF in a form the viewer reads back and hides while it draws them as marks. To be designed and approved first.
 - Files: `src/js/pdfmark-ui.js`, `pdfmarkconst.js`, `pdfchrome.js`, `app.js`, `explorer-view.js`, `src/css/pdfmark.css`, `style.css`, `topbar.css`. Not run through CI or a device (DP190).
 
+**365. Reminder fixes: one notification, vibration by the app, sound with the screen off, chained Upcoming labels.** Owner device test. Refines Decisions 359 and 363. Native code, not compiled.
+- One notification: when an alarm sound or audio file fires, the patched publisher hands the posted reminder notification to the service, which runs in the foreground with it. The service's own notice is only a fallback. When the sound ends the notification is detached and stays. Done and Snooze (in the app) still stop the sound; a swipe-away is allowed only where Android allows it for a running service.
+- Vibration: channels no longer vibrate. When a reminder fires with Vibrate on, the app buzzes three times with the alarm usage, so silent mode does not mute it, for every sound mode. Needs the VIBRATE permission, added by the patch script.
+- Screen off: the service holds a partial wake lock (WAKE_LOCK, added by the patch script) while the sound prepares and plays, up to its one-minute limit.
+- Upcoming labels name every period the day sits in, widest first: This Month, Next Month, or month and year further out (then alone); This Week or Next Week within two weeks; Today or Tomorrow. Replaces the joining rule of Decision 363.
+- The sound dialog is raised above the Save dialog.
+- Files: `scripts/java/ArklyReminderSound.java`, `ArklyReminderSoundService.java`, `scripts/patch-reminder-sound.js`, `src/js/dategroup.js`, `src/css/remindertabs.css`. Not run through CI or a device (DP191).
+

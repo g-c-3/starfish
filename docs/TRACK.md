@@ -373,3 +373,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-02 | Session 165 | Decision 362 | Phase 61: PDF viewer layout shared by Home, Vault and File explorer; tap to fold tools; edit mode with selectable marks, picture opacity, stamp shapes; Save in the title bar; DP188 added; not run through CI or a device |
 | 2026-11-02 | Session 166 | Decision 363 | Phase 62: speaker settings with vibration, per-reminder sound and vibration, Upcoming grouped by period, quieter sound notice; DP189 added; native code not compiled |
 | 2026-11-02 | Session 167 | Decision 364 | Phase 63: PDF edit panel refinements, stretch handles, translucent folding title bars; DP190 added; not run through CI or a device |
+| 2026-11-02 | Session 168 | Decision 365 | Phase 64: one notification while the sound plays, vibration by the app, sound with the screen off, chained Upcoming labels, dialog order; DP191 added; native code not compiled |
