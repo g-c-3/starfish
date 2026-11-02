@@ -34,3 +34,8 @@
 
 /* The sound dialog opened from the reminder's Save dialog must sit above it (Decision 365). */
 #reminder-sound-dialog { z-index: 60; }
+
+/* Lock-screen reminder switch shown in the sound dialog when Android 14 and later keep it off (Decision 369). */
+.rs-lock { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 13px; }
+.rs-lock span { flex: 1; min-width: 0; }
+.rs-lock button { width: auto; flex: 0 0 auto; margin: 0; }
