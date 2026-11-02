@@ -13,10 +13,11 @@ const OLD_CHANNEL_ID = 'arkly_reminders'; // first-generation id; absent on a fr
 const VAULT_REMINDER_TEXT = 'Vault Reminder';
 const notificationBody = (entry) => (entry.is_private ? VAULT_REMINDER_TEXT : entry.label);
 
-// The channel reminders go on: the banner channel below, or the native one made for a chosen sound (Decision 359).
-async function ensureChannel() {
-  const chosen = currentChannelId(CHANNEL_ID);
-  if (chosen !== CHANNEL_ID) return chosen; // the native side created it when the sound was saved
+// The channel a reminder goes on: the native one made for its sound and vibration setting (Decisions 359, 363), or the plain banner
+// channel below when there is no native side.
+async function ensureChannel(entryId = '') {
+  const chosen = currentChannelId(CHANNEL_ID, entryId);
+  if (chosen !== CHANNEL_ID) return chosen; // the native side created it
   await LocalNotifications.createChannel({
     id: CHANNEL_ID,
     name: 'Reminders',
@@ -48,7 +49,7 @@ const occurrenceId = (entryId, k) => hashIdToInt(k === 0 ? entryId : `${entryId}
 
 async function scheduleReminder(entry, { windowSize = null } = {}) {
   // entry: { id, label, fire_at, repeat_rule, is_private } — callers pass the database row, so is_private is never lost
-  const channelId = await ensureChannel();
+  const channelId = await ensureChannel(entry.id);
   const base = { title: 'Arkly Reminder', body: notificationBody(entry), channelId, actionTypeId: 'REMINDER_ACTIONS', extra: { entryId: entry.id, repeating: !!REPEAT_WINDOW[entry.repeat_rule] } };
   // allowWhileIdle: without it the plugin sets a non-waking RTC alarm, which Doze holds until the phone is next awake (Decision 97).
   const times = REPEAT_WINDOW[entry.repeat_rule]
@@ -87,7 +88,7 @@ async function cancelReminder(entryId) {
 // One-off notification N minutes from now. Separate id so snoozing a repeating reminder
 // does not replace its recurring schedule.
 async function snoozeReminder(entry, minutes = 10) {
-  const channelId = await ensureChannel();
+  const channelId = await ensureChannel(entry.id);
   await LocalNotifications.schedule({
     notifications: [{
       id: hashIdToInt(`${entry.id}:snooze`),

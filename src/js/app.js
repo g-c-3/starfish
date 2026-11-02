@@ -8,7 +8,7 @@ import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel, reminderTabItems } from './reminders.js';
 import { logClosedOccurrence, loadReminderLog } from './reminderlog.js';
-import { openSoundDialog, stopSound } from './remindersound.js';
+import { openSoundDialog, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary } from './remindersound.js';
 import '../css/remindertabs.css';
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
@@ -41,7 +41,7 @@ import { parseCoordinates, resolveShortLink } from './geoparse.js';
 import { openLiveFix, accWords } from './locfix.js';
 import { openProviderDialog, loadProviders, renderMap, START_Z } from './mapprov.js';
 import { hasTiles } from './maptiles.js';
-import { groupedHtml } from './dategroup.js';
+import { groupedHtml, upcomingLabel } from './dategroup.js';
 import '../css/topbar.css';
 import { parseFind, hasFind, dateMatches, nameMatches } from './folderfind.js';
 import { VoiceRecorder } from 'cap-voice-rec';
@@ -2052,6 +2052,10 @@ function rowMeta(row, inFolder = false) {
 }
 // A row in a Reminder tab (Decision 357): a closed occurrence names when it was closed and when it was due; a one-off marked done
 // names both too; every other row reads as in any list.
+// When an upcoming item is next due, for grouping: a snooze moves it to the snooze time (Decision 363).
+const upcomingDue = (it) => (it.row.snoozed_until && it.row.snoozed_until > Date.now() ? it.row.snoozed_until : it.at);
+// The speaker state of a reminder row: 'all', 'custom', 'silent', or null (finished reminders, and phones without the native side, show none).
+const reminderAlertOf = (it) => (it.kind === 'entry' && !it.row.completed_at && isReminderActive(it.row) ? reminderAlertState(it.row.id) : null);
 function reminderItemMeta(it) {
   const r = it.row;
   if (it.kind === 'occurrence') return { meta: [`Done ${formatEntryDate(it.closed_at)}`, `Was due ${formatEntryDate(it.due_at)}`, repeatLabel(r.repeat_rule).toLowerCase()].filter(Boolean).join(' · '), done: true };
@@ -2068,7 +2072,7 @@ function rowIconHtml(type, ext) {
 // The five buttons under a row (edit, share, download, move, delete) are not drawn (Decision 303): Edit is a tap on the row, and
 // the rest are in the selection bar and the viewers. actionPrefix is kept so the callers and the idle handlers need no change.
 // thumb: a Gallery list row, the icon is replaced by the item's thumbnail (filled by loadThumbsInto).
-function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false, play = false }, actionPrefix = null) {
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false, play = false, alert = null }, actionPrefix = null) {
   const icon = play
     ? `<button type="button" class="row-icon row-play" data-id="${escapeHtml(id)}" aria-label="Play">${PLAY_INNER(false)}</button>`
     : thumb
@@ -2082,6 +2086,7 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
         <span class="row-meta">${escapeHtml(meta)}</span>
         ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       </span>
+      ${alert ? `<button type="button" class="row-alert ${alert}" data-id="${escapeHtml(id)}" aria-label="Sound and vibration for this reminder" title="Sound and vibration">${iconSvg('speaker')}</button>` : ''}
     </div>`;
 }
 function emptyStateHtml(kind = 'folder') {
@@ -2388,6 +2393,20 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
     const pad = (n) => String(n).padStart(2, '0');
     const toLocalInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
     remEl.classList.toggle('hidden', !reminder);
+    // This reminder's own sound and vibration (Decision 363). undefined: untouched; null: follows all reminders; object: its own.
+    let alertStage;
+    const alertRow = $('sd-alert'), alertBtn = $('sd-alert-btn');
+    const alertNow = () => (alertStage !== undefined ? alertStage : (reminder && reminder.id ? getReminderAlert(reminder.id) : null));
+    const paintAlert = () => { alertBtn.querySelector('.sd-alert-text').textContent = alertSummary(alertNow()); };
+    alertRow.classList.toggle('hidden', !reminder || !window.ArklySound);
+    if (reminder) {
+      paintAlert();
+      alertBtn.onclick = async () => {
+        if (activeRemSound) return;
+        const r = await openSoundDialog({ toast, reminder: { initial: alertNow() }, register: (h) => { activeRemSound = h; updateBackButtonState(); } });
+        if (r) { alertStage = r.cfg; paintAlert(); if (draft) draft.touch(); }
+      };
+    }
     if (reminder) {
       const start = reminder.fire_at || (() => { const d = new Date(Date.now() + 60 * 60 * 1000); d.setMinutes(0, 0, 0); return d.getTime(); })();
       whenEl.value = toLocalInput(start);
@@ -2487,6 +2506,7 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
         if (!repeatEl.value && fireAt <= Date.now() && !unchanged) { toast('Pick a time in the future'); return; }
         result.fire_at = fireAt;
         result.repeat_rule = repeatEl.value || null;
+        if (alertStage !== undefined) result.alert = alertStage;
       }
       finish(result);
     };
@@ -4059,7 +4079,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const tabItems = openVaultFolderType === 'reminder' ? reminderTabItems(items, vaultReminderLog, reminderTab.vault, { savedAt: vSavedAt, newestFirst: false }) : null; // Decision 357
     container.innerHTML = tabItems
-      ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? null : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it) }, 'vault')) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
+      ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
       : vaultRowsHtml(items, !!folderFind.vault);
     if (tabItems) { // the log is read from the database; the list redraws once if it differs from the copy drawn
       loadReminderLog(db).then((l) => {
@@ -4169,6 +4189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { d = await openSaveDialog({ heading: 'New vault reminder', defaultName: `Reminder ${new Date().toLocaleTimeString()}`, isVault: true, discardLabel: 'Discard', reminder: {}, draft }); } finally { draft.end(); }
         if (!d) { if (!draft.locked) await draft.clear(); return; }
         const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
+        if (d.alert !== undefined) setReminderAlert(id, d.alert); // Decision 363
         await draft.clear();
         renderVault();
         try {
@@ -4230,7 +4251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(true);
     closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound" title="Reminder sound">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
@@ -4845,6 +4866,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const id = crypto.randomUUID();
       const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
+      if (d.alert !== undefined) setReminderAlert(id, d.alert); // before it is scheduled, so it goes out on its own channel (Decision 363)
       await applyTags(id, d.tags);
       await draft.clear(); // saved: the draft is no longer needed
       try {
@@ -5182,7 +5204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const tabItems = openFolderType === 'reminder' ? reminderTabItems(rows, await loadReminderLog(db), reminderTab.home, { savedAt }) : null; // Upcoming, Completed or All (Decision 357)
     document.getElementById('folder-list').innerHTML = (tabItems
-      ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? null : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it) }, 'main'))
+      ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
         id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
       }, 'main'))) || emptyStateHtml(finding ? 'search' : 'folder');
@@ -5258,6 +5280,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTimeout(() => b.classList.remove('tap-glow'), 600);
       toggleRowPlay(b.dataset.id, isVault);
     }, true);
+    // The speaker on a reminder row: that reminder's own sound and vibration (Decision 363). The rest of the row still opens it.
+    document.getElementById(isVault ? 'vault-folder-list' : 'folder-list').addEventListener('click', (e) => {
+      const b = e.target.closest('.row-alert');
+      if (!b) return;
+      e.stopPropagation(); e.preventDefault();
+      editReminderAlert(b.dataset.id, isVault);
+    }, true);
+  }
+  async function editReminderAlert(id, isVault) {
+    if (activeRemSound) return;
+    if (isVault) armVaultAutoLock();
+    const r = await openSoundDialog({ toast, reminder: { initial: getReminderAlert(id) }, register: (h) => { activeRemSound = h; updateBackButtonState(); } });
+    if (!r) return;
+    if (!setReminderAlert(id, r.cfg)) { toast('That choice could not be saved'); return; }
+    try { // on its new channel
+      const row = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+      if (row && !row.completed_at && (row.repeat_rule || row.fire_at > Date.now())) await scheduleReminder(row);
+    } catch (err) { toast(`Saved, but the reminder could not be scheduled again: ${err.message || err}`); return; }
+    toast(r.cfg ? 'Sound set for this reminder' : 'This reminder follows the sound for all reminders');
+    if (isVault) renderVault(); else await renderMainTimeline();
   }
   // Reminder tabs (Decision 357): All, Upcoming (the default), Completed. Home and the Vault each keep their own.
   function paintReminderTabs(isVault) {
@@ -5349,7 +5391,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(false);
     closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound" title="Reminder sound">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -5785,7 +5827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       d = await openSaveDialog({
         heading: isReminder ? 'Edit reminder' : 'Edit details', name: item.label, defaultName: item.label, tags, description: item.description || '', isVault,
-        reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule } : null, draft
+        reminder: isReminder ? { fire_at: item.fire_at, repeat_rule: item.repeat_rule, id: item.id } : null, draft
       });
     } finally { if (draft) draft.end(); }
     if (!d) { if (draft && !draft.locked) await draft.clear(); return; }
@@ -5807,6 +5849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    if (isReminder && d.alert !== undefined) setReminderAlert(item.id, d.alert); // before the reschedule below (Decision 363)
     try {
       const opts = item.type === 'reminder' ? { rescheduleReminder: scheduleReminder } : {};
       await window.Arkly.editEntry(item.id, fields, opts);
