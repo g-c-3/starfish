@@ -98,7 +98,7 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
       </div>
       <p class="rs-note">${single ? 'These apply to this reminder only. ' : ''}An alarm sound or audio file plays on the alarm volume, for up to a minute or until you tap Done, Snooze or swipe the reminder away. The others play once.</p>
       <p class="rs-err" aria-live="polite"></p>
-      <button type="button" class="secondary-btn rs-test">Test sound</button>
+      <button type="button" class="secondary-btn rs-test">Test</button>
       <button type="button" class="rs-save">Save</button>
       <button type="button" class="secondary-btn rs-cancel">Cancel</button>
     </div>`;
@@ -133,7 +133,8 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
       err.textContent = '';
       const m = mode();
       if (m === 'same') { err.textContent = 'This reminder follows the setting for all reminders.'; return; }
-      if (m === 'none') { err.textContent = 'No sound is played.'; return; }
+      if (q('.rs-vibck').checked) { try { b.vibrateTest(); } catch { /* an older build */ } }
+      if (m === 'none') { err.textContent = q('.rs-vibck').checked ? '' : 'No sound is played.'; return; }
       if (m === 'default') { const first = notif[0]; if (!first || !b.preview('uri', first.u, false)) err.textContent = 'That sound could not be played.'; return; }
       const ok = m === 'file' ? b.preview('file', '', true) : b.preview('uri', q(m === 'alarm' ? '.rs-alarm' : '.rs-notif').value, m === 'alarm');
       if (!ok) err.textContent = m === 'file' && !glob.hasFile ? 'Choose an audio file first.' : 'That sound could not be played.';
