@@ -47,6 +47,24 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
+// Android 14 and later keep the reminder screen over the lock screen (Decision 368) behind a switch the person turns on in the phone's
+// settings. true when it is on, or not needed, or there is no native side.
+function lockScreenAllowed() {
+  const b = bridge();
+  try { return !b || !b.canFullScreen || !!b.canFullScreen(); } catch { return true; }
+}
+function openLockScreenSettings(leaving) {
+  try { if (leaving) leaving(); bridge()?.openFullScreenSettings(); } catch { /* nothing to open */ }
+}
+let offeredThisSession = false;
+// Once per app session, when the switch is off: explains it and opens the phone's page for it. askYesNo as in app.js.
+async function offerLockScreen({ askYesNo, leaving }) {
+  if (offeredThisSession || lockScreenAllowed()) return;
+  offeredThisSession = true;
+  const yes = await askYesNo({ title: 'Show reminders on the lock screen?', text: 'To turn the screen on and show Snooze and Stop when a reminder is due, Android needs you to allow full-screen notifications for Arkly. The next page has the switch.', yes: 'Open settings', no: 'Not now' });
+  if (yes) openLockScreenSettings(leaving);
+}
+
 // The dialog. With no `reminder` option it edits the setting for all reminders and applies it itself (resolves true when saved).
 // With `reminder: { initial }` it edits one reminder's own setting and does not apply it: it resolves { cfg } (cfg null = follow the
 // global setting) or null when cancelled; the caller keeps it or hands it to setReminderAlert.
@@ -97,6 +115,7 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
       <label class="rs-opt rs-vib"><input type="checkbox" class="rs-vibck"${cfg.vibrate ? ' checked' : ''}> Vibrate</label>
       </div>
       <p class="rs-note">${single ? 'These apply to this reminder only. ' : ''}An alarm sound or audio file plays on the alarm volume, for up to a minute or until you tap Done, Snooze or swipe the reminder away. The others play once.</p>
+      ${lockScreenAllowed() ? '' : '<div class="rs-lock"><span>Lock screen reminder is off. Android needs your permission.</span><button type="button" class="secondary-btn rs-lockbtn">Allow</button></div>'}
       <p class="rs-err" aria-live="polite"></p>
       <button type="button" class="secondary-btn rs-test">Test</button>
       <button type="button" class="rs-save">Save</button>
@@ -112,6 +131,8 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
     pickSelect('.rs-notif', 'notification'); pickSelect('.rs-alarm', 'alarm');
     const label = (sel) => { const s = q(sel); return s.options[s.selectedIndex]?.text || ''; };
     q('.rs-cancel').onclick = () => finish(single ? null : false);
+    const lockBtn = q('.rs-lockbtn');
+    if (lockBtn) lockBtn.onclick = () => openLockScreenSettings(leaving);
     if (!single) {
       q('.rs-pick').onclick = () => { if (leaving) leaving(); q('.rs-file').click(); };
       q('.rs-file').onchange = async (e) => {
@@ -160,4 +181,4 @@ function openSoundDialog({ toast, register, leaving, onApplied, reminder = null 
   });
 }
 
-export { openSoundDialog, currentChannelId, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary };
+export { offerLockScreen, openSoundDialog, currentChannelId, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary };

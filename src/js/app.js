@@ -8,7 +8,7 @@ import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel, reminderTabItems } from './reminders.js';
 import { logClosedOccurrence, loadReminderLog } from './reminderlog.js';
-import { openSoundDialog, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary } from './remindersound.js';
+import { offerLockScreen, openSoundDialog, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary } from './remindersound.js';
 import '../css/remindertabs.css';
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
@@ -4191,6 +4191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!d) { if (!draft.locked) await draft.clear(); return; }
         const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
         if (d.alert !== undefined) setReminderAlert(id, d.alert); // Decision 363
+        setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch }), 700); // Decision 369
         await draft.clear();
         renderVault();
         try {
@@ -4868,6 +4869,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
       if (d.alert !== undefined) setReminderAlert(id, d.alert); // before it is scheduled, so it goes out on its own channel (Decision 363)
+      setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch }), 700); // Decision 369
       await applyTags(id, d.tags);
       await draft.clear(); // saved: the draft is no longer needed
       try {
