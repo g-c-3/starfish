@@ -65,6 +65,13 @@ if (!manifest.includes('FOREGROUND_SERVICE_MEDIA_PLAYBACK')) {
   if (!m) die('<application> not found in AndroidManifest.xml.');
   manifest = manifest.slice(0, m.index) + '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    ' + manifest.slice(m.index);
 }
+for (const perm of ['VIBRATE', 'WAKE_LOCK']) { // vibration, and keeping the phone awake while the sound plays with the screen off (Decision 365)
+  if (!manifest.includes(`android.permission.${perm}`)) {
+    const m = manifest.match(/<application\b/);
+    if (!m) die('<application> not found in AndroidManifest.xml.');
+    manifest = manifest.slice(0, m.index) + `<uses-permission android:name="android.permission.${perm}" />\n    ` + manifest.slice(m.index);
+  }
+}
 if (!manifest.includes('ArklyReminderSoundService')) {
   if (!manifest.includes('</application>')) die('</application> not found in AndroidManifest.xml.');
   manifest = manifest.replace('</application>', '    <service android:name=".ArklyReminderSoundService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>');
@@ -83,7 +90,7 @@ function patchPlugin(file, anchor, insertAfter, code) {
   fs.writeFileSync(p, s, 'utf8');
 }
 patchPlugin('TimedNotificationPublisher.java', '        notificationManager.notify(id, notification);', true,
-  `        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class, String.class).invoke(null, context, id, android.os.Build.VERSION.SDK_INT >= 26 ? notification.getChannelId() : null); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
+  `        try { Class.forName("${cls}").getMethod("onFire", Context.class, int.class, String.class, android.app.Notification.class).invoke(null, context, id, android.os.Build.VERSION.SDK_INT >= 26 ? notification.getChannelId() : null, notification); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 patchPlugin('NotificationDismissReceiver.java', '        int intExtra = intent.getIntExtra(LocalNotificationManager.NOTIFICATION_INTENT_KEY, Integer.MIN_VALUE);', false,
   `        try { Class.forName("${cls}").getMethod("stop", Context.class).invoke(null, context); } catch (Throwable ignored) { /* ${MARK}: no sound service */ }`);
 
