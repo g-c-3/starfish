@@ -162,6 +162,11 @@ public final class ArklyReminderSound {
     // Called by the patched TimedNotificationPublisher right after a reminder notification is posted; channelId is the one it was
     // posted on, notification the posted notification itself.
     public static void onFire(Context c, int notificationId, String channelId, Notification notification) {
+        fire(c, notificationId, channelId, notification, 1);
+    }
+
+    // One ring. `count` is which ring this is (1 to REPEATS); the next one is scheduled ten minutes on while there are rings left.
+    private static void fire(Context c, int notificationId, String channelId, Notification notification, int count) {
         String mode, src; boolean rise, vib;
         String stored = channelId == null ? "" : alerts(c).getString("chan_" + channelId, "");
         try {
@@ -176,6 +181,7 @@ public final class ArklyReminderSound {
         if (vib) vibrate(c);
         shown = notification; shownId = notificationId;
         wakeScreen(c);
+        scheduleRepeat(c, notificationId, count + 1);
         boolean isFile = "file".equals(mode);
         if (!isFile && !"alarm".equals(mode)) return;
         if (src.isEmpty()) return;
@@ -230,6 +236,37 @@ public final class ArklyReminderSound {
     }
 
     public static Notification shownNotification(int id) { return shownId == id ? shown : null; }
+
+    static final int REPEATS = 3;                // rings in all for a reminder nobody answers (Decision 372)
+    static final long REPEAT_MS = 10 * 60 * 1000L;
+
+    // Ten minutes after a ring, ring again, up to REPEATS rings. Nothing is scheduled once the reminder is dealt with: the alarm finds its
+    // notification gone (Done, Snooze or a swipe-away remove it) and does nothing.
+    private static void scheduleRepeat(Context c, int id, int nextCount) {
+        if (nextCount > REPEATS || id == 0) return;
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            PendingIntent pi = PendingIntent.getBroadcast(c, id, new Intent(c, ArklyRepeatReceiver.class).putExtra("nid", id).putExtra("count", nextCount),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            long at = System.currentTimeMillis() + REPEAT_MS;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            else am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+        } catch (Throwable ignored) { /* no repeat */ }
+    }
+
+    // The repeat alarm: ring again if the reminder's notification is still showing.
+    public static void repeat(Context c, int id, int count) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || id == 0) return;
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        Notification n = null;
+        for (android.service.notification.StatusBarNotification s : nm.getActiveNotifications()) { if (s.getId() == id) { n = s.getNotification(); break; } }
+        if (n == null) return;
+        String chan = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? n.getChannelId() : null;
+        try { nm.notify(id, n); } catch (Throwable ignored) { /* the first posting stands */ } // a new alert: the channel's sound, and the reminder screen on a locked phone
+        fire(c, id, chan, n, count);
+    }
 
     // The fired notification for the service to show as its foreground notice, so only one notification appears. Null when none is waiting.
     public static Notification takePending(int id) {
