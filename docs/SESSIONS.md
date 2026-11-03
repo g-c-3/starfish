@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 178**
+
+Start: owner device test of Decision 374 with display over other apps on: no card after unlocking. Cause not confirmed; most likely the app was ended when the sound stopped.
+- Decision 375. Native: `ArklyReminderSoundService.java`, `ArklyReminderSound.java`, `ArklyReminderCard.java`. Not compiled, not run on a device.
+- Open: DP201 and earlier; CI result for the Java of Sessions 164, 166, 168 to 178.
+- Next start: check the CI run; DP201; if the card is still missing, a diagnostic note in the app (is the permission on, was a card added) before more guesses.
+
 **Session 177**
 
 Start: owner left a reminder after its minute of ringing and, two minutes later, saw no card on opening the app. That followed Decision 373, which removed the card after one minute; the owner wants it waiting.

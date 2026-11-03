@@ -3804,3 +3804,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Still needs the display-over-other-apps permission; without it the notification stands alone. A card is not shown for a reminder whose notification was already removed.
 - Files: `scripts/java/ArklyReminderCard.java`, `ArklyReminderSound.java`. Not run through CI or a device (DP200).
 
+**375. Keep the app running while a reminder card shows.** Owner device test. Refines Decision 374.
+- A card is a window of the app, so it disappears if the phone ends the app. After the minute of sound the service stops and nothing keeps the app running. Reminders with a notification sound or no sound never had a service at all.
+- Now the sound service has a holding mode: after the minute it stops the sound and stays in the foreground while any card is showing, for at most three hours; a reminder without a looping sound starts it in that mode when a card is added. It uses the reminder notification as its foreground notification, so no second notification appears. It ends as soon as no card is left.
+- Known limits: Done or Snooze through the app stops the service even if another reminder's card is still up; the phone's battery settings may still end the app.
+- Files: `scripts/java/ArklyReminderSoundService.java`, `ArklyReminderSound.java`, `ArklyReminderCard.java`. Not run through CI or a device (DP201).
+
