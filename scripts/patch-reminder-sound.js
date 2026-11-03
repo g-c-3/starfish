@@ -18,7 +18,7 @@ const JAVA_ROOT = process.env.PATCH_JAVA_ROOT || path.join(ROOT, 'android', 'app
 const MANIFEST = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const PLUGIN_DIR = path.join(ROOT, 'node_modules', '@capacitor', 'local-notifications', 'android', 'src', 'main', 'java',
   'com', 'capacitorjs', 'plugins', 'localnotifications');
-const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge', 'ArklyAlarmActivity'];
+const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge', 'ArklyAlarmActivity', 'ArklyRepeatReceiver'];
 const MARK = 'arkly-reminder-sound';
 
 const die = (msg) => { console.error(`patch-reminder-sound.js: ${msg}`); process.exit(1); };
@@ -75,6 +75,9 @@ for (const perm of ['VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT']) { // vibr
 if (!manifest.includes('ArklyReminderSoundService')) {
   if (!manifest.includes('</application>')) die('</application> not found in AndroidManifest.xml.');
   manifest = manifest.replace('</application>', '    <service android:name=".ArklyReminderSoundService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>');
+}
+if (!manifest.includes('ArklyRepeatReceiver')) { // rings an unattended reminder again (Decision 372)
+  manifest = manifest.replace('</application>', '    <receiver android:name=".ArklyRepeatReceiver" android:exported="false" />\n    </application>');
 }
 if (!manifest.includes('ArklyAlarmActivity')) {
   manifest = manifest.replace('</application>', '    <activity android:name=".ArklyAlarmActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true" android:launchMode="singleTask" android:excludeFromRecents="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />\n    </application>');
