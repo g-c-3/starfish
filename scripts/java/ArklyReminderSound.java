@@ -327,6 +327,10 @@ public final class ArklyReminderSound {
         } catch (Throwable ignored) { /* no vibrator or no permission */ }
     }
 
+    public static void cancelVibration(Context c) {
+        try { Vibrator v = vibrator(c); if (v != null) v.cancel(); } catch (Throwable ignored) { /* not vibrating */ }
+    }
+
     // Two short buzzes (0.3 s, 0.3 s apart) for the Test button, then it stops.
     public static void vibrateShort(Context c) {
         try {

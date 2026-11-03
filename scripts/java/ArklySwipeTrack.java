@@ -32,7 +32,7 @@ public class ArklySwipeTrack extends View {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         pulse = ValueAnimator.ofFloat(0f, 1f);
-        pulse.setDuration(1500); pulse.setRepeatCount(ValueAnimator.INFINITE); pulse.setInterpolator(new LinearInterpolator());
+        pulse.setDuration(3000); pulse.setRepeatCount(ValueAnimator.INFINITE); pulse.setInterpolator(new LinearInterpolator());
         pulse.addUpdateListener((x) -> { phase = (float) x.getAnimatedValue(); invalidate(); });
         pulse.start();
     }
@@ -60,7 +60,7 @@ public class ArklySwipeTrack extends View {
         // the two words, large, each centred in its side
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setFakeBoldText(true);
-        paint.setTextSize(23 * d);
+        paint.setTextSize(21 * d);
         paint.setColor(0xFFC9BFFF);
         c.drawText("Snooze", w * 0.18f, h / 2f + 8 * d, paint);
         paint.setColor(0xFFFF7A7A);
@@ -70,7 +70,7 @@ public class ArklySwipeTrack extends View {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeWidth(4 * d);
-        float front = phase * 3.4f;
+        float front = phase * 3.6f;
         for (int k = 0; k < 3; k++) {
             float lit = Math.max(0f, 1f - Math.abs(front - (k + 0.5f)) / 1.1f);
             float rad = hr + (8 + k * 8.5f) * d;
@@ -86,7 +86,7 @@ public class ArklySwipeTrack extends View {
         c.drawCircle(cx, cy, hr, paint);
         float unit = hr * 0.58f;
         c.save();
-        c.rotate((float) (9 * Math.sin(phase * 2 * Math.PI * 3)), cx, cy - unit * 0.7f); // the bell swings from its top
+        c.rotate((float) (7 * Math.sin(phase * 2 * Math.PI)), cx, cy - unit * 0.7f); // the bell swings from its top
         bell(c, cx, cy + unit * 0.05f, unit);
         c.restore();
     }

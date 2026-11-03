@@ -5,7 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
@@ -34,7 +37,13 @@ public class ArklyReminderSoundService extends Service {
     private PowerManager.WakeLock wake; // keeps the phone awake while the sound is prepared and played, so it also sounds with the screen off
     private long startedAt;
     private boolean rise;
+    private static ArklyReminderSoundService current;
     private long holdUntil;
+    // A volume key or the power button (the screen going off) silences this ring's sound and vibration. Nothing else changes: the screen
+    // time, the card, the notification and the later rings stay as they are (Decision 376).
+    private final BroadcastReceiver keys = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { silenceRing(); }
+    };
     private final Runnable stopper = this::endSound;
     // While a reminder card is on screen the service stays in the foreground, so the phone does not end the app and the card with it.
     private final Runnable holdCheck = new Runnable() {
@@ -54,6 +63,29 @@ public class ArklyReminderSoundService extends Service {
     };
 
     @Override public IBinder onBind(Intent intent) { return null; }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        current = this;
+        try {
+            IntentFilter f = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+            f.addAction("android.media.VOLUME_CHANGED_ACTION");
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(keys, f, Context.RECEIVER_EXPORTED); else registerReceiver(keys, f);
+        } catch (Throwable ignored) { /* the keys do not silence it */ }
+    }
+
+    // Silences the sound and the vibration of this ring; the service stays while a card is showing, as after the minute.
+    public static void silenceNow(Context c) {
+        ArklyReminderSound.cancelVibration(c);
+        if (current != null) current.silenceRing();
+    }
+
+    private void silenceRing() {
+        handler.removeCallbacks(stopper);
+        ArklyReminderSound.cancelVibration(this);
+        endSound();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -163,6 +195,8 @@ public class ArklyReminderSoundService extends Service {
     public void onDestroy() {
         handler.removeCallbacks(stopper);
         handler.removeCallbacks(holdCheck);
+        try { unregisterReceiver(keys); } catch (Throwable ignored) { /* not registered */ }
+        if (current == this) current = null;
         release();
         try { stopForeground(Service.STOP_FOREGROUND_DETACH); } catch (Throwable ignored) { /* already out of the foreground */ }
         try { if (wake != null && wake.isHeld()) wake.release(); } catch (Throwable ignored) { /* released */ }

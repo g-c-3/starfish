@@ -83,6 +83,16 @@ public class ArklyAlarmActivity extends Activity {
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::finish, 60000L);
     }
 
+    // A volume key silences this ring's sound and vibration; the screen and the swipe track stay (Decision 376).
+    @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            ArklyReminderSoundService.silenceNow(this);
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
     @Override
     protected void onDestroy() {
         if (open != null && open.get() == this) open = null;
