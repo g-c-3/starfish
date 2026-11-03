@@ -382,3 +382,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-03 | Session 174 | Decision 371 | Phase 70: swipe Snooze and Stop on the lock-screen reminder; short test vibration; Test for Same as all reminders; DP197 added; not compiled or run on a device |
 | 2026-11-03 | Session 175 | Decision 372 | Phase 71: bell swipe track; three rings for an unattended reminder; DP198 added; not compiled or run on a device |
 | 2026-11-03 | Session 176 | Decision 373 | Phase 72: reminder card over other apps; one-minute reminder screen; label tweaks; DP199 added; not compiled or run on a device |
+| 2026-11-03 | Session 177 | Decision 374 | Phase 73: the reminder card stays until the reminder is dealt with; DP200 added; not compiled or run on a device |

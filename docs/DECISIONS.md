@@ -3798,3 +3798,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The card shows only what the notification shows ("Vault Reminder" for Vault reminders); it does not open the app or bypass the app-open password.
 - Files: `scripts/java/ArklySwipeTrack.java`, `ArklyReminderCard.java` (new), `ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`, `scripts/patch-reminder-sound.js`, `src/js/remindersound.js`. Not run through CI or a device (DP199).
 
+**374. The reminder card stays until the reminder is dealt with.** Owner device test. Replaces the one-minute limit of the card in Decision 373.
+- The card has no time limit. It stays until the person swipes Snooze or Stop, or its notification goes (Done, Snooze or a swipe-away elsewhere); each card checks every two seconds. It is also added when the phone is locked or the screen is off: it then waits under the lock screen and is the first thing seen after unlocking or on opening any app. Several reminders stack. The next rings at the 10th and 20th minute show the card again.
+- Sound, vibration and the full-screen reminder over the lock screen still last one minute only.
+- Still needs the display-over-other-apps permission; without it the notification stands alone. A card is not shown for a reminder whose notification was already removed.
+- Files: `scripts/java/ArklyReminderCard.java`, `ArklyReminderSound.java`. Not run through CI or a device (DP200).
+

@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 177**
+
+Start: owner left a reminder after its minute of ringing and, two minutes later, saw no card on opening the app. That followed Decision 373, which removed the card after one minute; the owner wants it waiting.
+- Decision 374. Native: `ArklyReminderCard.java`, `ArklyReminderSound.java`. Not compiled, not run on a device.
+- Open: DP200 and earlier; CI result for the Java of Sessions 164, 166, 168 to 177.
+- Next start: check the CI run; DP200; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 176**
 
 Start: owner approved the card over other apps. Decided: keep the notification as well as the card; acting on either clears both. Reminder screen and card last one minute, again at the 10th and 20th minute.
