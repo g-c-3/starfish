@@ -18,7 +18,7 @@ const JAVA_ROOT = process.env.PATCH_JAVA_ROOT || path.join(ROOT, 'android', 'app
 const MANIFEST = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const PLUGIN_DIR = path.join(ROOT, 'node_modules', '@capacitor', 'local-notifications', 'android', 'src', 'main', 'java',
   'com', 'capacitorjs', 'plugins', 'localnotifications');
-const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge', 'ArklyAlarmActivity', 'ArklyRepeatReceiver'];
+const TEMPLATES = ['ArklyReminderSound', 'ArklyReminderSoundService', 'ArklySoundBridge', 'ArklyAlarmActivity', 'ArklyRepeatReceiver', 'ArklySwipeTrack', 'ArklyReminderCard'];
 const MARK = 'arkly-reminder-sound';
 
 const die = (msg) => { console.error(`patch-reminder-sound.js: ${msg}`); process.exit(1); };
@@ -65,7 +65,7 @@ if (!manifest.includes('FOREGROUND_SERVICE_MEDIA_PLAYBACK')) {
   if (!m) die('<application> not found in AndroidManifest.xml.');
   manifest = manifest.slice(0, m.index) + '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    ' + manifest.slice(m.index);
 }
-for (const perm of ['VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT']) { // vibration; keeping the phone awake while the sound plays; the reminder screen over the lock screen (Decisions 365, 368)
+for (const perm of ['VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT', 'SYSTEM_ALERT_WINDOW']) { // vibration; keeping the phone awake while the sound plays; the reminder screen over the lock screen (Decisions 365, 368)
   if (!manifest.includes(`android.permission.${perm}`)) {
     const m = manifest.match(/<application\b/);
     if (!m) die('<application> not found in AndroidManifest.xml.');
