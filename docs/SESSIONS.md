@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 175**
+
+Start: owner confirmed the swipe screen works. Requests: tidier labels, a ringing bell with pulsing coloured glow, and repeat rings for an unattended reminder. The owner also proposed a Truecaller-style card over other apps; not built, needs a decision (see Decision 372).
+- Decision 372. New: `scripts/java/ArklyRepeatReceiver.java`. Replaced: `ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `scripts/patch-reminder-sound.js`. Not compiled, not run on a device.
+- Open: DP198 and earlier; CI result for the Java of Sessions 164, 166, 168 to 175.
+- Next start: check the CI run; DP198; the card-over-other-apps decision; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 174**
 
 Start: owner confirmed the lock-screen reminder works. Requests: swipe gestures for Snooze and Stop, clearer labels, a short test vibration, and a working Test when the reminder follows all reminders. Answered: the sound is also limited to one minute, like the vibration; the other sound modes play once.

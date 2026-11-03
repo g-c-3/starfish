@@ -380,3 +380,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-03 | Session 172 | Decision 369 | Phase 68: prompt to allow the lock-screen reminder on Android 14 and later; DP195 added; not compiled or run on a device |
 | 2026-11-03 | Session 173 | Decision 370 | Phase 69: reminder posted once with its full-screen intent; screen wake fallback; DP196 added; not compiled or run on a device |
 | 2026-11-03 | Session 174 | Decision 371 | Phase 70: swipe Snooze and Stop on the lock-screen reminder; short test vibration; Test for Same as all reminders; DP197 added; not compiled or run on a device |
+| 2026-11-03 | Session 175 | Decision 372 | Phase 71: bell swipe track; three rings for an unattended reminder; DP198 added; not compiled or run on a device |

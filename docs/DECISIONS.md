@@ -3784,3 +3784,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - In a reminder's own sound dialog with Same as all reminders chosen, Test plays the setting for all reminders, with its vibration, instead of showing a message.
 - Files: `scripts/java/ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`, `src/js/remindersound.js`. Not run through CI or a device (DP197).
 
+**372. Bell swipe track; three rings for an unattended reminder.** Owner device test. Refines Decision 371.
+- Swipe track: the arrows and the hint line are removed; the words read Snooze and Stop, larger, each centred in its side. The handle holds a golden bell that swings. Glow lines pulse outwards in turn on both sides, purple on the left and red on the right, and each side fills with its colour as the handle is pulled that way.
+- Repeat rings: ten minutes after a ring, if the reminder's notification is still showing, the reminder rings again (sound, vibration, screen on, reminder screen over the lock screen), up to three rings in all. Done, Snooze or dismissing the notification remove it, so no further ring happens. The notification itself is unchanged. Uses an alarm that may be inexact when the phone has not allowed exact alarms. Applies to every sound mode.
+- Open proposal, not built: a card in the middle of the screen over other apps (like a caller card) that stacks when several reminders are due. It needs the phone's "display over other apps" permission, a second kind of full-screen content, and care so the app-open password is not bypassed; to be decided.
+- Files: `scripts/java/ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklyRepeatReceiver.java` (new), `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP198).
+
