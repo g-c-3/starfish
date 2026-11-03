@@ -34,6 +34,8 @@ public final class ArklyReminderCard {
 
     private ArklyReminderCard() {}
 
+    public static boolean hasCards() { return !CARDS.isEmpty(); }
+
     public static boolean allowed(Context c) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(c);
     }

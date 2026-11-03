@@ -23,6 +23,7 @@ import android.os.PowerManager;
 public class ArklyReminderSoundService extends Service {
     public static final String ACTION_PLAY = "arkly.reminder.sound.PLAY";
     public static final String ACTION_STOP = "arkly.reminder.sound.STOP";
+    public static final String ACTION_HOLD = "arkly.reminder.sound.HOLD"; // no sound: keeps the app running while reminder cards are showing (Decision 375)
     private static final int NOTICE_ID = 7458001;
     private static final long CAP_MS = 60000L;
     private static final long RISE_MS = 20000L;
@@ -33,7 +34,15 @@ public class ArklyReminderSoundService extends Service {
     private PowerManager.WakeLock wake; // keeps the phone awake while the sound is prepared and played, so it also sounds with the screen off
     private long startedAt;
     private boolean rise;
-    private final Runnable stopper = this::finish;
+    private long holdUntil;
+    private final Runnable stopper = this::endSound;
+    // While a reminder card is on screen the service stays in the foreground, so the phone does not end the app and the card with it.
+    private final Runnable holdCheck = new Runnable() {
+        @Override public void run() {
+            if (!ArklyReminderCard.hasCards() || System.currentTimeMillis() > holdUntil) { finish(); return; }
+            handler.postDelayed(this, 2000L);
+        }
+    };
     private final Runnable ramp = new Runnable() {
         @Override public void run() {
             if (player == null) return;
@@ -49,6 +58,7 @@ public class ArklyReminderSoundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || ACTION_STOP.equals(intent.getAction())) { finish(); return START_NOT_STICKY; }
+        if (ACTION_HOLD.equals(intent.getAction())) { showNotice(intent.getIntExtra("nid", 0)); startHolding(); return START_NOT_STICKY; }
         holdAwake();
         showNotice(intent.getIntExtra("nid", 0));
         release();
@@ -110,6 +120,20 @@ public class ArklyReminderSoundService extends Service {
         else startForeground(NOTICE_ID, n);
     }
 
+    // After the minute of sound: stop the sound, and stay as the card's anchor while a card is showing (at most three hours).
+    private void endSound() {
+        handler.removeCallbacks(ramp);
+        release();
+        try { if (wake != null && wake.isHeld()) wake.release(); } catch (Throwable ignored) { /* released */ }
+        if (ArklyReminderCard.hasCards()) startHolding(); else finish();
+    }
+
+    private void startHolding() {
+        holdUntil = System.currentTimeMillis() + 3 * 60 * 60 * 1000L;
+        handler.removeCallbacks(holdCheck);
+        handler.postDelayed(holdCheck, 2000L);
+    }
+
     private void holdAwake() {
         try {
             if (wake == null) {
@@ -138,6 +162,7 @@ public class ArklyReminderSoundService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(stopper);
+        handler.removeCallbacks(holdCheck);
         release();
         try { stopForeground(Service.STOP_FOREGROUND_DETACH); } catch (Throwable ignored) { /* already out of the foreground */ }
         try { if (wake != null && wake.isHeld()) wake.release(); } catch (Throwable ignored) { /* released */ }

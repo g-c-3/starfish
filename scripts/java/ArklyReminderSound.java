@@ -184,8 +184,8 @@ public final class ArklyReminderSound {
         scheduleRepeat(c, notificationId, count + 1);
         showCard(c, notificationId, notification);
         boolean isFile = "file".equals(mode);
-        if (!isFile && !"alarm".equals(mode)) return;
-        if (src.isEmpty()) return;
+        if (!isFile && !"alarm".equals(mode)) { startHold(c, notificationId, notification); return; }
+        if (src.isEmpty()) { startHold(c, notificationId, notification); return; }
         try {
             pending = notification; pendingId = notificationId;
             Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_PLAY)
@@ -242,6 +242,17 @@ public final class ArklyReminderSound {
     // screen and is the first thing seen after unlocking. The full-screen reminder (Decision 368) covers the locked phone for the first minute.
     private static void showCard(Context c, int id, Notification n) {
         try { ArklyReminderCard.show(c, id, n); } catch (Throwable ignored) { /* no card */ }
+    }
+
+    // A reminder without a looping sound has no service to keep the app running, so the card would go when the phone ends the app. Start the
+    // service in its holding mode while a card is showing (Decision 375). It uses the reminder notification as its foreground notification.
+    private static void startHold(Context c, int id, Notification n) {
+        try {
+            if (!ArklyReminderCard.hasCards()) return;
+            pending = n; pendingId = id;
+            Intent i = new Intent(c, ArklyReminderSoundService.class).setAction(ArklyReminderSoundService.ACTION_HOLD).putExtra("nid", id);
+            ContextCompat.startForegroundService(c, i);
+        } catch (Throwable ignored) { /* the card lives as long as the app does */ }
     }
 
     static final int REPEATS = 3;                // rings in all for a reminder nobody answers (Decision 372)
