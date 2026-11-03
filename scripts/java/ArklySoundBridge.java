@@ -105,6 +105,20 @@ public class ArklySoundBridge {
         }
     }
 
+    // Whether Arkly may show the reminder card over other apps (a user setting).
+    @JavascriptInterface
+    public boolean canOverlay() {
+        try { return ArklyReminderCard.allowed(ctx); } catch (Throwable t) { return true; }
+    }
+
+    // Opens the phone's page where the person allows Arkly to display over other apps.
+    @JavascriptInterface
+    public void openOverlaySettings() {
+        try {
+            ctx.startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Throwable t) { /* nothing to open */ }
+    }
+
     // Two short buzzes, for the Test button when Vibrate is ticked.
     @JavascriptInterface
     public void vibrateTest() {
