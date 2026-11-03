@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 176**
+
+Start: owner approved the card over other apps. Decided: keep the notification as well as the card; acting on either clears both. Reminder screen and card last one minute, again at the 10th and 20th minute.
+- Decision 373. New: `scripts/java/ArklySwipeTrack.java`, `ArklyReminderCard.java`. Replaced: `ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`, `scripts/patch-reminder-sound.js`, `src/js/remindersound.js`. Not compiled, not run on a device.
+- Open: DP199 and earlier; CI result for the Java of Sessions 164, 166, 168 to 176.
+- Next start: check the CI run; DP199; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 175**
 
 Start: owner confirmed the swipe screen works. Requests: tidier labels, a ringing bell with pulsing coloured glow, and repeat rings for an unattended reminder. The owner also proposed a Truecaller-style card over other apps; not built, needs a decision (see Decision 372).

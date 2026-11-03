@@ -3790,3 +3790,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Open proposal, not built: a card in the middle of the screen over other apps (like a caller card) that stacks when several reminders are due. It needs the phone's "display over other apps" permission, a second kind of full-screen content, and care so the app-open password is not bypassed; to be decided.
 - Files: `scripts/java/ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklyRepeatReceiver.java` (new), `scripts/patch-reminder-sound.js`. Not run through CI or a device (DP198).
 
+**373. Reminder card over other apps; one-minute reminder screen; label tweaks.** Owner request. Builds on Decisions 368 and 372. Native code, not compiled.
+- With the phone unlocked and the screen on, a firing reminder shows a card in the middle of the screen over any app, using the "display over other apps" permission (the app asks once per session while it is off, after the lock-screen switch). One window holds all cards, so several reminders stack. With the phone locked or the screen off, the full-screen reminder (Decision 368) is used instead.
+- Card and notification stay together: swiping Snooze or Stop on the card or the full-screen reminder fires the notification's own action, which clears the notification; Done or Snooze on the notification removes the card within a second (each card checks that its notification still exists). If the permission is off, the notification and the full-screen reminder work as before.
+- A card and the full-screen reminder each last one minute, like the sound and vibration; they return at the 10th and 20th minute while unanswered (Decision 372). The notification is never removed by this. The screen-on hold ends with the screen.
+- Text: the app name is small and muted; the reminder's text is large. In the swipe track Snooze and Stop sit further out, centred in their sides. The track is one shared class used by both screens.
+- The card shows only what the notification shows ("Vault Reminder" for Vault reminders); it does not open the app or bypass the app-open password.
+- Files: `scripts/java/ArklySwipeTrack.java`, `ArklyReminderCard.java` (new), `ArklyAlarmActivity.java`, `ArklyReminderSound.java`, `ArklySoundBridge.java`, `scripts/patch-reminder-sound.js`, `src/js/remindersound.js`. Not run through CI or a device (DP199).
+
