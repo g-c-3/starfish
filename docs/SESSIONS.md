@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 179**
+
+Start: owner confirmed the card works. Requests: slightly smaller Snooze and Stop, a slower bell, and the physical keys silencing a ring.
+- Decision 376. Native: `ArklySwipeTrack.java`, `ArklyReminderSoundService.java`, `ArklyReminderSound.java`, `ArklyAlarmActivity.java`. Not compiled, not run on a device.
+- Open: DP202 and earlier; CI result for the Java of Sessions 164, 166, 168 to 179.
+- Next start: check the CI run; DP202; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 178**
 
 Start: owner device test of Decision 374 with display over other apps on: no card after unlocking. Cause not confirmed; most likely the app was ended when the sound stopped.

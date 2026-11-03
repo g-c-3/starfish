@@ -384,3 +384,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-03 | Session 176 | Decision 373 | Phase 72: reminder card over other apps; one-minute reminder screen; label tweaks; DP199 added; not compiled or run on a device |
 | 2026-11-03 | Session 177 | Decision 374 | Phase 73: the reminder card stays until the reminder is dealt with; DP200 added; not compiled or run on a device |
 | 2026-11-03 | Session 178 | Decision 375 | Phase 74: keep the app running while a reminder card shows; DP201 added; not compiled or run on a device |
+| 2026-11-04 | Session 179 | Decision 376 | Phase 75: smaller labels, slower bell, volume and power keys silence a ring; DP202 added; not compiled or run on a device |

@@ -3810,3 +3810,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Known limits: Done or Snooze through the app stops the service even if another reminder's card is still up; the phone's battery settings may still end the app.
 - Files: `scripts/java/ArklyReminderSoundService.java`, `ArklyReminderSound.java`, `ArklyReminderCard.java`. Not run through CI or a device (DP201).
 
+**376. Smaller labels, slower bell, keys silence a ring.** Owner request after the card worked.
+- Snooze and Stop are two sizes smaller. The bell swings once per three-second cycle, gentler, and the glow lines pulse at the same slower pace.
+- While a ring plays, a volume key silences its sound and vibration: on the lock-screen reminder directly, and elsewhere when the phone reports a volume change. The power button does the same: the service listens for the screen going off. Android does not let an app stop the power button turning the screen off, so the screen is not kept on after it. Nothing else changes: the reminder screen's one minute, the card, the notification, and the rings at the 10th and 20th minute stay as they are. A volume key pressed at the volume's end stop may not be reported when the reminder screen is not showing.
+- Files: `scripts/java/ArklySwipeTrack.java`, `ArklyReminderSoundService.java`, `ArklyReminderSound.java`, `ArklyAlarmActivity.java`. Not run through CI or a device (DP202).
