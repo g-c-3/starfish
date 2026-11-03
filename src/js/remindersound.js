@@ -59,7 +59,17 @@ function openLockScreenSettings(leaving) {
 let offeredThisSession = false;
 // Once per app session, when the switch is off: explains it and opens the phone's page for it. askYesNo as in app.js.
 async function offerLockScreen({ askYesNo, leaving }) {
-  if (offeredThisSession || lockScreenAllowed()) return;
+  if (offeredThisSession) return;
+  if (lockScreenAllowed()) { // the card over other apps (Decision 373)
+    const b = bridge();
+    let overlayOk = true;
+    try { overlayOk = !b || !b.canOverlay || !!b.canOverlay(); } catch { /* assume yes */ }
+    if (overlayOk) return;
+    offeredThisSession = true;
+    const go = await askYesNo({ title: 'Show reminders over other apps?', text: 'To show a reminder card on top of whatever you are doing, such as a film, Android needs you to allow Arkly to display over other apps. The next page has the switch.', yes: 'Open settings', no: 'Not now' });
+    if (go) { try { if (leaving) leaving(); b.openOverlaySettings(); } catch { /* nothing to open */ } }
+    return;
+  }
   offeredThisSession = true;
   const yes = await askYesNo({ title: 'Show reminders on the lock screen?', text: 'To turn the screen on and show Snooze and Stop when a reminder is due, Android needs you to allow full-screen notifications for Arkly. The next page has the switch.', yes: 'Open settings', no: 'Not now' });
   if (yes) openLockScreenSettings(leaving);
