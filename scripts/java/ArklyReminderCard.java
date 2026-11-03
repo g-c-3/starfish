@@ -21,11 +21,12 @@ import java.util.Map;
 
 // The reminder card shown in the middle of the screen over whatever app is open, when the phone is unlocked (Decision 373). One window holds
 // every card, newest at the bottom, so several due reminders stack. Each card shows the reminder's text and the swipe track; swiping fires the
-// notification's own Snooze or Done action, which also clears the notification. A card is shown for one minute, and goes at once if its
-// notification goes (Done, Snooze or a swipe-away elsewhere). Shows only what the notification shows ("Vault Reminder" for Vault reminders).
+// notification's own Snooze or Done action, which also clears the notification. A card goes at once if its
+// notification goes (Done, Snooze or a swipe-away elsewhere). Added also while the phone is locked: it is then under the lock screen and is
+// the first thing seen after unlocking, or on opening the app. It stays until the reminder is dealt with (Decision 374). Shows only what the notification shows ("Vault Reminder" for Vault reminders).
 // Needs the "display over other apps" permission; without it nothing is shown and the notification does its work.
 public final class ArklyReminderCard {
-    private static final long SHOWN_MS = 60000L, CHECK_MS = 1000L;
+    private static final long CHECK_MS = 2000L;
     private static final Handler H = new Handler(Looper.getMainLooper());
     private static final Map<Integer, LinearLayout> CARDS = new HashMap<>();
     private static LinearLayout container;
@@ -101,11 +102,10 @@ public final class ArklyReminderCard {
             }
             container.addView(card, lp);
             CARDS.put(id, card);
-            final long until = System.currentTimeMillis() + SHOWN_MS;
             H.postDelayed(new Runnable() {
                 @Override public void run() {
                     if (!CARDS.containsKey(id)) return;
-                    if (System.currentTimeMillis() >= until || !stillShowing(c, id)) { remove(id); return; }
+                    if (!stillShowing(c, id)) { remove(id); return; }
                     H.postDelayed(this, CHECK_MS);
                 }
             }, CHECK_MS);

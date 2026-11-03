@@ -182,7 +182,7 @@ public final class ArklyReminderSound {
         shown = notification; shownId = notificationId;
         wakeScreen(c);
         scheduleRepeat(c, notificationId, count + 1);
-        showCardIfUnlocked(c, notificationId, notification);
+        showCard(c, notificationId, notification);
         boolean isFile = "file".equals(mode);
         if (!isFile && !"alarm".equals(mode)) return;
         if (src.isEmpty()) return;
@@ -238,14 +238,10 @@ public final class ArklyReminderSound {
 
     public static Notification shownNotification(int id) { return shownId == id ? shown : null; }
 
-    // Phone in use and unlocked: the reminder card over the open app (Decision 373). Locked or screen off: the full-screen reminder does it.
-    private static void showCardIfUnlocked(Context c, int id, Notification n) {
-        try {
-            PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
-            android.app.KeyguardManager km = (android.app.KeyguardManager) c.getSystemService(Context.KEYGUARD_SERVICE);
-            boolean on = pm != null && pm.isInteractive(), locked = km != null && km.isKeyguardLocked();
-            if (on && !locked) ArklyReminderCard.show(c, id, n);
-        } catch (Throwable ignored) { /* no card */ }
+    // The reminder card over the open app (Decision 374). Also added when the phone is locked or the screen is off: it waits under the lock
+    // screen and is the first thing seen after unlocking. The full-screen reminder (Decision 368) covers the locked phone for the first minute.
+    private static void showCard(Context c, int id, Notification n) {
+        try { ArklyReminderCard.show(c, id, n); } catch (Throwable ignored) { /* no card */ }
     }
 
     static final int REPEATS = 3;                // rings in all for a reminder nobody answers (Decision 372)
