@@ -3842,3 +3842,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The strip between swiped images is 0.35 px (was 1 px).
 - Files: `src/js/app.js`, `src/css/style.css`. Not run through CI or a device (DP207).
 
+**382. Centred media with a blurred backdrop, no zoom.** Owner clarification. Replaces Decision 381's top alignment and small zoom.
+- Images are centred in the viewer and fitted whole, so they meet the screen on both sides or at the top and bottom and are never cropped or zoomed.
+- Behind each image, a copy of it, enlarged to fill the screen, blurred (26 px) and darkened a little, fills the remaining space. It fades in when the image has loaded. The neighbouring image seen during a swipe has no backdrop until the swipe completes.
+- Videos are centred; a blurred backdrop for videos is not built.
+- Files: `src/js/app.js`, `src/css/style.css`. Not run through CI or a device (DP208).
+

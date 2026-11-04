@@ -4,6 +4,12 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 185**
+
+Start: the owner clarified: centre all media, no zoom, fill the leftover space with the same picture blurred and enlarged.
+- Decision 382. Replaced: `app.js`, `style.css`. Not run through `vite build` or a device.
+- Open: DP208; a blurred backdrop for videos; the strip for non-image pages (Decision 379); the editable-after-save design for PDF marks (Decision 364).
+
 **Session 184**
 
 Start: owner confirmed the PDF change and the pending device passes worked. Requests: the strip between swiped media a third of its size; media starting at the top but fitting by shape, with a little zoom where the shape is close.
