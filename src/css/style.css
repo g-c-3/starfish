@@ -1456,6 +1456,7 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 /* Decision 364: in the PDF and image viewers the title bar floats over the content, translucent, and folds away smoothly. */
 #viewer-screen.pdf-mode .editor-bar, #viewer-screen.image-mode .editor-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 9; transition: transform .26s ease, opacity .26s ease; }
 #viewer-screen .editor-bar.bar-folded { transform: translateY(-110%); opacity: 0; pointer-events: none; }
-#viewer-screen.pdf-mode .pdf-scroll { padding-top: 58px; }
+#viewer-screen.pdf-mode .pdf-scroll { padding-top: 0; } /* the first page starts at the top of the screen, under the see-through bar (Decision 380) */
+#explorer-viewer .editor-bar.bar-folded { transform: translateY(-110%); opacity: 0; pointer-events: none; }
 #explorer-viewer .editor-bar.ev-head-hidden { transition: transform .26s ease, opacity .26s ease; }
 @media (prefers-reduced-motion: reduce) { #viewer-screen .editor-bar { transition: none; } }
