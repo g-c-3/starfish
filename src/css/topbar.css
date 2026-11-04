@@ -31,10 +31,11 @@
   -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
 }
 
-/* Decision 378: the title bar of the PDF, image, video and other file viewers, in light and dark mode, is the edit panel's setting:
-   dark, 62 per cent opaque, blurred, white text. */
+/* Decisions 378, 379: the title bar of the PDF, image, video and other file viewers, in light and dark mode, is the edit panel's setting:
+   dark, 62 per cent opaque, blurred, white text. !important because the older rules above name an id inside :is(), which outranks this one. */
 #viewer-screen .editor-bar, #explorer-viewer .editor-bar,
-:root[data-theme="dark"] #viewer-screen .editor-bar, :root[data-theme="dark"] #explorer-viewer .editor-bar {
-  background: rgba(20, 20, 26, 0.62); color: #fff; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
+:root[data-theme="dark"] #viewer-screen .editor-bar, :root[data-theme="dark"] #explorer-viewer .editor-bar,
+:root:not([data-theme="dark"]) #viewer-screen .editor-bar, :root:not([data-theme="dark"]) #explorer-viewer .editor-bar {
+  background: rgba(20, 20, 26, 0.62) !important; color: #fff !important; border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.2) !important; backdrop-filter: blur(16px) saturate(1.2) !important;
 }
