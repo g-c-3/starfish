@@ -3821,3 +3821,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Sliders: a shared style (`range.css`) draws the fill to the handle's centre and keeps the handle inside the track, so at the maximum the handle sits at the end with no gap. Used by the image opacity, the video seek bar and the audio seek bar; each sets `--v` as its value changes.
 - Files: `src/css/range.css` (new), `pdfmark.css`, `videoplayer.css`, `style.css`, `src/js/pdfmark-ui.js`, `videoplayer.js`, `app.js`. Not run through CI or a device (DP203).
 
+**378. See-through viewer title bars in both themes; thinnest strip between swiped images.** Owner request. Refines Decision 364.
+- The title bar of the viewers (Home and Vault viewer, File explorer viewer) uses the edit panel's setting in light and dark mode alike: rgba(20, 20, 26) at 62 per cent, blur 16 px with saturation 1.2, white text, a faint light edge. It replaces the purple of light mode and the dark colour of dark mode there. Other screens keep Decision 364's bars.
+- The strip between images while swiping is 2 px (was 16 px). Videos are not swiped as a carousel and are unchanged.
+- Files: `src/css/topbar.css`, `src/js/app.js`. Not run through CI or a device (DP204).
+

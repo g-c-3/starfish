@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 181**
+
+Start: owner liked the see-through edit panel and asked for it on the viewer title bars, plus the thinnest strip between swiped images.
+- Decision 378. Replaced: `src/css/topbar.css`, `src/js/app.js` (`GAP`). Not run through `vite build` or a device.
+- Open: DP204 and earlier; CI result for the Java of Sessions 164, 166, 168 to 179.
+- Next start: check the CI run; the device passes; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 180**
 
 Start: owner review of the edit panel from device screenshots and the media player seek bar.

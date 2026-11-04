@@ -386,3 +386,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-03 | Session 178 | Decision 375 | Phase 74: keep the app running while a reminder card shows; DP201 added; not compiled or run on a device |
 | 2026-11-04 | Session 179 | Decision 376 | Phase 75: smaller labels, slower bell, volume and power keys silence a ring; DP202 added; not compiled or run on a device |
 | 2026-11-04 | Session 180 | Decision 377 | Phase 76: edit panel clean-up, Image tool, sliders that reach the end; DP203 added; not run through CI or a device |
+| 2026-11-04 | Session 181 | Decision 378 | Phase 77: see-through viewer title bars in both themes; thinnest strip between swiped images; DP204 added; not run through CI or a device |
