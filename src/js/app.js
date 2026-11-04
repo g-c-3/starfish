@@ -6538,7 +6538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isVid = isVideoExt(item.extension);
         dropPlayer();
         body.innerHTML = `
-          <div class="img-stage">${isVid ? '<video class="img-full vid-full" playsinline preload="metadata"></video>' : '<img class="img-full" alt="" draggable="false">'}
+          <div class="img-stage">${isVid ? '<video class="img-full vid-full" playsinline preload="metadata"></video>' : '<img class="img-blur" alt="" aria-hidden="true" draggable="false"><img class="img-full" alt="" draggable="false">'}
             <div class="img-loading">Loading…</div>
           </div>`;
         // Header order in image mode: back, name, Edit (rename), Share, Download, Move, Delete, count. Appended after Edit.
@@ -6552,12 +6552,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn warning-text" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
-        // An image whose shape is close to the screen's is zoomed a little to fill it; any other starts at the top and fits (Decision 381).
-        if (img && !isVid) img.addEventListener('load', () => {
-          const box = stage.getBoundingClientRect();
-          if (!box.width || !box.height || !img.naturalWidth || !img.naturalHeight) return;
-          img.classList.toggle('fit-fill', Math.abs(Math.log((img.naturalWidth / img.naturalHeight) / (box.width / box.height))) < 0.16);
-        });
+        // The space the picture leaves is filled with the same picture, zoomed and blurred (Decision 382). The picture itself is never zoomed.
+        const blur = body.querySelector('.img-blur');
+        if (img && blur && !isVid) img.addEventListener('load', () => { blur.src = img.currentSrc || img.src; blur.classList.add('on'); });
         { // a single tap hides the title bar, another brings it back; it stays as it is while swiping (Decision 380)
           let d = null;
           stage.addEventListener('pointerdown', (e) => { d = e.isPrimary && !e.target.closest('button') ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; }, { passive: true });
