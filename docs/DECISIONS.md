@@ -3848,3 +3848,5 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Videos are centred; a blurred backdrop for videos is not built.
 - Files: `src/js/app.js`, `src/css/style.css`. Not run through CI or a device (DP208).
 
+**383. Saved PDF marks stay fixed.** Owner decision. Marks are drawn into the page when saved and are not editable after reopening; no hidden editable record is stored in the PDF. Keeps files small and identical in every app. Closes the question left open in Decision 364.
+

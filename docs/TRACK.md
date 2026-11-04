@@ -391,3 +391,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-04 | Session 183 | Decision 380 | Phase 79: tap to hide the title bar in the image and PDF viewers; PDF from the top of the screen; thinner strip; DP206 added; not run through CI or a device |
 | 2026-11-04 | Session 184 | Decision 381 | Phase 80: media starts at the top and fits by shape; thinner strip; DP207 added; not run through CI or a device |
 | 2026-11-04 | Session 185 | Decision 382 | Phase 81: centred media with a blurred backdrop, no zoom; DP208 added; not run through CI or a device |
+| 2026-11-04 | Session 186 | Decision 383 | Phase 82: decision recorded that saved PDF marks stay fixed; margins of non-image pages not yet located |

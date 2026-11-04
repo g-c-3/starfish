@@ -4,6 +4,12 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 186**
+
+Start: the owner asked what the two open items were; answered. Decided: leave PDF marks fixed after saving (Decision 383); fix the margins on non-image pages.
+- The margins were searched for and not found. The screenshots show the explorer's folder list of a zip item beside another item inside the image viewer, each about 12 px in from the screen edge (the explorer body has `padding: 8px 12px`). The slide-in of non-image items is not the image carousel, so the 12 px comes from the explorer list's own padding. Not changed.
+- Open: remove or reduce that padding while such a page is shown in the image viewer; DP208.
+
 **Session 185**
 
 Start: the owner clarified: centre all media, no zoom, fill the leftover space with the same picture blurred and enlarged.
