@@ -183,7 +183,6 @@ export function openFileViewer(file, ctx) {
     const scroll = body.querySelector('.pdf-scroll');
     body.classList.add('pdf-full');
     enterFull(() => {});
-    stopScroll = chromeOnScroll(body, (h) => setChrome(h), '.pdf-scroll'); // Decision 364: as in Home and the Vault
     if (menuBtn) menuBtn.classList.add('hidden'); // the tools are always at hand: a tap on the page folds or brings them back, as in Home and Vault (Decision 362)
     let view = null, tools = null, chrome = null;
     cleanup = () => { if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (view) { view.destroy(); view = null; } };

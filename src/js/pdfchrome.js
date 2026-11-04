@@ -22,7 +22,10 @@ function mountPdfChrome(body, scroll, { onActivity = () => {} } = {}) {
     onActivity();
     // Edit mode may claim the tap (a mark was tapped): it then does not fold the tools.
     if (!body.dispatchEvent(new CustomEvent('arkly-pdf-tap', { detail: { x: e.clientX, y: e.clientY }, cancelable: true }))) return;
-    body.classList.toggle('pdf-tools-hidden');
+    const hidden = body.classList.toggle('pdf-tools-hidden');
+    // the title bar goes and comes with the tools (Decision 380)
+    const bar = body.closest('#viewer-screen, #explorer-viewer');
+    if (bar) bar.querySelector('.editor-bar')?.classList.toggle('bar-folded', hidden);
   };
   const cancel = () => { down = null; };
   scroll.addEventListener('pointerdown', onDown, { passive: true });
@@ -36,6 +39,7 @@ function mountPdfChrome(body, scroll, { onActivity = () => {} } = {}) {
       scroll.removeEventListener('pointerup', onUp);
       scroll.removeEventListener('pointercancel', cancel);
       body.classList.remove('pdf-tools-hidden');
+      body.closest('#viewer-screen, #explorer-viewer')?.querySelector('.editor-bar')?.classList.remove('bar-folded');
     }
   };
 }

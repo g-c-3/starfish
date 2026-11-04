@@ -6552,9 +6552,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn warning-text" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
+        { // a single tap hides the title bar, another brings it back; it stays as it is while swiping (Decision 380)
+          let d = null;
+          stage.addEventListener('pointerdown', (e) => { d = e.isPrimary && !e.target.closest('button') ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; }, { passive: true });
+          stage.addEventListener('pointermove', (e) => { if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) d = null; }, { passive: true });
+          stage.addEventListener('pointerup', () => { const t = d; d = null; if (t && Date.now() - t.t < 350) viewerScreen.querySelector('.editor-bar')?.classList.toggle('bar-folded'); }, { passive: true });
+        }
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
         // Carousel (Decision 361): image next to image. The neighbour is placed beside this picture on the first sideways move.
-        const GAP = 2; // the thinnest strip between images while swiping (Decision 378)
+        const GAP = 1; // the thinnest strip between images while swiping (Decisions 378, 380)
         let ghost = null, ghostStep = 0;
         const span = () => stage.clientWidth + GAP;
         const neighbour = (step) => { const it = items[index + step]; return it && !isVideoExt(it.extension) && ahead.has(it.id) && aheadImg.has(it.id) ? it : null; };
@@ -6838,7 +6844,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (mine !== token || !body.isConnected) return;
           chrome = mountPdfChrome(body, scroll, { onActivity: arm });
           // Scrolling down folds the title bar, scrolling up a little brings it back (Decisions 235, 364).
-          foldStop = chromeOnScroll(body, (h) => viewerScreen.querySelector('.editor-bar')?.classList.toggle('bar-folded', h), '.pdf-scroll');
           const { mountPdfTools } = await import('./pdftools.js');
           if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
           tools = mountPdfTools(body, view, { onActivity: arm });
