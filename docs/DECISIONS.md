@@ -3826,3 +3826,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The strip between images while swiping is 2 px (was 16 px). Videos are not swiped as a carousel and are unchanged.
 - Files: `src/css/topbar.css`, `src/js/app.js`. Not run through CI or a device (DP204).
 
+**379. Viewer title bar fix.** Owner device test of Decision 378.
+- The rule of Decision 378 lost to older rules whose selector names an id inside `:is()`, which gives them higher specificity. The viewer title bar rules now use `!important` for background, colour, border and blur, so the see-through bar shows in both themes.
+- Not fixed: the black strip in the image viewer when a zip or other non-image item is swiped. Its pages have about 17 px of side margin each, which is not the 2 px gap of Decision 378. To be traced.
+- Files: `src/css/topbar.css`. Not run through CI or a device (DP205).
+

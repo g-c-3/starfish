@@ -4,6 +4,12 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 182**
+
+Start: owner reported nothing changed. Cause for the bar: an older rule in `topbar.css` names an id inside `:is()` and outranked the new one. The strip in the screenshots is between a zip item and the next item in the image viewer: those pages carry about 17 px of margin each, not the 16 px gap that was changed; the margin's source was not found.
+- Decision 379. Replaced: `src/css/topbar.css`. Not run through `vite build` or a device.
+- Next start: find the archive page's side margins in the image viewer (search the file-listing component used inside the image viewer), then DP205.
+
 **Session 181**
 
 Start: owner liked the see-through edit panel and asked for it on the viewer title bars, plus the thinnest strip between swiped images.
