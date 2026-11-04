@@ -4,13 +4,14 @@
 // pdf-lib loads when Edit is first tapped, not when the viewer opens.
 
 import '../css/pdfmark.css';
+import '../css/range.css';
 import { COLORS, HIGHLIGHT_COLORS, INK_COLORS, STAMPS, STAMP_SHAPES, STAMP_MAX_LABEL, HIGHLIGHT_OPACITY, MAX_MARKS, TEXT_SIZE, STAMP_SIZE, PEN_WIDTH, FS_MIN, FS_MAX, SIGN_DEFAULT_W, SIGN_W_MIN, SIGN_W_MAX, SIGN_MIN_ALPHA, SIGN_MAX_SIDE, stampGeometry } from './pdfmarkconst.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const css = (name) => { const c = COLORS[name] || COLORS.black; return `rgb(${c.map((n) => Math.round(n * 255)).join(',')})`; };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const ICON_PEN = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg>';
-const TOOLS = [['highlight', 'Highlight'], ['text', 'Text'], ['draw', 'Draw'], ['stamp', 'Stamp'], ['sign', 'Picture']];
+const TOOLS = [['highlight', 'Highlight'], ['text', 'Text'], ['draw', 'Draw'], ['stamp', 'Stamp'], ['sign', 'Image']];
 const TOOL_NAME = Object.fromEntries(TOOLS);
 const toolOf = (kind) => kind; // a mark's kind is the name of its tool
 const SEL_PAD = 5;
@@ -248,9 +249,7 @@ function mountMarkup(body, view, ctx) {
       const wf = b.w * STAMP_SIZE, hf = (b.h * STAMP_SIZE * W) / H;
       addMark({ page: L.n, kind: 'stamp', x: clamp(u - wf / 2, 0, Math.max(0, 1 - wf)), y: clamp(v - hf / 2, 0, Math.max(0, 1 - hf)), label: st.stamp, shape: st.shape, fs: STAMP_SIZE, color: st.ink });
     } else if (st.tool === 'sign') {
-      if (!st.sig) { await choosePicture(); if (!st || !st.sig) return; } // the first tap picks the picture, then places it here
-      const w = SIGN_DEFAULT_W, hf = (w * st.sig.ratio * W) / H;
-      addMark({ page: L.n, kind: 'sign', x: clamp(u - w / 2, 0, 1 - w), y: clamp(v - hf / 2, 0, Math.max(0, 1 - hf)), w, ratio: st.sig.ratio, png: st.sig.png, url: st.sig.url, alpha: st.alpha });
+      ctx.toast('Tap Choose Image to add an image'); // images are added only with Choose Image or Change Image (Decision 377)
     }
   }
 
@@ -393,19 +392,18 @@ function mountMarkup(body, view, ctx) {
     const selRow = m ? `<div class="pdf-mk-line pdf-mk-selrow"><button type="button" data-act="smaller">Smaller</button><button type="button" data-act="bigger">Bigger</button>${m.kind === 'text' || m.kind === 'stamp' ? '<button type="button" data-act="edittext">Edit text</button>' : ''}<button type="button" data-act="dup">Duplicate</button><button type="button" data-act="del" class="pdf-mk-del">Delete</button></div>` : '';
     let opts = '';
     if (t === 'stamp') {
-      opts += `<div class="pdf-mk-line">${STAMP_SHAPES.map(([k, l]) => chip(`data-shape="${k}"`, l, k === st.shape)).join('')}</div>`;
-      opts += `<div class="pdf-mk-line">${STAMPS.map((s) => chip(`data-stamp="${esc(s)}"`, s, s === st.stamp)).join('')}${chip('data-act="custom"', STAMPS.includes(st.stamp) ? 'Custom text…' : `“${st.stamp}”`, !STAMPS.includes(st.stamp))}</div>`;
+      opts += `<div class="pdf-mk-cols pdf-mk-c4">${STAMP_SHAPES.map(([k, l]) => chip(`data-shape="${k}"`, l, k === st.shape)).join('')}</div>`;
+      opts += `<div class="pdf-mk-cols pdf-mk-c3">${STAMPS.map((s) => chip(`data-stamp="${esc(s)}"`, s, s === st.stamp)).join('')}${chip('data-act="custom"', STAMPS.includes(st.stamp) ? 'Custom text…' : `“${st.stamp}”`, !STAMPS.includes(st.stamp))}</div>`;
     }
     if (palette.length) opts += `<div class="pdf-mk-line pdf-mk-dots">${palette.map((c) => dot(c, c === current)).join('')}</div>`;
     if (t === 'sign') {
-      const a = Math.round((m && m.kind === 'sign' ? (m.alpha == null ? 1 : m.alpha) : st.alpha) * 100);
-      opts += `<div class="pdf-mk-line">${chip('data-act="pick"', st.sig ? 'Change picture' : 'Choose picture', !st.sig)}</div>
-        <label class="pdf-mk-opacity"><span>Opacity <b>${a}%</b></span><input type="range" min="${Math.round(SIGN_MIN_ALPHA * 100)}" max="100" step="5" value="${a}" aria-label="Picture opacity"></label>`;
+      const a = Math.round((m && m.kind === 'sign' ? (m.alpha == null ? 1 : m.alpha) : st.alpha) * 100), lo = Math.round(SIGN_MIN_ALPHA * 100);
+      opts += `<div class="pdf-mk-line">${chip('data-act="pick"', m && m.kind === 'sign' ? 'Change Image' : 'Choose Image', false)}</div>
+        <label class="pdf-mk-opacity"><span>Opacity <b>${a}%</b></span><input type="range" class="ark-range" style="--v:${(a - lo) / (100 - lo)}" min="${lo}" max="100" step="5" value="${a}" aria-label="Image opacity"></label>`;
     }
-    const hint = t === 'highlight' ? 'Drag on the page. Tap ‹ Tools to scroll.' : t === 'draw' ? 'Draw on the page. Tap ‹ Tools to scroll.' : t === 'text' ? 'Tap the page to add text.' : t === 'stamp' ? 'Pick a shape and text, then tap the page.' : (st.sig ? 'Tap the page to place the picture.' : 'Tap the page, then choose a picture.');
     bar.innerHTML = `<div class="pdf-mk-head"><button type="button" data-act="back" class="pdf-mk-back">‹ Tools</button><strong>${TOOL_NAME[t]}</strong><span class="pdf-mk-gap"></span>
-        <button type="button" data-act="undo" ${st.undo.length ? '' : 'disabled'}>Undo</button><button type="button" data-act="redo" ${st.redo.length ? '' : 'disabled'}>Redo</button></div>
-      <div class="pdf-mk-opts">${selRow}${opts}<div class="pdf-mk-hint">${m ? 'Drag to move, drag the dot to resize.' : hint}</div></div>`;
+        <button type="button" data-act="undo" ${st.undo.length ? '' : 'disabled'}>Undo</button><button type="button" data-act="redo" ${st.redo.length ? '' : 'disabled'}>Redo</button><button type="button" data-act="close" class="pdf-mk-x" aria-label="Close">✕</button></div>
+      <div class="pdf-mk-opts">${selRow}${opts}${m ? '<div class="pdf-mk-hint">Drag to move, drag a handle to resize.</div>' : ''}</div>`;
     const range = bar.querySelector('input[type="range"]');
     if (range) {
       let first = true;
@@ -414,6 +412,7 @@ function mountMarkup(body, view, ctx) {
         const a = Number(range.value) / 100, sm = markById(st.sel);
         st.alpha = a;
         bar.querySelector('.pdf-mk-opacity b').textContent = `${range.value}%`;
+        range.style.setProperty('--v', String((Number(range.value) - Math.round(SIGN_MIN_ALPHA * 100)) / (100 - Math.round(SIGN_MIN_ALPHA * 100))));
         if (sm && sm.kind === 'sign') { if (first) { pushUndo(); first = false; } sm.alpha = a; renderSoon(layerOf(sm.page)); }
       });
       range.addEventListener('change', () => { first = true; });
@@ -490,20 +489,29 @@ function mountMarkup(body, view, ctx) {
     return true;
   }
 
-  // ---- Picture tool: chosen with the phone's picker and kept in memory only ----
-  async function usePicture(bytes) {
-    if (!st) return;
-    try {
-      const sig = await buildPicture(bytes);
-      if (!st) { URL.revokeObjectURL(sig.url); return; }
-      st.sig = sig; st.urls.push(sig.url); // earlier placements keep the picture they were made with
-    } catch (err) { ctx.toast(`Could not use that picture: ${String((err && err.message) || err)}`); }
-    paintBar();
+  // ---- Image tool (Decision 377): Choose Image adds a new image in the middle of the visible page; with an image selected, Change Image
+  // replaces that one. Picked with the phone's picker, kept in memory only. Tapping the page never adds an image. ----
+  function visibleSpot() {
+    const y = window.innerHeight * 0.4;
+    for (const L of st.layers) {
+      const r = L.el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) return { L, v: clamp((y - r.top) / r.height, 0.15, 0.85) };
+    }
+    return { L: st.layers[0], v: 0.4 };
   }
   async function choosePicture() {
     if (!st) return;
     const bytes = await ctx.pickImage();
-    if (bytes && st) await usePicture(bytes);
+    if (!bytes || !st) return;
+    let sig;
+    try { sig = await buildPicture(bytes); } catch (err) { ctx.toast(`Could not use that image: ${String((err && err.message) || err)}`); return; }
+    if (!st) { URL.revokeObjectURL(sig.url); return; }
+    st.urls.push(sig.url); // earlier placements keep the image they were made with
+    const m = st.sel != null ? markById(st.sel) : null;
+    if (m && m.kind === 'sign') { change(m, { png: sig.png, url: sig.url, ratio: sig.ratio }); return; }
+    const { L, v } = visibleSpot(), W = L.el.clientWidth, H = L.el.clientHeight || 1;
+    const w = SIGN_DEFAULT_W, hf = (w * sig.ratio * W) / H;
+    addMark({ page: L.n, kind: 'sign', x: (1 - w) / 2, y: clamp(v - hf / 2, 0, Math.max(0, 1 - hf)), w, ratio: sig.ratio, png: sig.png, url: sig.url, alpha: st.alpha });
   }
 
   // ---- start, open and close the panel, save, leave ----

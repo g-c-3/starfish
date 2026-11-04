@@ -1,3 +1,4 @@
+import '../css/range.css';
 // videoplayer.js — one set of video controls for the Gallery viewer and the Phone viewer (Decision 324). DOM only.
 // attachVideoPlayer(stage, video, { onFail, onActivity }) draws the controls over `stage` and returns { destroy }.
 // Full screen also asks window.ArklyScreen (patch-screen.js, Decisions 326, 328) to hide the system bars and turn a wide video to landscape,
@@ -40,6 +41,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   const bar = el('div', 'vp-bar vp-ctl');
   const tCur = el('span', 'vp-time', '0:00'), tLeft = el('span', 'vp-time vp-left', '-0:00');
   const seek = el('input', 'vp-seek');
+  seek.classList.add('ark-range');
   seek.type = 'range'; seek.min = '0'; seek.max = '1000'; seek.value = '0'; seek.setAttribute('aria-label', 'Seek');
   const row1 = el('div', 'vp-row'); row1.append(tCur, seek, tLeft);
   const bSpeed = el('button', 'vp-tool', '1×'), bLoop = el('button', 'vp-tool', ICON.loop), bMute = el('button', 'vp-tool', ICON.vol);
@@ -78,6 +80,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
     tCur.textContent = clockText(video.currentTime);
     tLeft.textContent = '-' + clockText(Math.max(0, dur - video.currentTime));
     if (!seeking && dur) seek.value = String(Math.round((video.currentTime / dur) * 1000));
+    seek.style.setProperty('--v', String(Number(seek.value) / 1000));
   }
   function paintVol() {
     const off = video.muted || video.volume === 0;
@@ -107,6 +110,7 @@ export function attachVideoPlayer(stage, video, { onFail, onActivity } = {}) {
   bMute.onclick = () => { touch(); video.muted = !video.muted; if (!video.muted && video.volume === 0) video.volume = 0.5; schedule(); };
   bFit.onclick = () => { touch(); const fill = video.classList.toggle('vp-fill'); bFit.textContent = fill ? 'Fill' : 'Fit'; schedule(); };
   seek.addEventListener('input', () => {
+    seek.style.setProperty('--v', String(Number(seek.value) / 1000));
     touch();
     seeking = true;
     clearTimeout(hideT);

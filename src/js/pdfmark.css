@@ -1,0 +1,65 @@
+/* PDF edit mode (Decisions 166, 362). Loaded with pdfmark-ui.js. */
+.pdf-mark-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.pdf-mark-layer.active { pointer-events: auto; }
+.pdf-mark-layer.capture { touch-action: none; cursor: crosshair; }
+.pdf-mk-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.pdf-mk-items { position: absolute; inset: 0; pointer-events: none; }
+.pdf-mk-text { position: absolute; white-space: pre; line-height: 1.2; font-family: Helvetica, Arial, sans-serif; }
+.pdf-mk-stamp { position: absolute; display: flex; align-items: center; justify-content: center; box-sizing: border-box; white-space: nowrap; line-height: 1; font-weight: 700; font-family: Helvetica, Arial, sans-serif; border-style: solid; border-color: currentColor; }
+.pdf-mk-sign { position: absolute; display: block; height: auto; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.pdf-mk-sel { position: absolute; box-sizing: border-box; border: 2px dashed #4f8cff; border-radius: 4px; pointer-events: auto; touch-action: none; cursor: move; }
+.pdf-mk-sel.hidden { display: none; }
+/* Handles: the corner scales, the left and top edge stretch. Each has a larger invisible touch area. */
+.pdf-mk-h { position: absolute; background: #4f8cff; border: 3px solid #fff; box-sizing: border-box; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.pdf-mk-h::after { content: ''; position: absolute; inset: -10px; }
+.pdf-mk-hb { right: -5px; bottom: -5px; width: 24px; height: 24px; border-radius: 50%; cursor: nwse-resize; }
+.pdf-mk-hl { left: -9px; top: 50%; width: 16px; height: 34px; margin-top: -17px; border-radius: 9px; cursor: ew-resize; }
+.pdf-mk-ht { top: -9px; left: 50%; width: 34px; height: 16px; margin-left: -17px; border-radius: 9px; cursor: ns-resize; }
+
+/* The panel sits at the bottom, as low as it can, and slides in. Its height follows what it holds: the tool menu is small,
+   Stamp and Picture need more room. */
+.pdf-markbar { position: absolute; left: 8px; right: 8px; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); max-height: min(360px, 56%); z-index: 4; display: flex; flex-direction: column; padding: 8px 8px 8px; border-radius: 18px; background: rgba(20, 20, 26, 0.62); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  opacity: 0; transform: translateY(18px); visibility: hidden; pointer-events: none; transition: opacity .22s ease, transform .22s ease, visibility 0s linear .22s; }
+.pdf-markbar.open { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+#explorer-viewer .pdf-markbar { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+.pdf-markbar button { width: auto; margin: 0; min-height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.25); background: transparent; color: #fff; box-shadow: none; font-size: 14px; }
+.pdf-markbar button.on { background: rgba(255, 255, 255, 0.22); border-color: #fff; }
+.pdf-markbar button:disabled { opacity: 0.4; }
+.pdf-mk-menu { display: flex; flex-direction: column; gap: 8px; animation: pdf-mk-fade .18s ease; }
+.pdf-mk-grid { display: flex; flex-direction: column; gap: 8px; }
+.pdf-mk-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pdf-mk-menu .pdf-mk-line { flex-wrap: nowrap; justify-content: center; gap: 10px; }
+.pdf-mk-tool { flex: 0 0 calc((100% - 20px) / 3); min-height: 46px; font-size: 15px; }
+.pdf-markbar .pdf-mk-close { color: #ff6b6b; font-weight: 600; }
+.pdf-mk-head { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; animation: pdf-mk-fade .18s ease; }
+.pdf-mk-head strong { font-size: 15px; }
+.pdf-mk-gap { flex: 1; }
+.pdf-markbar .pdf-mk-head button { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.pdf-markbar .pdf-mk-back { padding: 0 8px; border-color: transparent; font-size: 14px; }
+.pdf-mk-opts { flex: 0 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 2px; animation: pdf-mk-fade .18s ease; }
+.pdf-mk-dots { gap: 12px; padding: 4px 2px; }
+.pdf-markbar .pdf-mk-dot { width: 30px; min-height: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); }
+.pdf-markbar .pdf-mk-dot.on { border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+.pdf-markbar .pdf-mk-chip { min-height: 34px; padding: 0 11px; font-size: 13px; }
+.pdf-mk-selrow button { min-height: 34px; padding: 0 11px; font-size: 13px; }
+.pdf-markbar .pdf-mk-del { color: #ff6b6b; }
+.pdf-mk-opacity { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.pdf-mk-opacity input { width: 100%; margin: 0; }
+.pdf-mk-hint { font-size: 12px; opacity: 0.8; padding: 0 2px; }
+@keyframes pdf-mk-fade { from { opacity: 0; } to { opacity: 1; } }
+.pdf-mk-form { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; background: var(--surface); color: var(--fg); }
+.pdf-mk-form-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.pdf-mk-form-head button { margin: 0; }
+.pdf-mk-form-body { flex: 1; overflow: auto; padding: 8px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
+.pdf-mk-field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.pdf-mk-field span { font-size: 13px; color: var(--muted); word-break: break-word; }
+.pdf-mk-field input[type="checkbox"] { width: 24px; height: 24px; }
+.pdf-mk-field input[type="text"], .pdf-mk-field textarea, .pdf-mk-field select { width: 100%; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .pdf-markbar, .pdf-markbar * { transition: none !important; animation: none !important; } }
+
+/* Decision 377: a round close button in every tool, even columns for Stamp, a slimmer panel. */
+.pdf-markbar .pdf-mk-x { flex: 0 0 auto; width: 34px; min-height: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 15px; line-height: 1; margin-left: 2px; }
+.pdf-mk-cols { display: grid; gap: 6px; }
+.pdf-mk-c4 { grid-template-columns: repeat(4, 1fr); }
+.pdf-mk-c3 { grid-template-columns: repeat(3, 1fr); }
+.pdf-markbar .pdf-mk-cols .pdf-mk-chip { width: 100%; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

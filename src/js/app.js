@@ -1,6 +1,7 @@
 // app.js — bootstraps the app: auth gate -> main UI.
 // Control flow and key logic: auth gate, capture pipeline, folders, viewers, Money, Vault.
 
+import '../css/range.css';
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite';
 import { initDb, getEncryptionStatus, requestEncryption, getEncryptionResult, insertEntry, searchEntries, softDelete, listTrash, restoreFromTrash, permanentlyDeleteEntry, purgeOldTrash, listAllTags, listLabelHistory, listTagsForScope, MAX_TAGS } from './db.js';
 import { hashPassword, verifyPassword, needsRehash, PASSWORD_HASH_ITERATIONS, createVaultWrap, unwrapVault, wrapVmk, vmkToKey, vmkMatchesWrap, VAULT_WRAP_ITERATIONS, toBase64, fromBase64, encryptPrivateNote, decryptPrivateNote } from './crypto.js';
@@ -3024,7 +3025,7 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, 
   container.innerHTML = `<div class="audio-player">
     <button type="button" class="play-btn" aria-label="Play">${ICON_PLAY}</button>
     <div class="player-track">
-      <input type="range" class="scrub" min="0" max="1000" value="0" step="1" aria-label="Seek">
+      <input type="range" class="scrub ark-range" min="0" max="1000" value="0" step="1" aria-label="Seek">
       <div class="player-times"><span class="p-cur">0:00</span><span class="p-dur">0:00</span></div>
     </div>
     <button type="button" class="speed-btn secondary-btn" aria-label="Playback speed">1×</button>
@@ -3050,6 +3051,7 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, 
     const d = length();
     if (!scrubbing) {
       scrub.value = d ? String(Math.min(1000, Math.round((audio.currentTime / d) * 1000))) : '0';
+      scrub.style.setProperty('--v', String(Number(scrub.value) / 1000));
       cur.textContent = formatClock(audio.currentTime);
     }
     dur.textContent = formatClock(d);
@@ -3081,7 +3083,7 @@ function createAudioPlayer(container, url, { fallbackMs = 0, onActivity = null, 
   };
   scrub.addEventListener('pointerdown', () => { scrubbing = true; });
   scrub.addEventListener('pointercancel', () => { scrubbing = false; paint(); });
-  scrub.addEventListener('input', () => { cur.textContent = formatClock((Number(scrub.value) / 1000) * length()); });
+  scrub.addEventListener('input', () => { scrub.style.setProperty('--v', String(Number(scrub.value) / 1000)); cur.textContent = formatClock((Number(scrub.value) / 1000) * length()); });
   scrub.addEventListener('change', () => {
     const d = length();
     if (d) audio.currentTime = (Number(scrub.value) / 1000) * d;
