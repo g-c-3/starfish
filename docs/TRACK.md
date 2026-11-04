@@ -388,3 +388,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-04 | Session 180 | Decision 377 | Phase 76: edit panel clean-up, Image tool, sliders that reach the end; DP203 added; not run through CI or a device |
 | 2026-11-04 | Session 181 | Decision 378 | Phase 77: see-through viewer title bars in both themes; thinnest strip between swiped images; DP204 added; not run through CI or a device |
 | 2026-11-04 | Session 182 | Decision 379 | Phase 78: viewer title bar fix; strip for non-image pages not yet found; DP205 added; not run through CI or a device |
+| 2026-11-04 | Session 183 | Decision 380 | Phase 79: tap to hide the title bar in the image and PDF viewers; PDF from the top of the screen; thinner strip; DP206 added; not run through CI or a device |

@@ -4,6 +4,12 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 183**
+
+Start: owner asked for a thinner strip between swiped media, the picture and the PDF from the top of the screen with the see-through bar over them, and a single tap to hide or bring back the bar.
+- Decision 380. Replaced: `app.js`, `explorer-view.js`, `pdfchrome.js`, `style.css`. Not run through `vite build` or a device. The screen recording could not be read.
+- Open: DP206 and earlier; the strip for non-image pages (Decision 379); the File explorer PDF still starts below its bar.
+
 **Session 182**
 
 Start: owner reported nothing changed. Cause for the bar: an older rule in `topbar.css` names an id inside `:is()` and outranked the new one. The strip in the screenshots is between a zip item and the next item in the image viewer: those pages carry about 17 px of margin each, not the 16 px gap that was changed; the margin's source was not found.

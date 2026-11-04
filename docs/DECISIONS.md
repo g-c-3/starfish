@@ -3831,3 +3831,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not fixed: the black strip in the image viewer when a zip or other non-image item is swiped. Its pages have about 17 px of side margin each, which is not the 2 px gap of Decision 378. To be traced.
 - Files: `src/css/topbar.css`. Not run through CI or a device (DP205).
 
+**380. Tap to hide the title bar; PDF from the top of the screen.** Owner request. Replaces the scroll fold of Decision 364.
+- Image viewer: one tap on the picture hides the title bar, another brings it back; the state stays while swiping through images. The picture already fills the screen with the bar floating over it. The gap between swiped images is 1 px (was 2).
+- PDF viewers: the first page starts at the top of the screen (Home and Vault) under the see-through bar. One tap hides the bar together with the four tools, another brings them back. Scrolling no longer folds the bar, in Home, the Vault and the File explorer.
+- Not changed: in the File explorer the PDF still starts below its bar; non-image pages in the image viewer keep their own side margins (Decision 379).
+- Files: `src/js/app.js`, `explorer-view.js`, `pdfchrome.js`, `src/css/style.css`. Not run through CI or a device (DP206).
+
