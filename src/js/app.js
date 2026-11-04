@@ -6554,7 +6554,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
         // Carousel (Decision 361): image next to image. The neighbour is placed beside this picture on the first sideways move.
-        const GAP = 16;
+        const GAP = 2; // the thinnest strip between images while swiping (Decision 378)
         let ghost = null, ghostStep = 0;
         const span = () => stage.clientWidth + GAP;
         const neighbour = (step) => { const it = items[index + step]; return it && !isVideoExt(it.extension) && ahead.has(it.id) && aheadImg.has(it.id) ? it : null; };
