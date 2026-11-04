@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 180**
+
+Start: owner review of the edit panel from device screenshots and the media player seek bar.
+- Decision 377. New: `src/css/range.css`. Replaced: `pdfmark-ui.js`, `pdfmark.css`, `videoplayer.js`, `videoplayer.css`, `app.js`, `style.css`. Not run through `vite build` or a device.
+- Open: DP203 and earlier; CI result for the Java of Sessions 164, 166, 168 to 179.
+- Next start: check the CI run; DP203 and the earlier passes; the editable-after-save design for PDF marks (Decision 364).
+
 **Session 179**
 
 Start: owner confirmed the card works. Requests: slightly smaller Snooze and Stop, a slower bell, and the physical keys silencing a ring.
