@@ -3850,3 +3850,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **383. Saved PDF marks stay fixed.** Owner decision. Marks are drawn into the page when saved and are not editable after reopening; no hidden editable record is stored in the PDF. Keeps files small and identical in every app. Closes the question left open in Decision 364.
 
+**384. Open items closed by the owner.** Owner decision. No code changed.
+- Closed without a device pass: DP188 to DP208, and the CI result for the Java of Sessions 164, 166 and 168 to 179.
+- The 12 px side margin of non-image pages in the image viewer is closed with its cause never located. Neither viewer carousel (`app.js`, `explorer-view.js`) holds non-image pages, so the explorer list padding named in Decision 379 is not their source.
+- Blurred backdrop for videos (Decision 382): dropped, not built.

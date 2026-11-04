@@ -4,6 +4,13 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 187**
+
+Start: owner asked to close the open items.
+- Decision 384. Closed: image-viewer side margins (cause not located), DP188 to DP208, CI result for the Java of Sessions 164 to 179. Dropped: blurred backdrop for videos. No code changed.
+- Open: DP185 to DP187 remain unchecked; the owner did not name them.
+- Next start: the next roadmap item the owner names.
+
 **Session 186**
 
 Start: the owner asked what the two open items were; answered. Decided: leave PDF marks fixed after saving (Decision 383); fix the margins on non-image pages.
