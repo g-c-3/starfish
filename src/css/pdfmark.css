@@ -18,7 +18,7 @@
 
 /* The panel sits at the bottom, as low as it can, and slides in. Its height follows what it holds: the tool menu is small,
    Stamp and Picture need more room. */
-.pdf-markbar { position: absolute; left: 8px; right: 8px; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); max-height: min(360px, 56%); z-index: 4; display: flex; flex-direction: column; padding: 8px 8px 8px; border-radius: 18px; background: rgba(20, 20, 26, 0.96); color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+.pdf-markbar { position: absolute; left: 8px; right: 8px; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); max-height: min(360px, 56%); z-index: 4; display: flex; flex-direction: column; padding: 8px 8px 8px; border-radius: 18px; background: rgba(20, 20, 26, 0.62); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   opacity: 0; transform: translateY(18px); visibility: hidden; pointer-events: none; transition: opacity .22s ease, transform .22s ease, visibility 0s linear .22s; }
 .pdf-markbar.open { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
 #explorer-viewer .pdf-markbar { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
@@ -56,3 +56,10 @@
 .pdf-mk-field input[type="checkbox"] { width: 24px; height: 24px; }
 .pdf-mk-field input[type="text"], .pdf-mk-field textarea, .pdf-mk-field select { width: 100%; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .pdf-markbar, .pdf-markbar * { transition: none !important; animation: none !important; } }
+
+/* Decision 377: a round close button in every tool, even columns for Stamp, a slimmer panel. */
+.pdf-markbar .pdf-mk-x { flex: 0 0 auto; width: 34px; min-height: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 15px; line-height: 1; margin-left: 2px; }
+.pdf-mk-cols { display: grid; gap: 6px; }
+.pdf-mk-c4 { grid-template-columns: repeat(4, 1fr); }
+.pdf-mk-c3 { grid-template-columns: repeat(3, 1fr); }
+.pdf-markbar .pdf-mk-cols .pdf-mk-chip { width: 100%; min-width: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

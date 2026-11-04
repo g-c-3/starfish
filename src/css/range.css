@@ -1,0 +1,5 @@
+/* A slider whose fill and handle reach the very end at the maximum (Decision 377). Set --v (0 to 1) on the input as it changes. */
+.ark-range { -webkit-appearance: none; appearance: none; background: transparent; height: 32px; margin: 0; --v: 0; --thumb: 22px; --fill: var(--brand, #7c6cf0); }
+.ark-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--fill) calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--v)), rgba(150, 150, 165, 0.4) 0); }
+.ark-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--thumb); height: var(--thumb); margin-top: -8px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.ark-range:focus { outline: none; }

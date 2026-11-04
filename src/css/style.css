@@ -920,7 +920,7 @@ textarea { resize: none; line-height: 1.5; display: block; }
 .audio-player .play-btn { flex: none; width: 52px; height: 52px; margin: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 .audio-player .play-btn .ic { width: 26px; height: 26px; }
 .player-track { flex: 1; min-width: 0; }
-.player-track .scrub { display: block; width: 100%; margin: 0; padding: 0; accent-color: var(--brand); }
+.player-track .scrub { display: block; width: 100%; margin: 0; padding: 0; }
 .player-times { display: flex; justify-content: space-between; margin-top: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .audio-player .speed-btn { flex: none; width: auto; min-width: 54px; margin: 0; padding: 8px 10px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .rec-hero.live .row-icon { background: var(--danger); color: #fff; animation: rec-pulse 1.2s ease-in-out infinite; }

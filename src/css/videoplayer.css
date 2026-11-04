@@ -15,7 +15,7 @@
 .vp-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px calc(12px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px)); background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); }
 .vp-row { display: flex; align-items: center; gap: 10px; }
 .vp-time { flex: none; min-width: 40px; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
-.vp-seek { flex: 1; min-width: 0; margin: 0; height: 32px; accent-color: var(--brand, #7c6cf0); touch-action: none; }
+.vp-seek { flex: 1; min-width: 0; margin: 0; height: 32px; touch-action: none; }
 .vp-tools { justify-content: space-between; margin-top: 2px; }
 .vp-tool { height: 36px; min-width: 44px; padding: 0 10px !important; font-size: 14px; font-weight: 650; border-radius: 10px; display: grid; place-items: center; }
 .vp-tool svg { width: 22px; height: 22px; }
