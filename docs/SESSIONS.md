@@ -4,6 +4,12 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 184**
+
+Start: owner confirmed the PDF change and the pending device passes worked. Requests: the strip between swiped media a third of its size; media starting at the top but fitting by shape, with a little zoom where the shape is close.
+- Decision 381. Replaced: `app.js`, `style.css`. Not run through `vite build` or a device.
+- Open: DP207; the strip for non-image pages (Decision 379); the editable-after-save design for PDF marks (Decision 364).
+
 **Session 183**
 
 Start: owner asked for a thinner strip between swiped media, the picture and the PDF from the top of the screen with the see-through bar over them, and a single tap to hide or bring back the bar.

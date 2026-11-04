@@ -3837,3 +3837,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Not changed: in the File explorer the PDF still starts below its bar; non-image pages in the image viewer keep their own side margins (Decision 379).
 - Files: `src/js/app.js`, `explorer-view.js`, `pdfchrome.js`, `src/css/style.css`. Not run through CI or a device (DP206).
 
+**381. Media fit and the strip between images.** Owner request. Refines Decision 380.
+- The image viewer's stage aligns media to the top, so a landscape image sits at the top of the screen under the bar and a portrait one fits the height. An image whose shape is within about 17 per cent of the screen's is zoomed a little to fill it (`object-fit: cover`); any other image fits whole. Decided when the image loads. The neighbouring image shown while swiping is not zoomed until the swipe completes.
+- The strip between swiped images is 0.35 px (was 1 px).
+- Files: `src/js/app.js`, `src/css/style.css`. Not run through CI or a device (DP207).
+
