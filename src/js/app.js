@@ -6552,6 +6552,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const deleteBtn = hdr(`<button type="button" class="img-hdr icon-btn warning-text" aria-label="Delete" title="Delete">${iconSvg('trash')}</button>`);
         hdr(`<span class="img-hdr img-count">${index + 1}/${items.length}</span>`);
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
+        // An image whose shape is close to the screen's is zoomed a little to fill it; any other starts at the top and fits (Decision 381).
+        if (img && !isVid) img.addEventListener('load', () => {
+          const box = stage.getBoundingClientRect();
+          if (!box.width || !box.height || !img.naturalWidth || !img.naturalHeight) return;
+          img.classList.toggle('fit-fill', Math.abs(Math.log((img.naturalWidth / img.naturalHeight) / (box.width / box.height))) < 0.16);
+        });
         { // a single tap hides the title bar, another brings it back; it stays as it is while swiping (Decision 380)
           let d = null;
           stage.addEventListener('pointerdown', (e) => { d = e.isPrimary && !e.target.closest('button') ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; }, { passive: true });
@@ -6560,7 +6566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const arm = isVault ? armVaultAutoLock : armAppAutoLock;
         // Carousel (Decision 361): image next to image. The neighbour is placed beside this picture on the first sideways move.
-        const GAP = 1; // the thinnest strip between images while swiping (Decisions 378, 380)
+        const GAP = 0.35; // the strip between images while swiping: about a third of a pixel (Decisions 378, 381)
         let ghost = null, ghostStep = 0;
         const span = () => stage.clientWidth + GAP;
         const neighbour = (step) => { const it = items[index + step]; return it && !isVideoExt(it.extension) && ahead.has(it.id) && aheadImg.has(it.id) ? it : null; };
