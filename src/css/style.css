@@ -955,7 +955,7 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 /* Image mode: the stage fills everything below the header; counter and actions float over it. */
 #viewer-screen.image-mode #viewer-body, body.overlay-open #viewer-screen.image-mode #viewer-body { position: relative; padding: 0; overflow: hidden; }
 .img-stage { position: absolute; inset: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none;
-  display: flex; align-items: center; justify-content: center; }
+  display: flex; align-items: flex-start; justify-content: center; } /* media starts at the top of the screen (Decision 381) */
 .img-full { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: 50% 50%; will-change: transform; pointer-events: none; }
 .img-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #cfcfe6; font-size: 14px; padding: 16px; text-align: center; pointer-events: none; }
 /* Thin header in image mode: back, name, count, Share, Download, Delete, rename (Edit). */
@@ -1460,3 +1460,6 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 #explorer-viewer .editor-bar.bar-folded { transform: translateY(-110%); opacity: 0; pointer-events: none; }
 #explorer-viewer .editor-bar.ev-head-hidden { transition: transform .26s ease, opacity .26s ease; }
 @media (prefers-reduced-motion: reduce) { #viewer-screen .editor-bar { transition: none; } }
+
+/* Decision 381: an image close to the screen's shape is zoomed a little to fill it. */
+.img-full.fit-fill { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
