@@ -1,4 +1,4 @@
-/* Screen motion (Decisions 385 to 387). transform + opacity only; the classes exist only while an animation runs. */
+/* Screen motion (Decisions 385 to 388). transform + opacity only; the classes exist only while an animation runs. */
 @media (prefers-reduced-motion: no-preference) {
   :root { --mx-in: cubic-bezier(0.2, 0.8, 0.2, 1); --mx-dx: 36px; }
 
@@ -28,4 +28,19 @@
   .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.12s ease-in both; }
   .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.14s ease-in both; }
   .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.14s ease-in both; }
+}
+
+/* The Home and Vault landing art belongs to the screen, not to the page that slides (Decision 388). Inside an animated page it moved with
+   that page's box and jumped. Shown only while the landing page itself is. */
+@supports selector(:has(a)) {
+  #main-screen > .bg-squares, #vault-screen > .bg-squares { opacity: 0; }
+  #main-screen:has(> #home-tab:not(.hidden) > #home-main:not(.hidden)) > .bg-squares,
+  #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { opacity: var(--art-opacity); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports selector(:has(a)) {
+    #main-screen > .bg-squares, #vault-screen > .bg-squares { transition: opacity 0.12s ease-in; }
+    #main-screen:has(> #home-tab:not(.hidden) > #home-main:not(.hidden)) > .bg-squares,
+    #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { transition: opacity 0.2s ease 0.13s; }
+  }
 }
