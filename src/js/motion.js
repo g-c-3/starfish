@@ -1,13 +1,21 @@
-// Screen motion (Decisions 385 to 387). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 388). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // Layers have a solid background: they push in over the page and pop out, no fade, so no page shows through.
 // In-page views have none: the old one leaves, then the new one arrives (the reminder tab timing), so two pages never overlap.
 // Only transform and opacity animate.
 import '../css/motion.css';
 
-const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen';
+const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen, #explorer-viewer'; // every file or page that opens over another
 const DIALOGS = '.modal-overlay';
-// In-page views by depth. A view that appears while another of the same parent goes away is a pair: deeper = forward, shallower = back.
-const DEPTH = { 'home-main': 0, 'folder-view': 1, 'trash-view': 1, 'vault-main': 0, 'vault-trash-view': 1, 'vault-settings-view': 1, 'vault-folder-view': 1 };
+// Pages by depth. A page that appears while another of the same parent goes away is a pair: deeper = forward, shallower = back.
+// Covers the screens (lock, Home, Vault), Home's Settings tab, the Vault gate and the folder and Trash views.
+const DEPTH = {
+  'first-run-setup': -1, 'lock-screen': -1, 'main-screen': 0, 'vault-screen': 1,
+  'home-tab': 0, 'settings-tab': 1,
+  'vault-locked-view': 0, 'vault-pin-setup-view': 0, 'vault-content': 1,
+  'home-main': 0, 'folder-view': 1, 'trash-view': 1,
+  'vault-main': 0, 'vault-trash-view': 1, 'vault-settings-view': 1, 'vault-folder-view': 1,
+};
+const NO_EXIT = new Set(['vault-content']); // Vault content is never shown through an exit: a Vault lock hides it at once
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 const hasHidden = (cls) => !!cls && /(^|\s)hidden(\s|$)/.test(cls);
 const FAILSAFE_MS = 500;
@@ -64,13 +72,17 @@ new MutationObserver((records) => {
     const out = gone.find((g) => g.parentElement === inc.parentElement && g.classList.contains('hidden'));
     const back = !!out && DEPTH[inc.id] < DEPTH[out.id];
     inc.classList.remove('mx-out');
-    const pair = !!out && !locked() && !!inc.offsetParent;
+    const pair = !!out && !NO_EXIT.has(out.id) && !locked() && !!inc.offsetParent;
     play(inc, ['mx-in', 'mx-view', back ? 'mx-from-l' : 'mx-from-r'].concat(pair ? ['mx-after'] : []));
     if (pair) { // the old view slides away over the new one, out of the page flow
       out.style.setProperty('--mx-d', 'block');
       const st = out.style;
-      st.position = 'absolute'; st.top = inc.offsetTop + 'px'; st.left = inc.offsetLeft + 'px'; st.width = inc.offsetWidth + 'px';
-      play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; });
+      const screen = out.classList.contains('screen'); // a screen leaves over the viewport; a view over the box the new one fills
+      st.position = screen ? 'fixed' : 'absolute';
+      st.top = screen ? '0px' : inc.offsetTop + 'px'; st.left = screen ? '0px' : inc.offsetLeft + 'px';
+      st.width = screen ? '100%' : inc.offsetWidth + 'px';
+      if (screen) { st.height = '100vh'; st.overflow = 'hidden'; }
+      play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; st.height = ''; st.overflow = ''; });
     }
   }
 }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
