@@ -938,16 +938,17 @@ textarea { resize: none; line-height: 1.5; display: block; }
   margin: 0; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
 body.overlay-open #bottom-nav { z-index: 30; } /* above the Save dialog (11) and toast-free zone; the toast sits at the top */
-/* Select files has its own Close: no Back circle over it (Decision 391). Its box then needs no room for the circle. */
-body.overlay-open:has(#select-files-screen:not(.hidden)) #bottom-nav { display: none !important; }
-body.overlay-open:has(#select-files-screen:not(.hidden)) #select-files-screen { padding-bottom: 20px; }
-/* Keep each overlay's own controls clear of the floating button. */
-body.overlay-open #viewer-body { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
-body.overlay-open #editor-screen { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+/* The on-screen Back button is gone everywhere (Decision 393). The system Back, each page's own arrow and each dialog's own Close still leave.
+   Nothing but Back would be left in the back-only nav, so it goes too; the Home and Vault tabs stay. The room every overlay kept for the
+   button is given back below. */
+#nav-back-btn { display: none !important; }
+#bottom-nav.back-only, body.overlay-open #bottom-nav { display: none !important; }
+body.overlay-open #viewer-body { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+body.overlay-open #editor-screen { padding-bottom: env(safe-area-inset-bottom, 0px); }
 body.overlay-open .editor-count { padding-bottom: 6px; }
-body.overlay-open .modal-overlay, body.overlay-open #save-dialog, body.overlay-open #new-chooser-modal { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+body.overlay-open .modal-overlay, body.overlay-open #save-dialog, body.overlay-open #new-chooser-modal { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 body.overlay-open #save-dialog .modal-box, body.overlay-open #new-chooser-modal .modal-box { border-radius: 24px; }
-body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
+body.overlay-open #save-dialog .modal-box { max-height: 92vh; }
 
 /* ---- Image grid and viewer (Phase 16 D, Decision 105) ---- */
 .thumb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 12px; }
@@ -971,7 +972,7 @@ body.overlay-open #save-dialog .modal-box { max-height: calc(92vh - 76px); }
 /* ---- PDF viewer (Phase 16 H, Decision 121) ---- */
 #viewer-screen.pdf-mode #viewer-body, body.overlay-open #viewer-screen.pdf-mode #viewer-body { position: relative; padding: 0; overflow: hidden; }
 #viewer-screen.file-mode #viewer-body, body.overlay-open #viewer-screen.file-mode #viewer-body { position: relative; padding: 0; overflow: hidden; } /* Files opened in Arkly (Decision 333) */
-body.overlay-open #viewer-screen.file-mode #viewer-body .ev-media, body.overlay-open #viewer-screen.file-mode #viewer-body .ev-text-wrap { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* clear of the floating Back bar */
+body.overlay-open #viewer-screen.file-mode #viewer-body .ev-media, body.overlay-open #viewer-screen.file-mode #viewer-body .ev-text-wrap { bottom: env(safe-area-inset-bottom, 0px); }
 #viewer-screen.pdf-mode .editor-bar { padding: 4px 6px; gap: 2px; }
 #viewer-screen.pdf-mode #viewer-title { font-size: 14px; font-weight: 600; }
 .pdf-scroll { position: absolute; inset: 0; overflow: auto; background: #2a2a38; -webkit-overflow-scrolling: touch;
@@ -1052,7 +1053,7 @@ body.selecting .is-selected::after { content: "\2713"; background: var(--brand);
 
 /* Money dialogs scroll when the repayment section makes the form taller than the screen (Decision 128). */
 #money-dialog .modal-box, #repay-dialog .modal-box { max-height: 92vh; overflow-y: auto; }
-body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .modal-box { max-height: calc(92vh - 76px); }
+body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .modal-box { max-height: 92vh; }
 #mf-repay { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--border); }
 #mf-repay .settings-group { margin: 10px 0 0; }
 #mf-repay .secondary-btn { margin-top: 14px; }
@@ -1186,7 +1187,7 @@ body.overlay-open #money-dialog .modal-box, body.overlay-open #repay-dialog .mod
 .ev-audio-name { max-width: 100%; text-align: center; font-weight: 650; overflow-wrap: anywhere; }
 .ev-media.ev-audio audio { width: 100%; }
 .ev-media-msg { padding: 24px; text-align: center; color: var(--muted); line-height: 1.5; }
-body.overlay-open #explorer-viewer { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); } /* the Back bar floats over every overlay */
+body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Office viewers (Decisions 226, 227): docx page, xlsx grid, pptx slides; view only. The viewer has its own theme
    (data-theme on .eo-host, set from the viewer's switch), so every colour below comes from the variables set here. */
