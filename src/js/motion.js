@@ -1,8 +1,7 @@
-// Screen motion (Decisions 385 to 389). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
-// Layers (a file, the explorer, the editor) have a solid background: they push in over the page, with a soft edge shadow and a light
-// dim of the page beneath, and pop out. No page shows through.
-// Pages without a background (folders, Trash, Settings, Vault, Home) leave first and the next arrives, so two pages never overlap.
-// Only transform and opacity animate.
+// Screen motion (Decisions 385 to 390). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
+// Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
+// leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
 import '../css/motion.css';
 
 const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen, #explorer-viewer'; // every file or page that opens over another
@@ -24,7 +23,7 @@ let running = 0;
 let lastY = 0; // where the page was scrolled before a change: the page that leaves stays where it was seen
 window.addEventListener('scroll', () => { lastY = window.scrollY; }, { passive: true });
 
-const ALL = ['mx-in', 'mx-out', 'mx-layer', 'mx-view', 'mx-after', 'mx-from-r', 'mx-from-l', 'mx-to-r', 'mx-to-l'];
+const ALL = ['mx-in', 'mx-out', 'mx-view', 'mx-after', 'mx-from-r', 'mx-from-l', 'mx-to-r', 'mx-to-l', 'mx-u-in', 'mx-u-out'];
 
 function play(el, cls, cleanup) {
   el.classList.remove(...ALL);
@@ -44,18 +43,17 @@ function play(el, cls, cleanup) {
   setTimeout(() => end(), FAILSAFE_MS);
 }
 
-let dimTimer = 0;
-function dim(dir) { // the page under a layer darkens slightly as the layer arrives and clears as it leaves
-  root.classList.remove('mx-dim-in', 'mx-dim-out');
-  void root.offsetWidth;
-  root.classList.add(dir === 'in' ? 'mx-dim-in' : 'mx-dim-out');
-  clearTimeout(dimTimer);
-  dimTimer = setTimeout(() => root.classList.remove('mx-dim-in', 'mx-dim-out'), 480);
-}
-
 function locked() { // a lock must never be delayed or shown through an exit
   const lock = document.getElementById('lock-screen');
   return document.hidden || (lock && !lock.classList.contains('hidden'));
+}
+
+// The page a layer opens over: the screen on view, or, for the explorer's file viewer, the explorer's own page.
+function under(layer) {
+  const list = layer.id === 'explorer-viewer'
+    ? Array.from(layer.parentElement ? layer.parentElement.children : [])
+    : Array.from(document.querySelectorAll('.screen'));
+  return list.filter((u) => u instanceof HTMLElement && u !== layer && !u.classList.contains('hidden') && !u.classList.contains('mx-out'));
 }
 
 function layerOrDialog(el, was, now) {
@@ -63,11 +61,17 @@ function layerOrDialog(el, was, now) {
   if (!layer && !dialog) return false;
   if (was && !now) { // shown
     el.classList.remove('mx-out');
-    if (layer) { try { el.style.setProperty('--mx-d', getComputedStyle(el).display); } catch { /* default applies */ } dim('in'); play(el, ['mx-in', 'mx-layer']); }
-  } else if (!was && now && !locked()) { // hidden: stays painted while it slides or fades out
+    if (layer) {
+      try { el.style.setProperty('--mx-d', getComputedStyle(el).display); } catch { /* default applies */ }
+      if (locked()) return true;
+      const list = under(el); // the page under leaves and stays gone until the file has arrived
+      list.forEach((u) => { u.classList.remove(...ALL); u.classList.add('mx-u-out'); });
+      play(el, ['mx-in', 'mx-view', 'mx-from-r', 'mx-after'], () => list.forEach((u) => u.classList.remove('mx-u-out')));
+    }
+  } else if (!was && now && !locked()) { // hidden: stays painted while it leaves
     if (!el.style.getPropertyValue('--mx-d')) el.style.setProperty('--mx-d', 'flex');
-    if (layer) dim('out');
-    play(el, layer ? ['mx-out', 'mx-layer'] : ['mx-out']);
+    if (layer) under(el).forEach((u) => play(u, ['mx-u-in'])); // the page under returns once the file has left
+    play(el, layer ? ['mx-out', 'mx-view', 'mx-to-r'] : ['mx-out']);
   }
   return true;
 }
@@ -89,15 +93,15 @@ new MutationObserver((records) => {
     inc.classList.remove('mx-out');
     const pair = !!out && !NO_EXIT.has(out.id) && !locked() && !!inc.offsetParent;
     play(inc, ['mx-in', 'mx-view', back ? 'mx-from-l' : 'mx-from-r'].concat(pair ? ['mx-after'] : []));
-    if (pair) { // the old page leaves out of the page flow, where it was seen, so the new one never shifts
+    if (pair) {
+      // The old page leaves over the viewport, exactly where it was seen. It is fixed, so a tall page (Settings) no longer stretches the
+      // document: the new page is in view at once instead of sitting scrolled away until the animation ends.
       out.style.setProperty('--mx-d', 'block');
-      const st = out.style;
-      const screen = out.classList.contains('screen');
-      const shift = lastY - window.scrollY; // the page got shorter and the browser moved the scroll: put the old page back
-      st.position = screen ? 'fixed' : 'absolute';
-      st.top = screen ? -lastY + 'px' : inc.offsetTop - shift + 'px';
-      st.left = screen ? '0px' : inc.offsetLeft + 'px';
-      st.width = screen ? '100%' : inc.offsetWidth + 'px';
+      const st = out.style, box = inc.getBoundingClientRect();
+      st.position = 'fixed';
+      st.top = box.top + window.scrollY - lastY + 'px';
+      st.left = box.left + 'px';
+      st.width = box.width + 'px';
       play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; });
     }
   }
