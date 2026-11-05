@@ -3897,3 +3897,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Scroll: a page that leaves stays where it was seen. The last scroll position is kept, and the leaving page is placed with it, so a page that gets shorter no longer makes the old one jump.
 - Not changed: late content in a layer (an editor draws its body after it opens).
 - Not run through CI or a device (DP209).
+
+**390. One recipe for files, pages and dialogs.** Replaces the layer push, pop, shadow and dim of Decisions 387 and 389; the pairing, art, lock and Vault rules stand.
+- Files (note, image, PDF, voice, the explorer and its file viewer) now open and close exactly like a category: the page under leaves, the file arrives after 0.15 s (fade plus 44 px); on close the file leaves and the page under returns. No full-width slide anywhere.
+- The page under a file is the screen on view, or for the explorer's file viewer the explorer's own page. It stays gone until the file has arrived, so it never flashes back under a half-arrived file.
+- Cause of the Settings exit jar: the leaving page was absolute, so a tall Settings page stretched the document and the new page sat scrolled out of view until the animation ended. A leaving page is now fixed over the viewport at the place it was seen; the document shrinks at once.
+- Dialogs (Select files and the rest): the box drops 26 px and fades first (0.24 s), then the backdrop clears (0.26 s); arrival mirrors it (backdrop 0.22 s, box 0.3 s). Before, the exit was a 0.16 s fade.
+- Not run through CI or a device (DP209).
