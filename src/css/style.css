@@ -938,6 +938,9 @@ textarea { resize: none; line-height: 1.5; display: block; }
   margin: 0; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
 body.overlay-open #bottom-nav { z-index: 30; } /* above the Save dialog (11) and toast-free zone; the toast sits at the top */
+/* Select files has its own Close: no Back circle over it (Decision 391). Its box then needs no room for the circle. */
+body.overlay-open:has(#select-files-screen:not(.hidden)) #bottom-nav { display: none !important; }
+body.overlay-open:has(#select-files-screen:not(.hidden)) #select-files-screen { padding-bottom: 20px; }
 /* Keep each overlay's own controls clear of the floating button. */
 body.overlay-open #viewer-body { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
 body.overlay-open #editor-screen { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
