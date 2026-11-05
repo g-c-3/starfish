@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 390). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 391). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -92,12 +92,13 @@ new MutationObserver((records) => {
     const back = !!out && DEPTH[inc.id] < DEPTH[out.id];
     inc.classList.remove('mx-out');
     const pair = !!out && !NO_EXIT.has(out.id) && !locked() && !!inc.offsetParent;
+    const box = pair ? inc.getBoundingClientRect() : null; // measured before the arriving page gets its starting offset, or the old page would start displaced
     play(inc, ['mx-in', 'mx-view', back ? 'mx-from-l' : 'mx-from-r'].concat(pair ? ['mx-after'] : []));
     if (pair) {
       // The old page leaves over the viewport, exactly where it was seen. It is fixed, so a tall page (Settings) no longer stretches the
       // document: the new page is in view at once instead of sitting scrolled away until the animation ends.
       out.style.setProperty('--mx-d', 'block');
-      const st = out.style, box = inc.getBoundingClientRect();
+      const st = out.style;
       st.position = 'fixed';
       st.top = box.top + window.scrollY - lastY + 'px';
       st.left = box.left + 'px';
