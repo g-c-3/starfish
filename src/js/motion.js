@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 391). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 392). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -22,6 +22,22 @@ const FAILSAFE_MS = 700;
 let running = 0;
 let lastY = 0; // where the page was scrolled before a change: the page that leaves stays where it was seen
 window.addEventListener('scroll', () => { lastY = window.scrollY; }, { passive: true });
+
+// Where each page sits while it is on view. A page that leaves is put back exactly there: the new page may start higher or lower
+// (Settings, Vault settings), and placing the old one at the new one's top made it jump at the start of every swap.
+const rects = new Map();
+function snap() {
+  if (document.hidden) return;
+  for (const id in DEPTH) {
+    const el = document.getElementById(id);
+    if (!el || el.classList.contains('hidden') || el.closest('.mx-in, .mx-out, .mx-u-in, .mx-u-out') || !el.getClientRects().length) continue;
+    const r = el.getBoundingClientRect();
+    rects.set(id, { top: r.top + window.scrollY, left: r.left, width: r.width });
+  }
+}
+setInterval(snap, 150);
+document.addEventListener('pointerdown', snap, true); // the last look before a tap changes the page
+window.addEventListener('resize', snap);
 
 const ALL = ['mx-in', 'mx-out', 'mx-view', 'mx-after', 'mx-from-r', 'mx-from-l', 'mx-to-r', 'mx-to-l', 'mx-u-in', 'mx-u-out'];
 
@@ -99,10 +115,11 @@ new MutationObserver((records) => {
       // document: the new page is in view at once instead of sitting scrolled away until the animation ends.
       out.style.setProperty('--mx-d', 'block');
       const st = out.style;
+      const seen = rects.get(out.id) || { top: box.top + window.scrollY, left: box.left, width: box.width };
       st.position = 'fixed';
-      st.top = box.top + window.scrollY - lastY + 'px';
-      st.left = box.left + 'px';
-      st.width = box.width + 'px';
+      st.top = seen.top - lastY + 'px';
+      st.left = seen.left + 'px';
+      st.width = seen.width + 'px';
       play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; });
     }
   }
