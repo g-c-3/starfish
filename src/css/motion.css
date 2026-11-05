@@ -1,33 +1,46 @@
-/* Screen motion (Decisions 385 to 388). transform + opacity only; the classes exist only while an animation runs. */
+/* Screen motion (Decisions 385 to 389). transform + opacity only; the classes exist only while an animation runs.
+   One property settles while the other has finished: opacity completes early, so a page never lingers as a ghost. */
 @media (prefers-reduced-motion: no-preference) {
-  :root { --mx-in: cubic-bezier(0.2, 0.8, 0.2, 1); --mx-dx: 36px; }
+  :root {
+    --mx-settle: cubic-bezier(0.22, 0.61, 0.36, 1);  /* arrive: gentle start, long soft landing */
+    --mx-leave: cubic-bezier(0.4, 0, 0.7, 0.2);      /* leave: picks up speed */
+    --mx-push: cubic-bezier(0.25, 0.7, 0.2, 1);
+    --mx-dx: 44px;
+  }
 
-  @keyframes mx-in-r  { from { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } to { opacity: 1; transform: none; } }
-  @keyframes mx-in-l  { from { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } to { opacity: 1; transform: none; } }
-  @keyframes mx-out-r { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } }
-  @keyframes mx-out-l { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } }
+  @keyframes mx-in-r  { 0% { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+  @keyframes mx-in-l  { 0% { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+  @keyframes mx-out-r { 0% { opacity: 1; transform: none; } 65% { opacity: 0; } 100% { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } }
+  @keyframes mx-out-l { 0% { opacity: 1; transform: none; } 65% { opacity: 0; } 100% { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } }
   @keyframes mx-push  { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
   @keyframes mx-pop   { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
+  @keyframes mx-scrim-in  { from { opacity: 0; } to { opacity: 0.16; } }
+  @keyframes mx-scrim-out { from { opacity: 0.16; } to { opacity: 0; } }
   @keyframes mx-fade-out { from { opacity: 1; } to { opacity: 0; } }
   @keyframes mx-box-out  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); } }
 
   .mx-x, .mx-x body { overflow-x: clip; }
 
-  /* Layers: opaque, so no fade. */
-  .mx-in.mx-layer { animation: mx-push 0.26s var(--mx-in) both; will-change: transform; }
+  /* The page under a layer darkens a little while the layer moves. */
+  html.mx-dim-in::after, html.mx-dim-out::after { content: ""; position: fixed; inset: 0; z-index: 7; background: #000; pointer-events: none; }
+  html.mx-dim-in::after  { animation: mx-scrim-in 0.38s var(--mx-push) both; }
+  html.mx-dim-out::after { animation: mx-scrim-out 0.3s ease-out both; }
 
-  /* In-page views: the old one leaves (0.12 s), then the new one arrives (0.2 s) — the reminder tab timing. */
-  .mx-in.mx-view.mx-from-r { animation: mx-in-r 0.2s var(--mx-in) both; will-change: transform, opacity; }
-  .mx-in.mx-view.mx-from-l { animation: mx-in-l 0.2s var(--mx-in) both; will-change: transform, opacity; }
-  .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: 0.13s; }
+  /* Layers: opaque, so no fade; an edge shadow gives depth. */
+  .mx-in.mx-layer { animation: mx-push 0.38s var(--mx-push) both; will-change: transform; box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
+
+  /* Pages without a background: the old one leaves (0.17 s), then the new one arrives (0.3 s). */
+  .mx-in.mx-view.mx-from-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+  .mx-in.mx-view.mx-from-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+  .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: 0.15s; }
 
   /* Hidden but still painted until the animation ends. Three classes beat every `.x.hidden { display: none !important }` rule. */
   .mx-out.mx-out.hidden { display: var(--mx-d, flex) !important; pointer-events: none; will-change: transform, opacity; }
-  .mx-out.mx-out.hidden.mx-layer { animation: mx-pop 0.2s cubic-bezier(0.4, 0, 1, 1) both; }
-  .mx-out.mx-out.hidden.mx-view.mx-to-r { animation: mx-out-r 0.12s ease-in both; }
-  .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.12s ease-in both; }
-  .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.14s ease-in both; }
-  .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.14s ease-in both; }
+  .mx-out.mx-out.hidden.mx-layer { animation: mx-pop 0.3s cubic-bezier(0.4, 0, 0.6, 1) both; box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
+  .mx-out.mx-out.hidden.mx-view.mx-to-r { animation: mx-out-r 0.17s var(--mx-leave) both; }
+  .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.17s var(--mx-leave) both; }
+  .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.16s ease-in both; }
+  .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.16s ease-in both; }
 }
 
 /* The Home and Vault landing art belongs to the screen, not to the page that slides (Decision 388). Inside an animated page it moved with
@@ -39,8 +52,8 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   @supports selector(:has(a)) {
-    #main-screen > .bg-squares, #vault-screen > .bg-squares { transition: opacity 0.12s ease-in; }
+    #main-screen > .bg-squares, #vault-screen > .bg-squares { transition: opacity 0.15s ease-in; }
     #main-screen:has(> #home-tab:not(.hidden) > #home-main:not(.hidden)) > .bg-squares,
-    #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { transition: opacity 0.2s ease 0.13s; }
+    #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { transition: opacity 0.3s ease 0.15s; }
   }
 }
