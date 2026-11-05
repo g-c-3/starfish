@@ -13,6 +13,7 @@ Start: owner asked for smooth transitions on every enter and Back.
 - Decision 388: Home art jumped on every category swap (cause: it sat inside the sliding view). Art moved to the screen level (`index.html`). Screens, Settings, the Vault gate and the explorer's file viewer joined the motion.
 - Decision 389: recording showed file opens finishing in about 5 frames and a ghost of Settings on leaving. Slower curve, edge shadow and dim for layers; opacity finishes first for pages; scroll anchored for the leaving page.
 - Decision 390: owner asked for files to match the category animation, a clean Settings exit and a smooth Select files exit. One recipe for all; leaving pages are fixed over the viewport; dialog exit and arrival matched.
+- Decision 391: category open and close jerked after Decision 390 (leaving page placed from a displaced box). Fixed. Back circle hidden over Select files (`style.css`).
 - Not run through CI or a device. DP209 added.
 - Open: DP185 to DP187 remain unchecked.
 - Next start: DP209 result, then tune durations from the device.

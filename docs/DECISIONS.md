@@ -3904,3 +3904,8 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause of the Settings exit jar: the leaving page was absolute, so a tall Settings page stretched the document and the new page sat scrolled out of view until the animation ended. A leaving page is now fixed over the viewport at the place it was seen; the document shrinks at once.
 - Dialogs (Select files and the rest): the box drops 26 px and fades first (0.24 s), then the backdrop clears (0.26 s); arrival mirrors it (backdrop 0.22 s, box 0.3 s). Before, the exit was a 0.16 s fade.
 - Not run through CI or a device (DP209).
+
+**391. Category jerk fixed; no Back circle over Select files.**
+- Cause of the category jerk (Decision 390): the leaving page was placed from the arriving page's box, measured after the arriving page had been given its starting offset (44 px), so the old page began displaced and snapped. The box is now measured before the arriving page is animated.
+- While any dialog is open the nav shrinks to a Back circle above it (Decision 104). Select files has its own Close, so that circle is hidden there (`:has(#select-files-screen:not(.hidden))`) and the dialog drops the room it kept for it. System Back still closes it. Other dialogs are unchanged.
+- Not run through CI or a device (DP209).
