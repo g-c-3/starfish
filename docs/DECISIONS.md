@@ -3916,3 +3916,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The gap between the old page finishing its fade and the new one starting shrinks from 0.15 s to 0.11 s (`--mx-gap`), so full-screen swaps (Home and Vault) no longer show about 6 blank frames. The old page's opacity reaches 0 at 0.11 s, so nothing overlaps. The Home and Vault art follows the same gap.
 - Not changed: Home and Vault differ in header height, so their content sits at different heights; the swap is a fade and slide between them, not a morph.
 - Not run through CI or a device (DP209).
+
+**393. On-screen Back button removed everywhere.** Supersedes Decision 104 (Back visible everywhere) and the floating Back of Decision 123.
+- `#nav-back-btn` is hidden on every screen (`display: none`, still in the page, so nothing that reads it breaks). The back-only nav (lock, first-run, above any overlay) holds nothing else and is hidden. The Home and Vault tabs remain.
+- Leaving still works: the system Back gesture and button (same action as before, including "again to exit" on the landing page), each page's own arrow, and each dialog's own Cancel or Close.
+- The room each overlay kept for the button is returned: viewer body, editor, explorer viewer, file-mode media (bottom), dialogs (bottom padding back to 20 px, `max-height` back to 92vh).
+- Not run through CI or a device (DP210). ARCHITECTURE.md may still describe the Back button; to be reconciled in the next session.

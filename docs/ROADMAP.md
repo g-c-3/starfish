@@ -85,6 +85,7 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
+- [ ] 85 — On-screen Back button removed everywhere (Session 188, Decision 393; DP210)
 - [ ] 84 — Screen motion on the reminder tab recipe: layers, dialogs, paired views (Session 188, Decisions 385 to 392; DP209)
 - [x] 83 — Open items closed by the owner: image-viewer side margins, DP188 to DP208, Java CI result of Sessions 164 to 179; blurred backdrop for videos dropped (Session 187, Decision 384)
 - [x] 30 — Toast fade and exit-notice dismissal (every toast fades in and out; the "again to exit" notice leaves with the landing page — Session 154, Decision 289; DP132 confirmed — Session 154; Phase 30 complete)
@@ -771,6 +772,10 @@ individual items) can be picked up in any order once prerequisites are met.
 - [x] **81 — Centred media with a blurred backdrop (Decision 382; Session 185; DP208 closed by the owner — Session 187).** Replaces Decision 381 after the owner clarified.
   - [x] DP208 — Decision 382. (1) Every image is centred, never zoomed or cropped: it touches both sides, or the top and bottom, and nothing else. (2) The rest of the screen shows the same image, enlarged and blurred. (3) Landscape, portrait and square images; pinch zoom and swiping still work. (4) Videos are centred with black around them (no blurred backdrop yet). Closed by the owner — Session 187 (Decision 384), without a device pass.
   - [ ] DP209 — Device pass for Decisions 385 to 392 (compare against the reminder tabs): open and close each layer (Editor, Viewer, Explorer, Phone gallery) and a dialog; Home to a folder and back; a folder to Trash; app open with biometric to Home; Home to Vault and its gate; Home to Settings and back; no double image, no jump of the Home art, no ghost of Settings on leaving, a file open and close match the category animation, Select files exit smooth with no Back circle, category open and close steady, no vertical jump in Settings or Vault settings, Home and Vault swap without a blank gap, no flash, no stuck frame, no dropped taps; lock mid-exit shows no content; Back during an exit.
+  - [ ] DP210 — Device pass for Decision 393: no Back circle on Home, Vault, lock, any overlay or dialog; system Back still leaves each; no empty band at the bottom of the editor, viewers, explorer or dialogs; the Gallery (phone) screen has a way out.
+- [ ] **85 — On-screen Back button removed everywhere (Decision 393; Session 188).** Not yet run through CI or a device.
+  - `src/css/style.css` only: the button and the back-only nav are hidden; the room overlays kept for it is returned.
+  - Leaving: system Back, each page's arrow, each dialog's Cancel or Close.
 - [ ] **84 — Screen motion (Decisions 385 to 392; Session 188).** Not yet run through CI or a device.
   - `src/js/motion.js` + `src/css/motion.css` (NEW), one script line in `src/index.html`. `app.js` unchanged.
   - Decisions 386, 387: layers push in from the right and pop out, opaque, no fade. Dialogs fade out. Paired views (Home and folder or Trash, Vault main and its folder, Trash or Settings) leave, then arrive, with the reminder tab timing; reversed on Back.
