@@ -1,10 +1,9 @@
-/* Screen motion (Decisions 385 to 389). transform + opacity only; the classes exist only while an animation runs.
-   One property settles while the other has finished: opacity completes early, so a page never lingers as a ghost. */
+/* Screen motion (Decisions 385 to 390). transform + opacity only; the classes exist only while an animation runs.
+   One recipe: the old page leaves (0.17 s), the new one arrives after 0.15 s (0.3 s). Opacity finishes before the slide, so nothing lingers. */
 @media (prefers-reduced-motion: no-preference) {
   :root {
     --mx-settle: cubic-bezier(0.22, 0.61, 0.36, 1);  /* arrive: gentle start, long soft landing */
     --mx-leave: cubic-bezier(0.4, 0, 0.7, 0.2);      /* leave: picks up speed */
-    --mx-push: cubic-bezier(0.25, 0.7, 0.2, 1);
     --mx-dx: 44px;
   }
 
@@ -12,35 +11,33 @@
   @keyframes mx-in-l  { 0% { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
   @keyframes mx-out-r { 0% { opacity: 1; transform: none; } 65% { opacity: 0; } 100% { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } }
   @keyframes mx-out-l { 0% { opacity: 1; transform: none; } 65% { opacity: 0; } 100% { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } }
-  @keyframes mx-push  { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
-  @keyframes mx-pop   { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
-  @keyframes mx-scrim-in  { from { opacity: 0; } to { opacity: 0.16; } }
-  @keyframes mx-scrim-out { from { opacity: 0.16; } to { opacity: 0; } }
   @keyframes mx-fade-out { from { opacity: 1; } to { opacity: 0; } }
-  @keyframes mx-box-out  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); } }
+  @keyframes mx-box-out  { from { opacity: 1; transform: none; } 70% { opacity: 0; } to { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.96); } }
 
   .mx-x, .mx-x body { overflow-x: clip; }
 
-  /* The page under a layer darkens a little while the layer moves. */
-  html.mx-dim-in::after, html.mx-dim-out::after { content: ""; position: fixed; inset: 0; z-index: 7; background: #000; pointer-events: none; }
-  html.mx-dim-in::after  { animation: mx-scrim-in 0.38s var(--mx-push) both; }
-  html.mx-dim-out::after { animation: mx-scrim-out 0.3s ease-out both; }
-
-  /* Layers: opaque, so no fade; an edge shadow gives depth. */
-  .mx-in.mx-layer { animation: mx-push 0.38s var(--mx-push) both; will-change: transform; box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
-
-  /* Pages without a background: the old one leaves (0.17 s), then the new one arrives (0.3 s). */
+  /* Arriving page (a view, a screen, or a file). */
   .mx-in.mx-view.mx-from-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
   .mx-in.mx-view.mx-from-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
   .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: 0.15s; }
 
+  /* The page under a file: leaves when the file opens and stays gone until the file has arrived; returns after the file leaves. */
+  .mx-u-out { animation: mx-out-l 0.17s var(--mx-leave) both; will-change: transform, opacity; }
+  .mx-u-in  { animation: mx-in-l 0.3s var(--mx-settle) 0.15s both; will-change: transform, opacity; }
+
   /* Hidden but still painted until the animation ends. Three classes beat every `.x.hidden { display: none !important }` rule. */
   .mx-out.mx-out.hidden { display: var(--mx-d, flex) !important; pointer-events: none; will-change: transform, opacity; }
-  .mx-out.mx-out.hidden.mx-layer { animation: mx-pop 0.3s cubic-bezier(0.4, 0, 0.6, 1) both; box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
   .mx-out.mx-out.hidden.mx-view.mx-to-r { animation: mx-out-r 0.17s var(--mx-leave) both; }
   .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.17s var(--mx-leave) both; }
-  .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.16s ease-in both; }
-  .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.16s ease-in both; }
+
+  /* Dialogs (Select files, confirmations): the box drops away first, then the backdrop clears. */
+  .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.26s cubic-bezier(0.3, 0, 0.6, 1) both; }
+  .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.24s cubic-bezier(0.4, 0, 0.9, 0.4) both; }
+
+  /* Dialog arrival mirrors the exit: backdrop clears in, the box rises and settles. */
+  @keyframes mx-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .modal-overlay.modal-overlay:not(.hidden) { animation: mx-fade-in 0.22s ease-out both; }
+  .modal-overlay.modal-overlay:not(.hidden) .modal-box { animation: sheet-in 0.3s var(--mx-settle) both; }
 }
 
 /* The Home and Vault landing art belongs to the screen, not to the page that slides (Decision 388). Inside an animated page it moved with
