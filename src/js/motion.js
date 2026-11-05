@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 395). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 396). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -163,7 +163,20 @@ new MutationObserver((records) => {
   const DX = 44, OUT_MS = 170, IN_MS = 300, GAP_MS = 110;
   const SETTLE = 'cubic-bezier(0.22, 0.61, 0.36, 1)', LEAVE = 'cubic-bezier(0.4, 0, 0.7, 0.2)';
   let scrolled = 0, depth0 = 0, sig0 = '', hist = [];
+  const toolsEl = document.getElementById('explorer-tools');
   body.addEventListener('scroll', () => { scrolled = body.scrollTop; }, { passive: true });
+
+  // Where the list and the two toolbars (path, filter and sort) sit while on view. Going back to the storage list hides both toolbars, which
+  // moves the list up about 40 px: the old list must leave from where it was seen, not from where the new layout puts the list.
+  // Layout offsets, not screen rectangles: a slide in progress must not distort what is remembered. The three are children of the fixed screen.
+  const rectOf = (e) => (!e || e.classList.contains('hidden') || !e.getClientRects().length ? null : { top: e.offsetTop, left: e.offsetLeft, width: e.offsetWidth, height: e.offsetHeight });
+  let seen = null;
+  function look() {
+    if (document.hidden || screenEl.classList.contains('hidden') || screenEl.matches('.mx-in, .mx-out')) return;
+    seen = { body: rectOf(body), crumbs: rectOf(crumbsEl), tools: rectOf(toolsEl) };
+  }
+  setInterval(look, 150);
+  document.addEventListener('pointerdown', look, true);
 
   const busy = (anim) => { // keeps sideways overflow clipped while a slide runs
     root.classList.add('mx-x'); running++;
@@ -186,13 +199,36 @@ new MutationObserver((records) => {
     if (!changed || !removed.length || reduced.matches || locked()) return;
     if (screenEl.classList.contains('hidden') || screenEl.matches('.mx-in, .mx-out')) return; // the explorer itself is opening or closing
     const sign = back ? 1 : -1; // the old list leaves to the left going deeper, to the right going back
-    const box = body.getBoundingClientRect();
+    const was = seen && seen.body ? seen : { body: rectOf(body), crumbs: null, tools: null };
+    if (!was.body) return;
+    const pieces = [was.body, was.crumbs, was.tools].filter(Boolean);
+    const gTop = Math.min(...pieces.map((r) => r.top)), gLeft = Math.min(...pieces.map((r) => r.left));
+    const gRight = Math.max(...pieces.map((r) => r.left + r.width)), gBottom = was.body.top + was.body.height;
     const ghost = document.createElement('div'), inner = document.createElement('div');
-    Object.assign(ghost.style, { position: 'fixed', top: box.top + 'px', left: box.left + 'px', width: box.width + 'px', height: box.height + 'px', overflow: 'hidden', pointerEvents: 'none', zIndex: '2' });
-    inner.style.cssText = `box-sizing: border-box; width: 100%; padding: ${getComputedStyle(body).padding}; transform: translateY(${-scrolled}px);`; // same padding, and the list stays where it was seen
-    removed.forEach((n) => inner.appendChild(n));
+    Object.assign(ghost.style, { position: 'fixed', top: gTop + 'px', left: gLeft + 'px', width: gRight - gLeft + 'px', height: gBottom - gTop + 'px', overflow: 'hidden', pointerEvents: 'none', zIndex: '2' });
+    const place = (n, r) => Object.assign(n.style, { position: 'absolute', top: r.top - gTop + 'px', left: r.left - gLeft + 'px', width: r.width + 'px' });
+    // A toolbar that is gone now leaves with the list, as a copy of how it looked.
+    for (const [bar, r] of [[crumbsEl, was.crumbs], [toolsEl, was.tools]]) {
+      if (!r || !bar.classList.contains('hidden')) continue;
+      const copy = bar.cloneNode(true);
+      copy.removeAttribute('id'); copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+      copy.classList.remove('hidden');
+      place(copy, r); copy.style.height = r.height + 'px';
+      ghost.appendChild(copy);
+    }
+    place(inner, was.body); // same padding as the body, and the list stays where it was seen
+    inner.style.cssText += `; box-sizing: border-box; height: ${was.body.height}px; overflow: hidden; padding: ${getComputedStyle(body).padding};`;
+    const track = document.createElement('div');
+    track.style.cssText = `transform: translateY(${-scrolled}px);`;
+    removed.forEach((n) => track.appendChild(n));
+    inner.appendChild(track);
     ghost.appendChild(inner);
     screenEl.appendChild(ghost);
+    // A toolbar that appears now fades in with the new list instead of popping in.
+    for (const [bar, r] of [[crumbsEl, was.crumbs], [toolsEl, was.tools]]) {
+      if (r || bar.classList.contains('hidden')) continue;
+      busy(bar.animate([{ opacity: 0 }, { opacity: 1 }], { duration: IN_MS, delay: GAP_MS, easing: SETTLE, fill: 'backwards' }));
+    }
     const out = ghost.animate([
       { opacity: 1, transform: 'none' },
       { opacity: 0, offset: 0.65 },
