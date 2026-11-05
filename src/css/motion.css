@@ -1,5 +1,4 @@
-/* Screen motion (Decisions 385, 386). transform + opacity only; the classes exist only while an animation runs.
-   Same recipe as the reminder tabs: 36 px, 120 ms ease-in out, 200 ms decelerate in. */
+/* Screen motion (Decisions 385 to 387). transform + opacity only; the classes exist only while an animation runs. */
 @media (prefers-reduced-motion: no-preference) {
   :root { --mx-in: cubic-bezier(0.2, 0.8, 0.2, 1); --mx-dx: 36px; }
 
@@ -7,17 +6,26 @@
   @keyframes mx-in-l  { from { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } to { opacity: 1; transform: none; } }
   @keyframes mx-out-r { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(var(--mx-dx), 0, 0); } }
   @keyframes mx-out-l { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(calc(var(--mx-dx) * -1), 0, 0); } }
+  @keyframes mx-push  { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
+  @keyframes mx-pop   { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
   @keyframes mx-fade-out { from { opacity: 1; } to { opacity: 0; } }
   @keyframes mx-box-out  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); } }
 
   .mx-x, .mx-x body { overflow-x: clip; }
-  .mx-in.mx-from-r { animation: mx-in-r 0.22s var(--mx-in) both; will-change: transform, opacity; }
-  .mx-in.mx-from-l { animation: mx-in-l 0.22s var(--mx-in) both; will-change: transform, opacity; }
+
+  /* Layers: opaque, so no fade. */
+  .mx-in.mx-layer { animation: mx-push 0.26s var(--mx-in) both; will-change: transform; }
+
+  /* In-page views: the old one leaves (0.12 s), then the new one arrives (0.2 s) — the reminder tab timing. */
+  .mx-in.mx-view.mx-from-r { animation: mx-in-r 0.2s var(--mx-in) both; will-change: transform, opacity; }
+  .mx-in.mx-view.mx-from-l { animation: mx-in-l 0.2s var(--mx-in) both; will-change: transform, opacity; }
+  .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: 0.13s; }
 
   /* Hidden but still painted until the animation ends. Three classes beat every `.x.hidden { display: none !important }` rule. */
   .mx-out.mx-out.hidden { display: var(--mx-d, flex) !important; pointer-events: none; will-change: transform, opacity; }
-  .mx-out.mx-out.hidden.mx-to-r { animation: mx-out-r 0.13s ease-in both; }
-  .mx-out.mx-out.hidden.mx-to-l { animation: mx-out-l 0.13s ease-in both; }
+  .mx-out.mx-out.hidden.mx-layer { animation: mx-pop 0.2s cubic-bezier(0.4, 0, 1, 1) both; }
+  .mx-out.mx-out.hidden.mx-view.mx-to-r { animation: mx-out-r 0.12s ease-in both; }
+  .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.12s ease-in both; }
   .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.14s ease-in both; }
   .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.14s ease-in both; }
 }
