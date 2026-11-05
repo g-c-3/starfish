@@ -16,6 +16,7 @@ Start: owner asked for smooth transitions on every enter and Back.
 - Decision 391: category open and close jerked after Decision 390 (leaving page placed from a displaced box). Fixed. Back circle hidden over Select files (`style.css`).
 - Decision 392: owner reported jerks in Home and Vault swap, Vault settings and Home Settings exit. Frame tracking found a 12 to 16 px jump (old page placed at the new page's top) and a blank gap. Fixed with remembered positions and a shorter gap.
 - Decision 393: owner asked for the on-screen Back button off everywhere. Hidden with the back-only nav; reserved bottom space returned (`style.css`).
+- Decision 394: owner reported a drop on the Vault landing page and a ghost on the Home Settings exit. Frame tracking: margin collapse lost when a page leaves the flow; blank-then-faint repaint of a tall page. Fixed in `motion.js`.
 - Not run through CI or a device. DP209 added.
 - Open: DP185 to DP187 remain unchecked.
 - Next start: DP209 result, then tune durations from the device.

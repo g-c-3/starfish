@@ -3922,3 +3922,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Leaving still works: the system Back gesture and button (same action as before, including "again to exit" on the landing page), each page's own arrow, and each dialog's own Cancel or Close.
 - The room each overlay kept for the button is returned: viewer body, editor, explorer viewer, file-mode media (bottom), dialogs (bottom padding back to 20 px, `max-height` back to 92vh).
 - Not run through CI or a device (DP210). ARCHITECTURE.md may still describe the Back button; to be reconciled in the next session.
+
+**394. No drop on leaving, no blank-then-ghost.** Refines Decision 392.
+- Evidence (frame tracking): the Vault landing page dropped 28 px as it began to leave, and rose again on return; the Settings page on exit went blank for 4 frames, then reappeared faint and faded.
+- Cause of the drop: lifted out of the page flow, a page no longer lets its first block's top margin collapse through it, so the margin applied inside and pushed everything down. The first in-flow block's position is now remembered with the page, and the leaving page is placed so that block sits exactly where it was seen.
+- Cause of the ghost: a tall page needed a new drawing layer while the animation clock already ran, so it painted late and half faded. The leaving page is now cut to what is in view, and both pages hold their first frame until the old page has been painted (two frames), then start together. A page is never left paused.
+- Not changed: the app takes about 130 ms between a tap on Back and anything moving (its own work before the page changes).
+- Not run through CI or a device (DP209).
