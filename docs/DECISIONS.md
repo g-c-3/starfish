@@ -3864,3 +3864,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - No exit animation when the app lock shows or the page is hidden: locked content is never shown through an exit.
 - Search layer unchanged (own animation, Decision 135 era). Nothing under reduced motion.
 - No new dependency, permission, network call or stored data. Not run through CI or a device (DP209).
+
+**386. Motion matches the reminder tabs.** Replaces the sizes in Decision 385; its mechanism and lock rule stand.
+- Cause: a 7% fade-slide on layers and a 10 px rise on views read as a plain fade next to the reminder tabs. A device recording showed Home to folder switching instantly and a note opening as a fade through a blank layer.
+- One recipe for every change: 36 px sideways slide plus fade, 0.13 s ease-in out, 0.22 s decelerate in (the reminder tab recipe, Decision 360).
+- Layers (Editor, Viewer, Explorer, Phone gallery): enter from the right, exit to the right.
+- Paired views swap together: Home and a folder or Trash, Vault main and a Vault folder, Trash or Settings. Deeper slides in from the right and the old view slides out to the left; Back reverses both.
+- The outgoing view leaves the page flow for the animation (absolute, at the incoming view's box), so the incoming one never shifts. Pointer events are off on it.
+- While a slide runs the page clips sideways overflow. Nothing under reduced motion.
+- Not changed: late content in a layer (an editor draws its body after it opens) still appears after the slide starts.
+- Not run through CI or a device (DP209).
