@@ -3854,3 +3854,13 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Closed without a device pass: DP188 to DP208, and the CI result for the Java of Sessions 164, 166 and 168 to 179.
 - The 12 px side margin of non-image pages in the image viewer is closed with its cause never located. Neither viewer carousel (`app.js`, `explorer-view.js`) holds non-image pages, so the explorer list padding named in Decision 379 is not their source.
 - Blurred backdrop for videos (Decision 382): dropped, not built.
+
+**385. Screen motion.** Extends Decision 155 (entrances only).
+- Cause of the abrupt exits: hiding is `display: none`, so nothing could animate out. Delaying each hide in `app.js` was rejected.
+- `motion.js` watches the `hidden` class and acts after the change. App logic sees the final state at once; nothing awaits an animation.
+- Layers (Editor, Viewer, Explorer, Phone gallery): enter 0.24 s, exit 0.17 s, a 7% slide plus fade. Dialogs: exit 0.14 s fade, box drops 14 px. In-page views (folder, trash, Vault views): fade plus 10 px rise, 0.2 s. Screens keep their 0.18 s fade.
+- An exiting element keeps `hidden` and is painted by `.mx-out.mx-out.hidden` with pointer events off, so a tap passes to the screen beneath.
+- Only transform and opacity animate. `will-change` and the classes exist only while an animation runs, with a failsafe timer.
+- No exit animation when the app lock shows or the page is hidden: locked content is never shown through an exit.
+- Search layer unchanged (own animation, Decision 135 era). Nothing under reduced motion.
+- No new dependency, permission, network call or stored data. Not run through CI or a device (DP209).

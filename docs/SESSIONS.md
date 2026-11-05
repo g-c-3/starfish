@@ -4,6 +4,14 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 188**
+
+Start: owner asked for smooth transitions on every enter and Back.
+- Decision 385. Phase 84: `motion.js` and `motion.css` (new), one script line in `index.html`. `app.js` unchanged.
+- Not run through CI or a device. DP209 added.
+- Open: DP185 to DP187 remain unchecked.
+- Next start: DP209 result, then tune durations from the device.
+
 **Session 187**
 
 Start: owner asked to close the open items.

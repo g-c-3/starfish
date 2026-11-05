@@ -393,3 +393,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-04 | Session 185 | Decision 382 | Phase 81: centred media with a blurred backdrop, no zoom; DP208 added; not run through CI or a device |
 | 2026-11-04 | Session 186 | Decision 383 | Phase 82: decision recorded that saved PDF marks stay fixed; margins of non-image pages not yet located |
 | 2026-11-05 | Session 187 | Decision 384 | Phase 83: open items closed by the owner (image-viewer margins, DP188 to DP208, Java CI result); blurred backdrop for videos dropped; no code changed |
+| 2026-11-05 | Session 188 | Decision 385 | Phase 84: screen motion (layers, dialogs, in-page views); not yet run through CI or a device |
