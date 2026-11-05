@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 394). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 395). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -104,11 +104,13 @@ function layerOrDialog(el, was, now) {
 
 new MutationObserver((records) => {
   if (reduced.matches) return;
+  // One net change per element for the whole batch. showScreen() hides every screen and shows the target again in one go: read record
+  // by record, a screen that stayed on view looked as if it had just arrived, faded in from nothing, and hid the Settings page leaving inside it.
+  const first = new Map();
+  for (const r of records) if (r.target instanceof HTMLElement && !first.has(r.target)) first.set(r.target, r.oldValue);
   const shown = [], gone = [];
-  for (const r of records) {
-    const el = r.target;
-    if (!(el instanceof HTMLElement)) continue;
-    const was = hasHidden(r.oldValue), now = el.classList.contains('hidden');
+  for (const [el, oldValue] of first) {
+    const was = hasHidden(oldValue), now = el.classList.contains('hidden');
     if (was === now || layerOrDialog(el, was, now)) continue;
     if (!(el.id in DEPTH)) continue;
     (was && !now ? shown : gone).push(el);
@@ -147,3 +149,63 @@ new MutationObserver((records) => {
     }
   }
 }).observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+
+// ---- Inside the file explorer (Decision 395) ----
+// Every change of what the explorer shows (storage list, folder, Trash, archive, pick, resolve) replaces the children of #explorer-body.
+// One observer there gives them all the same recipe: the old list leaves (a ghost kept over the same place), the new one arrives.
+// Deeper = forward, shallower or back to an earlier view = back. Filtering, sorting and refreshing the same folder change nothing: no motion.
+(function explorerMotion() {
+  const body = document.getElementById('explorer-body');
+  const screenEl = document.getElementById('explorer-screen');
+  const crumbsEl = document.getElementById('explorer-crumbs');
+  const titleEl = document.getElementById('explorer-title');
+  if (!body || !screenEl || !crumbsEl || !titleEl) return;
+  const DX = 44, OUT_MS = 170, IN_MS = 300, GAP_MS = 110;
+  const SETTLE = 'cubic-bezier(0.22, 0.61, 0.36, 1)', LEAVE = 'cubic-bezier(0.4, 0, 0.7, 0.2)';
+  let scrolled = 0, depth0 = 0, sig0 = '', hist = [];
+  body.addEventListener('scroll', () => { scrolled = body.scrollTop; }, { passive: true });
+
+  const busy = (anim) => { // keeps sideways overflow clipped while a slide runs
+    root.classList.add('mx-x'); running++;
+    const done = () => { if (--running <= 0) { running = 0; root.classList.remove('mx-x'); } };
+    anim.finished.then(done, done);
+  };
+
+  new MutationObserver((records) => {
+    const removed = [];
+    for (const r of records) for (const n of r.removedNodes) if (n.nodeType === 1) removed.push(n);
+    const depth = crumbsEl.classList.contains('hidden') ? 0 : crumbsEl.querySelectorAll('.crumb').length;
+    const sig = `${titleEl.textContent}|${depth}`;
+    const changed = sig !== sig0;
+    let back = false;
+    if (changed) {
+      back = depth !== depth0 ? depth < depth0 : hist.length > 1 && hist[hist.length - 2] === sig;
+      if (back) hist.pop(); else hist.push(sig);
+      depth0 = depth; sig0 = sig;
+    }
+    if (!changed || !removed.length || reduced.matches || locked()) return;
+    if (screenEl.classList.contains('hidden') || screenEl.matches('.mx-in, .mx-out')) return; // the explorer itself is opening or closing
+    const sign = back ? 1 : -1; // the old list leaves to the left going deeper, to the right going back
+    const box = body.getBoundingClientRect();
+    const ghost = document.createElement('div'), inner = document.createElement('div');
+    Object.assign(ghost.style, { position: 'fixed', top: box.top + 'px', left: box.left + 'px', width: box.width + 'px', height: box.height + 'px', overflow: 'hidden', pointerEvents: 'none', zIndex: '2' });
+    inner.style.cssText = `box-sizing: border-box; width: 100%; padding: ${getComputedStyle(body).padding}; transform: translateY(${-scrolled}px);`; // same padding, and the list stays where it was seen
+    removed.forEach((n) => inner.appendChild(n));
+    ghost.appendChild(inner);
+    screenEl.appendChild(ghost);
+    const out = ghost.animate([
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, offset: 0.65 },
+      { opacity: 0, transform: `translate3d(${sign * DX}px, 0, 0)` },
+    ], { duration: OUT_MS, easing: LEAVE, fill: 'forwards' });
+    busy(out);
+    out.finished.then(() => ghost.remove(), () => ghost.remove());
+    body.getAnimations().forEach((a) => a.cancel());
+    const arrive = body.animate([
+      { opacity: 0, transform: `translate3d(${-sign * DX}px, 0, 0)` },
+      { opacity: 1, offset: 0.55 },
+      { opacity: 1, transform: 'none' },
+    ], { duration: IN_MS, delay: GAP_MS, easing: SETTLE, fill: 'backwards' });
+    busy(arrive);
+  }).observe(body, { childList: true });
+})();
