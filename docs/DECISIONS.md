@@ -3874,3 +3874,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - While a slide runs the page clips sideways overflow. Nothing under reduced motion.
 - Not changed: late content in a layer (an editor draws its body after it opens) still appears after the slide starts.
 - Not run through CI or a device (DP209).
+
+**387. Push and pop for layers, sequential views.** Replaces the layer and view timings of Decision 386; the pairing and lock rules stand.
+- Cause: the old and new page faded at the same time, so both showed at half opacity (a double image).
+- Layers have a solid background: they slide in from the right over the unchanged page (0.26 s) and slide out to the right on Back or close (0.2 s). No fade.
+- In-page views have no background of their own (the page art shows through): the old view leaves (0.12 s), the new one arrives after a 0.13 s delay (0.2 s), as the reminder tabs do. A view with no old partner arrives at once.
+- Rejected: a solid background on views (hides the Home art), overlapped fades (a faint double image remains), new page only (a hard cut before the slide).
+- Not run through CI or a device (DP209).
