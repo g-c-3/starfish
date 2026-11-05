@@ -3941,3 +3941,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - The position of the list and of both bars is remembered while the explorer is on view (every 150 ms and on every tap), as layout offsets so a slide in progress cannot distort them. The leaving ghost covers the old area from the top of the first bar to the bottom of the list, holds the old list where it was seen at the scroll it was seen at, and carries a copy of any bar that is gone (ids removed from the copy). A bar that appears fades in with the new list, after the same 0.11 s.
 - Not changed: the title and the small icons in the explorer header change at once.
 - Not run through a device (DP209).
+
+**397. Standing motion rule.** Owner decision after confirming the motion works.
+- Every page, layer, dialog and list swap added or changed from now on enters and leaves with the one recipe of Decisions 385 to 396. No instant swap, no other transition style.
+- How: toggle the `hidden` class (never `style.display`, never remove the element from the page); register it in `motion.js`: a fixed layer over a page in `LAYERS`, a page that replaces a sibling in `DEPTH` (deeper = forward), a dialog as `.modal-overlay`; a list that is swapped inside a container follows the explorer observer. Only transform and opacity animate.
+- Sensitive content (Vault) is never shown through an exit (`NO_EXIT`); the app lock rule stands.
+- A motion change is checked by frame-tracking a recording before a cause is named.
+- DP209 closed by the owner (confirmed working). DP210 closed (no Back circle in later recordings).
+- `ARCHITECTURE.md` gains a Motion section and its Back button section follows Decision 393. Project instructions carry the rule.

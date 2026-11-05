@@ -649,8 +649,7 @@ Noise reduction (Decision 281): a switch on the ready screen, kept in `meta.rec_
 ### Back button everywhere (Decision 104)
 The Android Back button and back gesture run this same action with the same glow; on the lock gate they send the app to the background at once (Decision 138); on a Home or Vault landing page the first Back shows "Press again to exit" (Back button) or "Swipe again to exit" (gesture), and a second within three seconds sends the app to the background (Decision 287). The wording comes from `window.ArklyNav` (`scripts/patch-nav.js`), which reads the phone's navigation settings; when they cannot be read the notice says "Back again to exit". Any Back that goes somewhere starts the count again.
 
-The nav's Back stays visible on every screen: alone on the lock and first-run screens, and alone above any open
-overlay (`body.overlay-open`). It dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
+**No on-screen Back button (Decision 393).** `#nav-back-btn` and the back-only nav (lock, first-run, above an overlay) are hidden by CSS, everywhere. The element stays in the page, so the code that reads it is unchanged. Leaving is by the system Back and gesture, each page's own arrow, and each dialog's own Cancel or Close. The action behind Back dismisses the top-most layer: Yes/No sheet, Money dialog (Decision 132), selection, Save dialog, static modal, editor, viewer (through its
 guard), then the Decision 82 hierarchy. Dimmed when nothing is open to go back from.
 
 **Unsaved work (Decision 133).** Back and every Cancel ask "Discard changes?" before dropping typed or chosen input; with nothing changed they close at once. Covered: Save/edit dialog (compared with its values at open), text editor, Money form and repayment dialog, coordinates paste, auto-backup passkey, Settings and Vault Settings fields (passkeys, hint, currency symbol, confirm password or PIN). Capture dialogs (new recording, reminder, location, files) always ask. Passkey fields are cleared after a backup or restore succeeds, so a finished action is not unsaved.
@@ -850,6 +849,7 @@ arkly/
     index.html
     css/style.css
     css/widget.css
+    css/motion.css      -> keyframes and the classes motion.js sets (Decision 385 onward)
     js/
       db.js             -> SQLite schema + FTS5 setup (includes reminder_log)
       crypto.js         -> KDF + AES helpers for private notes & backups
@@ -872,6 +872,7 @@ arkly/
       mapprov.js        -> optional map providers (up to two) and the pinch-zoom map (Decisions 345 to 348)
       maptiles.js       -> saved map tiles per provider slot (Decisions 346, 348)
       dategroup.js      -> soft date separators for lists (Decision 350)
+      motion.js         -> every enter and exit: one recipe, watches the `hidden` class (Decisions 385 to 397)
       app.js            -> app bootstrap / router / expense follow-up flow
   www/                  -> Vite's BUILD OUTPUT — Capacitor's webview content. Regenerated on every
                             CI run; don't hand-edit, changes there get overwritten.
@@ -1124,3 +1125,35 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - `.tool-tile` carries its own margin; no id rule overrides it.
 - The editor has no selection-match highlight; Find keeps `.cm-searchMatch`.
 
+## Motion: one recipe for every enter and exit (Decisions 385 to 397)
+
+**Rule (Decision 397).** Every page, layer, dialog and list swap added or changed from now on enters and leaves with this recipe. No instant swap, no other transition style.
+
+**Recipe.** The old page leaves (0.17 s, a 44 px slide with a fade; opacity reaches 0 at 65% of the time), the new page arrives after 0.11 s (0.3 s, opacity full at 55%, soft landing). Two pages never overlap, so nothing ghosts. Forward: old leaves left, new comes from the right; back reverses both. Only transform and opacity animate. Nothing moves under reduced motion. Tokens: `--mx-settle`, `--mx-leave`, `--mx-dx`, `--mx-gap` in `motion.css`.
+
+**Mechanism (`motion.js`, `motion.css`; `app.js` is untouched).** One observer reads the `hidden` class: the net change of each element per batch (not record by record: `showScreen` hides every screen and shows the target again in one go, and a screen that stayed on view must not look new). The change has already happened, so app logic sees the final state at once and nothing waits on an animation.
+- **Layers** (`LAYERS`: Editor, Viewer, Explorer, Phone gallery, the explorer's file viewer) open over a page. The page under (the screen on view, or the explorer's own page) leaves and stays gone until the layer has arrived; on close the layer leaves, then the page returns. Classes `mx-u-out`, `mx-u-in`.
+- **Paired pages** (`DEPTH`: lock and first-run, Home, Vault, Home's Settings tab, the Vault gate and content, folder and Trash views, Vault views): a page that appears while a sibling of the same parent goes away. Deeper = forward.
+- **Dialogs** (`.modal-overlay`): the box drops 26 px and fades first, then the backdrop clears; arrival mirrors it.
+- **File explorer.** Every change of what it shows replaces the children of `#explorer-body`; one observer there animates all of them. Deeper = forward; shallower, or back to an earlier view (a short history of title and depth) = back. Refreshing, filtering or sorting the same folder does not move. The path bar and the filter and sort bar come and go between views, which moves the list by about 40 px: their position is remembered, and the leaving ghost carries a copy of any bar that is gone.
+- A leaving page stays painted by `.mx-out.mx-out.hidden` (three classes beat every `.x.hidden { display: none !important }`), fixed over the viewport at the place it was seen, with pointer events off.
+
+**Adding something new.**
+1. Show and hide it with the `hidden` class. Never `style.display`, never remove it from the page.
+2. Register it in `motion.js`: a fixed layer over a page goes in `LAYERS`; a page that replaces a sibling goes in `DEPTH` with a depth; a dialog is a `.modal-overlay`; a list swapped inside one container follows the explorer observer.
+3. Keep it to transform and opacity. No new keyframes or durations: use the tokens.
+4. Content that must not be seen after a lock (the Vault) must not be shown through an exit: add its id to `NO_EXIT`. The app lock rule is built in: no exit under the lock screen or while the page is hidden.
+5. Check it with a screen recording, frame by frame (60 fps, track a stable element), before naming a cause for any jerk.
+
+**Pitfalls found, with causes (do not reintroduce).**
+- Place a leaving page from where it was seen (positions are remembered every 150 ms and on every tap), never from the arriving page's box: the two start at different heights.
+- Measure before the arriving page is animated: its starting offset distorts the measure.
+- Out of the page flow a page loses margin collapse: its first block's top margin pushes everything down. The first in-flow block's position is remembered and the page is put back so that block sits where it was seen.
+- A tall page needs a new drawing layer: cut the leaving page to the view and hold the first frame until it has been painted, then start both pages together.
+- A tall leaving page must not stretch the document: it is fixed, not absolute.
+- The Home and Vault landing art belongs to the screen (`#main-screen`, `#vault-screen`), not to the page that slides; it follows the landing page with `:has()`.
+- Remember layout offsets, not screen rectangles, for anything that may be mid-slide.
+- Files and layers are not a full-width push: that read as a different animation from the categories.
+- Select files has its own Close; dialogs keep no room for a Back button.
+
+**Not covered.** The explorer header's title and small icons change at once. The editor draws its body after it opens, so content can appear after the slide starts.

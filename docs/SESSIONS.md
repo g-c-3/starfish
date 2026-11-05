@@ -4,6 +4,14 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 189**
+
+Start: owner confirmed the motion works and asked for it to be the standard for everything added later.
+- Decision 397: standing motion rule. DP209 and DP210 closed. Phases 84 and 85 checked, Phase 86 added.
+- `ARCHITECTURE.md`: Motion section added, Back button section updated, folder list gains `motion.js` and `motion.css`. Project instructions updated (outside the repo).
+- Open: DP185 to DP187 remain unchecked. Suggested, not started: edge-swipe back on layers, editor body ready before its slide, Android back preview (manifest flag), entry animation for new rows.
+- Next start: the next item the owner names.
+
 **Session 188**
 
 Start: owner asked for smooth transitions on every enter and Back.

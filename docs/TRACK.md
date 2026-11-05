@@ -394,3 +394,5 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-04 | Session 186 | Decision 383 | Phase 82: decision recorded that saved PDF marks stay fixed; margins of non-image pages not yet located |
 | 2026-11-05 | Session 187 | Decision 384 | Phase 83: open items closed by the owner (image-viewer margins, DP188 to DP208, Java CI result); blurred backdrop for videos dropped; no code changed |
 | 2026-11-05 | Session 188 | Decision 385 | Phase 84: screen motion (layers, dialogs, in-page views); not yet run through CI or a device |
+| 2026-11-05 | Session 188 | Decisions 386 to 396 | Phases 84 and 85: motion recipe for layers, pages, dialogs and the file explorer; on-screen Back button removed; fixes found by frame tracking |
+| 2026-11-06 | Session 189 | Decision 397 | Phase 86: standing motion rule; DP209 and DP210 closed; Architecture Motion section; project instructions |
