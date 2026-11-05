@@ -3909,3 +3909,10 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - Cause of the category jerk (Decision 390): the leaving page was placed from the arriving page's box, measured after the arriving page had been given its starting offset (44 px), so the old page began displaced and snapped. The box is now measured before the arriving page is animated.
 - While any dialog is open the nav shrinks to a Back circle above it (Decision 104). Select files has its own Close, so that circle is hidden there (`:has(#select-files-screen:not(.hidden))`) and the dialog drops the room it kept for it. System Back still closes it. Other dialogs are unchanged.
 - Not run through CI or a device (DP209).
+
+**392. Leaving pages keep their real place.** Replaces the placement rule of Decisions 390 and 391; the recipe stands.
+- Evidence: frame tracking of three recordings showed a 12 to 16 px vertical jump at the start of Vault settings, Vault settings exit and Home Settings exit. Cause: the leaving page was placed at the arriving page's top, and the two do not start at the same height.
+- Each page's position (document top, left, width) is remembered while it is on view, refreshed every 150 ms, on every tap and on resize, and never while it animates. A leaving page is fixed at its own remembered place, less the scroll it was seen at.
+- The gap between the old page finishing its fade and the new one starting shrinks from 0.15 s to 0.11 s (`--mx-gap`), so full-screen swaps (Home and Vault) no longer show about 6 blank frames. The old page's opacity reaches 0 at 0.11 s, so nothing overlaps. The Home and Vault art follows the same gap.
+- Not changed: Home and Vault differ in header height, so their content sits at different heights; the swap is a fade and slide between them, not a morph.
+- Not run through CI or a device (DP209).
