@@ -1,21 +1,33 @@
-// Screen motion (Decision 385). Watches the `hidden` class: layers and dialogs slide/fade in and out, in-page views fade in.
-// Only transform and opacity animate. No app.js hook: the class change is read after it happened, so app logic sees the final state at once.
+// Screen motion (Decisions 385, 386). One recipe everywhere, the one the reminder tabs use: a 36 px sideways slide with a fade,
+// short out, longer in. Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Only transform and opacity animate.
 import '../css/motion.css';
 
 const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen';
 const DIALOGS = '.modal-overlay';
-const VIEWS = '#folder-view, #trash-view, #vault-trash-view, #vault-settings-view, #vault-folder-view, #vault-locked-view, #vault-pin-setup-view';
+// In-page views by depth. A view that appears while another of the same parent goes away is a pair: deeper = forward, shallower = back.
+const DEPTH = { 'home-main': 0, 'folder-view': 1, 'trash-view': 1, 'vault-main': 0, 'vault-trash-view': 1, 'vault-settings-view': 1, 'vault-folder-view': 1 };
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 const hasHidden = (cls) => !!cls && /(^|\s)hidden(\s|$)/.test(cls);
-const FAILSAFE_MS = 450;
+const FAILSAFE_MS = 500;
+let running = 0;
 
-function run(el, cls) {
-  el.classList.remove('mx-in', 'mx-out');
-  void el.offsetWidth; // restart the animation on a quick re-toggle
-  el.classList.add(cls);
-  const done = (e) => { if (e && e.target !== el) return; el.classList.remove(cls); el.removeEventListener('animationend', done); };
-  el.addEventListener('animationend', done);
-  setTimeout(() => { el.classList.remove(cls); el.removeEventListener('animationend', done); }, FAILSAFE_MS);
+function play(el, cls, cleanup) {
+  el.classList.remove('mx-in', 'mx-out', 'mx-from-r', 'mx-from-l', 'mx-to-r', 'mx-to-l');
+  void el.offsetWidth; // restart on a quick re-toggle
+  el.classList.add(...cls);
+  running++; document.documentElement.classList.add('mx-x'); // the page never scrolls sideways while a slide runs
+  let over = false;
+  const end = (e) => {
+    if (over || (e && e.target !== el)) return;
+    over = true;
+    el.removeEventListener('animationend', end);
+    el.classList.remove(...cls);
+    if (cleanup) cleanup();
+    if (--running <= 0) { running = 0; document.documentElement.classList.remove('mx-x'); }
+  };
+  el.addEventListener('animationend', end);
+  setTimeout(() => end(), FAILSAFE_MS);
 }
 
 function locked() { // a lock must never be delayed or shown through an exit
@@ -23,22 +35,40 @@ function locked() { // a lock must never be delayed or shown through an exit
   return document.hidden || (lock && !lock.classList.contains('hidden'));
 }
 
+function layerOrDialog(el, was, now) {
+  const layer = el.matches(LAYERS), dialog = !layer && el.matches(DIALOGS);
+  if (!layer && !dialog) return false;
+  if (was && !now) { // shown
+    el.classList.remove('mx-out');
+    if (layer) { try { el.style.setProperty('--mx-d', getComputedStyle(el).display); } catch { /* default applies */ } play(el, ['mx-in', 'mx-from-r']); }
+  } else if (!was && now && !locked()) { // hidden: stays painted while it slides or fades out
+    if (!el.style.getPropertyValue('--mx-d')) el.style.setProperty('--mx-d', 'flex');
+    play(el, layer ? ['mx-out', 'mx-to-r'] : ['mx-out']);
+  }
+  return true;
+}
+
 new MutationObserver((records) => {
   if (reduced.matches) return;
+  const shown = [], gone = [];
   for (const r of records) {
     const el = r.target;
     if (!(el instanceof HTMLElement)) continue;
     const was = hasHidden(r.oldValue), now = el.classList.contains('hidden');
-    if (was === now) continue;
-    const layer = el.matches(LAYERS), dialog = !layer && el.matches(DIALOGS), view = !layer && !dialog && el.matches(VIEWS);
-    if (!layer && !dialog && !view) continue;
-    if (was && !now) { // shown
-      el.classList.remove('mx-out');
-      if (layer || view) { try { el.style.setProperty('--mx-d', getComputedStyle(el).display); } catch { /* default applies */ } }
-      if (layer || view) run(el, 'mx-in');
-    } else if (!was && now && !view && !locked()) { // hidden: keep it on screen while it animates out
-      el.style.setProperty('--mx-d', el.style.getPropertyValue('--mx-d') || 'flex');
-      run(el, 'mx-out');
+    if (was === now || layerOrDialog(el, was, now)) continue;
+    if (!(el.id in DEPTH)) continue;
+    (was && !now ? shown : gone).push(el);
+  }
+  for (const inc of shown) {
+    const out = gone.find((g) => g.parentElement === inc.parentElement && g.classList.contains('hidden'));
+    const back = !!out && DEPTH[inc.id] < DEPTH[out.id];
+    inc.classList.remove('mx-out');
+    play(inc, ['mx-in', back ? 'mx-from-l' : 'mx-from-r']);
+    if (out && !locked() && inc.offsetParent) { // the old view slides away over the new one, out of the page flow
+      out.style.setProperty('--mx-d', 'block');
+      const st = out.style;
+      st.position = 'absolute'; st.top = inc.offsetTop + 'px'; st.left = inc.offsetLeft + 'px'; st.width = inc.offsetWidth + 'px';
+      play(out, ['mx-out', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; });
     }
   }
 }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
