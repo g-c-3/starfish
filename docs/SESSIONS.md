@@ -17,6 +17,7 @@ Start: owner asked for smooth transitions on every enter and Back.
 - Decision 392: owner reported jerks in Home and Vault swap, Vault settings and Home Settings exit. Frame tracking found a 12 to 16 px jump (old page placed at the new page's top) and a blank gap. Fixed with remembered positions and a shorter gap.
 - Decision 393: owner asked for the on-screen Back button off everywhere. Hidden with the back-only nav; reserved bottom space returned (`style.css`).
 - Decision 394: owner reported a drop on the Vault landing page and a ghost on the Home Settings exit. Frame tracking: margin collapse lost when a page leaves the flow; blank-then-faint repaint of a tall page. Fixed in `motion.js`.
+- Decision 395: owner asked why only Settings to Home kept failing, and for motion throughout the explorer. Cause: `showScreen` hides and re-shows the main screen in one go; the observer read it as a new arrival. Fixed (net change per element). Explorer navigation animated by one observer on its body.
 - Not run through CI or a device. DP209 added.
 - Open: DP185 to DP187 remain unchecked.
 - Next start: DP209 result, then tune durations from the device.
