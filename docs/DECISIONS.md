@@ -3935,3 +3935,9 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `showScreen('main-screen')` also redraws Home's counts and money summary on every arrival (Decision 218). Frame tracking showed no vertical shift from it, so it is left as it is.
 - File explorer: every change of what it shows (storage list, folder, Trash, archive, pick, resolve) replaces the children of `#explorer-body`. One observer there gives all of them the category recipe: the old list leaves as a ghost kept over the same place at the scroll it was seen, the new one arrives 0.11 s later. Deeper is forward; shallower, or back to an earlier view, is back (a short history of title and depth). Filtering, sorting and refreshing the same folder do not move. Nothing runs while the explorer itself opens or closes, under lock, or under reduced motion.
 - Not run through a device (DP209).
+
+**396. Explorer back-to-home jar.** Refines Decision 395.
+- Cause (frame tracking): the explorer's storage list has no path bar and no filter and sort bar; every folder has both. Going back hides both bars, so the list area moves up about 40 px in the same instant. The leaving list's ghost was placed from the area's new position, so the old list jumped up as it began to leave; the bars popped out, and on the way in they popped in. Forward moves jumped down the same way.
+- The position of the list and of both bars is remembered while the explorer is on view (every 150 ms and on every tap), as layout offsets so a slide in progress cannot distort them. The leaving ghost covers the old area from the top of the first bar to the bottom of the list, holds the old list where it was seen at the scroll it was seen at, and carries a copy of any bar that is gone (ids removed from the copy). A bar that appears fades in with the new list, after the same 0.11 s.
+- Not changed: the title and the small icons in the explorer header change at once.
+- Not run through a device (DP209).
