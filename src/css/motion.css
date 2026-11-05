@@ -1,5 +1,8 @@
-/* Screen motion (Decisions 385 to 390). transform + opacity only; the classes exist only while an animation runs.
+/* Screen motion (Decisions 385 to 392). transform + opacity only; the classes exist only while an animation runs.
    One recipe: the old page leaves (0.17 s), the new one arrives after 0.15 s (0.3 s). Opacity finishes before the slide, so nothing lingers. */
+/* The new page starts when the old one has just finished fading: no blank gap, no ghost. */
+:root { --mx-gap: 0.11s; }
+
 @media (prefers-reduced-motion: no-preference) {
   :root {
     --mx-settle: cubic-bezier(0.22, 0.61, 0.36, 1);  /* arrive: gentle start, long soft landing */
@@ -19,11 +22,11 @@
   /* Arriving page (a view, a screen, or a file). */
   .mx-in.mx-view.mx-from-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
   .mx-in.mx-view.mx-from-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
-  .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: 0.15s; }
+  .mx-in.mx-view.mx-after.mx-from-r, .mx-in.mx-view.mx-after.mx-from-l { animation-delay: var(--mx-gap); }
 
   /* The page under a file: leaves when the file opens and stays gone until the file has arrived; returns after the file leaves. */
   .mx-u-out { animation: mx-out-l 0.17s var(--mx-leave) both; will-change: transform, opacity; }
-  .mx-u-in  { animation: mx-in-l 0.3s var(--mx-settle) 0.15s both; will-change: transform, opacity; }
+  .mx-u-in  { animation: mx-in-l 0.3s var(--mx-settle) var(--mx-gap) both; will-change: transform, opacity; }
 
   /* Hidden but still painted until the animation ends. Three classes beat every `.x.hidden { display: none !important }` rule. */
   .mx-out.mx-out.hidden { display: var(--mx-d, flex) !important; pointer-events: none; will-change: transform, opacity; }
@@ -51,6 +54,6 @@
   @supports selector(:has(a)) {
     #main-screen > .bg-squares, #vault-screen > .bg-squares { transition: opacity 0.15s ease-in; }
     #main-screen:has(> #home-tab:not(.hidden) > #home-main:not(.hidden)) > .bg-squares,
-    #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { transition: opacity 0.3s ease 0.15s; }
+    #vault-screen:has(> #vault-content:not(.hidden) > #vault-main:not(.hidden)) > .bg-squares { transition: opacity 0.3s ease var(--mx-gap); }
   }
 }
