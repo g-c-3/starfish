@@ -1,0 +1,19 @@
+/* Screen motion (Decision 385). transform + opacity only; classes exist only while an animation runs. */
+@media (prefers-reduced-motion: no-preference) {
+  :root { --mx-in: cubic-bezier(0.22, 1, 0.36, 1); --mx-out: cubic-bezier(0.4, 0, 0.9, 0.4); }
+
+  @keyframes mx-layer-in  { from { opacity: 0; transform: translate3d(7%, 0, 0); } to { opacity: 1; transform: none; } }
+  @keyframes mx-layer-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(7%, 0, 0); } }
+  @keyframes mx-view-in   { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+  @keyframes mx-fade-out  { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes mx-box-out   { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); } }
+
+  #editor-screen.mx-in, #viewer-screen.mx-in, #explorer-screen.mx-in, #phone-screen.mx-in { animation: mx-layer-in 0.24s var(--mx-in) both; will-change: transform, opacity; }
+  .mx-in:is(#folder-view, #trash-view, #vault-trash-view, #vault-settings-view, #vault-folder-view, #vault-locked-view, #vault-pin-setup-view) { animation: mx-view-in 0.2s var(--mx-in) both; }
+
+  /* Hidden but still painted until the animation ends. Three classes beat every `.x.hidden { display: none !important }` rule. */
+  .mx-out.mx-out.hidden { display: var(--mx-d, flex) !important; pointer-events: none; will-change: transform, opacity; }
+  #editor-screen.mx-out.mx-out.hidden, #viewer-screen.mx-out.mx-out.hidden, #explorer-screen.mx-out.mx-out.hidden, #phone-screen.mx-out.mx-out.hidden { animation: mx-layer-out 0.17s var(--mx-out) both; }
+  .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.14s ease-in both; }
+  .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.14s ease-in both; }
+}
