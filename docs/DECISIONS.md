@@ -3881,3 +3881,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - In-page views have no background of their own (the page art shows through): the old view leaves (0.12 s), the new one arrives after a 0.13 s delay (0.2 s), as the reminder tabs do. A view with no old partner arrives at once.
 - Rejected: a solid background on views (hides the Home art), overlapped fades (a faint double image remains), new page only (a hard cut before the slide).
 - Not run through CI or a device (DP209).
+
+**388. Screens and Settings join the motion; Home art anchored to the screen.** Extends Decision 387.
+- Cause of the art jump: the landing art was a child of the Home and Vault main views and is positioned against the nearest positioned ancestor. A sliding view becomes that ancestor, so the art took the view's box (20 px in) and snapped back after. Layers never touched it, so the explorer did not jump.
+- The art (`.bg-squares`) is now a direct child of `#main-screen` and `#vault-screen`, so its anchor never changes. It shows only while the landing page is on view (`:has()`), fading out 0.12 s and in 0.2 s after the 0.13 s delay. Needs `:has()` support, as Decision 355's rule already does; without it the art stays hidden.
+- Pairs added: lock or first-run screen to Home, Home to Vault, Home to its Settings tab, Vault gate to Vault content. Same recipe as views (leave 0.12 s, arrive after 0.13 s). A leaving screen is fixed over the viewport.
+- A Vault lock never animates the Vault content out: `#vault-content` has no exit, so nothing from the Vault shows through it. The app lock rule stands (Decision 385).
+- `#explorer-viewer` joins the layers: a file opened in the explorer pushes and pops like every other file.
+- Not run through CI or a device (DP209).

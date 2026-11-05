@@ -10,6 +10,7 @@ Start: owner asked for smooth transitions on every enter and Back.
 - Decision 385. Phase 84: `motion.js` and `motion.css` (new), one script line in `index.html`. `app.js` unchanged.
 - Decision 386: owner found the first pass not felt; a device recording showed instant folder swaps and a fade through a blank layer. Rebuilt on the reminder tab recipe, with paired view swaps.
 - Decision 387: a recording showed both pages at half opacity during a swap. Layers now push and pop opaque; paired views leave, then arrive.
+- Decision 388: Home art jumped on every category swap (cause: it sat inside the sliding view). Art moved to the screen level (`index.html`). Screens, Settings, the Vault gate and the explorer's file viewer joined the motion.
 - Not run through CI or a device. DP209 added.
 - Open: DP185 to DP187 remain unchecked.
 - Next start: DP209 result, then tune durations from the device.
