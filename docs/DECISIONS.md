@@ -3889,3 +3889,11 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A Vault lock never animates the Vault content out: `#vault-content` has no exit, so nothing from the Vault shows through it. The app lock rule stands (Decision 385).
 - `#explorer-viewer` joins the layers: a file opened in the explorer pushes and pops like every other file.
 - Not run through CI or a device (DP209).
+
+**389. Slower settle, depth, no ghost, scroll anchored.** Replaces the timings of Decisions 386 to 388; pairing, art and lock rules stand.
+- Cause of "fast" file opens: the curve put 90% of the push in the first 100 ms, so 0.26 s read as a jump. Layers now take 0.38 s on a softer curve and leave in 0.3 s.
+- Depth: a layer carries an edge shadow while it moves, and the page beneath darkens up to 16% (one fixed overlay, opacity only), clearing as the layer leaves.
+- Cause of the Settings ghost: the leaving page faded at the same pace as it moved, so a faint copy lingered over the blank gap. Opacity now finishes first (leaving at 65% of the time, arriving at 55%), 44 px of travel, 0.17 s out, 0.3 s in after a 0.15 s delay.
+- Scroll: a page that leaves stays where it was seen. The last scroll position is kept, and the leaving page is placed with it, so a page that gets shorter no longer makes the old one jump.
+- Not changed: late content in a layer (an editor draws its body after it opens).
+- Not run through CI or a device (DP209).
