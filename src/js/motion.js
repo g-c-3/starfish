@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 392). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 394). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -26,13 +26,22 @@ window.addEventListener('scroll', () => { lastY = window.scrollY; }, { passive: 
 // Where each page sits while it is on view. A page that leaves is put back exactly there: the new page may start higher or lower
 // (Settings, Vault settings), and placing the old one at the new one's top made it jump at the start of every swap.
 const rects = new Map();
+function leadOf(el) { // the first block that sits in the page flow: its top margin can collapse through the page
+  for (const c of el.children) {
+    if (!c.getClientRects().length) continue;
+    const pos = getComputedStyle(c).position;
+    if (pos === 'absolute' || pos === 'fixed') continue;
+    return c;
+  }
+  return null;
+}
 function snap() {
   if (document.hidden) return;
   for (const id in DEPTH) {
     const el = document.getElementById(id);
     if (!el || el.classList.contains('hidden') || el.closest('.mx-in, .mx-out, .mx-u-in, .mx-u-out') || !el.getClientRects().length) continue;
-    const r = el.getBoundingClientRect();
-    rects.set(id, { top: r.top + window.scrollY, left: r.left, width: r.width });
+    const r = el.getBoundingClientRect(), lead = leadOf(el);
+    rects.set(id, { top: r.top + window.scrollY, left: r.left, width: r.width, lead, leadTop: lead ? lead.getBoundingClientRect().top + window.scrollY : 0 });
   }
 }
 setInterval(snap, 150);
@@ -52,6 +61,7 @@ function play(el, cls, cleanup) {
     over = true;
     el.removeEventListener('animationend', end);
     el.classList.remove(...cls);
+    el.style.animationPlayState = ''; // never left paused
     if (cleanup) cleanup();
     if (--running <= 0) { running = 0; root.classList.remove('mx-x'); }
   };
@@ -111,16 +121,29 @@ new MutationObserver((records) => {
     const box = pair ? inc.getBoundingClientRect() : null; // measured before the arriving page gets its starting offset, or the old page would start displaced
     play(inc, ['mx-in', 'mx-view', back ? 'mx-from-l' : 'mx-from-r'].concat(pair ? ['mx-after'] : []));
     if (pair) {
+      inc.style.animationPlayState = 'paused'; // both start together, once the old page has been painted
       // The old page leaves over the viewport, exactly where it was seen. It is fixed, so a tall page (Settings) no longer stretches the
       // document: the new page is in view at once instead of sitting scrolled away until the animation ends.
       out.style.setProperty('--mx-d', 'block');
       const st = out.style;
-      const seen = rects.get(out.id) || { top: box.top + window.scrollY, left: box.left, width: box.width };
+      const seen = rects.get(out.id) || { top: box.top + window.scrollY, left: box.left, width: box.width, lead: null, leadTop: 0 };
+      const clear = () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; st.maxHeight = ''; st.overflow = ''; st.animationPlayState = ''; };
       st.position = 'fixed';
       st.top = seen.top - lastY + 'px';
       st.left = seen.left + 'px';
       st.width = seen.width + 'px';
-      play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], () => { st.position = ''; st.top = ''; st.left = ''; st.width = ''; });
+      play(out, ['mx-out', 'mx-view', back ? 'mx-to-r' : 'mx-to-l'], clear);
+      st.animationPlayState = 'paused'; // first frame held until the page has been painted where it is
+      if (seen.lead && seen.lead.isConnected) {
+        // Out of the page flow, the first block's top margin no longer collapses through the page and would push everything down.
+        // Put the page back so that block sits exactly where it was seen.
+        const dy = (seen.leadTop - lastY) - seen.lead.getBoundingClientRect().top;
+        if (Math.abs(dy) >= 0.5) st.top = seen.top - lastY + dy + 'px';
+      }
+      // Only what is in view is painted: a tall page (Settings) would otherwise stall while its layer is built, and reappear half faded.
+      st.maxHeight = Math.max(0, window.innerHeight - parseFloat(st.top) + 8) + 'px';
+      st.overflow = 'hidden';
+      requestAnimationFrame(() => requestAnimationFrame(() => { st.animationPlayState = ''; inc.style.animationPlayState = ''; }));
     }
   }
 }).observe(root, { subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
