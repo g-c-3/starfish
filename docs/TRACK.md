@@ -399,3 +399,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-06 | Session 189 | Decision 398 | DP185 to DP187 confirmed on the device and closed; no device pass open |
 | 2026-11-06 | Session 190 | Decisions 399 to 402 | Phase 87: edge swipe back, editor body ready, back preview flag, new-row arrival; DP211 added; not run through CI or a device |
 | 2026-11-06 | Session 191 | Decision 403 | Phase 88: image viewer shows the picture whole (hidden until decoded); DP212 added; not run through CI or a device |
+| 2026-11-06 | Session 192 | Decision 404 | Phase 89: swipe between pictures starts at the finger's speed; DP213 added; not run through CI or a device |

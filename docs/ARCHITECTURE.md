@@ -1160,6 +1160,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
 
+**Swipe between pictures (Decision 404).** On release the carousel continues from the finger's speed: `SWIPE_EASE` over 300 to 420 ms, the time from remaining distance and finger speed. The fallback slide and the voice viewer use the same ease.
+
 **Image viewer picture (Decision 403).** The picture is hidden until it has loaded and decoded, then shown with its blurred backdrop in one step; the neighbours are decoded ahead.
 
 **Editor body.** The note editor is shown after its module has loaded (preloaded when startup is quiet), so its body exists when the slide starts (Decision 400).

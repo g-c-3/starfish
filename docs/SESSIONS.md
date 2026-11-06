@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 192**
+
+Start: screen recording of swiping to the next picture, "the next media moves very fast".
+- Measured at 60 fps: the seam between pictures moved about 20 px a frame under the finger, then 140 to 150 px the first frame after release, in all three swipes. Same figure from a simulation of the old curve.
+- Decision 404. Replaced: `src/js/app.js` (`SWIPE_EASE`, release time from distance and finger speed, `SLIDE_MS` 240). Phase 89, DP213 open.
+- Parses; not run through CI or a device.
+- Observed, not changed: one frame after each slide ends changes the picture area slightly (the backdrop swaps at once).
+- Open: DP211, DP212, DP213.
+- Next start: DP211 to DP213 results.
+
+---
+
 **Session 191**
 
 Start: screen recording of the image viewer, "picture loads frame by frame".
