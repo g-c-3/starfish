@@ -1156,4 +1156,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Files and layers are not a full-width push: that read as a different animation from the categories.
 - Select files has its own Close; dialogs keep no room for a Back button.
 
-**Not covered.** The explorer header's title and small icons change at once. The editor draws its body after it opens, so content can appear after the slide starts.
+**Edge swipe back (Decision 401).** With button navigation (`ArklyNav.mode()` is `buttons`), a swipe from the left edge on an open layer calls `window.ArklyBack`, which is the system Back function in `app.js`. No finger-following drag: the layer leaves by the recipe. Gesture navigation: the system's edge, nothing added. The manifest carries `enableOnBackInvokedCallback`; `@capacitor/app` keeps its callback enabled, so there is no system preview.
+
+**New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
+
+**Editor body.** The note editor is shown after its module has loaded (preloaded when startup is quiet), so its body exists when the slide starts (Decision 400).
+
+**Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.

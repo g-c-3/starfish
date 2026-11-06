@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 190**
+
+Start: owner asked for the four items left suggested in Session 189.
+- Decisions 399 to 402. Phase 87: edge swipe back on layers, editor body ready before its slide, back preview manifest flag, arrival of new rows.
+- Replaced: `src/js/app.js` (`window.ArklyBack`, editor shown after its module, idle preload), `src/js/motion.js`, `src/css/motion.css`, `scripts/patch-manifest.js`.
+- Tested in a simulated page: new-row rule (6 cases) and edge swipe (6 cases), all pass. `app.js` and `patch-manifest.js` parse. Not run through `vite build`, CI or a device.
+- Found: `@capacitor/app` 6 keeps its back callback always enabled, so the manifest flag gives no preview (Decision 401).
+- Open: DP211.
+- Next start: DP211 result, then tune from the device.
+
+---
+
 **Session 189**
 
 Start: owner confirmed the motion works and asked for it to be the standard for everything added later.

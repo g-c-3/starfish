@@ -3951,3 +3951,15 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - `ARCHITECTURE.md` gains a Motion section and its Back button section follows Decision 393. Project instructions carry the rule.
 
 **398. Last open device passes closed.** DP185 (reminder sound), DP186 (reminder tab swipe) and DP187 (image swipe in a folder) all worked on the device. No device pass is open now.
+
+**399. Phase 87 opened.** Owner asked for the four items Session 189 listed as suggested: edge swipe back on layers, the editor body ready before its slide, the Android back preview flag, an entry animation for new rows. Each follows the one motion recipe (Decision 397); no new keyframes or durations.
+
+**400. Editor body ready before its slide.** Cause: the note editor was shown at once and its body was built after the module loaded, so on the first open the body could appear during or after the slide. Fix: the screen is shown after the module has loaded, in the same task that builds the body; the module is loaded in the idle time 3 s after start. Why correct: the observer in `motion.js` runs after that task, so the slide starts with the body in place. Cost: a first open before the preload finishes waits for the module. Only the note editor changed.
+
+**401. Edge swipe back and back preview flag.**
+- Edge swipe: a swipe from the left edge on an open layer (Editor, Viewer, Explorer, the explorer's file viewer, Phone gallery) goes back through `window.ArklyBack`, the system Back function. Active only when `ArklyNav.mode()` is `buttons`; with gesture navigation the system owns the edge and nothing is added. Off under the lock, while a dialog is open and on landing pages (no exit by swipe).
+- No finger-following drag: the layer would have to restart its exit from 0 and jump. The layer leaves by the recipe.
+- Known cost: a horizontal swipe that starts inside the 28 px edge in an image carousel goes back instead of to the previous image.
+- Manifest flag: `android:enableOnBackInvokedCallback="true"` added by `patch-manifest.js`. `@capacitor/app` 6 registers its own always-enabled back callback, so the system shows no preview; the system Back still reaches the `backButton` listener. A real preview would need that callback disabled on pages with no in-app destination, which conflicts with the exit-notice rule (Decision 289). Not done.
+
+**402. New rows arrive.** A redraw of `#folder-list` or `#vault-folder-list` that adds one or two ids while at least one stays marks those rows `mx-row`: the recipe's arrival without its slide (existing `mx-in-r` keyframes with `--mx-dx: 0px`). A first draw, a different set, three or more new ids, a hidden or animating ancestor, the lock and reduced motion all skip it. Logic tested in a simulated page (first draw, one new, different set, three new, edge swipe cases); not run on a device (DP211). Not covered: the first row of an empty folder, search results, the Gallery grid and the explorer lists.
