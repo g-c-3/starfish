@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 193**
+
+Start: swipe to next or previous also for notes, reminders and locations; Voice swipe leaves a big blank; everything as smooth as possible.
+- Measured at 60 fps: the Voice page slid off, about 16 blank frames, then the next slid in.
+- Answers: notes swipe anywhere while the keyboard is closed; unsaved changes are saved first.
+- Decision 405. New `src/js/pageswipe.js`; replaced `src/js/app.js` (Voice, Reminder, Location viewers, `swipeItems`). Phase 90, DP214 open.
+- Tested in a simulated page (9 cases: ghost, follow, commit, snap back, vertical, no neighbour, timing); `app.js` parses. Not run through CI or a device.
+- Notes swipe not built: Phase 91, Decision 406 planned. The editor is one closure and must be rebuilt in place.
+- Open: DP211 to DP214.
+- Next start: DP211 to DP214 results, then Phase 91.
+
+---
+
 **Session 192**
 
 Start: screen recording of swiping to the next picture, "the next media moves very fast".

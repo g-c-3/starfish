@@ -400,3 +400,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-06 | Session 190 | Decisions 399 to 402 | Phase 87: edge swipe back, editor body ready, back preview flag, new-row arrival; DP211 added; not run through CI or a device |
 | 2026-11-06 | Session 191 | Decision 403 | Phase 88: image viewer shows the picture whole (hidden until decoded); DP212 added; not run through CI or a device |
 | 2026-11-06 | Session 192 | Decision 404 | Phase 89: swipe between pictures starts at the finger's speed; DP213 added; not run through CI or a device |
+| 2026-11-06 | Session 193 | Decision 405 | Phase 90: Voice, Reminder, Location swipe with the neighbour beside them, no blank; Phase 91 (notes) planned; DP214 added; not run through CI or a device |
