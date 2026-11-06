@@ -38,6 +38,9 @@
   .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.26s cubic-bezier(0.3, 0, 0.6, 1) both; }
   .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.24s cubic-bezier(0.4, 0, 0.9, 0.4) both; }
 
+  /* A new row in a list (Decision 402): the arrival of the recipe without its slide, from the same keyframes and tokens. */
+  .entry-row.mx-row { --mx-dx: 0px; animation: mx-in-r 0.3s var(--mx-settle) both; }
+
   /* Dialog arrival mirrors the exit: backdrop clears in, the box rises and settles. */
   @keyframes mx-fade-in { from { opacity: 0; } to { opacity: 1; } }
   .modal-overlay.modal-overlay:not(.hidden) { animation: mx-fade-in 0.22s ease-out both; }
