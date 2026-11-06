@@ -2534,6 +2534,7 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
 // One import of the editor module, kept; a failed load is retried at the next open.
 let codeEditorModule = null;
 const loadCodeEditor = () => (codeEditorModule ||= import('./codeeditor.js').catch((e) => { codeEditorModule = null; throw e; }));
+setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => loadCodeEditor().catch(() => {})), 3000); // loaded before the first open: the editor then opens with its body ready
 
 // The note editor: the code editor in note mode (Decision 292). The screen opens at once; the editor attaches when its module loads.
 // Resolves when the person leaves. Saving does not close it (Decision 302): Save is enabled only while there are changes, calls
@@ -2622,13 +2623,14 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     };
     saveBtn.onclick = doSave;
     activeEditor = { finish: (r) => finish(r === true), requestBack, isVault };
-    screen.classList.remove('hidden');
-    updateBackButtonState();
     (async () => {
       let mod;
       try { mod = await loadCodeEditor(); }
       catch (e) { if (!closed) { toast('The editor could not be loaded'); finish(true); } return; }
       if (closed) return;
+      // Shown only now: the body below is built in the same task, before the slide's first frame (Decision 400).
+      screen.classList.remove('hidden');
+      updateBackButtonState();
       let undoBtn, redoBtn;
       const sync = () => { undoBtn.disabled = !ed.canUndo(); redoBtn.disabled = !ed.canRedo(); };
       const mk = (host2, cls, html, label, fn) => {
@@ -3977,7 +3979,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Android Back button and back gesture: the same action as the on-screen Back button, with the same glow. Where that
   // button is disabled (a section's landing page) the second Back in a row sends the app to the background, which locks it (Decision 45); the lock gate does so at once (Decision 287).
-  App.addListener('backButton', () => {
+  const systemBack = () => {
     if (handleWidgetBack()) return; // an open widget capture closes first (Decision 266)
     if (!backAction()) { backFromLanding(); return; }
     lastLandingBackAt = 0; // a Back that went somewhere starts the exit count again
@@ -3985,7 +3987,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     void navBackBtn.offsetWidth;
     navBackBtn.classList.add('glow');
     goBack();
-  });
+  };
+  App.addListener('backButton', systemBack);
+  window.ArklyBack = systemBack; // the edge swipe on layers (motion.js) takes the same path as the system Back
 
   // Same glow on the row action buttons (Edit, Share, Download, Delete): one delegated listener covers every list,
   // including rows drawn later. Only the tapped button glows; the row itself stays still (see style.css).

@@ -1,4 +1,4 @@
-// Screen motion (Decisions 385 to 396). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
+// Screen motion (Decisions 385 to 402). Watches the `hidden` class and acts after the change, so app logic sees the final state at once.
 // One recipe for everything that opens or closes, the category one: the old page leaves (fade plus a short slide), then the new page arrives.
 // Two pages never overlap, and nothing is a full-width slide. A file or the explorer opening over a page is the same: the page under it
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
@@ -244,4 +244,61 @@ new MutationObserver((records) => {
     ], { duration: IN_MS, delay: GAP_MS, easing: SETTLE, fill: 'backwards' });
     busy(arrive);
   }).observe(body, { childList: true });
+})();
+
+// ---- A new row in a list (Decision 402) ----
+// A list redrawn with one or two ids it did not hold, while the rest stayed, has gained rows: they arrive with the one recipe's soft
+// landing (fade, no slide). Opening another folder, a tab swap or a filter changes the whole set, so it never matches. Class only.
+(function rowMotion() {
+  const LISTS = ['folder-list', 'vault-folder-list'];
+  const known = new Map();
+  const idsOf = (list) => new Set(Array.from(list.querySelectorAll('.entry-row[data-id]'), (r) => r.dataset.id));
+  const animating = (list) => { for (let n = list; n; n = n.parentElement) if (n.getAnimations && n.getAnimations().length) return true; return false; };
+  for (const id of LISTS) {
+    const list = document.getElementById(id);
+    if (!list) continue;
+    known.set(list, idsOf(list));
+    new MutationObserver(() => {
+      const now = idsOf(list), prev = known.get(list) || new Set();
+      known.set(list, now);
+      const fresh = Array.from(now).filter((x) => !prev.has(x));
+      if (!fresh.length || fresh.length > 2 || now.size - fresh.length < 1) return; // a first draw, or a different set
+      if (reduced.matches || locked() || !list.getClientRects().length || list.closest('.hidden, .mx-in, .mx-out, .mx-u-in, .mx-u-out') || animating(list)) return;
+      for (const rid of fresh) {
+        const row = Array.from(list.querySelectorAll('.entry-row[data-id]')).find((r) => r.dataset.id === rid);
+        if (!row) continue;
+        row.classList.add('mx-row');
+        const done = (e) => { if (e && e.target !== row) return; row.classList.remove('mx-row'); row.removeEventListener('animationend', done); };
+        row.addEventListener('animationend', done);
+        setTimeout(() => done(), FAILSAFE_MS);
+      }
+    }).observe(list, { childList: true, subtree: true });
+  }
+})();
+
+// ---- Edge swipe back on a layer (Decision 401) ----
+// Where Back is a button (window.ArklyNav, Decision 287) a swipe from the left edge goes back, by the same path as the system Back and
+// with the same exit recipe. With gesture navigation the system already owns the edge, so nothing is added there. No drag follows the
+// finger: the layer leaves by the recipe, so there is no jump between a dragged position and the exit.
+(function edgeBack() {
+  const EDGE = 28, MIN_DX = 64, MAX_DY = 48, MAX_MS = 600;
+  const OPEN = ['#editor-screen', '#viewer-screen', '#explorer-screen', '#explorer-viewer', '#phone-screen'];
+  let t = null;
+  const buttons = () => { try { return !!window.ArklyNav && window.ArklyNav.mode() === 'buttons'; } catch { return false; } };
+  const shown = (el) => !!el && !el.classList.contains('hidden') && el.getClientRects().length > 0 && !el.matches('.mx-in, .mx-out');
+  const layerOpen = () => OPEN.some((s) => shown(document.querySelector(s)));
+  const dialogOpen = () => !!document.querySelector('.modal-overlay:not(.hidden)');
+  document.addEventListener('touchstart', (e) => {
+    t = null;
+    const p = e.touches[0];
+    if (e.touches.length !== 1 || p.clientX > EDGE || !buttons() || locked() || dialogOpen() || !layerOpen()) return;
+    t = { x: p.clientX, y: p.clientY, at: performance.now() };
+  }, { passive: true, capture: true });
+  document.addEventListener('touchend', (e) => {
+    const s = t; t = null;
+    const p = e.changedTouches[0];
+    if (!s || !p || performance.now() - s.at > MAX_MS) return;
+    if (p.clientX - s.x >= MIN_DX && Math.abs(p.clientY - s.y) <= MAX_DY && !dialogOpen() && layerOpen() && typeof window.ArklyBack === 'function') window.ArklyBack();
+  }, { passive: true, capture: true });
+  document.addEventListener('touchcancel', () => { t = null; }, { passive: true, capture: true });
 })();
