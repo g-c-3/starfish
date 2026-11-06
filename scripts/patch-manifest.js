@@ -85,4 +85,11 @@ if (/android:allowBackup="true"/.test(xml)) {
   console.log('patch-manifest.js: allowBackup=false added.');
 }
 
+// Decision 401: opt in to the platform back callback, so the system can show the back preview where it applies.
+// @capacitor/app keeps its own callback enabled, so the system Back still reaches the page's backButton listener unchanged.
+if (!/android:enableOnBackInvokedCallback=/.test(xml)) {
+  xml = xml.replace('<application', '<application android:enableOnBackInvokedCallback="true"');
+  console.log('patch-manifest.js: enableOnBackInvokedCallback=true added.');
+}
+
 fs.writeFileSync(MANIFEST_PATH, xml, 'utf8');
