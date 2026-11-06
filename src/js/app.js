@@ -54,6 +54,7 @@ import { openExplorer } from './explorer.js';
 import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT } from './filesview.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
+import { attachPageSwipe } from './pageswipe.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
 
 
@@ -191,12 +192,14 @@ let moneyMonth = null; // { y, m } month shown in the Money folder header; null 
 let vaultMoneyMonth = null; // same for the Vault Money folder (Decision 135)
 let moneyChartMode = 'month'; // chart under the month header: 'month' (6 months) or 'week' (weeks of the shown month); per folder, in memory (Decision 263)
 let vaultMoneyChartMode = 'month';
+const swipeItems = { home: { reminder: [], location: [] }, vault: { reminder: [], location: [] } }; // the reminders and locations shown in an open folder, in order: what their viewers swipe through (Decision 405)
 const voiceFolderItems = { home: [], vault: [] }; // the recordings shown in an open Voice folder, in order: what the viewer swipes through (Decision 313)
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.home = [];
+  swipeItems.home = { reminder: [], location: [] };
   openFolderType = null;
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
@@ -306,6 +309,7 @@ function closeVaultFolder() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.vault = [];
+  swipeItems.vault = { reminder: [], location: [] };
   openVaultFolderType = null;
   vaultMoneyMonth = null;
   const vms = document.getElementById('vault-money-summary'); // amounts must not stay in the page once the folder closes or the Vault locks
@@ -1324,6 +1328,7 @@ function lockVault() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.vault = [];
+  swipeItems.vault = { reminder: [], location: [] };
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
@@ -4087,6 +4092,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const tabItems = openVaultFolderType === 'reminder' ? reminderTabItems(items, vaultReminderLog, reminderTab.vault, { savedAt: vSavedAt, newestFirst: false }) : null; // Decision 357
+    if (tabItems) swipeItems.vault.reminder = tabItems.map((it) => it.row);
+    if (openVaultFolderType === 'location') swipeItems.vault.location = items;
     container.innerHTML = tabItems
       ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
       : vaultRowsHtml(items, !!folderFind.vault);
@@ -5214,6 +5221,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const tabItems = openFolderType === 'reminder' ? reminderTabItems(rows, await loadReminderLog(db), reminderTab.home, { savedAt }) : null; // Upcoming, Completed or All (Decision 357)
+    if (tabItems) swipeItems.home.reminder = tabItems.map((it) => it.row);
+    if (openFolderType === 'location') swipeItems.home.location = rows;
     document.getElementById('folder-list').innerHTML = (tabItems
       ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
@@ -6156,29 +6165,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function openReminder(item, isVault = false) {
+  async function openReminder(item, isVault = false, list = null) {
+    const items = list && list.some((x) => x.id === item.id) ? list.slice() : [item];
+    let index = items.findIndex((x) => x.id === item.id), viewerRefresh = () => {}, closed = false;
+    const ref = { id: item.id, type: item.type }; // Share, Download, Move and Delete read this: it follows the swipe
     // Vault: the schedule is read from the row (Snooze and Done change it while locked); the note comes from the unlocked index.
-    const fresh = async () => {
-      const dbRow = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
-      if (!dbRow) return item;
+    const freshOf = async (it) => {
+      const dbRow = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [it.id])).values || [])[0];
+      if (!dbRow) return it;
       if (!isVault) return dbRow;
-      const ix = (getVaultIndex() || []).find((e) => e.id === item.id);
+      const ix = (getVaultIndex() || []).find((e) => e.id === it.id);
       return { ...dbRow, description: ix ? ix.description : '', tags: ix ? ix.tags : [] };
     };
-    await openViewer({
-      title: 'Reminder', isVault, entry: item,
-      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      render: async (body, { refresh }) => {
-        const row = await fresh();
-        const tags = await getEntryTags(row.id);
-        const st = reminderStatus(row);
-        const stLabel = { upcoming: 'Upcoming', snoozed: 'Snoozed', done: 'Done', fired: 'Fired' }[st];
-        const active = st === 'upcoming' || st === 'snoozed';
-        const when = new Date(reminderNextDue(row)).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-        // A fired one-off can't simply be reopened (its time is past): offer Reschedule instead.
-        const canToggle = active || row.completed_at;
-        const toggleLabel = active ? (row.repeat_rule ? 'Done for now' : 'Mark done') : 'Reopen';
-        body.innerHTML = `
+    const fresh = () => freshOf(items[index]);
+    const pageHtml = (row, tags) => {
+      const st = reminderStatus(row);
+      const stLabel = { upcoming: 'Upcoming', snoozed: 'Snoozed', done: 'Done', fired: 'Fired' }[st];
+      const active = st === 'upcoming' || st === 'snoozed';
+      const when = new Date(reminderNextDue(row)).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      // A fired one-off can't simply be reopened (its time is past): offer Reschedule instead.
+      const canToggle = active || row.completed_at;
+      const toggleLabel = active ? (row.repeat_rule ? 'Done for now' : 'Mark done') : 'Reopen';
+      return `
           <div class="detail-hero${active ? '' : ' inactive'}" data-type="reminder">
             <span class="row-icon">${iconSvg('reminder')}</span>
             <div class="hero-when">${escapeHtml(when)}</div>
@@ -6196,6 +6204,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${canToggle ? `<button id="rv-toggle-btn">${toggleLabel}</button>` : ''}
             <button id="rv-edit-btn" class="secondary-btn">Reschedule</button>
           </div>`;
+    };
+    // Swipe (Decision 405): the neighbour's page moves with this one, edge to edge.
+    const swipe = attachPageSwipe({
+      body: document.getElementById('viewer-body'), pageSel: '.vv-wrap',
+      canGo: (s) => index + s >= 0 && index + s < items.length,
+      ghostHtml: async (step) => {
+        const it = items[index + step];
+        if (!it) return null;
+        const row = await freshOf(it);
+        return pageHtml(row, await getEntryTags(row.id));
+      },
+      onCommit: (step) => {
+        if (closed || index + step < 0 || index + step >= items.length) return;
+        index += step; ref.id = items[index].id;
+        return viewerRefresh();
+      }
+    });
+    await openViewer({
+      title: 'Reminder', isVault, entry: ref, onClose: () => { closed = true; swipe.detach(); },
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      render: async (body, { refresh }) => {
+        viewerRefresh = refresh;
+        const row = await fresh();
+        const tags = await getEntryTags(row.id);
+        const st = reminderStatus(row);
+        const active = st === 'upcoming' || st === 'snoozed';
+        body.innerHTML = `<div class="vv-wrap">${pageHtml(row, tags)}</div>`;
+        swipe.settle();
         const t = document.getElementById('rv-toggle-btn');
         if (t) t.onclick = async () => { if (active) { await markReminderDone(row.id); if (row.repeat_rule) toast('Done for now — it will repeat'); } else await reopenReminder(row.id); window.dispatchEvent(new Event('arkly-reminders-changed')); await refresh(); };
         document.getElementById('rv-edit-btn').onclick = async () => { await editEntryUI(await fresh(), isVault); await refresh(); };
@@ -6218,25 +6254,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Vault: the coordinates come from the unlocked index (Decision 142); the view is otherwise Home's.
-  async function openLocation(item, isVault = false) {
-    const fresh = async () => isVault
-      ? ((getVaultIndex() || []).find((e) => e.id === item.id) || item)
-      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0] || item;
-    await openViewer({
-      title: 'Location', isVault, entry: item,
-      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      render: async (body) => {
-        const found = await fresh();
-        const row = isVault // one shape for both: latitude, longitude, created_at
-          ? { ...found, latitude: found.location ? found.location.latitude : null, longitude: found.location ? found.location.longitude : null, created_at: found.createdAt }
-          : found;
-        const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
-        const has = row.latitude != null && row.longitude != null;
-        const coords = has ? formatCoords(row.latitude, row.longitude) : '';
-        const provs = has && !isVault ? await loadProviders(metaGet) : []; // the providers that are set (Decision 348)
-        // The default name is "Location" plus the time; the Saved row already shows it. A name the person chose stays, as a row (Decision 347).
-        const customLabel = row.label && !/^Location \d{1,2}[:.]\d{2}([:.]\d{2})?(\s?[ap]\.?m\.?)?$/i.test(row.label.trim()) ? row.label : '';
-        body.innerHTML = `
+  async function openLocation(item, isVault = false, list = null) {
+    const items = list && list.some((x) => x.id === item.id) ? list.slice() : [item];
+    let index = items.findIndex((x) => x.id === item.id), viewerRefresh = () => {}, closed = false;
+    const ref = { id: item.id, type: item.type }; // Share, Download, Move and Delete read this: it follows the swipe
+    const freshOf = async (it) => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === it.id) || it)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [it.id])).values || [])[0] || it;
+    const fresh = () => freshOf(items[index]);
+    const rowOf = (found) => (isVault // one shape for both: latitude, longitude, created_at
+      ? { ...found, latitude: found.location ? found.location.latitude : null, longitude: found.location ? found.location.longitude : null, created_at: found.createdAt }
+      : found);
+    const pageHtml = (row, tags, provs) => {
+      const has = row.latitude != null && row.longitude != null;
+      const coords = has ? formatCoords(row.latitude, row.longitude) : '';
+      // The default name is "Location" plus the time; the Saved row already shows it. A name the person chose stays, as a row (Decision 347).
+      const customLabel = row.label && !/^Location \d{1,2}[:.]\d{2}([:.]\d{2})?(\s?[ap]\.?m\.?)?$/i.test(row.label.trim()) ? row.label : '';
+      return `
           <div class="detail-hero" data-type="location">
             <span class="row-icon">${iconSvg('location')}</span>
             <div class="hero-when hero-coords">${has ? escapeHtml(coords) : 'No coordinates saved'}</div>
@@ -6257,6 +6291,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             <button id="lv-copy-btn" class="secondary-btn">Copy</button>
           </div>
           ${isVault ? '' : `<div class="detail-actions lv-actions2">${provs.length > 1 ? provs.map((p) => `<button id="lv-map-btn${p.slot}" class="secondary-btn">Show map ${p.slot}</button>`).join('') : '<button id="lv-map-btn" class="secondary-btn">Show map</button>'}</div>`}` : ''}`;
+    };
+    // Swipe (Decision 405): the neighbour's page moves with this one, edge to edge; a map is dragged and pinched, never swiped.
+    const swipe = attachPageSwipe({
+      body: document.getElementById('viewer-body'), pageSel: '.vv-wrap', ignoreSel: 'button, input, select, a, #lv-map-wrap',
+      canGo: (s) => index + s >= 0 && index + s < items.length,
+      ghostHtml: async (step) => {
+        const it = items[index + step];
+        if (!it) return null;
+        const found = await freshOf(it), row = rowOf(found);
+        const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
+        const has = row.latitude != null && row.longitude != null;
+        return pageHtml(row, tags, has && !isVault ? await loadProviders(metaGet) : []);
+      },
+      onCommit: (step) => {
+        if (closed || index + step < 0 || index + step >= items.length) return;
+        index += step; ref.id = items[index].id;
+        return viewerRefresh();
+      }
+    });
+    await openViewer({
+      title: 'Location', isVault, entry: ref, onClose: () => { closed = true; swipe.detach(); },
+      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      render: async (body, { refresh: redraw }) => {
+        viewerRefresh = redraw;
+        const found = await fresh();
+        const row = isVault // one shape for both: latitude, longitude, created_at
+          ? { ...found, latitude: found.location ? found.location.latitude : null, longitude: found.location ? found.location.longitude : null, created_at: found.createdAt }
+          : found;
+        const tags = isVault ? (found.tags || []) : await getEntryTags(row.id);
+        const has = row.latitude != null && row.longitude != null;
+        const coords = has ? formatCoords(row.latitude, row.longitude) : '';
+        const provs = has && !isVault ? await loadProviders(metaGet) : []; // the providers that are set (Decision 348)
+        // The default name is "Location" plus the time; the Saved row already shows it. A name the person chose stays, as a row (Decision 347).
+        const customLabel = row.label && !/^Location \d{1,2}[:.]\d{2}([:.]\d{2})?(\s?[ap]\.?m\.?)?$/i.test(row.label.trim()) ? row.label : '';
+        body.innerHTML = `<div class="vv-wrap">${pageHtml(row, tags, provs)}</div>`;
+        swipe.settle();
         if (!has) return;
         // Optional maps (Decisions 345, 346, 348): the map replaces the grid plot in place. Saved tiles show with no network, on open; a provider
         // is asked only after a tap, for the tiles in view, and Home only. Two providers: two buttons, each with its own saved tiles.
@@ -6330,12 +6400,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     stopRowPlay();
     const items = list && list.some((x) => x.id === item.id) ? list.slice() : [item];
     let index = items.findIndex((x) => x.id === item.id);
-    let url = null, player = null, token = 0, enterDir = 0, leaving = false, closed = false, viewerRefresh = () => {};
+    let url = null, player = null, token = 0, closed = false, viewerRefresh = () => {};
     const ref = { id: item.id, type: item.type }; // the viewer's Share, Download, Move and Delete read this: it follows the swipe
     const bodyEl = document.getElementById('viewer-body');
-    const fresh = async () => isVault
-      ? ((getVaultIndex() || []).find((e) => e.id === items[index].id) || items[index])
-      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [items[index].id])).values || [])[0] || items[index];
+    const freshOf = async (it) => isVault
+      ? ((getVaultIndex() || []).find((e) => e.id === it.id) || it)
+      : ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [it.id])).values || [])[0] || it;
+    const fresh = () => freshOf(items[index]);
+    const voicePageHtml = (row, tags, i) => {
+      const saved = isVault ? row.createdAt : row.created_at;
+      return `
+            <div class="detail-hero" data-type="voice">
+              <span class="row-icon">${iconSvg('voice')}</span>
+              <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
+              <div class="hero-sub">Voice recording${items.length > 1 ? ` · ${i + 1}/${items.length}` : ''}</div>
+            </div>
+            <div id="vv-player"${playerH ? ` style="min-height:${playerH}px"` : ''}></div>
+            <dl class="detail-list">
+              ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+              ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((tg) => `<span class="tag">${escapeHtml(tg)}</span>`).join('')}</dd></div>` : ''}
+              <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
+            </dl>
+          `;
+    };
     const source = async () => {
       if (url) return url;
       if (isVault) { url = (await openVaultEntry(items[index].id)).blobUrl; return url; }
@@ -6349,84 +6436,42 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (url) { URL.revokeObjectURL(url); url = null; }
     };
     const canGo = (s) => index + s >= 0 && index + s < items.length;
-    const go = (step) => {
-      if (closed || !canGo(step)) return false;
-      release();
-      index += step; ref.id = items[index].id; enterDir = step;
-      viewerRefresh();
-      return true;
-    };
-    // Swipe: the page follows the finger, then slides off (or eases back); a touch on the player's own controls is not a swipe.
-    const wrapEl = () => bodyEl.querySelector('.vv-wrap');
-    let sx = 0, sy = 0, dx = 0, mode = null, active = false;
-    const slide = (w, to) => { w.style.transition = `transform ${SLIDE_MS}ms ${SWIPE_EASE}`; w.style.transform = to; };
-    const onDown = (e) => {
-      if (leaving || !wrapEl() || e.target.closest('.audio-player, button, input, select, a')) return;
-      active = true; mode = null; dx = 0; sx = e.clientX; sy = e.clientY;
-    };
-    const onMove = (e) => {
-      if (!active) return;
-      dx = e.clientX - sx;
-      const dy = e.clientY - sy;
-      if (!mode && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
-      if (mode === 'v') { active = false; return; }
-      const w = mode === 'h' ? wrapEl() : null;
-      if (w) { w.style.transition = 'none'; w.style.transform = `translateX(${canGo(dx < 0 ? 1 : -1) ? dx : dx * 0.3}px)`; }
-    };
-    const onUp = (e) => {
-      if (!active) return;
-      active = false;
-      const w = wrapEl();
-      if (mode !== 'h' || !w) return;
-      const step = dx < 0 ? 1 : -1;
-      if (e.type === 'pointerup' && Math.abs(dx) > bodyEl.clientWidth * 0.2 && canGo(step)) {
-        leaving = true;
-        slide(w, `translateX(${dx < 0 ? -bodyEl.clientWidth : bodyEl.clientWidth}px)`);
-        setTimeout(() => go(step), SLIDE_MS);
-      } else slide(w, '');
-    };
-    const ev = [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onUp], ['pointercancel', onUp]];
-    for (const [n, f] of ev) bodyEl.addEventListener(n, f);
-    bodyEl.classList.add('vv-swipe');
+    // Swipe (Decision 405): the neighbour's page moves with this one, edge to edge; a touch on the player's own controls is not a swipe.
+    let playerH = 0;
+    const swipe = attachPageSwipe({
+      body: bodyEl, pageSel: '.vv-wrap', ignoreSel: '.audio-player, button, input, select, a', canGo,
+      ghostHtml: async (step) => {
+        const it = items[index + step];
+        if (!it) return null;
+        const row = await freshOf(it);
+        const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
+        return voicePageHtml(row, tags, index + step);
+      },
+      onCommit: (step) => {
+        if (closed || !canGo(step)) return;
+        release();
+        index += step; ref.id = items[index].id;
+        return viewerRefresh();
+      }
+    });
     await openViewer({
       title: 'Voice', isVault, entry: ref,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      onClose: () => { closed = true; release(); for (const [n, f] of ev) bodyEl.removeEventListener(n, f); bodyEl.classList.remove('vv-swipe'); },
+      onClose: () => { closed = true; release(); swipe.detach(); },
       render: async (body, { refresh }) => {
         viewerRefresh = refresh;
-        leaving = false;
         const mine = ++token;
         const row = await fresh();
         const tags = isVault ? (row.tags || []) : await getEntryTags(row.id);
         if (mine !== token) return;
-        const saved = isVault ? row.createdAt : row.created_at;
-        body.innerHTML = `
-          <div class="vv-wrap">
-            <div class="detail-hero" data-type="voice">
-              <span class="row-icon">${iconSvg('voice')}</span>
-              <div class="hero-when hero-coords">${escapeHtml(row.label)}</div>
-              <div class="hero-sub">Voice recording${items.length > 1 ? ` · ${index + 1}/${items.length}` : ''}</div>
-            </div>
-            <div id="vv-player"></div>
-            <dl class="detail-list">
-              ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
-              ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((tg) => `<span class="tag">${escapeHtml(tg)}</span>`).join('')}</dd></div>` : ''}
-              <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
-            </dl>
-          </div>`;
-        const enter = enterDir;
-        enterDir = 0;
-        if (enter) { // the new page waits off the screen on the side the swipe came from, then slides in
-          const w = wrapEl();
-          w.style.transform = `translateX(${enter * body.clientWidth}px)`;
-          w.getBoundingClientRect();
-          slide(w, '');
-        }
+        body.innerHTML = `<div class="vv-wrap">${voicePageHtml(row, tags, index)}</div>`;
+        swipe.settle();
         try {
           voiceOutDefault = (await metaGet('voice_output', 'speaker')) === 'earpiece' ? 'earpiece' : 'speaker';
           const u = await source();
           if (mine !== token) return;
           player = createAudioPlayer(body.querySelector('#vv-player'), u, { onActivity: isVault ? armVaultAutoLock : armAppAutoLock, output: voiceOutDefault });
+          playerH = body.querySelector('#vv-player').offsetHeight || playerH;
         } catch (err) {
           const box = mine === token && body.querySelector('#vv-player');
           if (box) box.innerHTML = `<div class="hero-note">Could not open this recording: ${escapeHtml(String(err.message || err))}</div>`;
@@ -6970,8 +7015,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!item) return;
     if (item.type === 'note') await openNote(item, isVault);
     else if (item.type === 'money' || (item.type === 'expense' && !isVault)) await openMoney(item, isVault);
-    else if (item.type === 'reminder') await openReminder(item, isVault);
-    else if (item.type === 'location') await openLocation(item, isVault);
+    else if (item.type === 'reminder') await openReminder(item, isVault, swipeItems[isVault ? 'vault' : 'home'].reminder);
+    else if (item.type === 'location') await openLocation(item, isVault, swipeItems[isVault ? 'vault' : 'home'].location);
     else if (item.type === 'voice') await openVoice(item, isVault, isVault ? voiceFolderItems.vault : voiceFolderItems.home);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') {
