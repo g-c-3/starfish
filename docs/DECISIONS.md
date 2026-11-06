@@ -3949,3 +3949,5 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 - A motion change is checked by frame-tracking a recording before a cause is named.
 - DP209 closed by the owner (confirmed working). DP210 closed (no Back circle in later recordings).
 - `ARCHITECTURE.md` gains a Motion section and its Back button section follows Decision 393. Project instructions carry the rule.
+
+**398. Last open device passes closed.** DP185 (reminder sound), DP186 (reminder tab swipe) and DP187 (image swipe in a folder) all worked on the device. No device pass is open now.

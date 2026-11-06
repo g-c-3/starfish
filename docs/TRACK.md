@@ -396,3 +396,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-05 | Session 188 | Decision 385 | Phase 84: screen motion (layers, dialogs, in-page views); not yet run through CI or a device |
 | 2026-11-05 | Session 188 | Decisions 386 to 396 | Phases 84 and 85: motion recipe for layers, pages, dialogs and the file explorer; on-screen Back button removed; fixes found by frame tracking |
 | 2026-11-06 | Session 189 | Decision 397 | Phase 86: standing motion rule; DP209 and DP210 closed; Architecture Motion section; project instructions |
+| 2026-11-06 | Session 189 | Decision 398 | DP185 to DP187 confirmed on the device and closed; no device pass open |
