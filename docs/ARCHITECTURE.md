@@ -1160,6 +1160,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
 
+**Image viewer picture (Decision 403).** The picture is hidden until it has loaded and decoded, then shown with its blurred backdrop in one step; the neighbours are decoded ahead.
+
 **Editor body.** The note editor is shown after its module has loaded (preloaded when startup is quiet), so its body exists when the slide starts (Decision 400).
 
 **Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.

@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 191**
+
+Start: screen recording of the image viewer, "picture loads frame by frame".
+- Measured at 60 fps: the picture painted in pieces while decoding (a strip at the right edge for 15 frames, a top band in the second open), then appeared whole; the backdrop faded in from the load event.
+- Decision 403. Replaced: `src/js/app.js` (picture hidden until decoded, then shown whole with its backdrop). Phase 88, DP212 open.
+- Parses; not run through CI or a device. The recording is not reproducible in a simulated page (decode and raster are the WebView's).
+- Observed, not changed: on Back from the image viewer the body turns pale during the exit (the image stage is cleared before the exit starts). To confirm in DP212, then fix by Decision.
+- Open: DP211, DP212.
+- Next start: DP211 and DP212 results.
+
+---
+
 **Session 190**
 
 Start: owner asked for the four items left suggested in Session 189.

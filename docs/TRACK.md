@@ -398,3 +398,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-06 | Session 189 | Decision 397 | Phase 86: standing motion rule; DP209 and DP210 closed; Architecture Motion section; project instructions |
 | 2026-11-06 | Session 189 | Decision 398 | DP185 to DP187 confirmed on the device and closed; no device pass open |
 | 2026-11-06 | Session 190 | Decisions 399 to 402 | Phase 87: edge swipe back, editor body ready, back preview flag, new-row arrival; DP211 added; not run through CI or a device |
+| 2026-11-06 | Session 191 | Decision 403 | Phase 88: image viewer shows the picture whole (hidden until decoded); DP212 added; not run through CI or a device |
