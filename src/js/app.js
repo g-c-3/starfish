@@ -2894,7 +2894,8 @@ function thumbGridHtml(items, cols = DEFAULT_COLS, dateOf = null) {
 }
 
 // Pinch, drag and double-tap on one image inside a stage. At scale 1 a horizontal drag is a swipe (onSwipe(+1|-1)).
-const ZOOM_MAX = 6, ZOOM_DOUBLE = 2.5, SLIDE_MS = 160; // SLIDE_MS: a swipe slides the picture off and the next one in
+const ZOOM_MAX = 6, ZOOM_DOUBLE = 2.5, SLIDE_MS = 240; // SLIDE_MS: a swipe slides the picture off and the next one in
+const SWIPE_EASE = 'cubic-bezier(0.3, 0.4, 0.35, 1)'; // starts at about the finger's speed (slope 4/3), stops softly (Decision 404)
 function clampPan(tx, ty, scale, stage, img) {
   const mx = Math.max(0, (img.clientWidth * scale - stage.clientWidth) / 2);
   const my = Math.max(0, (img.clientHeight * scale - stage.clientHeight) / 2);
@@ -2961,15 +2962,16 @@ function attachZoomPan(stage, img, { onSwipe = null, canSwipe = null, onActivity
       leaving = true; // the picture carries on off the screen from where the finger left it; the next one slides in
       if (carousel && carousel.has(step)) {
         const span = stage.clientWidth + carousel.gap;
-        const ms = Math.round(Math.min(230, Math.max(110, (span - Math.abs(dx)) / Math.max(Math.abs(vx), 1.2))));
-        const ease = 'cubic-bezier(0.22, 0.8, 0.3, 1)';
+        // The ease starts at 4/3 of the average speed, so the time that keeps the first frame near the finger's speed is 4/3 x distance / speed (Decision 404).
+        const ms = Math.round(Math.min(420, Math.max(300, (4 / 3) * (span - Math.abs(dx)) / Math.max(Math.abs(vx), 0.8))));
+        const ease = SWIPE_EASE;
         img.style.transition = `transform ${ms}ms ${ease}`;
         img.style.transform = `translate(${-step * span}px, 0px) scale(1)`;
         carousel.commit(step, ms, ease);
         setTimeout(() => onSwipe(step), ms + 16);
         return;
       }
-      img.style.transition = `transform ${SLIDE_MS}ms ease-out`;
+      img.style.transition = `transform ${SLIDE_MS}ms ${SWIPE_EASE}`;
       img.style.transform = `translate(${dx < 0 ? -stage.clientWidth : stage.clientWidth}px, 0px) scale(1)`;
       setTimeout(() => onSwipe(step), SLIDE_MS);
       return;
@@ -6357,7 +6359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Swipe: the page follows the finger, then slides off (or eases back); a touch on the player's own controls is not a swipe.
     const wrapEl = () => bodyEl.querySelector('.vv-wrap');
     let sx = 0, sy = 0, dx = 0, mode = null, active = false;
-    const slide = (w, to) => { w.style.transition = `transform ${SLIDE_MS}ms ease-out`; w.style.transform = to; };
+    const slide = (w, to) => { w.style.transition = `transform ${SLIDE_MS}ms ${SWIPE_EASE}`; w.style.transform = to; };
     const onDown = (e) => {
       if (leaving || !wrapEl() || e.target.closest('.audio-player, button, input, select, a')) return;
       active = true; mode = null; dx = 0; sx = e.clientX; sy = e.clientY;
@@ -6614,7 +6616,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const slideIn = () => {
           if (!enter) return;
           img.getBoundingClientRect(); // start the transition from the off-screen position
-          img.style.transition = `transform ${SLIDE_MS}ms ease-out`;
+          img.style.transition = `transform ${SLIDE_MS}ms ${SWIPE_EASE}`;
           img.style.transform = 'translate(0px, 0px) scale(1)';
         };
         const render2 = () => body.isConnected && openViewerRefresh();
