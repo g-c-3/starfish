@@ -6558,7 +6558,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const stage = body.querySelector('.img-stage'), img = body.querySelector('.img-full'), loading = body.querySelector('.img-loading');
         // The space the picture leaves is filled with the same picture, zoomed and blurred (Decision 382). The picture itself is never zoomed.
         const blur = body.querySelector('.img-blur');
-        if (img && blur && !isVid) img.addEventListener('load', () => { blur.src = img.currentSrc || img.src; blur.classList.add('on'); });
         { // a single tap hides the title bar, another brings it back; it stays as it is while swiping (Decision 380)
           let d = null;
           stage.addEventListener('pointerdown', (e) => { d = e.isPrimary && !e.target.closest('button') ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; }, { passive: true });
@@ -6664,9 +6663,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pst = await cachedThumb(item, isVault);
             if (pst && mine === token) img.poster = pst;
           }
+          if (!isVid) img.style.opacity = '0'; // a large picture is painted band by band while it decodes: hidden until it is whole (Decision 403)
           await new Promise((res, rej) => { img[isVid ? 'onloadeddata' : 'onload'] = res; img.onerror = () => rej(new Error(isVid ? 'Could not play this video here' : 'Could not display this image')); img.src = u; });
+          if (!isVid && img.decode) { try { await img.decode(); } catch { /* shown as it is */ } }
+          if (mine !== token) { releaseUrl(u); return; } // moved on or closed while decoding
           if (isVid) { try { img.currentTime = 0.05; } catch { /* the poster stays */ } } // paints the first real frame
           loading.remove();
+          if (!isVid) { img.style.opacity = ''; if (blur) { blur.src = img.currentSrc || img.src; blur.classList.add('on'); } }
           if (carried) { img.style.visibility = ''; carried.remove(); aheadImg.delete(item.id); } // same pixels: no change on screen
           if (isVid) {
             vplayer = attachVideoPlayer(stage, img, {
@@ -6684,6 +6687,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           trimAhead(); makeAhead(index + 1); makeAhead(index - 1);
         } catch (err) {
           if (mine !== token) return;
+          img.style.opacity = '';
           if (carried) { img.style.visibility = ''; carried.remove(); loading.style.display = ''; }
           slideIn();
           // A format the WebView cannot decode (for example HEIC or some video codecs): offer the phone's own app.
