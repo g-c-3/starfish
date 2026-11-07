@@ -1160,6 +1160,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
 
+**Notes editor (Decision 407).** No Save: `touch()` marks a change, `flush()` writes it 0.3 s later through `session.autoSave`, Back waits for it. `makeNoteSession` is the one session for new and existing notes, Home and Vault. `noteName` gives the name (Rename name, Title, kept older name, first three words, Untitled). Title and the Rename flag live in the note body mark (`notestyle.js`, `t` and `n`). Drafts are written only when a change is unsaved at the moment the editor is closed by a lock or the app is hidden.
+
 **Swipe between Voice, Reminder and Location pages (Decision 405).** `pageswipe.js` attaches to `#viewer-body` with one page element (`.vv-wrap`). The neighbour is a ghost built from the same markup function as the viewer's redraw, ids stripped, moving with the page edge to edge. On release both finish at the finger's speed (Decision 404 timing); the redraw replaces the body markup and calls `settle()` in the same task. Neighbours come from `swipeItems` (Home and Vault apart, cleared on lock). A touch on the Voice player, a button or the Location map is never a swipe.
 
 **Swipe between pictures (Decision 404).** On release the carousel continues from the finger's speed: `SWIPE_EASE` over 300 to 420 ms, the time from remaining distance and finger speed. The fallback slide and the voice viewer use the same ease.

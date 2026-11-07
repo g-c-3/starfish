@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 194**
+
+Start: notes without a Save button, a Title line, name rules, a Mic. All swipe device passes (DP211 to DP214) and DP212 to DP213 confirmed on the device.
+- Answers: Mic on the device only; the Rename dialog's name stays until renamed again; an emptied note stays as Untitled.
+- Decisions 407 and 408. Phase 91 built: every change saved at once, Title line, name rules. Phase 92 (Mic) and Phase 93 (notes swipe) planned.
+- Replaced: `src/js/app.js` (editor, `makeNoteSession`, `noteName`, new and open note flows), `src/js/notestyle.js` (title and named in the body mark), `src/index.html`, `src/css/style.css`.
+- Tested in a simulated page: name rules (8 cases) and note format (3 cases). `app.js` parses. Not run through CI or a device.
+- Removed with the Save button: the reminder-wording offer on first save.
+- Open: DP215.
+- Next start: DP215 result, then Phase 92 (needs a native plugin; read ARCHITECTURE.md first), then Phase 93.
+
+---
+
 **Session 193**
 
 Start: swipe to next or previous also for notes, reminders and locations; Voice swipe leaves a big blank; everything as smooth as possible.
