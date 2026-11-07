@@ -321,4 +321,4 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 - `scripts/java/ArklySpeechBridge.java` is copied next to `MainActivity.java` by `scripts/patch-speech.js` and registered as `window.ArklySpeech`. It runs after `patch-screenlock.js` and `patch-audioroute.js`.
 - It uses `SpeechRecognizer.createSpeechRecognizer`, the phone's standard recognizer; while it runs the voice goes over the internet to Google's speech service. Languages come from the phone's preferred language list.
 - Permission: `RECORD_AUDIO` (already declared for the voice recorder), asked at the first tap on the Mic. `patch-manifest.js` adds the `RecognitionService` query. No Gradle change.
-- The page polls `status()` and `poll()`; `start(language)` begins one round, which ends after a pause in speech.
+- The page polls `status()` and `poll()` (partial and final text, voice level); `start(language)` begins one round, which ends after a pause in speech.
