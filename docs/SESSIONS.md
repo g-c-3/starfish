@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 201**
+
+Start: screenshots confirming Phases 97 and 98 (DP220, DP221). Requests: a clear message when offline, a new tool order, pinch to change the text size, styles in the grid cards.
+- Cause of the wrong message: with no connection the service reports an unsupported language, which was mapped to its own message.
+- Decision 416. Phase 99 built. Replaced: `src/js/app.js`, `src/js/speech.js`, `src/js/dictpanel.js`, `src/css/style.css`.
+- Tested in a simulated page: styled preview (8 cases: runs, colours, escaping, blank runs, cut at 320, offsets), pinch (8 cases: begin, larger, smaller, both limits, slider follows, lifting a finger, one finger). `app.js` and the other scripts parse. Not run through CI or a device.
+- Found in a screenshot: short previews and names were centred in the grid cards; left aligned now.
+- Open: DP222.
+- Next start: DP222 result, then Phase 93 (notes swipe).
+
+---
+
 **Session 200**
 
 Start: screenshots of Find, Notes, the colours and the dictation panel; seven changes: Find panel centring and capitals, Notes grid view with pinch, neon colours, Auto-detect removed, dictation header alignment, line numbers by line.

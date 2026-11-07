@@ -408,3 +408,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-07 | Session 198 | Decision 413 | Phase 96: dictation panel refinements (quiet errors, compact header, Auto-detect, cursor kept above the panel); DP219 added; not run through CI or a device |
 | 2026-11-07 | Session 199 | Decision 414 | DP215 to DP219 confirmed; Phase 97: text size slider, list button, dictation header polish, slimmer Title; DP220 added; not run through CI or a device |
 | 2026-11-07 | Session 200 | Decision 415 | Phase 98: Notes grid view with pinch, line numbers by line, neon colours, Find panel polish, dictation without Auto-detect and with a centred header; DP221 added; not run through CI or a device |
+| 2026-11-07 | Session 201 | Decision 416 | DP220 and DP221 confirmed; Phase 99: offline message, tool order, pinch text size, styled grid previews; DP222 added; not run through CI or a device |

@@ -1160,6 +1160,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
 
+**Note editor input (Decision 416).** The tool row order is Text wrap, A±, Go to line, Undo, Redo, Find, List, the colours, B I U. A two-finger pinch on the text (`touchstart` and `touchmove` on the editor host, `touch-action: pan-y`) calls `setSize` within the A± range and keeps the slider in step. Notes grid previews are built by `noteRichPreviewHtml` from the style spans with the editor's `ns-*` classes.
+
 **Notes layout (Decision 415).** The folder title of Notes (Home and Vault) has a List or Grid button (`note_view`) after the search. The grid (`.note-grid`, `notegrid.js`) shows one card per note (`.note-card`, also an `entry-row`) with name and preview; 1 to 5 per row by pinch (`note_cols`, default 2); a Vault note's preview is read after drawing. Style colours are neon (`--ns-r`, `--ns-g`, `--ns-b`), glowing in dark mode.
 
 **Editor tools (Decision 414).** A± (text size slider) and List open panels (`.ev-pop`) under the tool row, floating over the text; they close on a tap on the text or another tool. `codeeditor.js` has `getSize`, `setSize` and `applyList(kind)`: a list is a marker and a space at the start of each non-blank selected line, recognised only from a fixed set, one transaction (one undo step).
