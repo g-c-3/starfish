@@ -403,3 +403,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-06 | Session 193 | Decision 405 | Phase 90: Voice, Reminder, Location swipe with the neighbour beside them, no blank; Phase 91 (notes) planned; DP214 added; not run through CI or a device |
 | 2026-11-07 | Session 194 | Decisions 407 and 408 | DP211 to DP214 confirmed; Phase 91: notes saved at once, Title line, name rules; Phases 92 (Mic) and 93 (notes swipe) planned; DP215 added; not run through CI or a device |
 | 2026-11-07 | Session 195 | Decisions 409 and 410 | Phase 92: Mic in the notes editor (on-device dictation, native bridge), Title centred; DP216 added; not run through CI or a device |
+| 2026-11-07 | Session 196 | Decision 411 | Phase 94: Mic dictates online in the phone's languages, own script, once-only notice, none in the Vault; DP217 added; not run through CI or a device |

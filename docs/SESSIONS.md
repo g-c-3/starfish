@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 196**
+
+Start: screenshots of the Mic message and the phone's Languages screen; the on-device Mic found no pack.
+- Discussed: display languages are not speech packs; online option and its privacy cost. Owner chose online only, own-script text, on-device mode dropped.
+- Decision 411. Phase 94 built: the bridge uses the standard recognizer, languages from the phone's own list, a once-only notice, no Mic in the Vault, manifest query for the recognizer.
+- Replaced: `scripts/java/ArklySpeechBridge.java`, `src/js/speech.js`, `scripts/patch-manifest.js`, `src/js/app.js`, `src/index.html`, `android-notes/native-setup.md`.
+- Tested: manifest patch on a sample manifest (adds the query once, repeat run changes nothing); speech module with a mock bridge (8 cases); `app.js` parses. The Java is not compiled here: not run through CI or a device.
+- Open: DP215, DP216 (its on-device items are superseded), DP217.
+- Next start: CI result, DP217, then Phase 93 (notes swipe).
+
+---
+
 **Session 195**
 
 Start: screenshots of the Title line; the removed reminder offer accepted as it is; Title centred; build the Mic.

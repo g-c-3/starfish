@@ -13,7 +13,7 @@ Last updated: 2026-09-19 (seed session — full design consolidated from pre-rep
 - 100% local storage (SQLite) by default. No account or server is required for capture, search,
   reminders, expenses, or local backup/restore.
 - The only network calls this app will ever make are Google Drive backup (§4b, opt-in), and three actions
-  the person starts with a tap: Check for updates (public repo, no token, Decision 214), Verify link (short map link, Decision 117) and Show map (up to two providers
+  the person starts with a tap (and, while the Mic is on, the phone's own speech recognizer sends the voice to Google's speech service, Decision 411; the app makes no request and keeps no audio): Check for updates (public repo, no token, Decision 214), Verify link (short map link, Decision 117) and Show map (up to two providers
   the person set up, off until then, Decisions 345, 348). None is reachable from, or required by, local-only use.
 - Three independent local credentials: app-open password, private-notes PIN, backup passkey.
 - Everything convertible to text gets indexed (FTS5) for full-text search.
@@ -1160,7 +1160,7 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **New rows (Decision 402).** `#folder-list` and `#vault-folder-list`: one or two ids new while the rest stay get `mx-row` (fade, no slide). A first draw or a different set never does.
 
-**Dictation (Decisions 408 and 409).** `speech.js` talks to `window.ArklySpeech` (`ArklySpeechBridge.java`, written by `patch-speech.js`). Only the on-device recognizer exists in it: Android 13 or newer, an installed language pack, no fallback to the online one. The page polls: `status()` (permission, availability, installed languages) and `poll()` (partial and final text). The language is chosen by the person (`#lang-dialog`, a `.modal-overlay`, `activeLang`). Final text is inserted at the cursor, so the autosave of Decision 407 saves it. The network rule stays two calls.
+**Dictation (Decisions 408 and 411).** `speech.js` talks to `window.ArklySpeech` (`ArklySpeechBridge.java`, written by `patch-speech.js`): the phone's standard recognizer, which sends the voice to Google's speech service while the Mic is on. The manifest carries the `RecognitionService` package query. Languages are the phone's preferred languages; the person chooses (`#lang-dialog`, a `.modal-overlay`, `activeLang`) and text arrives in that language's script. A once-only notice precedes the first use (`dictation_notice`). The Mic is hidden in the Vault. The page polls `status()` and `poll()`; final text is inserted at the cursor, so the autosave of Decision 407 saves it.
 
 **Notes editor (Decision 407).** No Save: `touch()` marks a change, `flush()` writes it 0.3 s later through `session.autoSave`, Back waits for it. `makeNoteSession` is the one session for new and existing notes, Home and Vault. `noteName` gives the name (Rename name, Title, kept older name, first three words, Untitled). Title and the Rename flag live in the note body mark (`notestyle.js`, `t` and `n`). Drafts are written only when a change is unsaved at the moment the editor is closed by a lock or the app is hidden.
 
