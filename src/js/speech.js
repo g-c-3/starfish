@@ -51,18 +51,23 @@ export function languageLabel(tag) {
 // Dictation until stop(): each pause in speech ends one round and the next starts, so it runs on until the person taps again.
 // onFinal(text) once per phrase; onPartial(text) while speaking; onLevel(0..1) the voice level; onError(reason) ends it; onEnd() once,
 // whatever the end. An error that arrives after the person pressed stop is not reported: stopping is not a failure. Returns { stop }.
-export function dictate({ language, onPartial, onFinal, onLevel, onError, onEnd }) {
+export function dictate({ language, allowed = [], onPartial, onFinal, onLevel, onError, onEnd }) {
   const b = B();
-  let active = true, done = false, lastStart = 0, quick = 0;
-  const begin = () => { lastStart = Date.now(); b.start(language); };
+  let active = true, done = false, lastStart = 0, quick = 0, netTries = 0, waiting = false;
+  const begin = () => { lastStart = Date.now(); b.start(language, allowed.join(',')); }; // allowed: several languages to tell apart (auto-detect), '' for one
   const finish = () => { if (done) return; done = true; active = false; clearInterval(timer); try { b.cancel(); } catch { /* gone */ } if (onEnd) onEnd(); };
   begin();
   const timer = setInterval(() => {
     if (done) return;
     const r = J(b.poll());
-    for (const t of r.finals || []) if (t) onFinal(t);
+    for (const t of r.finals || []) if (t) { netTries = 0; onFinal(t); }
+    if (r.partial) netTries = 0;
     if (onPartial) onPartial(r.partial || '');
     if (onLevel) onLevel(Number(r.level) || 0);
+    if (r.run === 'error' && r.error === 'network' && active && netTries < 3) { // a dropped round is tried again, quietly
+      if (!waiting) { waiting = true; netTries += 1; setTimeout(() => { waiting = false; if (active && !done) begin(); }, 600); }
+      return;
+    }
     if (r.run === 'error') { const wanted = active; finish(); if (wanted && onError) onError(r.error || 'other'); return; }
     if (r.run === 'ended') {
       if (!active) { finish(); return; }

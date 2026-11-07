@@ -2579,6 +2579,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     updateCount();
     const finish = (discarded = false) => {
       stopDictation(); if (panel) panel.destroy();
+      window.removeEventListener('resize', caretSoon); if (window.visualViewport) window.visualViewport.removeEventListener('resize', caretSoon);
       if (closed) return;
       closed = true;
       document.removeEventListener('visibilitychange', onHide);
@@ -2628,7 +2629,32 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       const lead = before && !/\s/.test(before) ? ' ' : '';
       const add = lead + t + (newline ? '\n' : '');
       v.dispatch({ changes: { from: sel.from, to: sel.to, insert: add }, selection: { anchor: sel.from + add.length }, scrollIntoView: true, userEvent: 'input.type' });
+      caretSoon();
     };
+    // The line being dictated stays above the panel (Decision 413): the note keeps the focus (no keyboard unless the person taps the
+    // text), its cursor stays visible, it has room to scroll above the panel, and it scrolls up when the cursor would sit under it.
+    const caretClear = () => {
+      if (!panel || !panel.isOpen() || !ed || closed) return;
+      const v = ed.view, c = v.coordsAtPos(v.state.selection.main.head);
+      if (!c) return;
+      const limit = panel.element.getBoundingClientRect().top - 14;
+      if (c.bottom > limit) v.scrollDOM.scrollTop += c.bottom - limit;
+    };
+    const caretSoon = () => { requestAnimationFrame(() => requestAnimationFrame(caretClear)); };
+    const room = () => { if (ed && panel) ed.view.contentDOM.style.paddingBottom = panel.isOpen() ? `${Math.ceil(panel.element.getBoundingClientRect().height) + 16}px` : ''; };
+    const unlockKeyboard = () => { if (ed && panel && panel.isOpen()) ed.view.contentDOM.removeAttribute('inputmode'); }; // tapping the text means typing
+    let tapBound = false;
+    const setDictating = (on) => {
+      if (!ed) return;
+      const dom = ed.view.contentDOM;
+      if (on) {
+        if (!tapBound) { ed.view.dom.addEventListener('pointerdown', unlockKeyboard, true); tapBound = true; }
+        dom.setAttribute('inputmode', 'none'); dom.blur(); dom.focus({ preventScroll: true }); // focus (cursor) without the keyboard
+        room(); caretSoon(); setTimeout(caretClear, 280);
+      } else { dom.removeAttribute('inputmode'); room(); }
+    };
+    window.addEventListener('resize', caretSoon);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', caretSoon);
     if (speechPresent() && !isVault) {
       panel = createDictationPanel({
         host: screen, store: { get: metaGet, set: metaSet }, toast, onInsert: insertDictated,
@@ -2640,13 +2666,11 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
           await metaSet('dictation_notice', '1');
           return true;
         },
-        onOpenChange: (o) => micBtn.classList.toggle('on', o)
+        keepFocus: () => { if (ed && !closed && panel && panel.isOpen() && document.activeElement !== ed.view.contentDOM) ed.view.contentDOM.focus({ preventScroll: true }); },
+        onResize: () => { room(); caretSoon(); },
+        onOpenChange: (o) => { micBtn.classList.toggle('on', o); setDictating(o); }
       });
-      micBtn.onclick = () => {
-        if (!ed) return;
-        if (!panel.isOpen()) { try { ed.view.contentDOM.blur(); } catch { /* the keyboard stays */ } }
-        panel.toggle();
-      };
+      micBtn.onclick = () => { if (ed) panel.toggle(); };
     }
     micBtn.classList.toggle('hidden', !panel);
     nameEl.value = session.titleText || '';
