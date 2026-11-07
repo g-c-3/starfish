@@ -3,35 +3,37 @@
   opacity: 0; transform: translateY(18px); visibility: hidden; pointer-events: none; transition: opacity .22s ease, transform .22s ease, visibility 0s linear .22s; }
 .dict-panel.open { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
 .dict-head { display: flex; align-items: center; gap: 8px; }
-.dict-head strong { font-size: 15px; letter-spacing: 0.2px; }
-.dict-status { flex: 1; font-size: 12px; opacity: 0.72; }
+.dict-title { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.dict-title strong { font-size: 15px; letter-spacing: 0.2px; }
+.dict-status { font-size: 12px; opacity: 0.7; white-space: nowrap; }
 .dict-panel.listening .dict-status { opacity: 1; color: #ff8a8a; }
 .dict-panel button { width: auto; margin: 0; box-shadow: none; }
+.dict-mt { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 38px; }
+.dict-meter { display: flex; align-items: center; gap: 3px; height: 18px; }
+.dict-meter i { width: 4px; height: 18px; border-radius: 2px; background: #fff; opacity: 0.35; transform: scaleY(0.18); transition: transform .12s linear, opacity .12s linear; }
+.dict-time { font-variant-numeric: tabular-nums; font-size: 12px; opacity: 0.8; }
+.dict-panel .dict-nl { min-height: 36px; width: 36px; padding: 0; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.25); background: transparent; color: #fff; font-size: 18px; line-height: 1; }
+.dict-panel .dict-nl.on { background: rgba(255, 255, 255, 0.24); border-color: #fff; }
+.dict-panel .dict-go { min-height: 38px; min-width: 76px; padding: 0 16px; border-radius: 19px; border: 0; background: #6c5ce7; color: #fff; font-size: 15px; font-weight: 650; letter-spacing: 0.2px; }
+.dict-panel .dict-go.stop { background: #e5484d; }
+.dict-panel .dict-go:disabled { opacity: 0.7; }
 .dict-panel .dict-x { min-height: 32px; width: 32px; padding: 0; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; line-height: 1; }
 .dict-lang { position: relative; }
 .dict-panel .dict-langbtn { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 15px; font-weight: 600; }
 .dict-panel .dict-langbtn:disabled { opacity: 0.55; }
 .dict-chev { opacity: 0.7; font-size: 12px; }
-.dict-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: min(340px, 46vh); display: flex; flex-direction: column; border-radius: 14px; background: rgba(24, 24, 32, 0.9); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); overflow: hidden; }
+.dict-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: min(340px, 46vh); display: flex; flex-direction: column; border-radius: 14px; background: rgba(24, 24, 32, 0.92); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); overflow: hidden; }
 .dict-menu.hidden { display: none; }
 .dict-panel .dict-search { width: auto; margin: 8px 8px 4px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 14px; }
 .dict-panel .dict-search::placeholder { color: rgba(255, 255, 255, 0.55); }
 .dict-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 6px 8px; }
-.dict-sec { padding: 8px 10px 4px; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.6; }
-.dict-sep { height: 1px; margin: 6px 8px; background: rgba(255, 255, 255, 0.2); }
-.dict-none { padding: 14px 10px; font-size: 14px; opacity: 0.7; }
-.dict-panel .dict-opt { width: 100%; min-height: 42px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #fff; font-size: 15px; text-align: left; }
-.dict-panel .dict-opt small { font-size: 12px; opacity: 0.6; }
+.dict-sec { padding: 10px 12px 4px; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; opacity: 0.6; }
+.dict-sep { height: 1px; margin: 8px 12px 2px; background: rgba(255, 255, 255, 0.2); }
+.dict-none { padding: 14px 12px; font-size: 14px; opacity: 0.7; }
+.dict-panel .dict-opt { width: 100%; min-height: 44px; height: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: #fff; font-size: 15px; line-height: 1.25; text-align: left; }
+.dict-opt .dict-on { flex: 1; min-width: 0; }
+.dict-opt .dict-os { flex: 0 1 auto; max-width: 55%; font-size: 12px; line-height: 1.25; opacity: 0.6; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dict-panel .dict-opt.sel { background: rgba(255, 255, 255, 0.18); font-weight: 600; }
 .dict-live { min-height: 40px; max-height: 64px; overflow: hidden; padding: 8px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); font-size: 14px; line-height: 1.4; }
 .dict-live .dict-hint { opacity: 0.55; }
-.dict-row { display: flex; align-items: center; gap: 12px; }
-.dict-meter { display: flex; align-items: center; gap: 4px; height: 22px; }
-.dict-meter i { width: 4px; height: 22px; border-radius: 2px; background: #fff; opacity: 0.35; transform: scaleY(0.18); transition: transform .12s linear, opacity .12s linear; }
-.dict-time { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; opacity: 0.8; }
-.dict-nl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; }
-.dict-nl input { width: 18px; height: 18px; margin: 0; accent-color: #8b7cff; }
-.dict-panel .dict-go { width: 100%; min-height: 50px; border-radius: 14px; border: 0; background: #6c5ce7; color: #fff; font-size: 16px; font-weight: 650; letter-spacing: 0.3px; }
-.dict-panel .dict-go.stop { background: #e5484d; }
-.dict-panel .dict-go:disabled { opacity: 0.6; }
-@media (prefers-reduced-motion: reduce) { .dict-panel, .dict-meter i { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .dict-panel, 
