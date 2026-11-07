@@ -55,7 +55,8 @@ import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT }
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
-import { speechPresent, speechPrepare, speechMessage, languageLabel, dictate } from './speech.js';
+import { speechPresent } from './speech.js';
+import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
 
 
@@ -354,7 +355,6 @@ function openModalDismiss() {
 function outsideAction(o) {
   switch (o.id) {
     case 'yesno-dialog': return activeYesNo && (() => activeYesNo.finish(false));
-    case 'lang-dialog': return activeLang && (() => activeLang.finish(null));
     case 'text-dialog': return activeText && (() => activeText.finish(null));
     case 'secret-dialog': return () => document.getElementById('secret-cancel-btn')?.click();
     case 'save-dialog': return activeSaveDialog && (() => activeSaveDialog.requestLeave());
@@ -441,7 +441,6 @@ const appLockShowing = () => !document.getElementById('lock-screen')?.classList.
 function backAction() {
   if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
-  if (activeLang) return () => activeLang.finish(null); // Back closes the dictation language dialog
   if (activeLocFix) return () => activeLocFix.finish(null); // Back cancels the live location sheet
   if (activeRemSound) return () => activeRemSound.finish(); // Back closes the Reminder sound dialog
   if (activeLocProv) return () => activeLocProv.finish(); // Back closes the map provider dialog
@@ -2190,7 +2189,6 @@ let activeCoords = null;     // { finish, isVault } — paste coordinates / map 
 let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
 let activeRemSound = null;   // { finish } — Reminder sound dialog (Decision 359)
 let activeLocProv = null;    // { finish } — map provider dialog (Decision 345)
-let activeLang = null;       // { finish } — dictation language dialog (Decision 408)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
@@ -2227,31 +2225,6 @@ async function confirmStrength(kind, secret) {
 }
 
 // extra: a third button, shown first, that resolves 'extra'.
-// Which installed language to dictate in: one button per language the phone has a pack for. Resolves to the tag, or null.
-function askDictationLanguage(tags) {
-  if (activeLang) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const dlg = document.getElementById('lang-dialog'), list = document.getElementById('lang-list');
-    list.innerHTML = '';
-    const finish = (v) => {
-      if (!activeLang) return;
-      activeLang = null;
-      dlg.classList.add('hidden');
-      updateBackButtonState();
-      resolve(v);
-    };
-    for (const tag of tags) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = languageLabel(tag);
-      b.onclick = () => finish(tag);
-      list.appendChild(b);
-    }
-    document.getElementById('lang-cancel-btn').onclick = () => finish(null);
-    activeLang = { finish };
-    updateBackButtonState();
-    dlg.classList.remove('hidden');
-  });
-}
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false, extra = '' } = {}) {
   if (activeYesNo) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -2394,7 +2367,6 @@ function dismissOverlays(vaultOnly = false) {
   for (const s of draftSources) if (!vaultOnly || s.isVault) { s.locked = true; s.flush().catch(() => {}); } // before the dialogs close (Decision 189)
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
-  if (activeLang) activeLang.finish(null);
   if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
   if (activeCompose && (!vaultOnly || activeCompose.isVault)) activeCompose.finish(null);
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
@@ -2606,7 +2578,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     };
     updateCount();
     const finish = (discarded = false) => {
-      stopDictation();
+      stopDictation(); if (panel) panel.destroy();
       if (closed) return;
       closed = true;
       document.removeEventListener('visibilitychange', onHide);
@@ -2642,51 +2614,41 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       for (let i = 0; saving && i < 100; i++) await new Promise((r) => setTimeout(r, 50));
       await flush();
     };
-    const requestBack = async () => { await settle(); if (!closed) finish(); };
+    const requestBack = async () => { if (panel && panel.isOpen()) { panel.close(); return; } await settle(); if (!closed) finish(); }; // Back closes the dictation panel first
     $('editor-back-btn').onclick = requestBack;
-    // Mic (Decisions 408 and 411): dictation by the phone's speech recognizer, which sends the voice to Google's speech service while
-    // it runs (the person is told once). The text goes in at the cursor like typing, so it is saved like typing, in the script of the
-    // language chosen. The language is chosen by the person among the phone's own languages (asked whenever there is more than one).
-    // Not in the Vault: a private note's voice would leave the phone.
-    let dictation = null, micBusy = false;
-    micBtn.classList.toggle('hidden', !speechPresent() || isVault);
-    const stopDictation = () => {
-      if (dictation) { dictation.stop(); dictation = null; }
-      micBtn.classList.remove('on');
-      if (!closed) updateCount();
-    };
-    const insertDictated = (t) => {
+    // Mic (Decisions 408, 411, 412): opens the dictation panel at the bottom. Dictated text goes in at the cursor like typing, so the note
+    // saves it like typing. The voice goes to Google's speech service while it runs (told once); not in the Vault, where a private
+    // note's voice would leave the phone.
+    let panel = null;
+    const stopDictation = () => { if (panel) panel.close(); };
+    const insertDictated = (t, { newline = false } = {}) => {
       if (!ed || closed || !t) return;
       const v = ed.view, sel = v.state.selection.main;
       const before = sel.from > 0 ? v.state.sliceDoc(sel.from - 1, sel.from) : '';
       const lead = before && !/\s/.test(before) ? ' ' : '';
-      v.dispatch({ changes: { from: sel.from, to: sel.to, insert: lead + t }, selection: { anchor: sel.from + lead.length + t.length }, scrollIntoView: true, userEvent: 'input.type' });
+      const add = lead + t + (newline ? '\n' : '');
+      v.dispatch({ changes: { from: sel.from, to: sel.to, insert: add }, selection: { anchor: sel.from + add.length }, scrollIntoView: true, userEvent: 'input.type' });
     };
-    micBtn.onclick = async () => {
-      if (dictation) { stopDictation(); return; }
-      if (micBusy || !ed) return;
-      micBusy = true;
-      try {
-        if (await metaGet('dictation_notice', '') !== '1') { // once: say plainly where the voice goes
+    if (speechPresent() && !isVault) {
+      panel = createDictationPanel({
+        host: screen, store: { get: metaGet, set: metaSet }, toast, onInsert: insertDictated,
+        phoneTags: Array.from(navigator.languages || []),
+        confirmFirstUse: async () => {
+          if (await metaGet('dictation_notice', '') === '1') return true; // once: say plainly where the voice goes
           const yes = await askYesNo({ title: 'Dictation uses Google', text: "While you dictate, your voice is sent over the internet to Google's speech service, which turns it into text. Nothing else from the note is sent, and Arkly keeps no audio. Dictation needs the internet.", yes: 'Continue', no: 'Cancel' });
-          if (yes !== true || closed) return;
+          if (yes !== true) return false;
           await metaSet('dictation_notice', '1');
-        }
-        const info = await speechPrepare();
-        if (closed) return;
-        if (!info.ok) { toast(speechMessage(info.reason)); return; }
-        const lang = info.languages.length === 1 ? info.languages[0] : await askDictationLanguage(info.languages);
-        if (!lang || closed) return;
-        micBtn.classList.add('on');
-        dictation = dictate({
-          language: lang,
-          onPartial: (t) => { if (dictation && !closed) $('editor-count').textContent = t ? `Listening… ${t}` : 'Listening…'; },
-          onFinal: insertDictated,
-          onError: (reason) => { dictation = null; stopDictation(); toast(speechMessage(reason)); }
-        });
-        $('editor-count').textContent = 'Listening…';
-      } finally { micBusy = false; }
-    };
+          return true;
+        },
+        onOpenChange: (o) => micBtn.classList.toggle('on', o)
+      });
+      micBtn.onclick = () => {
+        if (!ed) return;
+        if (!panel.isOpen()) { try { ed.view.contentDOM.blur(); } catch { /* the keyboard stays */ } }
+        panel.toggle();
+      };
+    }
+    micBtn.classList.toggle('hidden', !panel);
     nameEl.value = session.titleText || '';
     nameEl.oninput = () => touch();
     nameEl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); if (ed) ed.view.focus(); } };
