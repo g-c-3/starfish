@@ -557,15 +557,15 @@
     </div>
   </div>
 
-  <!-- Text editor (Decision 91): full-screen; Save leads into the Save dialog. -->
+  <!-- Text editor (Decision 91): full-screen; every change is saved at once (Decision 407). -->
   <div id="editor-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Notes editor">
     <header class="editor-bar">
       <button id="editor-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
       <span id="editor-title">New note</span>
       <button id="editor-rename-btn" class="icon-btn" aria-label="Rename" title="Rename"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
-      <button id="editor-save-btn" class="editor-save">Save</button>
     </header>
     <div id="editor-tools" class="ev-tools"></div>
+    <input id="editor-name" class="editor-name" type="text" placeholder="Title" aria-label="Title" autocomplete="off" enterkeyhint="next">
     <div id="editor-host" class="ev-code"></div>
     <div id="editor-count" class="editor-count"></div>
   </div>
