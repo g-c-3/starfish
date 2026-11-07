@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 198**
+
+Start: screenshots and a recording of the dictation panel; six points: the toast, the menu rows, Auto-detect, a compact header, the hidden cursor, the dictated line under the panel.
+- Measured: the toast appeared each time a round ended on its own; the earlier fix only covered errors after Stop. Rows were misaligned because the row content sat at the top of a tall row. The cursor vanished because opening the panel took the focus from the note.
+- Decision 413. Phase 96 built. Replaced: `src/js/dictpanel.js`, `src/css/dictation.css`, `src/js/speech.js`, `scripts/java/ArklySpeechBridge.java`, `src/js/app.js`.
+- Tested in a simulated page (16 cases: header contents, menu order, Auto-detect, quiet retries, other errors shown, Stopped, offline, focus, row layout). `app.js` parses. Java not compiled here; not run through CI or a device.
+- Auto-detect and mixed-language speech depend on the service; not verified.
+- Open: DP215 to DP219.
+- Next start: CI result, DP217 to DP219, then Phase 93 (notes swipe).
+
+---
+
 **Session 197**
 
 Start: screen recording of dictation; wanted a professional panel (language menu with Recent, Start and Stop, glass like the PDF tools) and no toast on Stop.

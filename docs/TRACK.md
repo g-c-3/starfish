@@ -405,3 +405,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-07 | Session 195 | Decisions 409 and 410 | Phase 92: Mic in the notes editor (on-device dictation, native bridge), Title centred; DP216 added; not run through CI or a device |
 | 2026-11-07 | Session 196 | Decision 411 | Phase 94: Mic dictates online in the phone's languages, own script, once-only notice, none in the Vault; DP217 added; not run through CI or a device |
 | 2026-11-07 | Session 197 | Decision 412 | Phase 95: dictation panel (language menu with Recent, Start and Stop, live phrase and level), no toast on Stop; DP218 added; not run through CI or a device |
+| 2026-11-07 | Session 198 | Decision 413 | Phase 96: dictation panel refinements (quiet errors, compact header, Auto-detect, cursor kept above the panel); DP219 added; not run through CI or a device |
