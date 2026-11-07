@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 200**
+
+Start: screenshots of Find, Notes, the colours and the dictation panel; seven changes: Find panel centring and capitals, Notes grid view with pinch, neon colours, Auto-detect removed, dictation header alignment, line numbers by line.
+- Cause of the low × button: the field was an inline box, leaving a line gap under it inside the wrapper the button was centred in.
+- Decision 415. Phase 98 built.
+- New: `src/js/notegrid.js`. Replaced: `src/js/codeeditor.js`, `src/js/app.js`, `src/js/dictpanel.js`, `src/js/speech.js`, `scripts/java/ArklySpeechBridge.java`, `src/css/dictation.css`, `src/css/style.css`.
+- Tested in a simulated page: gutter marker for wrapped lines (6 cases), grid bounds and cards (7), dictation panel (18). `app.js`, `codeeditor.js` and the other scripts parse. Java not compiled here; layouts not drawn on a screen; not run through CI or a device.
+- DP220 still to confirm.
+- Open: DP220, DP221.
+- Next start: CI result, DP220 and DP221, then Phase 93 (notes swipe).
+
+---
+
 **Session 199**
 
 Start: all pending device passes (DP215 to DP219) confirmed. Requests: remove the phrase box, Start before the level, a better New line, centred language, A− and A+ as one button with a slider, a list button in the A+ place, a slimmer Title.
