@@ -1480,10 +1480,6 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 /* Text size and list panels under the editor tool row (Decision 414) */
 .ev-pop { position: absolute; left: 10px; right: 10px; z-index: 8; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
 .ev-pop.hidden { display: none; }
-.ev-size { display: flex; align-items: center; gap: 12px; }
-.ev-sa { font-weight: 700; color: var(--fg); line-height: 1; }
-.ev-range { flex: 1; min-width: 0; height: 28px; margin: 0; padding: 0; accent-color: var(--brand); background: transparent; }
-.ev-sv { min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: var(--muted); }
 .ev-pop-h { margin: 2px 2px 6px; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
 .ev-pop-h:not(:first-child) { margin-top: 12px; }
 .ev-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -1500,7 +1496,7 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 .note-grid .note-card { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; width: auto; padding: 14px 12px 10px; border-radius: 16px; overflow: hidden; text-align: left; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(20, 16, 50, 0.06), 0 8px 18px rgba(20, 16, 50, 0.06); aspect-ratio: 1 / 1.05; }
 .note-grid .nc-bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, #f59e0b, #fb923c); }
-.note-grid .nc-title { font-size: 14px; font-weight: 700; line-height: 1.25; color: var(--fg); word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.note-grid .nc-title { text-align: center; font-size: 14px; font-weight: 700; line-height: 1.25; color: var(--fg); word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .note-grid .nc-body { flex: 1; min-height: 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); white-space: pre-line; word-break: break-word; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6;
   -webkit-mask-image: linear-gradient(#000 72%, transparent); mask-image: linear-gradient(#000 72%, transparent); }
 .note-grid .note-card:active { background: var(--brand-tint); }
@@ -1531,3 +1527,7 @@ body.selecting .note-grid .note-card::after { top: 8px; right: 8px; margin-top: 
 .note-grid .nc-body .ns-c-r { color: var(--ns-r); } .note-grid .nc-body .ns-c-g { color: var(--ns-g); } .note-grid .nc-body .ns-c-b { color: var(--ns-b); }
 /* Two fingers on the note text change its size, so the browser must not take the pinch (Decision 416) */
 #editor-host, #editor-host .cm-scroller, #editor-host .cm-content { touch-action: pan-y; }
+
+/* Ruled lines in a note (Decision 417): one thin line at the foot of every row, from --ev-lh (row height) and --ev-pt (top padding). */
+.ev-ruled .cm-scroller { background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--ev-rule, rgba(110, 100, 175, 0.22)) calc(100% - 1px)); background-size: 100% var(--ev-lh, 28px); background-position: 0 var(--ev-pt, 14px); background-repeat: repeat-y; background-attachment: local; }
+:root[data-theme="dark"] .ev-ruled .cm-scroller { --ev-rule: rgba(255, 255, 255, 0.11); }
