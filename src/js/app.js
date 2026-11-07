@@ -2644,10 +2644,12 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     };
     const requestBack = async () => { await settle(); if (!closed) finish(); };
     $('editor-back-btn').onclick = requestBack;
-    // Mic (Decision 408): on-device dictation. The text goes in at the cursor like typing, so it is saved like typing. The language is
-    // chosen by the person (asked whenever the phone has more than one pack); nothing is sent anywhere.
+    // Mic (Decisions 408 and 411): dictation by the phone's speech recognizer, which sends the voice to Google's speech service while
+    // it runs (the person is told once). The text goes in at the cursor like typing, so it is saved like typing, in the script of the
+    // language chosen. The language is chosen by the person among the phone's own languages (asked whenever there is more than one).
+    // Not in the Vault: a private note's voice would leave the phone.
     let dictation = null, micBusy = false;
-    micBtn.classList.toggle('hidden', !speechPresent());
+    micBtn.classList.toggle('hidden', !speechPresent() || isVault);
     const stopDictation = () => {
       if (dictation) { dictation.stop(); dictation = null; }
       micBtn.classList.remove('on');
@@ -2665,6 +2667,11 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       if (micBusy || !ed) return;
       micBusy = true;
       try {
+        if (await metaGet('dictation_notice', '') !== '1') { // once: say plainly where the voice goes
+          const yes = await askYesNo({ title: 'Dictation uses Google', text: "While you dictate, your voice is sent over the internet to Google's speech service, which turns it into text. Nothing else from the note is sent, and Arkly keeps no audio. Dictation needs the internet.", yes: 'Continue', no: 'Cancel' });
+          if (yes !== true || closed) return;
+          await metaSet('dictation_notice', '1');
+        }
         const info = await speechPrepare();
         if (closed) return;
         if (!info.ok) { toast(speechMessage(info.reason)); return; }

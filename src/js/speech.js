@@ -1,6 +1,7 @@
-// speech.js — dictation for the notes editor (Decision 408). Talks to window.ArklySpeech (patch-speech.js), which only ever uses the
-// phone's on-device recognizer: Android 13 or newer, a language pack already on the phone. Nothing is sent anywhere; without the
-// native bridge (a browser) there is no Mic. The spoken language is never guessed: the person chooses it.
+// speech.js — dictation for the notes editor (Decisions 408 and 411). Talks to window.ArklySpeech (patch-speech.js), the phone's
+// standard speech recognizer: while the person dictates, the voice goes over the internet to Google's speech service. Text comes back
+// in the script of the language chosen. Without the native bridge (a browser) there is no Mic. The spoken language is never guessed:
+// the person chooses it among the phone's own languages.
 const B = () => window.ArklySpeech || null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const J = (s) => { try { return JSON.parse(s) || {}; } catch { return {}; } };
@@ -9,12 +10,11 @@ export const speechPresent = () => !!B();
 
 const MESSAGES = {
   native: 'Dictation is not available here',
-  android: 'Dictation needs Android 13 or newer',
-  device: 'This phone has no on-device speech recognizer',
-  packs: 'No offline speech pack is on this phone. Add one in the phone settings (Languages, Speech), then try again',
+  device: 'This phone has no speech recognition service',
+  network: 'Dictation needs the internet',
   permission: 'Dictation needs the microphone',
   check: 'The phone could not tell which speech languages it has',
-  language: 'That language is not available offline',
+  language: 'The speech service does not support that language',
   busy: 'The speech recognizer is busy; try again',
   start: 'Dictation could not start',
   other: 'Dictation stopped'
