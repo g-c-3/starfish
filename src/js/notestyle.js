@@ -9,19 +9,22 @@ const COLOURS = new Set(['r', 'g', 'b']);
 export function splitNoteStyle(raw) {
   const s = String(raw ?? '');
   const i = s.lastIndexOf(STYLE_MARK);
-  if (i < 0) return { text: s, spans: [] };
+  if (i < 0) return { text: s, spans: [], title: '', named: false };
   try {
     const o = JSON.parse(s.slice(i + STYLE_MARK.length));
     const text = s.slice(0, i);
     const spans = (Array.isArray(o.s) ? o.s : []).filter((p) => Array.isArray(p) && KINDS.has(p[0])
       && Number.isInteger(p[1]) && Number.isInteger(p[2]) && p[1] >= 0 && p[1] < p[2] && p[2] <= text.length
       && (p[0] !== 'c' || COLOURS.has(p[3])));
-    return { text, spans };
-  } catch { return { text: s, spans: [] }; }
+    return { text, spans, title: typeof o.t === 'string' ? o.t : '', named: o.n === 1 }; // t: the Title line; n: 1 when the name was set in the Rename dialog (Decision 407)
+  } catch { return { text: s, spans: [], title: '', named: false }; }
 }
 
-export function joinNoteStyle(text, spans) {
-  return spans && spans.length ? `${text}${STYLE_MARK}${JSON.stringify({ v: 1, s: spans })}` : text;
+export function joinNoteStyle(text, spans, meta = null) {
+  const o = { v: 1, s: spans || [] };
+  if (meta && meta.title) o.t = meta.title;
+  if (meta && meta.named) o.n = 1;
+  return o.s.length || o.t || o.n ? `${text}${STYLE_MARK}${JSON.stringify(o)}` : text;
 }
 
 export const plainNoteText = (raw) => splitNoteStyle(raw).text;

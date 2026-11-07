@@ -2553,11 +2553,11 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
   return new Promise((resolve) => {
     const { text, spans } = splitNoteStyle(stored);
     const $ = (id) => document.getElementById(id);
-    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), saveBtn = $('editor-save-btn');
-    const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat()); // what is stored and drafted
-    let ed = null, closed = false, dirty = false, saving = false, draftTimer = null, countTimer = null, findBtn = null, floatCleanup = () => {};
+    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), nameEl = $('editor-name');
+    const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat(), { title: nameEl.value, named: !!session.named }); // what is stored and drafted
+    let ed = null, closed = false, dirty = false, saving = false, pending = false, saveTimer = null, draftTimer = null, countTimer = null, findBtn = null, floatCleanup = () => {};
     const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(raw())).catch(() => {}); };
-    const onHide = () => { if (document.hidden && dirty) saveDraft(); }; // backgrounded: store now, the app may be closed next
+    const onHide = () => { if (document.hidden && dirty) { flush(); saveDraft(); } }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = session.title;
     host.replaceChildren(); bar.replaceChildren();
@@ -2566,17 +2566,8 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       if (!session.onRename) return;
       let changed = false;
       try { changed = await session.onRename(ed ? raw() : stored); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
-      if (changed && !closed) $('editor-title').textContent = session.title;
+      if (changed && !closed) { $('editor-title').textContent = session.title; touch(); }
     };
-    const hasText = () => { // Save needs something to save; the first 2000 characters settle it for almost every note
-      const d = ed.view.state.doc;
-      if (!d.length) return false;
-      return d.sliceString(0, Math.min(d.length, 2000)).trim() !== '' || (d.length > 2000 && d.toString().trim() !== '');
-    };
-    const syncSave = () => {
-      saveBtn.disabled = saving || !ed || !dirty || !hasText();
-    };
-    saveBtn.disabled = true; // opens clean: nothing to save yet
     const updateCount = () => {
       const v = ed ? ed.getValue() : text;
       const words = v.trim() ? v.trim().split(/\s+/).length : 0;
@@ -2588,7 +2579,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       if (closed) return;
       closed = true;
       document.removeEventListener('visibilitychange', onHide);
-      clearTimeout(draftTimer); clearTimeout(countTimer);
+      clearTimeout(draftTimer); clearTimeout(countTimer); clearTimeout(saveTimer);
       if (!discarded) { if (dirty) saveDraft(); else if (session.clear) Promise.resolve(session.clear()).catch(() => {}); } // lock, screen-off: keep the text
       if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
       bar.replaceChildren(); floatCleanup();
@@ -2597,36 +2588,34 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       updateBackButtonState();
       resolve(null);
     };
-    // Unsaved changes: one Back asks Save & exit, Yes discard or keep editing (Decision 310).
-    const requestBack = async () => {
-      if (!dirty) { finish(); return; }
-      const r = await askYesNo({ title: 'Discard changes?', text: 'Your note has not been saved.', yes: 'Yes, discard', no: 'No, keep editing', extra: 'Save & exit' });
-      if (closed) return;
-      if (r === 'extra') { if (await doSave() && !closed) finish(); return; } // a failed or cancelled save keeps the editor open
-      if (r) { if (session.clear) await Promise.resolve(session.clear()).catch(() => {}); finish(true); }
-    };
-    $('editor-back-btn').onclick = requestBack;
-    // Resolves true when the note was saved.
-    const doSave = async () => {
-      if (saving || !ed) return false;
-      if (saveBtn.disabled) { toast('Nothing to save yet'); return false; }
-      const doc = ed.view.state.doc, v = doc.toString(), fmt = ed.getFormat();
-      if (!v.trim()) { toast('Nothing to save yet'); return false; }
-      saving = true; syncSave();
+    // Every change is saved at once (Decision 407): a change is written 0.3 s after the last one, on Back, and when the app is hidden.
+    const touch = () => { pending = true; dirty = true; clearTimeout(saveTimer); saveTimer = setTimeout(flush, 300); };
+    const flush = async () => {
+      clearTimeout(saveTimer); saveTimer = null;
+      if (!pending || !ed) return true;
+      if (saving) { saveTimer = setTimeout(flush, 120); return false; }
+      saving = true; pending = false;
+      const doc = ed.view.state.doc, fmt = ed.getFormat();
+      const rawNow = joinNoteStyle(doc.toString(), fmt, { title: nameEl.value, named: !!session.named });
       let ok = false;
-      try { ok = await session.onSave(joinNoteStyle(v, fmt)); } catch (err) { toast(`Could not save: ${err.message || err}`); }
+      try { ok = await session.autoSave(rawNow, doc.toString(), nameEl.value); } catch (err) { toast(`Could not save: ${err.message || err}`); }
       saving = false;
+      if (!ok) pending = true; // kept: the next change retries, and leaving stores a draft
       if (closed || !ed) return ok;
-      if (ok) {
-        ed.markClean(doc, fmt); // what was typed or styled while saving still counts as a change
-        dirty = ed.isDirty();
-        if (!dirty) { clearTimeout(draftTimer); draftTimer = null; }
-        $('editor-title').textContent = session.title;
-      }
-      syncSave();
+      if (ok) { ed.markClean(doc, fmt); $('editor-title').textContent = session.title; }
+      dirty = pending;
       return ok;
     };
-    saveBtn.onclick = doSave;
+    const settle = async () => { // Back: the last change is written before the editor leaves
+      clearTimeout(saveTimer); saveTimer = null;
+      for (let i = 0; saving && i < 100; i++) await new Promise((r) => setTimeout(r, 50));
+      await flush();
+    };
+    const requestBack = async () => { await settle(); if (!closed) finish(); };
+    $('editor-back-btn').onclick = requestBack;
+    nameEl.value = session.titleText || '';
+    nameEl.oninput = () => touch();
+    nameEl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); if (ed) ed.view.focus(); } };
     activeEditor = { finish: (r) => finish(r === true), requestBack, isVault };
     (async () => {
       let mod;
@@ -2651,9 +2640,8 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
         onSelect: (inf) => paintStyle(inf),
         onChange: () => {
-          dirty = ed.isDirty(); sync(); syncSave();
+          touch(); sync();
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
-          if (session.persist) { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 500); }
         }
       });
       undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
@@ -2700,7 +2688,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       ed.view.scrollDOM.addEventListener('scroll', () => placeFloat(ed.styleInfo()), { passive: true });
       paintStyle(ed.styleInfo());
       ed.setEditing(true, !text); // keyboard up at once for a new note only
-      sync(); syncSave();
+      sync();
     })();
   });
 }
@@ -4138,31 +4126,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function startVaultCapture(type) {
     try {
       if (type === 'note') {
-        // The editor stays open after Save (Decision 302). The first Save asks name, tags and description; later Saves are silent.
-        let savedId = null, desc = '';
-        const pending = { name: '', tags: [], description: '' };
-        const session = { title: 'New vault note', ...noteDraftHandlers({ isVault: true }) };
-        session.onRename = (t) => renameNoteFromEditor(session, savedId, true, t, pending, () => desc, (v) => { desc = v; });
-        session.onSave = async (text) => {
-          if (!savedId) {
-            const d = await openSaveDialog({ heading: 'Save vault note', name: pending.name || undefined, defaultName: defaultNoteName(text), tags: pending.tags, description: pending.description, isVault: true, discardLabel: 'Back to editing' });
-            if (!d) return false; // Back to editing, or a lock meanwhile
-            const id = await captureToVault({ type: 'note', label: d.name, tags: d.tags, description: d.description, text });
-            await session.clear();
-            savedId = id; desc = d.description || '';
-            Object.assign(session, noteDraftHandlers({ isVault: true, entryId: id }), { title: d.name });
-            renderVault();
-            toast('Saved to the Vault');
-            return true;
-          }
-          await window.Arkly.editEntry(savedId, { text }, {});
-          await session.clear();
-          await refreshVaultIndexEntries(db, privateSessionKey, [savedId]);
-          renderVault();
-          toast('Saved');
-          return true;
-        };
+        // Every change is saved at once (Decision 407): the note is created with the first character.
+        const session = makeNoteSession({ isVault: true });
         await openTextEditor({ text: '', isVault: true, session });
+        renderVault();
       } else if (type === 'voice') {
         await startVoiceRecordingUI(async ({ recordDataBase64, mimeType }) => {
           try {
@@ -4831,48 +4798,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function startCapture(type) {
     if (type === 'note') {
-      // The editor stays open after Save (Decision 302). The first Save asks name, tags and description; later Saves are silent.
-      // Backing out of the dialog returns to the editor with the text kept.
-      let savedId = null, desc = '';
-      const pending = { name: '', tags: [], description: '' };
-      const session = { title: 'New note', ...noteDraftHandlers({ isVault: false }) };
-      session.onRename = (t) => renameNoteFromEditor(session, savedId, false, t, pending, () => desc, (v) => { desc = v; });
-      session.onSave = async (text) => {
-        if (!savedId) {
-          const d = await openSaveDialog({ heading: 'Save note', name: pending.name || undefined, defaultName: defaultNoteName(text), tags: pending.tags, description: pending.description, discardLabel: 'Back to editing' });
-          if (!d) return false; // Back to editing, or a lock meanwhile
-          // The note is always saved. Reminder wording also offers a reminder on top of it (Decisions 175, 178); Back, No or a lock keeps the note only.
-          let reminderAt = null;
-          const offer = reminderOffer(text);
-          if (offer) {
-            const markAsk = overlayAbortCount;
-            const yes = await askYesNo({ title: 'Also set a reminder?', text: `${offer.label}\n${reminderSetText(offer.fire_at).replace('Reminder set for ', '')}`, yes: 'Set reminder too', no: 'Note only' });
-            if (overlayAbortCount === markAsk && yes === true) reminderAt = offer.fire_at;
-          }
-          const id = await captureText(text, 'note', { label: d.name, tags: d.tags, description: d.description });
-          if (reminderAt) {
-            try {
-              await captureText(text, 'note', { label: offer.label, tags: d.tags, reminderAt });
-              toast(`Note saved · ${reminderSetText(reminderAt)}`);
-            } catch (err) {
-              toast(`Note saved. The reminder could not be set: ${err.message || err}`);
-            }
-          } else {
-            toast('Note saved');
-          }
-          await session.clear(); // saved: the new-note draft is no longer needed
-          savedId = id; desc = d.description || '';
-          Object.assign(session, noteDraftHandlers({ isVault: false, entryId: id }), { title: d.name });
-          await renderMainTimeline();
-          return true;
-        }
-        await window.Arkly.editEntry(savedId, { text }, {});
-        await session.clear();
-        toast('Saved');
-        await renderMainTimeline();
-        return true;
-      };
-      await openTextEditor({ text: '', session });
+      // Every change is saved at once (Decision 407): the note is created with the first character.
+      const session = makeNoteSession({ isVault: false });
+      await openTextEditor({ text: '', isVault: false, session });
+      await renderMainTimeline();
     } else if (type === 'voice') {
       await startVoiceRecordingUI(homeVoiceSaved);
     } else if (type === 'reminder') {
@@ -5883,40 +5812,67 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Rename from the editor's Rename button (Decisions 303, 304): the whole Save dialog, as for every other save or rename. A saved
   // note is changed at once. A note that is not saved yet (id null) keeps the answers in `pending` for its first Save sheet.
   // Returns true when the title changed.
-  async function renameNoteFromEditor(session, id, isVault, text, pending, getDesc, setDesc) {
-    if (!id) {
-      const d = await openSaveDialog({ heading: 'Rename', name: pending.name || undefined, defaultName: defaultNoteName(text), tags: pending.tags, description: pending.description, isVault });
-      if (!d) return false;
-      pending.name = d.name; pending.tags = d.tags; pending.description = d.description;
-      session.title = d.name;
-      return true;
+  // Note name (Decision 407): the Rename dialog's name when set; else the Title line; else the name the note already had when it
+  // was made before the Title line; else the first three words of the text, even a dot or a comma; else Untitled.
+  const firstWords = (text) => (text || '').trim().split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
+  function noteName({ named, title, text, keep }) {
+    if (named) return named;
+    const t = (title || '').trim();
+    if (t) return t.slice(0, 120);
+    if (keep) return keep;
+    return firstWords(text).slice(0, 120) || 'Untitled';
+  }
+  // One session for every note editor: new or existing, Home or Vault. Every change is written by autoSave.
+  function makeNoteSession({ isVault, item = null, raw = '' }) {
+    const st = { id: item ? item.id : null, desc: item ? (item.description || '') : '' };
+    const held = { tags: [], description: '' }; // chosen in Rename before the first character created the note
+    const session = { title: item ? item.label : (isVault ? 'New vault note' : 'New note'), titleText: '', named: null, keep: null, ...noteDraftHandlers({ isVault, entryId: st.id }) };
+    if (item) {
+      const m = splitNoteStyle(raw);
+      session.titleText = m.title;
+      if (m.named) session.named = item.label;
+      else if (!m.title && item.label !== firstWords(m.text)) session.keep = item.label; // made before the Title line, or named by hand
     }
-    const tags = await getEntryTags(id);
-    const d = await openSaveDialog({ heading: 'Rename', name: session.title, defaultName: session.title, tags, description: getDesc(), isVault });
+    session.onRename = (t) => renameNoteFromEditor(session, st, isVault, held);
+    session.autoSave = async (rawNow, text, titleText) => {
+      session.titleText = titleText;
+      const label = noteName({ named: session.named, title: titleText, text, keep: session.keep });
+      if (!st.id) {
+        if (!text.trim() && !titleText.trim()) return true; // nothing typed yet
+        const id = isVault
+          ? await captureToVault({ type: 'note', label, tags: held.tags, description: held.description, text: rawNow })
+          : await captureText(rawNow, 'note', { label, tags: held.tags, description: held.description });
+        await session.clear();
+        st.id = id; st.desc = held.description || '';
+        Object.assign(session, noteDraftHandlers({ isVault, entryId: id }));
+      } else {
+        await window.Arkly.editEntry(st.id, { text: rawNow, label }, {});
+        await session.clear();
+        if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [st.id]);
+      }
+      session.title = label;
+      return true;
+    };
+    return session;
+  }
+  async function renameNoteFromEditor(session, st, isVault, held) {
+    const tags = st.id ? await getEntryTags(st.id) : held.tags;
+    const d = await openSaveDialog({ heading: 'Rename', name: session.title, defaultName: session.title, tags, description: st.id ? st.desc : held.description, isVault });
     if (!d) return false;
-    await window.Arkly.editEntry(id, { label: d.name, description: d.description }, {});
-    await setEntryTags(id, d.tags);
-    if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [id]);
-    session.title = d.name; setDesc(d.description || '');
-    toast('Renamed');
+    if (st.id) {
+      await window.Arkly.editEntry(st.id, { label: d.name, description: d.description }, {});
+      await setEntryTags(st.id, d.tags);
+      if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [st.id]);
+      st.desc = d.description || '';
+    } else { held.tags = d.tags; held.description = d.description; }
+    session.named = d.name; session.title = d.name; // from now the dialog's name is the file name; the Title line only edits the title
     return true;
   }
 
-  // Text note: the editor opens clean; Save writes the text at once and stays (Decision 302). Details edits name, tags and description.
+  // Text note: opens with its text and Title; every change is saved at once (Decision 407). Rename edits name, tags and description.
   async function openNote(item, isVault) {
     const text = isVault ? await vaultNoteText(item.id) : (item.body_text || '');
-    let desc = item.description || '';
-    const session = { title: item.label, ...noteDraftHandlers({ isVault, entryId: item.id }) };
-    session.onSave = async (t) => {
-      try {
-        await window.Arkly.editEntry(item.id, { text: t }, {});
-        await session.clear();
-        if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [item.id]);
-        toast('Saved');
-        return true;
-      } catch (err) { toast(`Could not save: ${err.message || err}`); return false; }
-    };
-    session.onRename = (t) => renameNoteFromEditor(session, item.id, isVault, t, null, () => desc, (v) => { desc = v; });
+    const session = makeNoteSession({ isVault, item, raw: text });
     await openTextEditor({ text, isVault, session });
   }
 
