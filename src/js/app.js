@@ -2705,12 +2705,6 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
         }
       });
-      undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
-      redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
-      findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => ed.find()); // a second tap closes it
-      mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
-      const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
-      wrapBtn.classList.toggle('on', ed.isWrapped());
       // Text size and lists (Decision 414): each opens a small panel under the tool row; a second tap, or a tap on the text, closes it.
       const pops = {};
       const closePops = () => { for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); } };
@@ -2728,10 +2722,16 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         pops[key].el.style.top = `${Math.round(r.bottom - s.top + 6)}px`;
         pops[key].el.classList.remove('hidden'); pops[key].btn.classList.add('on');
       };
+      const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
+      wrapBtn.classList.toggle('on', ed.isWrapped());
       const sizeBtn = mk(bar, 'ev-tool', 'A\u00B1', 'Text size', () => togglePop('size'));
       const sz = ed.getSize();
       const sizePop = makePop('size', sizeBtn, `<div class="ev-size"><span class="ev-sa" style="font-size:13px">A</span><input type="range" class="ev-range" min="${sz.min}" max="${sz.max}" step="1" value="${sz.size}" aria-label="Text size"><span class="ev-sa" style="font-size:22px">A</span><output class="ev-sv">${sz.size}</output></div>`);
       sizePop.querySelector('.ev-range').oninput = (e) => { sizePop.querySelector('.ev-sv').textContent = String(ed.setSize(+e.target.value)); };
+      mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
+      undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
+      redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
+      findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => ed.find()); // a second tap closes it
       const listBtn = mk(bar, 'ev-tool ev-ico', iconSvg('list'), 'List', () => togglePop('list'));
       const LISTS = [
         ['Bullets', [['dot', '\u2022', 'Dots'], ['circle', '\u25CB', 'Circles'], ['square', '\u25AA', 'Squares'], ['arrow', '\u2192', 'Arrows'], ['dash', '\u2013', 'Dashes'], ['check', '\u2713', 'Checks']]],
@@ -2739,6 +2739,20 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       ];
       const listPop = makePop('list', listBtn, LISTS.map(([h, items]) => `<div class="ev-pop-h">${h}</div><div class="ev-grid">${items.map(([k, m, n]) => `<button type="button" class="ev-opt" data-k="${k}"><b>${m}</b><span>${n}</span></button>`).join('')}</div>`).join('') + '<button type="button" class="ev-opt ev-opt-wide" data-k="none"><span>No list</span></button>');
       listPop.addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (!b || !ed) return; ed.applyList(b.dataset.k); closePops(); });
+      // Two fingers on the text change its size (Decision 416): together smaller, apart larger, between the A± slider's ends.
+      let pz = null;
+      const fdist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+      host.addEventListener('touchstart', (ev) => {
+        if (ev.touches.length === 2 && ed) { const d = fdist(ev.touches); pz = d > 10 ? { d, s: ed.getSize().size } : null; if (pz) { closePops(); ev.preventDefault(); } } else if (ev.touches.length !== 2) pz = null;
+      }, { passive: false });
+      host.addEventListener('touchmove', (ev) => {
+        if (!pz || ev.touches.length !== 2 || !ed) return;
+        ev.preventDefault();
+        const n = Math.round(pz.s * (fdist(ev.touches) / pz.d));
+        if (n !== ed.getSize().size) { const v = ed.setSize(n); sizePop.querySelector('.ev-range').value = String(v); sizePop.querySelector('.ev-sv').textContent = String(v); }
+      }, { passive: false });
+      const pzEnd = (ev) => { if (ev.touches.length < 2) pz = null; };
+      host.addEventListener('touchend', pzEnd); host.addEventListener('touchcancel', pzEnd);
       host.addEventListener('pointerdown', closePops, true);
       bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== sizeBtn && b !== listBtn) closePops(); }, true);
       // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
@@ -6545,16 +6559,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn = document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').querySelector('.title-noteview');
     if (btn) btn.outerHTML = noteViewBtnHtml();
   }
-  const notePreviewText = (raw) => splitNoteStyle(raw || '').text.replace(/\n{3,}/g, '\n\n').trim().slice(0, 320);
+  // The first 320 characters of a note, with its bold, italic, underline and colours (Decision 416), as HTML. Style offsets are in the
+  // note's words, so the text is cut and runs of blank lines are shortened without moving them.
+  function noteRichPreviewHtml(raw) {
+    const { text, spans } = splitNoteStyle(raw || '');
+    const start = text.length - text.trimStart().length, end = Math.min(text.length, start + 320);
+    const keyAt = (i) => {
+      let b = 0, it = 0, u = 0, c = '';
+      for (const [k, f, t, v] of spans) if (i >= f && i < t) { if (k === 'b') b = 1; else if (k === 'i') it = 1; else if (k === 'u') u = 1; else if (k === 'c') c = v; }
+      return `${b}${it}${u}${c}`;
+    };
+    let out = '', run = '', runKey = null, nl = 0;
+    const flush = () => {
+      if (!run) return;
+      const [b, it, u, c] = [runKey[0] === '1', runKey[1] === '1', runKey[2] === '1', runKey.slice(3)];
+      const cls = `${b ? ' ns-bold' : ''}${it ? ' ns-ital' : ''}${u ? ' ns-und' : ''}${c ? ` ns-c-${c}` : ''}`.trim();
+      out += cls ? `<span class="${cls}">${escapeHtml(run)}</span>` : escapeHtml(run);
+      run = '';
+    };
+    for (let i = start; i < end; i++) {
+      const ch = text[i];
+      nl = ch === '\n' ? nl + 1 : 0;
+      if (nl > 2) continue;
+      const k = keyAt(i);
+      if (k !== runKey) { flush(); runKey = k; }
+      run += ch;
+    }
+    flush();
+    return out.replace(/\s+$/, '');
+  }
   // One card per note: the name and a small preview of the text. A Vault note's text is read after the cards are drawn.
   function noteGridHtml(items, dateOf, isVault) {
     const cols = noteCols;
-    return `<div class="note-grid" style="--cols:${cols}" data-cols="${cols}">${groupedHtml(items, dateOf, (i) => `<div class="entry-row note-card" role="button" tabindex="0" data-id="${i.id}" data-type="note"><span class="nc-bar" aria-hidden="true"></span><strong class="nc-title">${escapeHtml(i.label || 'Untitled')}</strong><span class="nc-body"${isVault ? ` data-vid="${i.id}"` : ''}>${isVault ? '' : escapeHtml(notePreviewText(i.body_text))}</span></div>`)}</div>`;
+    return `<div class="note-grid" style="--cols:${cols}" data-cols="${cols}">${groupedHtml(items, dateOf, (i) => `<div class="entry-row note-card" role="button" tabindex="0" data-id="${i.id}" data-type="note"><span class="nc-bar" aria-hidden="true"></span><strong class="nc-title">${escapeHtml(i.label || 'Untitled')}</strong><span class="nc-body"${isVault ? ` data-vid="${i.id}"` : ''}>${isVault ? '' : noteRichPreviewHtml(i.body_text)}</span></div>`)}</div>`;
   }
   function fillVaultNotePreviews(box) {
     box.querySelectorAll('.nc-body[data-vid]').forEach(async (el) => {
       const t = await vaultNoteText(el.dataset.vid);
-      if (el.isConnected) el.textContent = notePreviewText(t);
+      if (el.isConnected) el.innerHTML = noteRichPreviewHtml(t);
     });
   }
 

@@ -14,7 +14,7 @@ const MESSAGES = {
   network: 'Dictation needs the internet',
   permission: 'Dictation needs the microphone',
   check: 'The phone could not tell which speech languages it has',
-  language: 'The speech service does not support that language',
+  language: 'Check Internet Connection', // with no connection the service answers that it has no such language
   busy: 'The speech recognizer is busy; try again',
   start: 'Dictation could not start',
   other: 'Dictation stopped'

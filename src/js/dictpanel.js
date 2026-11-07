@@ -90,7 +90,7 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
   const stop = () => { if (run) run.stop(); listening = false; paintGo('Finishing'); };
   const start = async () => {
     if (busy || listening || destroyed) return;
-    if (navigator.onLine === false) { paintGo('Offline'); return; } // said in the panel, not as a message
+    if (navigator.onLine === false) { paintGo('Offline'); toast('Check Internet Connection'); return; }
     busy = true; paintGo();
     try {
       if (!(await confirmFirstUse())) { reset(); return; }
