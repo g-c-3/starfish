@@ -110,7 +110,7 @@ public class ArklySpeechBridge {
 
     // One recognition: ends after a pause in speech (run becomes "ended"); the page starts the next one while the mic is on.
     @JavascriptInterface
-    public void start(final String language, final String allowed) {
+    public void start(final String language) {
         synchronized (lock) { partial = ""; err = ""; run = "listening"; level = 0f; }
         act.runOnUiThread(() -> {
             try {
@@ -121,14 +121,6 @@ public class ArklySpeechBridge {
                 Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                 i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
                 i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
-                if (allowed != null && allowed.contains(",")) {
-                    // Auto-detect (Android 13 and newer; a service that does not know these extras ignores them and uses the one language).
-                    ArrayList<String> list = new ArrayList<>(java.util.Arrays.asList(allowed.split(",")));
-                    i.putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true);
-                    i.putStringArrayListExtra("android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES", list);
-                    i.putExtra("android.speech.extra.ENABLE_LANGUAGE_SWITCH", "balanced");
-                    i.putStringArrayListExtra("android.speech.extra.LANGUAGE_SWITCH_ALLOWED_LANGUAGES", list);
-                }
                 i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                 i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
                 rec.startListening(i);
