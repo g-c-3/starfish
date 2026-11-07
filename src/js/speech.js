@@ -51,10 +51,10 @@ export function languageLabel(tag) {
 // Dictation until stop(): each pause in speech ends one round and the next starts, so it runs on until the person taps again.
 // onFinal(text) once per phrase; onPartial(text) while speaking; onLevel(0..1) the voice level; onError(reason) ends it; onEnd() once,
 // whatever the end. An error that arrives after the person pressed stop is not reported: stopping is not a failure. Returns { stop }.
-export function dictate({ language, allowed = [], onPartial, onFinal, onLevel, onError, onEnd }) {
+export function dictate({ language, onPartial, onFinal, onLevel, onError, onEnd }) {
   const b = B();
   let active = true, done = false, lastStart = 0, quick = 0, netTries = 0, waiting = false;
-  const begin = () => { lastStart = Date.now(); b.start(language, allowed.join(',')); }; // allowed: several languages to tell apart (auto-detect), '' for one
+  const begin = () => { lastStart = Date.now(); b.start(language); };
   const finish = () => { if (done) return; done = true; active = false; clearInterval(timer); try { b.cancel(); } catch { /* gone */ } if (onEnd) onEnd(); };
   begin();
   const timer = setInterval(() => {

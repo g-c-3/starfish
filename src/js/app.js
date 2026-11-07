@@ -30,6 +30,7 @@ import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
 import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
+import { DEFAULT_COLS as NOTE_DEFAULT_COLS, clampCols as clampNoteCols, attachNoteGridPinch } from './notegrid.js';
 import { attachDragSelect, dragBlocked } from './dragselect.js';
 import { attachVideoPlayer } from './videoplayer.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
@@ -4172,7 +4173,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (openVaultFolderType === 'location') swipeItems.vault.location = items;
     container.innerHTML = tabItems
       ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
-      : vaultRowsHtml(items, !!folderFind.vault);
+      : (openVaultFolderType === 'note' && noteView === 'grid' && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
+    if (openVaultFolderType === 'note' && noteView === 'grid') fillVaultNotePreviews(container);
     if (tabItems) { // the log is read from the database; the list redraws once if it differs from the copy drawn
       loadReminderLog(db).then((l) => {
         if (!privateSessionKey || openVaultFolderType !== 'reminder' || JSON.stringify(l) === JSON.stringify(vaultReminderLog)) return;
@@ -4323,7 +4325,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(true);
     closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}`;
+    if (type === 'note') await loadNotePrefs();
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
@@ -5240,7 +5243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabItems = openFolderType === 'reminder' ? reminderTabItems(rows, await loadReminderLog(db), reminderTab.home, { savedAt }) : null; // Upcoming, Completed or All (Decision 357)
     if (tabItems) swipeItems.home.reminder = tabItems.map((it) => it.row);
     if (openFolderType === 'location') swipeItems.home.location = rows;
-    document.getElementById('folder-list').innerHTML = (tabItems
+    document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
       ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
         id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
@@ -5428,7 +5431,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     paintReminderTabs(false);
     closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}`;
+    if (type === 'note') await loadNotePrefs();
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -6526,6 +6530,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Full-screen image viewer over a list (the folder's images, in grid order): swipe or arrows to move, pinch and
   // double-tap to zoom. One full-size blob URL at a time, revoked on every change and on close or lock (Decision 105).
+  // ---- Notes layout (Decision 415): list or grid, and cards per row by pinch (1 to 5, two is the standard). Kept in meta (note_view, note_cols). ----
+  let noteView = 'list', noteCols = NOTE_DEFAULT_COLS;
+  async function loadNotePrefs() {
+    noteView = (await metaGet('note_view', 'list')) === 'grid' ? 'grid' : 'list';
+    noteCols = clampNoteCols(await metaGet('note_cols', String(NOTE_DEFAULT_COLS)));
+  }
+  // The title-bar button shows the layout a tap switches to.
+  function noteViewBtnHtml() {
+    const toGrid = noteView === 'list';
+    return `<button type="button" class="title-act title-noteview" aria-label="${toGrid ? 'Grid view' : 'List view'}" title="${toGrid ? 'Grid view' : 'List view'}">${iconSvg(toGrid ? 'grid' : 'list')}</button>`;
+  }
+  function paintNoteBtn(isVault) {
+    const btn = document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').querySelector('.title-noteview');
+    if (btn) btn.outerHTML = noteViewBtnHtml();
+  }
+  const notePreviewText = (raw) => splitNoteStyle(raw || '').text.replace(/\n{3,}/g, '\n\n').trim().slice(0, 320);
+  // One card per note: the name and a small preview of the text. A Vault note's text is read after the cards are drawn.
+  function noteGridHtml(items, dateOf, isVault) {
+    const cols = noteCols;
+    return `<div class="note-grid" style="--cols:${cols}" data-cols="${cols}">${groupedHtml(items, dateOf, (i) => `<div class="entry-row note-card" role="button" tabindex="0" data-id="${i.id}" data-type="note"><span class="nc-bar" aria-hidden="true"></span><strong class="nc-title">${escapeHtml(i.label || 'Untitled')}</strong><span class="nc-body"${isVault ? ` data-vid="${i.id}"` : ''}>${isVault ? '' : escapeHtml(notePreviewText(i.body_text))}</span></div>`)}</div>`;
+  }
+  function fillVaultNotePreviews(box) {
+    box.querySelectorAll('.nc-body[data-vid]').forEach(async (el) => {
+      const t = await vaultNoteText(el.dataset.vid);
+      if (el.isConnected) el.textContent = notePreviewText(t);
+    });
+  }
+
   // ---- Gallery layout (Decision 306): grid or list, and items per row by pinch. Both choices are kept in meta (gallery_view, gallery_cols). ----
   let galleryView = 'grid', galleryCols = DEFAULT_COLS;
   async function loadGalleryPrefs() {
@@ -6565,6 +6597,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const redraw = () => (isVault ? renderVault() : renderMainTimeline());
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
       if (e.target.closest('.title-search')) { if (isVault) armVaultAutoLock(); toggleFolderFind(isVault); return; }
+      if (e.target.closest('.title-noteview')) {
+        noteView = noteView === 'grid' ? 'list' : 'grid';
+        await metaSet('note_view', noteView);
+        paintNoteBtn(isVault);
+        if (isVault) armVaultAutoLock();
+        redraw();
+        return;
+      }
       if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn') || e.target.closest('.rem-sound-btn')) return;
       galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
@@ -6577,6 +6617,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       grid: () => { const g = listBox.querySelector('.thumb-grid'); return g && g.offsetParent ? g : null; }, // null while the folder is hidden
       getCols: () => galleryCols,
       onCols: async (n) => { galleryCols = n; await metaSet('gallery_cols', String(n)); if (isVault) armVaultAutoLock(); }
+    });
+    attachNoteGridPinch(document.getElementById(isVault ? 'vault-screen' : 'main-screen'), {
+      grid: () => { const g = listBox.querySelector('.note-grid'); return g && g.offsetParent ? g : null; }, // null while the folder is hidden
+      getCols: () => noteCols,
+      onCols: async (n) => { noteCols = n; await metaSet('note_cols', String(n)); if (isVault) armVaultAutoLock(); }
     });
   }
 

@@ -1,16 +1,14 @@
 // dictpanel.js — the dictation panel of the notes editor (Decisions 412 and 413): a glass panel at the bottom, as the PDF mark bar.
 // One header line holds the title and state, the voice level and timer, the New line switch, Start or Stop, and Close; under it the
-// language menu (Recent, a separator, Auto-detect, a separator, then every language the service has) and the phrase being spoken.
+// language menu (Recent, a separator, then every language the service has).
 // Text goes into the note through onInsert, so the note saves it like typing. The voice goes to Google's speech service while it runs
 // (Decision 411); nothing else is sent. Pressing the panel never takes the focus from the note, so its cursor stays visible.
 import '../css/dictation.css';
 import { speechPrepare, speechMessage, dictate } from './speech.js';
 import { SPEECH_LANGS, langName, nativeName, defaultLanguage } from './speechlangs.js';
 
-const AUTO = 'auto';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-const baseOf = (t) => t.split('-')[0];
 
 // host: the element it sits in. store: { get(key, fallback), set(key, value) }. onInsert(text, { newline }). confirmFirstUse(): true once
 // the person has accepted where the voice goes. keepFocus(): gives the focus back to the note. onOpenChange(open), onResize().
@@ -21,11 +19,15 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
   el.setAttribute('aria-label', 'Dictation');
   el.innerHTML = `
     <div class="dict-head">
-      <div class="dict-title"><strong>Dictation</strong><span class="dict-status" data-s="status">Ready</span></div>
+      <div class="dict-zone dict-left">
+        <div class="dict-title"><strong>Dictation</strong><span class="dict-status" data-s="status">Ready</span></div>
+        <div class="dict-mt"><div class="dict-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="dict-time" data-s="time">0:00</span></div>
+      </div>
       <button type="button" class="dict-go" data-a="go"><span data-s="gotext">Start</span></button>
-      <div class="dict-mt"><div class="dict-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="dict-time" data-s="time">0:00</span></div>
-      <button type="button" class="dict-nl" data-a="nl" aria-pressed="false" title="Start a new line after each phrase">New line</button>
-      <button type="button" class="dict-x" data-a="close" aria-label="Close dictation">&times;</button>
+      <div class="dict-zone dict-right">
+        <div class="dict-nlbox"><button type="button" class="dict-nl" data-a="nl" aria-pressed="false" title="Start a new line after each phrase">New line</button></div>
+        <button type="button" class="dict-x" data-a="close" aria-label="Close dictation">&times;</button>
+      </div>
     </div>
     <div class="dict-lang">
       <button type="button" class="dict-langbtn" data-a="menu" aria-haspopup="listbox" aria-expanded="false">
@@ -55,18 +57,7 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
     el.querySelector('[data-a="nl"]').setAttribute('aria-pressed', String(newline));
   };
 
-  // The languages auto-detect tells apart: the last ones used, then the phone's own, up to five (at least two).
-  const autoList = () => {
-    const out = [];
-    const add = (t) => { if (t && SPEECH_LANGS.includes(t) && !out.includes(t) && out.length < 5) out.push(t); };
-    recent.forEach(add);
-    for (const t of phoneTags) { if (SPEECH_LANGS.includes(t)) add(t); else add(SPEECH_LANGS.find((x) => baseOf(x) === baseOf(t))); }
-    if (out.length < 2) add('en-US');
-    if (out.length < 2) add('hi-IN');
-    return out;
-  };
-  const autoSub = () => autoList().map(langName).join(', ');
-  const paintLang = () => { $s('lang').textContent = lang === AUTO ? 'Auto-detect' : langName(lang); };
+  const paintLang = () => { $s('lang').textContent = langName(lang); };
 
   const renderList = (q = '') => {
     const needle = q.trim().toLowerCase();
@@ -74,10 +65,8 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
     const row = (t, label, sub, cls = '') => `<button type="button" class="dict-opt${t === lang ? ' sel' : ''}${cls}" role="option" aria-selected="${t === lang}" data-t="${esc(t)}"><span class="dict-on">${esc(label)}</span>${sub ? `<small class="dict-os">${esc(sub)}</small>` : ''}</button>`;
     const lr = (t) => row(t, langName(t), nativeName(t));
     const rec = recent.filter(match), all = SPEECH_LANGS.filter(match).sort((a, b) => langName(a).localeCompare(langName(b)));
-    const showAuto = !needle || 'auto-detect automatic mixed'.includes(needle);
     let h = '';
     if (rec.length) h += `<div class="dict-sec">Recent</div>${rec.map(lr).join('')}`;
-    if (showAuto) h += `${h ? '<div class="dict-sep" role="separator"></div>' : ''}<div class="dict-sec">Auto-detect</div>${row(AUTO, 'Auto-detect', autoSub(), ' dict-auto')}`;
     if (all.length) h += `${h ? '<div class="dict-sep" role="separator"></div>' : ''}<div class="dict-sec">All languages</div>${all.map(lr).join('')}`;
     if (!h) h = '<div class="dict-none">No language matches</div>';
     $s('list').innerHTML = h;
@@ -89,8 +78,6 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
     onResize();
   };
   const remember = async (t) => {
-    try { await store.set('dictation_last', t); } catch { /* kept for this session */ }
-    if (t === AUTO) return;
     recent = [t, ...recent.filter((x) => x !== t)].slice(0, 5);
     try { await store.set('dictation_recent', JSON.stringify(recent)); } catch { /* kept for this session */ }
   };
@@ -111,9 +98,8 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
       if (destroyed) return;
       if (!info.ok) { reset(); toast(speechMessage(info.reason)); return; }
       await remember(lang);
-      const auto = lang === AUTO, list = auto ? autoList() : [];
       run = dictate({
-        language: auto ? list[0] : lang, allowed: auto ? list : [],
+        language: lang,
         onFinal: (t) => { onInsert(t, { newline }); },
         onLevel: (v) => { if (listening) level(v); },
         onError: (reason) => { if (reason === 'network') { paintGo('Stopped'); return; } toast(speechMessage(reason)); }, // a dropped connection is never a message
@@ -145,11 +131,9 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => onResize()); ro.observe(el); }
 
   (async () => {
-    let last = '';
     try { const r = JSON.parse(await store.get('dictation_recent', '[]')); recent = Array.isArray(r) ? r.filter((t) => SPEECH_LANGS.includes(t)).slice(0, 5) : []; } catch { recent = []; }
     try { newline = (await store.get('dictation_newline', 'false')) === 'true'; } catch { newline = false; }
-    try { last = await store.get('dictation_last', ''); } catch { last = ''; }
-    lang = last === AUTO ? AUTO : defaultLanguage(recent, phoneTags);
+    lang = defaultLanguage(recent, phoneTags);
     paintLang(); paintGo();
   })();
 

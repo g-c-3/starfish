@@ -83,6 +83,9 @@ const highlight = HighlightStyle.define([
 const PREFS = { file: { wrap: true, size: 14 }, note: { wrap: true, size: 17 } };
 const MIN_SIZE = 10, MAX_SIZE = 24;
 
+// The Find and Replace panel's words, each word capitalised (Decision 415).
+const PHRASES = { next: 'Next', previous: 'Previous', all: 'All', 'match case': 'Match Case', regexp: 'Regexp', 'by word': 'By Word', replace: 'Replace', 'replace all': 'Replace All', Find: 'Find', Replace: 'Replace' };
+
 // Lists (Decision 414): a marker and a space at the start of each non-blank line of the selection. Applying another style replaces the
 // marker; applying the style the lines already have, or 'none', takes it off. Numbers count the non-blank lines only.
 const LIST_MARK = { dot: '\u2022', circle: '\u25CB', square: '\u25AA', arrow: '\u2192', dash: '\u2013', check: '\u2713' };
@@ -122,35 +125,33 @@ const noteTheme = EditorView.theme({
   '.cm-line': { padding: '0 18px 0 10px' }
 });
 
-// Row numbers for notes (Decision 304): every row on screen is numbered in turn, so a line that wraps takes several numbers and the
-// next line carries on from them; zoom or the Wrap switch changes the count. A row is one line height: the first row of a block
-// is its top divided by the line height, its row count is its height divided by the line height.
+// Line numbers for notes (Decisions 304 and 415): a line is one line however many rows it wraps to. Its number sits beside its first
+// row; the rows it wraps onto carry none, and the next line takes the next number. A row is one line height: a block's row count is
+// its height divided by the line height.
 export function rowSpan(top, height, lh) {
   const h = lh > 0 ? lh : 20;
   return { start: Math.round(top / h) + 1, rows: Math.max(1, Math.round(height / h)) };
 }
 class RowMarker extends GutterMarker {
-  constructor(start, rows, lh) { super(); this.start = start; this.rows = rows; this.lh = lh; }
-  eq(o) { return o.start === this.start && o.rows === this.rows && Math.abs(o.lh - this.lh) < 0.5; }
+  constructor(num, rows, lh) { super(); this.num = num; this.rows = rows; this.lh = lh; }
+  eq(o) { return o.num === this.num && o.rows === this.rows && Math.abs(o.lh - this.lh) < 0.5; }
   toDOM() {
     const d = document.createElement('div');
     d.className = 'ev-rn';
     for (let i = 0; i < this.rows; i++) {
       const r = document.createElement('span'); // inherits the text's font size: its baseline is the text's baseline
-      const n = document.createElement('i');    // the digits sit on that baseline, smaller
-      n.textContent = String(this.start + i);
       r.style.height = r.style.lineHeight = `${this.lh}px`;
-      r.appendChild(n); d.appendChild(r);
+      if (i === 0) { const n = document.createElement('i'); n.textContent = String(this.num); r.appendChild(n); } // the digits sit on that baseline, smaller
+      d.appendChild(r);
     }
     return d;
   }
 }
 const lineH = (view) => view.defaultLineHeight || 20;
-const totalRows = (view) => { const b = view.lineBlockAt(view.state.doc.length); return Math.max(1, Math.round((b.top + b.height) / lineH(view))); }; // the document alone, without its padding
-const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(totalRows(view)).length) - 1, 1, lineH(view)); // sets the width
+const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(view.state.doc.lines).length) - 1, 1, lineH(view)); // sets the width
 const rowGutter = () => gutter({
   class: 'cm-lineNumbers ev-rows',
-  lineMarker: (view, line) => { const { start, rows } = rowSpan(line.top, line.height, lineH(view)); return new RowMarker(start, rows, lineH(view)); },
+  lineMarker: (view, line) => new RowMarker(view.state.doc.lineAt(line.from).number, rowSpan(line.top, line.height, lineH(view)).rows, lineH(view)),
   lineMarkerChange: (u) => u.docChanged || u.heightChanged || u.geometryChanged || u.viewportChanged || u.transactions.some((t) => t.reconfigured),
   initialSpacer: (view) => spacerFor(view),
   updateSpacer: (_sp, u) => spacerFor(u.view)
@@ -190,7 +191,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     doc: text,
     extensions: [
       ...(note ? [placeholder('Start typing\u2026'), rowGutter()] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
-      history(), ...(ns ? [ns.extension] : []), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
+      history(), ...(ns ? [ns.extension] : []), EditorState.phrases.of(PHRASES), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
       keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
       languageFor(note ? '' : name),
       wrapC.of(prefs.wrap ? EditorView.lineWrapping : []), sizeC.of(sizeTheme()), editC.of(editExt(false)),
@@ -251,7 +252,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     getFormat: () => (ns ? ns.spansOf(view.state) : []),
     toggleStyle: (kind, value) => (ns ? ns.toggle(view, kind, value) : false), // colour 'r' 'g' 'b', or 'b' 'i' 'u'; false when nothing is selected
     styleInfo: () => (ns ? ns.info(view.state) : { has: false, c: null, b: false, i: false, u: false }),
-    rowCount: () => (note ? totalRows(view) : view.state.doc.lines), // rows as numbered on screen (notes), else lines
+    rowCount: () => view.state.doc.lines, // lines: a wrapped line is one line (Decision 415)
     isEditing: () => on,
     canEdit: editable,
     setEditing(v, focus = true) { // focus false: switch on without raising the keyboard
@@ -268,24 +269,6 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     },
     closeFind() { closeSearchPanel(view); },
     async goTo() {
-      if (note) { // rows as numbered on screen (Decision 304)
-        const lh = lineH(view), total = totalRows(view);
-        const v = await ui.askText({ title: 'Go to line', text: `1 to ${total}`, placeholder: 'Line number', ok: 'Go' });
-        const k = parseInt(v, 10);
-        if (!Number.isFinite(k)) return;
-        const row = Math.min(total, Math.max(1, k));
-        const block = view.lineBlockAtHeight((row - 1) * lh + lh / 2);
-        view.dispatch({ selection: { anchor: block.from }, effects: EditorView.scrollIntoView(block.from, { y: 'center' }) });
-        const inside = row - 1 - Math.round(block.top / lh); // a wrapped line: move to the row asked for
-        if (inside > 0) {
-          requestAnimationFrame(() => {
-            const c = view.coordsAtPos(block.from), r = view.contentDOM.getBoundingClientRect();
-            const pos = c ? view.posAtCoords({ x: r.left + 30, y: c.top + inside * lh + lh / 2 }) : null;
-            if (pos != null) view.dispatch({ selection: { anchor: pos } });
-          });
-        }
-        return;
-      }
       const n = view.state.doc.lines;
       const v = await ui.askText({ title: 'Go to line', text: `1 to ${n}`, placeholder: 'Line number', ok: 'Go' });
       const k = parseInt(v, 10);
