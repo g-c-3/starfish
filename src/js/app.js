@@ -55,6 +55,7 @@ import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT }
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
+import { speechPresent, speechPrepare, speechMessage, languageLabel, dictate } from './speech.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
 
 
@@ -353,6 +354,7 @@ function openModalDismiss() {
 function outsideAction(o) {
   switch (o.id) {
     case 'yesno-dialog': return activeYesNo && (() => activeYesNo.finish(false));
+    case 'lang-dialog': return activeLang && (() => activeLang.finish(null));
     case 'text-dialog': return activeText && (() => activeText.finish(null));
     case 'secret-dialog': return () => document.getElementById('secret-cancel-btn')?.click();
     case 'save-dialog': return activeSaveDialog && (() => activeSaveDialog.requestLeave());
@@ -439,6 +441,7 @@ const appLockShowing = () => !document.getElementById('lock-screen')?.classList.
 function backAction() {
   if (appLockShowing()) return null; // Back never leaves the lock screen: its leftover location (Settings, Vault) must not run
   if (activeYesNo) return () => activeYesNo.finish(false); // Back answers No; checked before the dialog it sits over
+  if (activeLang) return () => activeLang.finish(null); // Back closes the dictation language dialog
   if (activeLocFix) return () => activeLocFix.finish(null); // Back cancels the live location sheet
   if (activeRemSound) return () => activeRemSound.finish(); // Back closes the Reminder sound dialog
   if (activeLocProv) return () => activeLocProv.finish(); // Back closes the map provider dialog
@@ -2187,6 +2190,7 @@ let activeCoords = null;     // { finish, isVault } — paste coordinates / map 
 let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
 let activeRemSound = null;   // { finish } — Reminder sound dialog (Decision 359)
 let activeLocProv = null;    // { finish } — map provider dialog (Decision 345)
+let activeLang = null;       // { finish } — dictation language dialog (Decision 408)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
 function askDiscard() {
@@ -2223,6 +2227,31 @@ async function confirmStrength(kind, secret) {
 }
 
 // extra: a third button, shown first, that resolves 'extra'.
+// Which installed language to dictate in: one button per language the phone has a pack for. Resolves to the tag, or null.
+function askDictationLanguage(tags) {
+  if (activeLang) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const dlg = document.getElementById('lang-dialog'), list = document.getElementById('lang-list');
+    list.innerHTML = '';
+    const finish = (v) => {
+      if (!activeLang) return;
+      activeLang = null;
+      dlg.classList.add('hidden');
+      updateBackButtonState();
+      resolve(v);
+    };
+    for (const tag of tags) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = languageLabel(tag);
+      b.onclick = () => finish(tag);
+      list.appendChild(b);
+    }
+    document.getElementById('lang-cancel-btn').onclick = () => finish(null);
+    activeLang = { finish };
+    updateBackButtonState();
+    dlg.classList.remove('hidden');
+  });
+}
 function askYesNo({ title = 'Are you sure?', text = '', yes = 'Yes', no = 'No', explicitNo = false, extra = '' } = {}) {
   if (activeYesNo) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -2365,6 +2394,7 @@ function dismissOverlays(vaultOnly = false) {
   for (const s of draftSources) if (!vaultOnly || s.isVault) { s.locked = true; s.flush().catch(() => {}); } // before the dialogs close (Decision 189)
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
+  if (activeLang) activeLang.finish(null);
   if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
   if (activeCompose && (!vaultOnly || activeCompose.isVault)) activeCompose.finish(null);
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
@@ -2553,11 +2583,11 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
   return new Promise((resolve) => {
     const { text, spans } = splitNoteStyle(stored);
     const $ = (id) => document.getElementById(id);
-    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), nameEl = $('editor-name');
+    const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), nameEl = $('editor-name'), micBtn = $('editor-mic-btn');
     const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat(), { title: nameEl.value, named: !!session.named }); // what is stored and drafted
     let ed = null, closed = false, dirty = false, saving = false, pending = false, saveTimer = null, draftTimer = null, countTimer = null, findBtn = null, floatCleanup = () => {};
     const saveDraft = () => { clearTimeout(draftTimer); draftTimer = null; if (session.persist && ed) Promise.resolve(session.persist(raw())).catch(() => {}); };
-    const onHide = () => { if (document.hidden && dirty) { flush(); saveDraft(); } }; // backgrounded: store now, the app may be closed next
+    const onHide = () => { if (document.hidden) stopDictation(); if (document.hidden && dirty) { flush(); saveDraft(); } }; // backgrounded: store now, the app may be closed next
     document.addEventListener('visibilitychange', onHide);
     $('editor-title').textContent = session.title;
     host.replaceChildren(); bar.replaceChildren();
@@ -2576,6 +2606,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     };
     updateCount();
     const finish = (discarded = false) => {
+      stopDictation();
       if (closed) return;
       closed = true;
       document.removeEventListener('visibilitychange', onHide);
@@ -2613,6 +2644,42 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     };
     const requestBack = async () => { await settle(); if (!closed) finish(); };
     $('editor-back-btn').onclick = requestBack;
+    // Mic (Decision 408): on-device dictation. The text goes in at the cursor like typing, so it is saved like typing. The language is
+    // chosen by the person (asked whenever the phone has more than one pack); nothing is sent anywhere.
+    let dictation = null, micBusy = false;
+    micBtn.classList.toggle('hidden', !speechPresent());
+    const stopDictation = () => {
+      if (dictation) { dictation.stop(); dictation = null; }
+      micBtn.classList.remove('on');
+      if (!closed) updateCount();
+    };
+    const insertDictated = (t) => {
+      if (!ed || closed || !t) return;
+      const v = ed.view, sel = v.state.selection.main;
+      const before = sel.from > 0 ? v.state.sliceDoc(sel.from - 1, sel.from) : '';
+      const lead = before && !/\s/.test(before) ? ' ' : '';
+      v.dispatch({ changes: { from: sel.from, to: sel.to, insert: lead + t }, selection: { anchor: sel.from + lead.length + t.length }, scrollIntoView: true, userEvent: 'input.type' });
+    };
+    micBtn.onclick = async () => {
+      if (dictation) { stopDictation(); return; }
+      if (micBusy || !ed) return;
+      micBusy = true;
+      try {
+        const info = await speechPrepare();
+        if (closed) return;
+        if (!info.ok) { toast(speechMessage(info.reason)); return; }
+        const lang = info.languages.length === 1 ? info.languages[0] : await askDictationLanguage(info.languages);
+        if (!lang || closed) return;
+        micBtn.classList.add('on');
+        dictation = dictate({
+          language: lang,
+          onPartial: (t) => { if (dictation && !closed) $('editor-count').textContent = t ? `Listening… ${t}` : 'Listening…'; },
+          onFinal: insertDictated,
+          onError: (reason) => { dictation = null; stopDictation(); toast(speechMessage(reason)); }
+        });
+        $('editor-count').textContent = 'Listening…';
+      } finally { micBusy = false; }
+    };
     nameEl.value = session.titleText || '';
     nameEl.oninput = () => touch();
     nameEl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); if (ed) ed.view.focus(); } };
