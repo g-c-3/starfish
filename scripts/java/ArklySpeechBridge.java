@@ -7,9 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.LocaleList;
 import android.speech.RecognitionListener;
-import android.speech.RecognitionSupport;
-import android.speech.RecognitionSupportCallback;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.webkit.JavascriptInterface;
@@ -18,20 +17,22 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-// Voice to text for the notes editor (patch-speech.js, Decision 408): window.ArklySpeech. Only the phone's ON-DEVICE recognizer is ever
-// created (Android 13 or newer, a language pack already on the phone); there is no fallback to the online recognizer, so no audio leaves
-// the phone. The page polls: status() for permission, availability and the installed languages, poll() for partial and final text.
-// Needs the microphone permission (RECORD_AUDIO, already declared for the voice recorder). Reads nothing else, stores nothing.
+// Voice to text for the notes editor (patch-speech.js, Decisions 408 and 411): window.ArklySpeech. Uses the phone's standard speech
+// recognizer, which sends the voice to Google's speech service over the internet while the person dictates (the person is told once,
+// Decision 411). The app itself makes no request and keeps no audio. The page polls: status() for permission, availability and the
+// phone's own language list, poll() for partial and final text. Text comes back in the script of the language chosen.
+// Needs the microphone permission (RECORD_AUDIO, already declared for the voice recorder) and the RecognitionService package query.
 @SuppressLint("NewApi")
 public class ArklySpeechBridge {
     private final Activity act;
     private ActivityResultLauncher<String> permLauncher = null;
     private volatile String perm = "idle";      // idle | pending | granted | denied
     private volatile String prep = "idle";      // idle | preparing | ready | unavailable
-    private volatile String reason = "";        // android | device | packs | check
+    private volatile String reason = "";        // device | check
     private volatile List<String> installed = new ArrayList<>();
     private SpeechRecognizer rec = null;
     private final Object lock = new Object();
@@ -72,32 +73,23 @@ public class ArklySpeechBridge {
         });
     }
 
-    // Starts the check of what this phone can do on-device. Read the answer with status().
+    // Checks that the phone has a speech service and reads its own language list (the preferred languages, in order).
     @JavascriptInterface
     public void prepare() {
-        if (Build.VERSION.SDK_INT < 33) { prep = "unavailable"; reason = "android"; return; }
         try {
-            if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(act)) { prep = "unavailable"; reason = "device"; return; }
-        } catch (Exception e) { prep = "unavailable"; reason = "device"; return; }
-        prep = "preparing"; reason = "";
-        act.runOnUiThread(this::check);
-    }
-
-    private void check() {
-        try {
-            final SpeechRecognizer r = SpeechRecognizer.createOnDeviceSpeechRecognizer(act);
-            Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            r.checkRecognitionSupport(i, act.getMainExecutor(), new RecognitionSupportCallback() {
-                @Override public void onSupportResult(RecognitionSupport s) {
-                    installed = new ArrayList<>(s.getInstalledOnDeviceLanguages());
-                    if (installed.isEmpty()) { prep = "unavailable"; reason = "packs"; } else { prep = "ready"; reason = ""; }
-                    try { r.destroy(); } catch (Exception e) { /* nothing to free */ }
+            if (!SpeechRecognizer.isRecognitionAvailable(act)) { prep = "unavailable"; reason = "device"; return; }
+            List<String> tags = new ArrayList<>();
+            if (Build.VERSION.SDK_INT >= 24) {
+                LocaleList ll = LocaleList.getAdjustedDefault();
+                for (int i = 0; i < ll.size(); i++) {
+                    String t = ll.get(i).toLanguageTag();
+                    if (!tags.contains(t)) tags.add(t);
                 }
-                @Override public void onError(int error) {
-                    prep = "unavailable"; reason = "check";
-                    try { r.destroy(); } catch (Exception e) { /* nothing to free */ }
-                }
-            });
+            } else {
+                tags.add(Locale.getDefault().toLanguageTag());
+            }
+            installed = tags;
+            prep = "ready"; reason = "";
         } catch (Exception e) {
             prep = "unavailable"; reason = "check";
         }
@@ -122,15 +114,14 @@ public class ArklySpeechBridge {
         act.runOnUiThread(() -> {
             try {
                 destroyRec();
-                if (Build.VERSION.SDK_INT < 33 || !SpeechRecognizer.isOnDeviceRecognitionAvailable(act)) { fail("device"); return; }
-                rec = SpeechRecognizer.createOnDeviceSpeechRecognizer(act);
+                if (!SpeechRecognizer.isRecognitionAvailable(act)) { fail("device"); return; }
+                rec = SpeechRecognizer.createSpeechRecognizer(act);
                 rec.setRecognitionListener(listener);
                 Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                 i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
                 i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
                 i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                 i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-                i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
                 rec.startListening(i);
             } catch (Exception e) {
                 fail("start");
@@ -197,7 +188,7 @@ public class ArklySpeechBridge {
             synchronized (lock) {
                 partial = "";
                 if (code == 6 || code == 7) { run = "ended"; return; } // no speech or no match: the next round starts
-                err = code == 12 || code == 13 ? "language" : code == 9 ? "permission" : code == 8 ? "busy" : "other";
+                err = code == 1 || code == 2 || code == 4 || code == 11 ? "network" : code == 12 || code == 13 ? "language" : code == 9 ? "permission" : code == 8 ? "busy" : "other";
                 run = "error";
             }
         }
