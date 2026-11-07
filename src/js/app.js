@@ -2569,7 +2569,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       if (!session.onRename) return;
       let changed = false;
       try { changed = await session.onRename(ed ? raw() : stored); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
-      if (changed && !closed) { $('editor-title').textContent = session.title; touch(); }
+      if (changed && !closed) { $('editor-title').textContent = session.title; nameEl.value = session.titleText; touch(); }
     };
     const updateCount = () => {
       const v = ed ? ed.getValue() : text;
@@ -2705,7 +2705,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
         }
       });
-      // Text size and lists (Decision 414): each opens a small panel under the tool row; a second tap, or a tap on the text, closes it.
+      // The list panel (Decision 414) opens under the tool row; a second tap, or a tap on the text, closes it.
       const pops = {};
       const closePops = () => { for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); } };
       const makePop = (key, btn, html) => {
@@ -2724,10 +2724,14 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       };
       const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
       wrapBtn.classList.toggle('on', ed.isWrapped());
-      const sizeBtn = mk(bar, 'ev-tool', 'A\u00B1', 'Text size', () => togglePop('size'));
-      const sz = ed.getSize();
-      const sizePop = makePop('size', sizeBtn, `<div class="ev-size"><span class="ev-sa" style="font-size:13px">A</span><input type="range" class="ev-range" min="${sz.min}" max="${sz.max}" step="1" value="${sz.size}" aria-label="Text size"><span class="ev-sa" style="font-size:22px">A</span><output class="ev-sv">${sz.size}</output></div>`);
-      sizePop.querySelector('.ev-range').oninput = (e) => { sizePop.querySelector('.ev-sv').textContent = String(ed.setSize(+e.target.value)); };
+      // Ruled lines (Decision 417): a switch for thin lines under every row of the text; kept in meta (note_ruled). The text size is by pinch.
+      const RULED = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>';
+      const ruledBtn = mk(bar, 'ev-tool ev-ico', RULED, 'Ruled lines', () => {
+        const on = ed.setRuled(!ed.isRuled());
+        ruledBtn.classList.toggle('on', on);
+        metaSet('note_ruled', String(on));
+      });
+      metaGet('note_ruled', 'false').then((v) => { if (v === 'true' && ed && !closed) { ed.setRuled(true); ruledBtn.classList.add('on'); } });
       mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
       undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
       redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
@@ -2739,7 +2743,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       ];
       const listPop = makePop('list', listBtn, LISTS.map(([h, items]) => `<div class="ev-pop-h">${h}</div><div class="ev-grid">${items.map(([k, m, n]) => `<button type="button" class="ev-opt" data-k="${k}"><b>${m}</b><span>${n}</span></button>`).join('')}</div>`).join('') + '<button type="button" class="ev-opt ev-opt-wide" data-k="none"><span>No list</span></button>');
       listPop.addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (!b || !ed) return; ed.applyList(b.dataset.k); closePops(); });
-      // Two fingers on the text change its size (Decision 416): together smaller, apart larger, between the A± slider's ends.
+      // Two fingers on the text change its size (Decisions 416 and 417): together smaller, apart larger, 10 to 42.
       let pz = null;
       const fdist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
       host.addEventListener('touchstart', (ev) => {
@@ -2749,12 +2753,12 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         if (!pz || ev.touches.length !== 2 || !ed) return;
         ev.preventDefault();
         const n = Math.round(pz.s * (fdist(ev.touches) / pz.d));
-        if (n !== ed.getSize().size) { const v = ed.setSize(n); sizePop.querySelector('.ev-range').value = String(v); sizePop.querySelector('.ev-sv').textContent = String(v); }
+        if (n !== ed.getSize().size) ed.setSize(n);
       }, { passive: false });
       const pzEnd = (ev) => { if (ev.touches.length < 2) pz = null; };
       host.addEventListener('touchend', pzEnd); host.addEventListener('touchcancel', pzEnd);
       host.addEventListener('pointerdown', closePops, true);
-      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== sizeBtn && b !== listBtn) closePops(); }, true);
+      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== listBtn) closePops(); }, true);
       // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
       // selected only; a second tap on the one that is on removes it. With only a cursor they stay dimmed but show the style of the
       // character beside it. A copy floats under a selection near the top, where the system's menu would cover the tool row.
@@ -5918,14 +5922,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Rename from the editor's Rename button (Decisions 303, 304): the whole Save dialog, as for every other save or rename. A saved
   // note is changed at once. A note that is not saved yet (id null) keeps the answers in `pending` for its first Save sheet.
   // Returns true when the title changed.
-  // Note name (Decision 407): the Rename dialog's name when set; else the Title line; else the name the note already had when it
-  // was made before the Title line; else the first three words of the text, even a dot or a comma; else Untitled.
+  // Note name (Decisions 407 and 417): the Title line is the file name, both ways: typing a Title names the note, and renaming fills
+  // the Title. With no Title the name is the first three words of the text, even a dot or a comma; with nothing at all, Untitled.
   const firstWords = (text) => (text || '').trim().split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
-  function noteName({ named, title, text, keep }) {
-    if (named) return named;
+  function noteName({ title, text }) {
     const t = (title || '').trim();
     if (t) return t.slice(0, 120);
-    if (keep) return keep;
     return firstWords(text).slice(0, 120) || 'Untitled';
   }
   // One session for every note editor: new or existing, Home or Vault. Every change is written by autoSave.
@@ -5935,14 +5937,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const session = { title: item ? item.label : (isVault ? 'New vault note' : 'New note'), titleText: '', named: null, keep: null, ...noteDraftHandlers({ isVault, entryId: st.id }) };
     if (item) {
       const m = splitNoteStyle(raw);
-      session.titleText = m.title;
-      if (m.named) session.named = item.label;
-      else if (!m.title && item.label !== firstWords(m.text)) session.keep = item.label; // made before the Title line, or named by hand
+      // The Title shows the file name when it is not just the first words of the text (a name set by hand, or from before the Title line).
+      session.titleText = m.title || (m.named || item.label !== firstWords(m.text) ? item.label : '');
     }
     session.onRename = (t) => renameNoteFromEditor(session, st, isVault, held);
     session.autoSave = async (rawNow, text, titleText) => {
       session.titleText = titleText;
-      const label = noteName({ named: session.named, title: titleText, text, keep: session.keep });
+      const label = noteName({ title: titleText, text });
       if (!st.id) {
         if (!text.trim() && !titleText.trim()) return true; // nothing typed yet
         const id = isVault
@@ -5971,7 +5972,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [st.id]);
       st.desc = d.description || '';
     } else { held.tags = d.tags; held.description = d.description; }
-    session.named = d.name; session.title = d.name; // from now the dialog's name is the file name; the Title line only edits the title
+    session.title = d.name; session.titleText = d.name; // the Title line shows the new name, and editing it renames the note again (Decision 417)
     return true;
   }
 

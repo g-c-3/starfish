@@ -81,7 +81,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 const PREFS = { file: { wrap: true, size: 14 }, note: { wrap: true, size: 17 } };
-const MIN_SIZE = 10, MAX_SIZE = 24;
+const MIN_SIZE = 10, MAX_SIZE = 42;
 
 // The Find and Replace panel's words, each word capitalised (Decision 415).
 const PHRASES = { next: 'Next', previous: 'Previous', all: 'All', 'match case': 'Match Case', regexp: 'Regexp', 'by word': 'By Word', replace: 'Replace', 'replace all': 'Replace All', Find: 'Find', Replace: 'Replace' };
@@ -148,6 +148,12 @@ class RowMarker extends GutterMarker {
   }
 }
 const lineH = (view) => view.defaultLineHeight || 20;
+// Ruled lines for notes (Decision 417): the editor's own CSS draws one thin line per row from these two numbers (style.css, .ev-ruled).
+const paintRule = (view) => {
+  const lh = `${lineH(view)}px`, pt = `${parseFloat(getComputedStyle(view.contentDOM).paddingTop) || 0}px`;
+  if (view.dom.style.getPropertyValue('--ev-lh') !== lh) view.dom.style.setProperty('--ev-lh', lh);
+  if (view.dom.style.getPropertyValue('--ev-pt') !== pt) view.dom.style.setProperty('--ev-pt', pt);
+};
 const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(view.state.doc.lines).length) - 1, 1, lineH(view)); // sets the width
 const rowGutter = () => gutter({
   class: 'cm-lineNumbers ev-rows',
@@ -203,6 +209,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
         if (u.docChanged || styled) onChange();
         if (ns && (u.selectionSet || u.docChanged || styled)) onSelect(ns.info(u.state));
         if (u.docChanged || u.heightChanged || u.geometryChanged) onRows(); // the number of rows can change without the text changing
+        if (note && (u.geometryChanged || u.heightChanged || u.transactions.some((t) => t.reconfigured))) paintRule(u.view);
         const open = searchPanelOpen(u.state);
         if (open !== findOpen) { findOpen = open; onFind(open); }
       })
@@ -279,6 +286,8 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     toggleWrap() { prefs.wrap = !prefs.wrap; view.dispatch({ effects: wrapC.reconfigure(prefs.wrap ? EditorView.lineWrapping : []) }); return prefs.wrap; },
     isWrapped: () => prefs.wrap,
     getSize: () => ({ size: prefs.size, min: MIN_SIZE, max: MAX_SIZE }),
+    setRuled(on) { view.dom.classList.toggle('ev-ruled', !!on); paintRule(view); return !!on; },
+    isRuled: () => view.dom.classList.contains('ev-ruled'),
     setSize(n) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(n))); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); return prefs.size; },
     // kind: dot, circle, square, arrow, dash, check, num, romanS, romanB, alphaS, alphaB, or 'none'. Returns the number of lines changed.
     applyList(kind) {
