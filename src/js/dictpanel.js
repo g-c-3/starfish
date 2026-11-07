@@ -22,9 +22,9 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
   el.innerHTML = `
     <div class="dict-head">
       <div class="dict-title"><strong>Dictation</strong><span class="dict-status" data-s="status">Ready</span></div>
-      <div class="dict-mt"><div class="dict-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="dict-time" data-s="time">0:00</span></div>
-      <button type="button" class="dict-nl" data-a="nl" aria-pressed="false" aria-label="New line after each phrase" title="New line after each phrase">&#8629;</button>
       <button type="button" class="dict-go" data-a="go"><span data-s="gotext">Start</span></button>
+      <div class="dict-mt"><div class="dict-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="dict-time" data-s="time">0:00</span></div>
+      <button type="button" class="dict-nl" data-a="nl" aria-pressed="false" title="Start a new line after each phrase">New line</button>
       <button type="button" class="dict-x" data-a="close" aria-label="Close dictation">&times;</button>
     </div>
     <div class="dict-lang">
@@ -35,16 +35,13 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
         <input type="search" class="dict-search" placeholder="Search languages" aria-label="Search languages" autocomplete="off">
         <div class="dict-list" data-s="list"></div>
       </div>
-    </div>
-    <div class="dict-live" data-s="live"></div>`;
+    </div>`;
   host.appendChild(el);
   const $s = (k) => el.querySelector(`[data-s="${k}"]`);
   const menu = el.querySelector('.dict-menu'), search = el.querySelector('.dict-search'), bars = Array.from(el.querySelectorAll('.dict-meter i'));
-  const HINT = '<span class="dict-hint">Your words appear in the note as you speak.</span>';
   let lang = 'en-US', recent = [], newline = false, run = null, listening = false, busy = false, secs = 0, clockT = null, open = false, destroyed = false;
 
   const setStatus = (t) => { $s('status').textContent = t; };
-  const setLive = (t) => { const n = $s('live'); if (t) { n.textContent = t; n.classList.add('on'); } else { n.classList.remove('on'); n.innerHTML = HINT; } };
   const level = (v) => bars.forEach((b, i) => { const on = Math.max(0, Math.min(1, v * 1.15 - i * 0.12)); b.style.transform = `scaleY(${(0.18 + on * 0.82).toFixed(2)})`; b.style.opacity = String(0.35 + on * 0.65); });
   const paintGo = (note) => {
     const b = el.querySelector('[data-a="go"]');
@@ -101,7 +98,7 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
   const reset = (note) => {
     listening = false; busy = false; run = null;
     clearInterval(clockT); clockT = null; secs = 0; $s('time').textContent = '0:00';
-    level(0); setLive(''); if (!destroyed) paintGo(note);
+    level(0); if (!destroyed) paintGo(note);
   };
   const stop = () => { if (run) run.stop(); listening = false; paintGo('Finishing'); };
   const start = async () => {
@@ -117,8 +114,7 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
       const auto = lang === AUTO, list = auto ? autoList() : [];
       run = dictate({
         language: auto ? list[0] : lang, allowed: auto ? list : [],
-        onPartial: (t) => { if (listening) setLive(t); },
-        onFinal: (t) => { setLive(''); onInsert(t, { newline }); },
+        onFinal: (t) => { onInsert(t, { newline }); },
         onLevel: (v) => { if (listening) level(v); },
         onError: (reason) => { if (reason === 'network') { paintGo('Stopped'); return; } toast(speechMessage(reason)); }, // a dropped connection is never a message
         onEnd: () => reset(el.querySelector('.dict-status').textContent === 'Stopped' ? 'Stopped' : undefined)
@@ -154,7 +150,7 @@ export function createDictationPanel({ host, store, onInsert, confirmFirstUse, t
     try { newline = (await store.get('dictation_newline', 'false')) === 'true'; } catch { newline = false; }
     try { last = await store.get('dictation_last', ''); } catch { last = ''; }
     lang = last === AUTO ? AUTO : defaultLanguage(recent, phoneTags);
-    paintLang(); setLive(''); paintGo();
+    paintLang(); paintGo();
   })();
 
   const api = {

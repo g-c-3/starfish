@@ -2710,8 +2710,36 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
       const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
       wrapBtn.classList.toggle('on', ed.isWrapped());
-      mk(bar, 'ev-tool', 'A\u2212', 'Smaller text', () => ed.bumpSize(-1));
-      mk(bar, 'ev-tool', 'A+', 'Larger text', () => ed.bumpSize(1));
+      // Text size and lists (Decision 414): each opens a small panel under the tool row; a second tap, or a tap on the text, closes it.
+      const pops = {};
+      const closePops = () => { for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); } };
+      const makePop = (key, btn, html) => {
+        const el = document.createElement('div');
+        el.className = 'ev-pop hidden'; el.innerHTML = html;
+        el.addEventListener('mousedown', (e) => { if (!e.target.closest('input')) e.preventDefault(); }); // the selection stays
+        screen.appendChild(el); pops[key] = { el, btn }; return el;
+      };
+      const togglePop = (key) => {
+        const was = !pops[key].el.classList.contains('hidden');
+        closePops();
+        if (was) return;
+        const r = bar.getBoundingClientRect(), s = screen.getBoundingClientRect();
+        pops[key].el.style.top = `${Math.round(r.bottom - s.top + 6)}px`;
+        pops[key].el.classList.remove('hidden'); pops[key].btn.classList.add('on');
+      };
+      const sizeBtn = mk(bar, 'ev-tool', 'A\u00B1', 'Text size', () => togglePop('size'));
+      const sz = ed.getSize();
+      const sizePop = makePop('size', sizeBtn, `<div class="ev-size"><span class="ev-sa" style="font-size:13px">A</span><input type="range" class="ev-range" min="${sz.min}" max="${sz.max}" step="1" value="${sz.size}" aria-label="Text size"><span class="ev-sa" style="font-size:22px">A</span><output class="ev-sv">${sz.size}</output></div>`);
+      sizePop.querySelector('.ev-range').oninput = (e) => { sizePop.querySelector('.ev-sv').textContent = String(ed.setSize(+e.target.value)); };
+      const listBtn = mk(bar, 'ev-tool ev-ico', iconSvg('list'), 'List', () => togglePop('list'));
+      const LISTS = [
+        ['Bullets', [['dot', '\u2022', 'Dots'], ['circle', '\u25CB', 'Circles'], ['square', '\u25AA', 'Squares'], ['arrow', '\u2192', 'Arrows'], ['dash', '\u2013', 'Dashes'], ['check', '\u2713', 'Checks']]],
+        ['Numbered', [['num', '1.', 'Numbers'], ['romanS', 'i.', 'Roman small'], ['romanB', 'I.', 'Roman big'], ['alphaS', 'a.', 'Letters small'], ['alphaB', 'A.', 'Letters big']]]
+      ];
+      const listPop = makePop('list', listBtn, LISTS.map(([h, items]) => `<div class="ev-pop-h">${h}</div><div class="ev-grid">${items.map(([k, m, n]) => `<button type="button" class="ev-opt" data-k="${k}"><b>${m}</b><span>${n}</span></button>`).join('')}</div>`).join('') + '<button type="button" class="ev-opt ev-opt-wide" data-k="none"><span>No list</span></button>');
+      listPop.addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (!b || !ed) return; ed.applyList(b.dataset.k); closePops(); });
+      host.addEventListener('pointerdown', closePops, true);
+      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== sizeBtn && b !== listBtn) closePops(); }, true);
       // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
       // selected only; a second tap on the one that is on removes it. With only a cursor they stay dimmed but show the style of the
       // character beside it. A copy floats under a selection near the top, where the system's menu would cover the tool row.
@@ -2729,7 +2757,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       floatBar.className = 'ns-float hidden';
       screen.appendChild(floatBar);
       addStyleButtons(floatBar);
-      floatCleanup = () => floatBar.remove();
+      floatCleanup = () => { floatBar.remove(); for (const q of Object.values(pops)) q.el.remove(); };
       const placeFloat = (inf) => {
         const v = ed && ed.view, { from, to } = v ? v.state.selection.main : { from: 0, to: 0 };
         const a = v && from !== to ? v.coordsAtPos(from) : null, b = a ? v.coordsAtPos(to) : null;

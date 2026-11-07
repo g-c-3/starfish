@@ -83,6 +83,14 @@ const highlight = HighlightStyle.define([
 const PREFS = { file: { wrap: true, size: 14 }, note: { wrap: true, size: 17 } };
 const MIN_SIZE = 10, MAX_SIZE = 24;
 
+// Lists (Decision 414): a marker and a space at the start of each non-blank line of the selection. Applying another style replaces the
+// marker; applying the style the lines already have, or 'none', takes it off. Numbers count the non-blank lines only.
+const LIST_MARK = { dot: '\u2022', circle: '\u25CB', square: '\u25AA', arrow: '\u2192', dash: '\u2013', check: '\u2713' };
+const roman = (n) => { if (n >= 40) return String(n); let s = ''; for (const [v, r] of [[10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']]) while (n >= v) { s += r; n -= v; } return s; };
+const letters = (n) => { let s = ''; while (n > 0) { n -= 1; s = String.fromCharCode(97 + (n % 26)) + s; n = Math.floor(n / 26); } return s; };
+const markerFor = (kind, n) => LIST_MARK[kind] || ({ num: `${n}.`, romanS: `${roman(n)}.`, romanB: `${roman(n).toUpperCase()}.`, alphaS: `${letters(n)}.`, alphaB: `${letters(n).toUpperCase()}.` })[kind];
+const MARK_RE = /^(\s*)(?:[\u2022\u25CB\u25AA\u2192\u2013\u2713]|\d+\.|[a-zA-Z]\.|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3})\.|(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})\.)\s/;
+
 const baseTheme = EditorView.theme({
   '&': { height: '100%', color: 'var(--fg)', backgroundColor: 'transparent' },
   '&.cm-focused': { outline: 'none' },
@@ -287,6 +295,33 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     },
     toggleWrap() { prefs.wrap = !prefs.wrap; view.dispatch({ effects: wrapC.reconfigure(prefs.wrap ? EditorView.lineWrapping : []) }); return prefs.wrap; },
     isWrapped: () => prefs.wrap,
+    getSize: () => ({ size: prefs.size, min: MIN_SIZE, max: MAX_SIZE }),
+    setSize(n) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(n))); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); return prefs.size; },
+    // kind: dot, circle, square, arrow, dash, check, num, romanS, romanB, alphaS, alphaB, or 'none'. Returns the number of lines changed.
+    applyList(kind) {
+      const st = view.state, sel = st.selection.main;
+      const a = st.doc.lineAt(sel.from);
+      let b = st.doc.lineAt(sel.to);
+      if (sel.to > sel.from && sel.to === b.from && b.number > a.number) b = st.doc.line(b.number - 1); // a selection ending at a line start leaves that line out
+      const lines = [];
+      for (let i = a.number; i <= b.number; i++) { const l = st.doc.line(i); if (l.text.trim()) lines.push(l); }
+      if (!lines.length) return 0;
+      let remove = kind === 'none';
+      if (!remove) {
+        remove = lines.every((l, i) => { const m = /^\s*/.exec(l.text)[0]; return l.text.startsWith(`${markerFor(kind, i + 1)} `, m.length); });
+      }
+      const changes = [];
+      lines.forEach((l, i) => {
+        const m = MARK_RE.exec(l.text);
+        const indent = m ? m[1].length : /^\s*/.exec(l.text)[0].length;
+        const cut = m ? m[0].length - m[1].length : 0;
+        const ins = remove ? '' : `${markerFor(kind, i + 1)} `;
+        if (cut || ins) changes.push({ from: l.from + indent, to: l.from + indent + cut, insert: ins });
+      });
+      if (!changes.length) return 0;
+      view.dispatch({ changes, userEvent: 'input' });
+      return changes.length;
+    },
     bumpSize(d) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, prefs.size + d)); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); },
     destroy() { panelWatch.disconnect(); clearTimeout(hideT); sc.removeEventListener('scroll', onScroll); thumb.remove(); view.destroy(); }
   };
