@@ -563,6 +563,7 @@
       <button id="editor-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
       <span id="editor-title">New note</span>
       <button id="editor-rename-btn" class="icon-btn" aria-label="Rename" title="Rename"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
+      <button id="editor-mic-btn" class="icon-btn hidden" aria-label="Dictate" title="Dictate"><svg class="ic" aria-hidden="true"><use href="#i-voice"/></svg></button>
     </header>
     <div id="editor-tools" class="ev-tools"></div>
     <input id="editor-name" class="editor-name" type="text" placeholder="Title" aria-label="Title" autocomplete="off" enterkeyhint="next">
@@ -655,6 +656,15 @@
       <button id="yesno-extra-btn" class="hidden"></button>
       <button id="yesno-yes-btn">Yes</button>
       <button id="yesno-no-btn" class="secondary-btn">No</button>
+    </div>
+  </div>
+
+  <div id="lang-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lang-title">
+    <div class="modal-box">
+      <h3 id="lang-title">Dictation language</h3>
+      <p id="lang-text">Choose the language you will speak. Recognition runs on this phone only.</p>
+      <div id="lang-list"></div>
+      <button id="lang-cancel-btn" class="secondary-btn">Cancel</button>
     </div>
   </div>
 
