@@ -107,6 +107,11 @@ jobs:
       - name: Add the playback output bridge (native)
         run: node scripts/patch-audioroute.js
 
+      # Decision 408 — dictation for the notes editor: window.ArklySpeech, the phone's on-device recognizer only. Needs the onCreate()
+      # that patch-screenlock.js guarantees. No Gradle change; the microphone permission is added by patch-manifest.js.
+      - name: Add the dictation bridge (native)
+        run: node scripts/patch-speech.js
+
       # Decision 359 — reminder sound: the phone's notification sound, alarm sound or an audio file, optionally rising. Writes the
       # sound classes and bridge (window.ArklySound), the media-playback service and its permission, and hooks the plugin's
       # publisher and dismiss receiver and the action receiver. Needs patch-reminder-actions.js and patch-audioroute.js first.
