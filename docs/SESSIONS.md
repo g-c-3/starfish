@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 202**
+
+Start: screenshots of the tool row and the grid. Requests: Title and file name the same, grid names centred, size up to 42, ruled lines in place of A±.
+- Decision 417. Phase 100 built. Replaced: `src/js/codeeditor.js`, `src/js/app.js`, `src/css/style.css`.
+- Tested in a simulated page: Title and name sync through the real session code (11 cases: first words, Title, Rename fills the Title, edit again, clear, older notes, Untitled). Scripts parse. The ruled lines were not drawn on a screen here: not run through CI or a device.
+- DP222 still to confirm.
+- Open: DP222, DP223.
+- Next start: DP222 and DP223 results, then Phase 93 (notes swipe).
+
+---
+
 **Session 201**
 
 Start: screenshots confirming Phases 97 and 98 (DP220, DP221). Requests: a clear message when offline, a new tool order, pinch to change the text size, styles in the grid cards.
