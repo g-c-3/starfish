@@ -92,4 +92,12 @@ if (!/android:enableOnBackInvokedCallback=/.test(xml)) {
   console.log('patch-manifest.js: enableOnBackInvokedCallback=true added.');
 }
 
+// Decision 411: dictation uses the phone's speech recognizer. From Android 11 an app can only see the services it declares a query for.
+if (!/android\.speech\.RecognitionService/.test(xml)) {
+  const Q = '<intent><action android:name="android.speech.RecognitionService"/></intent>';
+  if (/<queries>/.test(xml)) xml = xml.replace('<queries>', `<queries>\n        ${Q}`);
+  else xml = xml.replace(/(<manifest[^>]*>)/, `$1\n    <queries>\n        ${Q}\n    </queries>`);
+  console.log('patch-manifest.js: RecognitionService query added.');
+}
+
 fs.writeFileSync(MANIFEST_PATH, xml, 'utf8');
