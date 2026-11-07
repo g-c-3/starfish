@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 199**
+
+Start: all pending device passes (DP215 to DP219) confirmed. Requests: remove the phrase box, Start before the level, a better New line, centred language, A− and A+ as one button with a slider, a list button in the A+ place, a slimmer Title.
+- Decision 414. Phase 97 built.
+- Replaced: `src/js/codeeditor.js`, `src/js/app.js`, `src/js/dictpanel.js`, `src/css/dictation.css`, `src/css/style.css`.
+- Tested: list rules with real editor transactions (12 cases: styles, blank lines, cursor only, selection ending at a line start, replace, remove, indent); marker recognition (13 cases); dictation panel in a simulated page (21 cases). `app.js` and `codeeditor.js` parse. Not run through CI or a device.
+- Not done: continuing a list on Enter.
+- Open: DP220.
+- Next start: DP220 result, then Phase 93 (notes swipe).
+
+---
+
 **Session 198**
 
 Start: screenshots and a recording of the dictation panel; six points: the toast, the menu rows, Auto-detect, a compact header, the hidden cursor, the dictated line under the panel.
