@@ -40,6 +40,7 @@ public class ArklySpeechBridge {
     private final List<String> finals = new ArrayList<>();
     private volatile String run = "idle";       // idle | listening | ended | error
     private volatile String err = "";
+    private volatile float level = 0f;         // 0..1, the voice level of the current round
 
     public ArklySpeechBridge(Activity act) {
         this.act = act;
@@ -110,7 +111,7 @@ public class ArklySpeechBridge {
     // One recognition: ends after a pause in speech (run becomes "ended"); the page starts the next one while the mic is on.
     @JavascriptInterface
     public void start(final String language) {
-        synchronized (lock) { partial = ""; err = ""; run = "listening"; }
+        synchronized (lock) { partial = ""; err = ""; run = "listening"; level = 0f; }
         act.runOnUiThread(() -> {
             try {
                 destroyRec();
@@ -147,7 +148,7 @@ public class ArklySpeechBridge {
         try {
             JSONObject o = new JSONObject();
             synchronized (lock) {
-                o.put("run", run); o.put("partial", partial); o.put("error", err);
+                o.put("run", run); o.put("partial", partial); o.put("error", err); o.put("level", (double) level);
                 o.put("finals", new JSONArray(finals));
                 finals.clear();
             }
@@ -169,7 +170,7 @@ public class ArklySpeechBridge {
     private final RecognitionListener listener = new RecognitionListener() {
         @Override public void onReadyForSpeech(Bundle params) { }
         @Override public void onBeginningOfSpeech() { }
-        @Override public void onRmsChanged(float rmsdB) { }
+        @Override public void onRmsChanged(float rmsdB) { level = Math.max(0f, Math.min(1f, (rmsdB + 2f) / 12f)); }
         @Override public void onBufferReceived(byte[] buffer) { }
         @Override public void onEndOfSpeech() { }
         @Override public void onEvent(int eventType, Bundle params) { }
