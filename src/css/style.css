@@ -1497,7 +1497,7 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 /* Notes grid (Decision 415): cards with the name and a small preview; 1 to 5 per row, two is the standard size. */
 .note-grid { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .note-grid .date-sep { grid-column: 1 / -1; justify-self: start; margin: 8px 0 0 2px; }
-.note-grid .note-card { position: relative; display: flex; flex-direction: column; gap: 6px; margin: 0; width: auto; padding: 14px 12px 10px; border-radius: 16px; overflow: hidden; text-align: left; cursor: pointer;
+.note-grid .note-card { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; width: auto; padding: 14px 12px 10px; border-radius: 16px; overflow: hidden; text-align: left; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(20, 16, 50, 0.06), 0 8px 18px rgba(20, 16, 50, 0.06); aspect-ratio: 1 / 1.05; }
 .note-grid .nc-bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, #f59e0b, #fb923c); }
 .note-grid .nc-title { font-size: 14px; font-weight: 700; line-height: 1.25; color: var(--fg); word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -1523,3 +1523,11 @@ body:has(#editor-screen:not(.hidden)) #bottom-nav { display: none; } /* the edit
 body.selecting .note-grid .note-card { padding-right: 12px; }
 body.selecting .note-grid .note-card::after { top: 8px; right: 8px; margin-top: 0; background: rgba(0, 0, 0, 0.35); border-color: #fff; }
 .note-grid .note-card.is-selected { outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-tint); }
+
+/* The styles of a note shown in a Notes grid card (Decision 416) */
+.note-grid .nc-body .ns-bold { font-weight: 700; }
+.note-grid .nc-body .ns-ital { font-style: italic; }
+.note-grid .nc-body .ns-und { text-decoration: underline; text-underline-offset: 1px; }
+.note-grid .nc-body .ns-c-r { color: var(--ns-r); } .note-grid .nc-body .ns-c-g { color: var(--ns-g); } .note-grid .nc-body .ns-c-b { color: var(--ns-b); }
+/* Two fingers on the note text change its size, so the browser must not take the pinch (Decision 416) */
+#editor-host, #editor-host .cm-scroller, #editor-host .cm-content { touch-action: pan-y; }
