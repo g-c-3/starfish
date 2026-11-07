@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 195**
+
+Start: screenshots of the Title line; the removed reminder offer accepted as it is; Title centred; build the Mic.
+- Decisions 409 and 410. Phase 92 built: Mic in the editor, on-device dictation, language dialog; Title centred.
+- New: `src/js/speech.js`, `scripts/java/ArklySpeechBridge.java`, `scripts/patch-speech.js`. Replaced: `src/js/app.js`, `src/index.html`, `src/css/style.css`, `.github/workflows/build-android.yml` (one step), `android-notes/native-setup.md`.
+- Tested in a simulated page with a mock bridge: permission and languages, final text, next round, stop, error, no bridge (8 cases). `app.js` parses. The Java is not compiled here: not run through CI or a device.
+- Open: DP215, DP216.
+- Next start: CI result, DP215 and DP216, then Phase 93 (notes swipe).
+
+---
+
 **Session 194**
 
 Start: notes without a Save button, a Title line, name rules, a Mic. All swipe device passes (DP211 to DP214) and DP212 to DP213 confirmed on the device.
