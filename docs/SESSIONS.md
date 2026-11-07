@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 197**
+
+Start: screen recording of dictation; wanted a professional panel (language menu with Recent, Start and Stop, glass like the PDF tools) and no toast on Stop.
+- Cause of the toast found in the code: errors after Stop were reported. Fixed in `speech.js`.
+- Decision 412. Phase 95 built: dictation panel, 125-language list with search, Recent (5), previous language preselected, live phrase, voice level, timer, New line switch; the language dialog removed.
+- New: `src/js/dictpanel.js`, `src/js/speechlangs.js`, `src/css/dictation.css`. Replaced: `src/js/speech.js`, `scripts/java/ArklySpeechBridge.java`, `src/js/app.js`, `src/index.html`, `src/css/style.css`.
+- Tested in a simulated page (15 cases: default language, menu order, names, search, choosing, start and stop, recent, insert, error after stop, close). `app.js` parses. Java not compiled here: not run through CI or a device.
+- The panel is outside the one motion recipe (follows the PDF mark bar); flagged in DP218.
+- Open: DP215, DP216 (on-device items superseded), DP217, DP218.
+- Next start: CI result, DP217 and DP218, then Phase 93 (notes swipe).
+
+---
+
 **Session 196**
 
 Start: screenshots of the Mic message and the phone's Languages screen; the on-device Mic found no pack.
