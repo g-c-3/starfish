@@ -4,6 +4,21 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 209**
+
+Start: three screenshots (a second phone toolbar and handles over the list panel, the normal selection state, the Trash) and five requests: clear the remaining selection tools under a panel, the volume key not stopping the vibration with the screen off, sizes in the Trash, opening items from the Trash, a license file. Questions were invited.
+- Cause of the extra toolbar: Decision 428 blurred the editor, which left the text selected in the page as a plain text selection. Fixed, Decision 431.
+- Trash sizes: Decision 430 (Home and Vault; the Vault list has few columns, so the size is read by id, read only).
+- License: Decision 432; history checked (1257 commits): no license, readme or license field ever existed.
+- Decisions 430 to 432. Phase 106 built.
+- New: `LICENSE`. Replaced: `src/js/app.js`, `src/js/vault.js`.
+- Tested: selection clearing with the real editor (state kept, list applied, page selection restored); Vault trash size with the real encryption (note, current and legacy file meta, mismatched meta, no meta, wrong key, missing row, never writes); Trash line markup and the fill, taken from `app.js`. Both files parse. The phone's own toolbar and handles, the Trash layout and the Vault size on real data were not run: not run through CI or a device.
+- Not built, waiting on answers: opening items from the Trash (view only? what for reminders, money and locations); the volume key with the screen off (which sound setting is in use; the code path is by setting, see below). Reading of the code: with the Phone notification sound or Notification sound settings the phone plays the sound; with Alarm sound or an audio file the reminder service plays it and listens for the key by the system's volume-change broadcast, which is sent only when a volume actually changes.
+- Open: DP222 to DP230. CI has not yet completed a build of Phases 93 to 106.
+- Next start: the answers, the CI result, then DP222 to DP230.
+
+---
+
 **Session 208**
 
 Start: three screenshots (list panel over a selection, a Full indent list in the editor, the Notes grid) and five requests: hide the phone's selection tools and our colour bar under a panel, the first-line indent in the Notes grid, the repeated full-screen notification question, the Money date line, and sizes in list views.

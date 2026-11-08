@@ -85,6 +85,7 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
+- [ ] 106 — Selection tools cleared under panels, sizes in the Trash lines, LICENSE (Session 209, Decisions 430 to 432; DP230 open, not run through CI or a device; trash opening and volume-key vibration waiting on answers)
 - [ ] 105 — Notes grid first-line indent, Money date line, row sizes in list views, selection tools hidden under panels, lock-screen offer once (Session 208, Decisions 425 to 429; DP229 open, not run through CI or a device)
 - [ ] 104 — CI: retries for the install and the Gradle download (Session 207, Decision 424; DP228 open, not run on Actions)
 - [ ] 103 — Dictation panel: unfinished reduced-motion rule completed (Session 206, Decision 423; DP227 open, not run through CI or a device)
@@ -807,6 +808,14 @@ individual items) can be picked up in any order once prerequisites are met.
   - Removed: the reminder-wording offer ("Also set a reminder?") that came with the first Save of a note; the Mic is not yet in the Save button's place (Phase 92).
   - Files: `src/js/app.js`, `src/js/notestyle.js`, `src/index.html`, `src/css/style.css`.
   - [x] DP215 (confirmed on the device) — Device pass for Decision 407. (1) New note, type a word: the note appears in the folder named by its first words after leaving; leave at once and reopen: text intact. (2) Type a Title: the name changes to it; clear it: back to the first words. (3) Rename in the dialog: the name shown is the current one, tags and description kept; then type in Title: the name does not change; rename again: it does. (4) Type only "." or ",": the name is that. Delete all text and title: the note stays, named Untitled. (5) Existing notes from before: open, edit the text: the name does not change; type a Title: it does. (6) Vault: the same, then lock while typing: after unlock the last text is there, no duplicate Autosave note. (7) Background the app mid-typing and return. (8) Search finds new and edited notes; the Title and name text do not appear as part of the body.
+- [ ] **106 — Device-pass follow-ups, round two (Decisions 430 to 432; Session 209).** Built; not run through CI or a device.
+  - Panels over a selection: the page selection is cleared too, so the phone's plain-text Copy / Share toolbar and the handles go (Decision 431; completes Decision 428).
+  - Trash lines (Home and Vault): size at the right of the line, after the days left, for Notes, Voice, Gallery, Pdf and Files (Decision 430).
+  - `LICENSE` at the repository root: proprietary, personal testing and personal use only, applies to all versions (Decision 432).
+  - Waiting on answers, not built: opening items directly from the Trash; the volume key not stopping the vibration with the screen off.
+
+  - [ ] DP230 — Device pass for Decisions 430 to 432. (1) Select several lines, open the list panel: no phone toolbar (Cut, Copy, Share, Read aloud, Select all), no handles, no colour bar over the panel; after picking a list or closing the panel the selection, the handles and the colour bar are back, and the keyboard does not rise if it was down. (2) Trash, Home and Vault: a note, a voice note, a photo, a Pdf and a file each show their size at the right of the line, after the days left; a reminder, money and location rows show none; sizes appear a moment after the list. (3) `LICENSE` is at the repository root and GitHub names it in the sidebar.
+
 - [ ] **105 — Follow-ups from the device pass (Decisions 425 to 429; Session 208).** Built; not run through CI or a device.
   - Notes grid: the first line keeps its own indent (Decision 425).
   - Money rows: year and seconds, and the last change instead of the creation time (Decision 426).
