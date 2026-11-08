@@ -2,8 +2,9 @@
 // go to line, wrap and size switches, a draggable scroll handle. CodeMirror 6, bundled into the app (no network); this module is
 // loaded only when a text file or a note opens. kind 'file' (File explorer) or 'note' (Home and Vault notes, Decision 292: plain
 // text, no numbers or colours, spell check on). Wrap and size choices last until the app closes, one set per kind.
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder, gutter, GutterMarker } from '@codemirror/view';
+import { EditorState, Compartment, RangeSetBuilder } from '@codemirror/state';
+import '../css/notetools.css';
+import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap, placeholder, gutter, GutterMarker, Decoration, ViewPlugin } from '@codemirror/view';
 import { history, historyKeymap, defaultKeymap, insertNewline, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching, indentOnInput, StreamLanguage } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
@@ -93,6 +94,34 @@ const roman = (n) => { if (n >= 40) return String(n); let s = ''; for (const [v,
 const letters = (n) => { let s = ''; while (n > 0) { n -= 1; s = String.fromCharCode(97 + (n % 26)) + s; n = Math.floor(n / 26); } return s; };
 const markerFor = (kind, n) => LIST_MARK[kind] || ({ num: `${n}.`, romanS: `${roman(n)}.`, romanB: `${roman(n).toUpperCase()}.`, alphaS: `${letters(n)}.`, alphaB: `${letters(n).toUpperCase()}.` })[kind];
 const MARK_RE = /^(\s*)(?:[\u2022\u25CB\u25AA\u2192\u2013\u2713]|\d+\.|[a-zA-Z]\.|(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3})\.|(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})\.)\s/;
+
+// List indentation (Decision 421). Both kinds are 2 em wide and are told apart by the character, so the choice is kept in the text:
+// origin = four en spaces, only the first row of a point is indented; full = two em spaces, and the wrapped rows of the point are
+// held at the same indent (a line decoration: padding of n em, first row pulled back by n em, so the marker stays where the spaces end).
+const IND = { origin: '\u2002'.repeat(4), full: '\u2003'.repeat(2), none: '' };
+const OUR_SPACES = /[\u2002\u2003]/g;
+const hanging = ViewPlugin.fromClass(class {
+  constructor(view) { this.decorations = this.build(view); }
+  update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+  build(view) {
+    const b = new RangeSetBuilder();
+    let last = -1;
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos);
+        pos = line.to + 1;
+        if (line.from <= last) continue;
+        last = line.from;
+        const m = /^\u2003+/.exec(line.text);
+        if (m && MARK_RE.test(line.text)) b.add(line.from, line.from, Decoration.line({ attributes: { style: `padding-left: calc(10px + ${m[0].length}em); text-indent: -${m[0].length}em` } }));
+      }
+    }
+    return b.finish();
+  }
+}, { decorations: (v) => v.decorations });
+
+// Tab (Decision 422): four spaces.
+const TAB = '    ';
 
 const baseTheme = EditorView.theme({
   '&': { height: '100%', color: 'var(--fg)', backgroundColor: 'transparent' },
@@ -200,7 +229,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     doc: text,
     extensions: [
       ...(note ? [placeholder('Start typing\u2026'), rowGutter()] : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), bracketMatching(), indentOnInput()]),
-      history(), ...(ns ? [ns.extension] : []), EditorState.phrases.of(PHRASES), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
+      history(), ...(ns ? [ns.extension, hanging] : []), EditorState.phrases.of(PHRASES), search({ top: true }), syntaxHighlighting(highlight), baseTheme, ...(note ? [noteTheme] : []), // noteTheme after baseTheme: later wins
       keymap.of([...(note ? [{ key: 'Enter', run: insertNewline }] : []), ...defaultKeymap, ...historyKeymap, ...searchKeymap]), // note: Enter copies no indent
       languageFor(note ? '' : name),
       wrapC.of(prefs.wrap ? EditorView.lineWrapping : []), sizeC.of(sizeTheme()), editC.of(editExt(false)),
@@ -292,14 +321,21 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     setRuled(on) { parent.classList.toggle('ev-ruled', !!on); paintRule(view, parent); return !!on; },
     isRuled: () => parent.classList.contains('ev-ruled'),
     setSize(n) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(n))); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); if (note) requestAnimationFrame(() => paintRule(view, parent)); return prefs.size; },
-    // kind: dot, circle, square, arrow, dash, check, num, romanS, romanB, alphaS, alphaB, or 'none'. Returns the number of lines changed.
-    applyList(kind) {
+    // The non-blank lines of the selection (a selection ending at a line start leaves that line out).
+    listLines() {
       const st = view.state, sel = st.selection.main;
       const a = st.doc.lineAt(sel.from);
       let b = st.doc.lineAt(sel.to);
-      if (sel.to > sel.from && sel.to === b.from && b.number > a.number) b = st.doc.line(b.number - 1); // a selection ending at a line start leaves that line out
+      if (sel.to > sel.from && sel.to === b.from && b.number > a.number) b = st.doc.line(b.number - 1);
       const lines = [];
       for (let i = a.number; i <= b.number; i++) { const l = st.doc.line(i); if (l.text.trim()) lines.push(l); }
+      return lines;
+    },
+    // kind: dot, circle, square, arrow, dash, check, num, romanS, romanB, alphaS, alphaB, or 'none'. indent: 'origin', 'full' or 'none'
+    // (Decision 421): our indent is set to that and any indent of the person's own is kept. Taking a list off takes our indent off too.
+    // Returns the number of lines changed.
+    applyList(kind, indent = 'none') {
+      const lines = api.listLines();
       if (!lines.length) return 0;
       let remove = kind === 'none';
       if (!remove) {
@@ -308,13 +344,44 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
       const changes = [];
       lines.forEach((l, i) => {
         const m = MARK_RE.exec(l.text);
-        const indent = m ? m[1].length : /^\s*/.exec(l.text)[0].length;
+        const ws = m ? m[1] : /^\s*/.exec(l.text)[0];
         const cut = m ? m[0].length - m[1].length : 0;
-        const ins = remove ? '' : `${markerFor(kind, i + 1)} `;
-        if (cut || ins) changes.push({ from: l.from + indent, to: l.from + indent + cut, insert: ins });
+        const keep = ws.replace(OUR_SPACES, '');
+        const next = (remove ? '' : IND[indent] || '') + keep + (remove ? '' : `${markerFor(kind, i + 1)} `);
+        if (l.text.slice(0, ws.length + cut) !== next) changes.push({ from: l.from, to: l.from + ws.length + cut, insert: next });
       });
       if (!changes.length) return 0;
       view.dispatch({ changes, userEvent: 'input' });
+      return changes.length;
+    },
+    // Re-indent the lines of the selection that already are list points. Returns the number of lines changed.
+    applyIndent(indent) {
+      const changes = [];
+      for (const l of api.listLines()) {
+        const m = MARK_RE.exec(l.text);
+        if (!m) continue;
+        const next = (IND[indent] || '') + m[1].replace(OUR_SPACES, '');
+        if (m[1] !== next) changes.push({ from: l.from, to: l.from + m[1].length, insert: next });
+      }
+      if (!changes.length) return 0;
+      view.dispatch({ changes, userEvent: 'input' });
+      return changes.length;
+    },
+    // Tab (Decision 422): four spaces at the cursor; with a selection, in front of it, and over several lines at the start of each of
+    // them. Nothing is deleted, and the selection stays on the same text. Each tap is one more step.
+    insertTab() {
+      const st = view.state, sel = st.selection.main;
+      const a = st.doc.lineAt(sel.from);
+      let b = st.doc.lineAt(sel.to);
+      if (sel.to > sel.from && sel.to === b.from && b.number > a.number) b = st.doc.line(b.number - 1);
+      if (a.number === b.number) {
+        view.dispatch({ changes: { from: sel.from, insert: TAB }, selection: { anchor: sel.anchor + TAB.length, head: sel.head + TAB.length }, scrollIntoView: true, userEvent: 'input.type' });
+        return 1;
+      }
+      const changes = [];
+      for (let i = a.number; i <= b.number; i++) { const l = st.doc.line(i); if (l.text.trim()) changes.push({ from: l.from, insert: TAB }); }
+      if (!changes.length) return 0;
+      view.dispatch({ changes, userEvent: 'input.type' });
       return changes.length;
     },
     bumpSize(d) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, prefs.size + d)); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); },

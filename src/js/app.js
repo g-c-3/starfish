@@ -2728,16 +2728,24 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
         pops[key].el.style.top = `${Math.round(r.bottom - s.top + 6)}px`;
         pops[key].el.classList.remove('hidden'); pops[key].btn.classList.add('on');
       };
-      const wrapBtn = mk(bar, 'ev-tool ev-ico', iconSvg('wrap'), 'Wrap long lines', () => wrapBtn.classList.toggle('on', ed.toggleWrap()));
-      wrapBtn.classList.toggle('on', ed.isWrapped());
-      // Ruled lines (Decision 417): a switch for thin lines under every row of the text; kept in meta (note_ruled). The text size is by pinch.
+      // First tool (Decision 422): three lines; opens a panel with the two switches that were separate buttons, Text Wrap and Ruled Lines
+      // (ruled lines kept in meta, note_ruled). The text size is by pinch.
       const RULED = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>';
-      const ruledBtn = mk(bar, 'ev-tool ev-ico', RULED, 'Ruled lines', () => {
-        const on = ed.setRuled(!ed.isRuled());
-        ruledBtn.classList.toggle('on', on);
-        metaSet('note_ruled', String(on));
+      const LINES = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+      const TABIC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h11M11 7.5l4.5 4.5-4.5 4.5M20 6v12"/></svg>';
+      const viewBtn = mk(bar, 'ev-tool ev-ico', LINES, 'Text wrap and ruled lines', () => togglePop('view'));
+      const viewPop = makePop('view', viewBtn, `<div class="ev-grid ev-grid2"><button type="button" class="ev-opt" data-v="wrap"><b>${iconSvg('wrap')}</b><span>Text Wrap</span></button><button type="button" class="ev-opt" data-v="ruled"><b>${RULED}</b><span>Ruled Lines</span></button></div>`);
+      const wrapOpt = viewPop.querySelector('[data-v="wrap"]'), ruledOpt = viewPop.querySelector('[data-v="ruled"]');
+      wrapOpt.classList.toggle('on', ed.isWrapped());
+      viewPop.addEventListener('click', (e) => {
+        const o = e.target.closest('[data-v]');
+        if (!o || !ed) return;
+        if (o.dataset.v === 'wrap') o.classList.toggle('on', ed.toggleWrap());
+        else { const on = ed.setRuled(!ed.isRuled()); o.classList.toggle('on', on); metaSet('note_ruled', String(on)); }
       });
-      metaGet('note_ruled', 'false').then((v) => { if (v === 'true' && ed && !closed) { ed.setRuled(true); ruledBtn.classList.add('on'); } });
+      metaGet('note_ruled', 'false').then((v) => { if (v === 'true' && ed && !closed) { ed.setRuled(true); ruledOpt.classList.add('on'); } });
+      // Second tool (Decision 422): Tab, four spaces at the cursor, one more step on each tap.
+      mk(bar, 'ev-tool ev-ico', TABIC, 'Tab', () => { if (ed) ed.insertTab(); });
       mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
       undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
       redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
@@ -2747,8 +2755,24 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
         ['Bullets', [['dot', '\u2022', 'Dots'], ['circle', '\u25CB', 'Circles'], ['square', '\u25AA', 'Squares'], ['arrow', '\u2192', 'Arrows'], ['dash', '\u2013', 'Dashes'], ['check', '\u2713', 'Checks']]],
         ['Numbered', [['num', '1.', 'Numbers'], ['romanS', 'i.', 'Roman small'], ['romanB', 'I.', 'Roman big'], ['alphaS', 'a.', 'Letters small'], ['alphaB', 'A.', 'Letters big']]]
       ];
-      const listPop = makePop('list', listBtn, LISTS.map(([h, items]) => `<div class="ev-pop-h">${h}</div><div class="ev-grid">${items.map(([k, m, n]) => `<button type="button" class="ev-opt" data-k="${k}"><b>${m}</b><span>${n}</span></button>`).join('')}</div>`).join('') + '<button type="button" class="ev-opt ev-opt-wide" data-k="none"><span>No list</span></button>');
-      listPop.addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (!b || !ed) return; ed.applyList(b.dataset.k); closePops(); });
+      // Indentation (Decision 421): chosen once, kept (list_indent) and used by the next list that is applied; choosing it also re-indents the
+      // list points already in the selection. Default None.
+      const IND_ICON = { origin: 'M9 4h12M3 8h18M3 12h12', full: 'M9 4h12M9 8h12M9 12h8', none: 'M3 4h18M3 8h18M3 12h12' };
+      const INDENTS = [['origin', 'Origin'], ['full', 'Full'], ['none', 'None']];
+      let listIndent = 'none';
+      const indentHtml = `<div class="ev-pop-h">Indentation</div><div class="ev-grid">${INDENTS.map(([k, n]) => `<button type="button" class="ev-opt" data-ind="${k}"><b><svg viewBox="0 0 24 16" aria-hidden="true"><path d="${IND_ICON[k]}"/></svg></b><span>${n}</span></button>`).join('')}</div>`;
+      const listPop = makePop('list', listBtn, LISTS.map(([h, items]) => `<div class="ev-pop-h">${h}</div><div class="ev-grid">${items.map(([k, m, n]) => `<button type="button" class="ev-opt" data-k="${k}"><b>${m}</b><span>${n}</span></button>`).join('')}</div>`).join('') + indentHtml + '<button type="button" class="ev-opt ev-opt-wide" data-k="none"><span>No list</span></button>');
+      const paintIndent = () => listPop.querySelectorAll('[data-ind]').forEach((o) => o.classList.toggle('on', o.dataset.ind === listIndent));
+      paintIndent();
+      metaGet('list_indent', 'none').then((v) => { if (INDENTS.some(([k]) => k === v)) { listIndent = v; paintIndent(); } });
+      listPop.addEventListener('click', (e) => {
+        if (!ed) return;
+        const ind = e.target.closest('[data-ind]');
+        if (ind) { listIndent = ind.dataset.ind; metaSet('list_indent', listIndent); paintIndent(); ed.applyIndent(listIndent); return; } // the panel stays: a list style is picked next
+        const b = e.target.closest('[data-k]');
+        if (!b) return;
+        ed.applyList(b.dataset.k, listIndent); closePops();
+      });
       // Two fingers on the text change its size (Decisions 416 and 417): together smaller, apart larger, 10 to 42.
       let pz = null;
       const fdist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -2764,7 +2788,7 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       const pzEnd = (ev) => { if (ev.touches.length < 2) pz = null; };
       host.addEventListener('touchend', pzEnd); host.addEventListener('touchcancel', pzEnd);
       host.addEventListener('pointerdown', closePops, true);
-      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== listBtn) closePops(); }, true);
+      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b && b !== listBtn && b !== viewBtn) closePops(); }, true);
       // Styles (Decision 309), in the same row: one colour of red, green, blue, and bold, italic, underline. Usable with text
       // selected only; a second tap on the one that is on removes it. With only a cursor they stay dimmed but show the style of the
       // character beside it. A copy floats under a selection near the top, where the system's menu would cover the tool row.
@@ -2824,11 +2848,11 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
             g.className = 'ev-ghostpage'; g.setAttribute('aria-hidden', 'true');
             g.style.cssText = `position:absolute;left:0;right:0;top:${nr.top - sr.top}px;height:${cr.bottom - nr.top}px;display:flex;flex-direction:column;background:${bgOf()};pointer-events:none;will-change:transform;transform:translateX(${step * screen.clientWidth}px)`;
             const gn = nameEl.cloneNode(false);
-            gn.removeAttribute('id'); gn.value = n.session.titleText || ''; gn.readOnly = true; gn.tabIndex = -1;
+            gn.removeAttribute('id'); gn.removeAttribute('style'); gn.value = n.session.titleText || ''; gn.readOnly = true; gn.tabIndex = -1;
             const gh = document.createElement('div');
             gh.className = host.className;
             const gc = countEl.cloneNode(false);
-            gc.removeAttribute('id');
+            gc.removeAttribute('id'); gc.removeAttribute('style'); // a clone carries the live element's drag transform in its style attribute (Decision 420)
             g.append(gn, gh, gc);
             screen.appendChild(g);
             const m = splitNoteStyle(n.text);
