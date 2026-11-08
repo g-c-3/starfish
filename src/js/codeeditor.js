@@ -148,11 +148,13 @@ class RowMarker extends GutterMarker {
   }
 }
 const lineH = (view) => view.defaultLineHeight || 20;
-// Ruled lines for notes (Decision 417): the editor's own CSS draws one thin line per row from these two numbers (style.css, .ev-ruled).
-const paintRule = (view) => {
+// Ruled lines for notes (Decisions 417 and 418): the CSS draws one thin line per row from these two numbers (style.css, .ev-ruled). The
+// class and the numbers live on the element that holds the editor, not on the editor's root: the editor rewrites the root's class
+// attribute whenever its theme changes, which a text size change does, and that removed the lines.
+const paintRule = (view, host) => {
   const lh = `${lineH(view)}px`, pt = `${parseFloat(getComputedStyle(view.contentDOM).paddingTop) || 0}px`;
-  if (view.dom.style.getPropertyValue('--ev-lh') !== lh) view.dom.style.setProperty('--ev-lh', lh);
-  if (view.dom.style.getPropertyValue('--ev-pt') !== pt) view.dom.style.setProperty('--ev-pt', pt);
+  if (host.style.getPropertyValue('--ev-lh') !== lh) host.style.setProperty('--ev-lh', lh);
+  if (host.style.getPropertyValue('--ev-pt') !== pt) host.style.setProperty('--ev-pt', pt);
 };
 const spacerFor = (view) => new RowMarker(10 ** Math.max(2, String(view.state.doc.lines).length) - 1, 1, lineH(view)); // sets the width
 const rowGutter = () => gutter({
@@ -188,6 +190,7 @@ function tidySearchPanel(panel) {
 // spans: the styles of a note (notestyle.js); onSelect(info) when the selection or its styles change (notes only).
 export function createCodeEditor({ parent, text, name, kind = 'file', editable = true, ui, spans = [], onChange = () => {}, onFind = () => {}, onRows = () => {}, onSelect = () => {} }) {
   const note = kind === 'note', prefs = PREFS[note ? 'note' : 'file'];
+  parent.classList.remove('ev-ruled'); // the holder is reused from note to note: lines only when this editor switches them on
   const ns = note ? noteStyle(spans) : null;
   const wrapC = new Compartment(), sizeC = new Compartment(), editC = new Compartment();
   const sizeTheme = () => EditorView.theme({ '&': { fontSize: `${prefs.size}px` } });
@@ -209,7 +212,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
         if (u.docChanged || styled) onChange();
         if (ns && (u.selectionSet || u.docChanged || styled)) onSelect(ns.info(u.state));
         if (u.docChanged || u.heightChanged || u.geometryChanged) onRows(); // the number of rows can change without the text changing
-        if (note && (u.geometryChanged || u.heightChanged || u.transactions.some((t) => t.reconfigured))) paintRule(u.view);
+        if (note && (u.geometryChanged || u.heightChanged || u.transactions.some((t) => t.reconfigured))) paintRule(u.view, parent);
         const open = searchPanelOpen(u.state);
         if (open !== findOpen) { findOpen = open; onFind(open); }
       })
@@ -286,9 +289,9 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     toggleWrap() { prefs.wrap = !prefs.wrap; view.dispatch({ effects: wrapC.reconfigure(prefs.wrap ? EditorView.lineWrapping : []) }); return prefs.wrap; },
     isWrapped: () => prefs.wrap,
     getSize: () => ({ size: prefs.size, min: MIN_SIZE, max: MAX_SIZE }),
-    setRuled(on) { view.dom.classList.toggle('ev-ruled', !!on); paintRule(view); return !!on; },
-    isRuled: () => view.dom.classList.contains('ev-ruled'),
-    setSize(n) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(n))); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); return prefs.size; },
+    setRuled(on) { parent.classList.toggle('ev-ruled', !!on); paintRule(view, parent); return !!on; },
+    isRuled: () => parent.classList.contains('ev-ruled'),
+    setSize(n) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(n))); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); if (note) requestAnimationFrame(() => paintRule(view, parent)); return prefs.size; },
     // kind: dot, circle, square, arrow, dash, check, num, romanS, romanB, alphaS, alphaB, or 'none'. Returns the number of lines changed.
     applyList(kind) {
       const st = view.state, sel = st.selection.main;
@@ -315,7 +318,7 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
       return changes.length;
     },
     bumpSize(d) { prefs.size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, prefs.size + d)); view.dispatch({ effects: sizeC.reconfigure(sizeTheme()) }); },
-    destroy() { panelWatch.disconnect(); clearTimeout(hideT); sc.removeEventListener('scroll', onScroll); thumb.remove(); view.destroy(); }
+    destroy() { panelWatch.disconnect(); clearTimeout(hideT); sc.removeEventListener('scroll', onScroll); thumb.remove(); view.destroy(); parent.classList.remove('ev-ruled'); parent.style.removeProperty('--ev-lh'); parent.style.removeProperty('--ev-pt'); }
   };
   return api;
 }
