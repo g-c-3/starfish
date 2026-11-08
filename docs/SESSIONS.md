@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 208**
+
+Start: three screenshots (list panel over a selection, a Full indent list in the editor, the Notes grid) and five requests: hide the phone's selection tools and our colour bar under a panel, the first-line indent in the Notes grid, the repeated full-screen notification question, the Money date line, and sizes in list views.
+- Cause of the grid line: the preview's `trimStart` also removed the first line's indent characters. Cause of the repeated question: the offer was once per app session, not once. Cause of the Money line: it read the creation time in the short format.
+- Decisions 425 to 429. Phase 105 built.
+- New: `src/css/rowsize.css`. Replaced: `src/js/app.js`, `src/js/remindersound.js`.
+- Tested: size helpers and the row size fill (formats B, KB, MB, GB, Home file measured later, cache keyed by change time, missing file), the grid preview start, and the once-only offers across two launches, run against the code in `app.js` and `remindersound.js`; the editor keeps its selection through a blur and a list applies while blurred (real editor, simulated page). Both files parse. The phone's own toolbar and handles, the keyboard behaviour on refocus, the row layout and the update behaviour were not run: not run through CI or a device.
+- Open: DP222 to DP229. CI has not yet completed a build of Phases 93 to 105.
+- Next start: the CI result, then DP222 to DP229.
+
+---
+
 **Session 207**
 
 Start: a third CI log. Install, web build and signing passed; the build tool's distribution download timed out after 10 s again, ten minutes after the previous run. The CSS warning from Session 206 is gone from the log (Decision 423 confirmed in CI output).
