@@ -60,7 +60,7 @@ import { attachNoteSwipe } from './noteswipe.js';
 import '../css/rowsize.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
-import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
+import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
 
 
 const CATEGORY_LABELS = {
@@ -2064,13 +2064,13 @@ function rowSizeProps(row) {
   return hit !== undefined ? { size: hit } : { lazySize: true };
 }
 // Fills the size placeholders of Home rows just drawn in box; rows are the items they were drawn from.
-function fillRowSizes(box, rows) {
+function fillRowSizes(box, rows, measure = fileSize) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   box.querySelectorAll('.row-size[data-size-for]').forEach(async (el) => {
     const row = byId.get(el.dataset.sizeFor);
     if (!row) return;
     let n = 0;
-    try { n = await fileSize(row); } catch { n = 0; }
+    try { n = await measure(row); } catch { n = 0; }
     if (n) rowSizeCache.set(rowSizeKey(row), n); // 0 is a missing file: not remembered, nothing shown
     if (n && el.isConnected) el.textContent = formatBytes(n);
   });
@@ -2750,6 +2750,9 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
         if (selUi || !ed || !ed.view.hasFocus || ed.view.state.selection.main.empty) return;
         selUi = { kb: document.body.classList.contains('kb-open') };
         ed.view.contentDOM.blur();
+        // A blurred editor keeps its text selected in the page, which the phone then treats as a plain text selection (its Copy / Share
+        // toolbar and the handles). The page selection is cleared; the editor ignores that while unfocused and puts it back on focus (Decision 431).
+        try { window.getSelection().removeAllRanges(); } catch { /* nothing to clear */ }
         floatBar.classList.add('hidden');
       };
       const restoreSelectionUi = () => {
@@ -4001,6 +4004,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const browseType = (r) => (r.type === 'expense' ? 'money' : r.type); // legacy expense rows read as Money
   const TRASH_KEEP_MS = 30 * 86400000; // same 30-day rule as db.js purgeOldTrash
   let trashRows = [];
+  // The Trash line: category, deleted date, days left, and the size at the right for Notes, Voice, Gallery, Pdf and Files (Decision 430).
+  function trashMetaHtml(row, when, left, isVault) {
+    const base = `${escapeHtml(typeLabelFor(browseType(row)))} · deleted ${escapeHtml(when)} · <span class="left">${left} ${left === 1 ? 'day' : 'days'} left</span>`;
+    let p = {};
+    if (isVault) {
+      if (SIZED_TYPES.has(row.type)) { const hit = rowSizeCache.get(rowSizeKey(row)); p = hit !== undefined ? { size: hit } : { lazySize: true }; }
+    } else p = rowSizeProps(row);
+    if (p.size === undefined && !p.lazySize) return `<span class="row-meta">${base}</span>`;
+    return `<span class="row-meta row-meta-sz"><span class="row-when">${base}</span><span class="row-size"${p.lazySize ? ` data-size-for="${escapeHtml(row.id)}"` : ''}>${p.lazySize ? '' : escapeHtml(formatBytes(p.size))}</span></span>`;
+  }
   function drawTrash() {
     const types = typeCounts(trashRows, browseType, VAULT_TYPES);
     if (trashState.type !== 'all' && !types.some((t) => t.type === trashState.type)) trashState.type = 'all';
@@ -4016,7 +4029,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ${rowIconHtml(row.type, row.extension || '')}
         <span class="row-main">
           <span class="row-title">${escapeHtml(row.label)}</span>
-          <span class="row-meta">${escapeHtml(typeLabelFor(browseType(row)))} · deleted ${escapeHtml(when)} · <span class="left">${left} ${left === 1 ? 'day' : 'days'} left</span></span>
+          ${trashMetaHtml(row, when, left, false)}
         </span>
         <span class="row-actions">
           <button class="icon-btn trash-restore-btn" data-id="${escapeHtml(row.id)}" aria-label="Restore" title="Restore">${iconSvg('restore')}</button>
@@ -4026,6 +4039,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }) || (trashRows.length
       ? emptyStateHtml('search')
       : `<div class="empty-state">${iconSvg('trash')}<strong>Trash is empty</strong><span>Deleted items wait here for 30 days.</span></div>`);
+    fillRowSizes(document.getElementById('trash-list'), rows);
   }
   async function loadTrash() { trashRows = await showTrash(); drawTrash(); }
   async function openTrash() {
@@ -4515,7 +4529,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ${rowIconHtml(row.type, row.extension || '')}
         <span class="row-main">
           <span class="row-title">${escapeHtml(row.label)}</span>
-          <span class="row-meta">${escapeHtml(typeLabelFor(browseType(row)))} · deleted ${escapeHtml(when)} · <span class="left">${left} ${left === 1 ? 'day' : 'days'} left</span></span>
+          ${trashMetaHtml(row, when, left, true)}
         </span>
         <span class="row-actions">
           <button class="icon-btn vtrash-restore-btn" data-id="${escapeHtml(row.id)}" aria-label="Restore" title="Restore">${iconSvg('restore')}</button>
@@ -4525,6 +4539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }) || (vaultTrashRows.length
       ? emptyStateHtml('search')
       : `<div class="empty-state">${iconSvg('trash')}<strong>Vault Trash is empty</strong><span>Deleted Vault items wait here for 30 days.</span></div>`);
+    fillRowSizes(document.getElementById('vault-trash-list'), rows, (r) => vaultTrashSize(db, privateSessionKey, r));
   }
   async function loadVaultTrash() {
     if (!privateSessionKey) return;

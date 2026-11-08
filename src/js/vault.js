@@ -458,6 +458,24 @@ async function vaultTrashLabel(privateSessionKey, row) {
   return l;
 }
 
+// Size of a trashed Vault row for its Trash line (Decision 430). The trash list holds few columns, so the rest is read by id. Reads
+// only: nothing is written or rebuilt. 0 when it cannot be read.
+async function vaultTrashSize(db, privateSessionKey, row) {
+  try {
+    if (VAULT_FILE_TYPES.includes(row.type)) {
+      const r = ((await db.query(`SELECT encrypted_meta, body_len FROM entries WHERE id=?`, [row.id])).values || [])[0];
+      if (!r || !r.encrypted_meta) return 0;
+      const m = JSON.parse(await decryptPrivateNote(privateSessionKey, r.encrypted_meta, fieldAad(row.id, 'meta')));
+      return m && (m.v === 2 || (m.v === 1 && m.bl === r.body_len)) ? m.s || 0 : 0;
+    }
+    if (row.type === 'note') {
+      const r = ((await db.query(`SELECT encrypted_body FROM entries WHERE id=?`, [row.id])).values || [])[0];
+      return r ? new Blob([await decryptPrivateNote(privateSessionKey, r.encrypted_body, fieldAad(row.id, 'body'))]).size : 0;
+    }
+  } catch { /* unreadable: no size shown */ }
+  return 0;
+}
+
 function getVaultIndex() {
   return vaultIndexCache;
 }
@@ -603,5 +621,5 @@ function vaultLabelSuggestions(type, partial) {
 export {
   VAULT_TYPES, buildVaultPlaintext, parseVaultPlaintext, vaultRowLabel, migrateVaultLabels,
   saveVaultEntry, loadVaultEntryContent, updateVaultFileContent, base64ToBlobUrl,
-  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions
+  buildVaultIndex, refreshVaultIndexEntries, upsertIndexEntry, removeIndexEntry, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, vaultTrashSize, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions
 };
