@@ -1,0 +1,12 @@
+/* notetools.css — editor tool popups (Decisions 421 and 422). */
+.ev-pop .ev-opt b .ic, .ev-pop .ev-opt b svg { width: 22px; height: 22px; display: block; }
+.ev-pop .ev-opt b svg[viewBox="0 0 24 16"] { width: 28px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.ev-pop .ev-opt.on { background: var(--brand); border-color: var(--brand); }
+.ev-pop .ev-opt.on b, .ev-pop .ev-opt.on span { color: var(--brand-fg); }
+.ev-pop .ev-grid2 { grid-template-columns: repeat(2, 1fr); }
+
+/* Find and Replace: the clear button sits in the same grid cell as its field and is centred in it, so its place does not depend on
+   margins, line gaps or the wrapper's height. */
+.ev-code .cm-panels .cm-search .ev-fw { position: relative; display: grid; align-items: center; margin: 2px 0; }
+.ev-code .cm-panels .cm-search .ev-fw input { grid-area: 1 / 1; display: block; box-sizing: border-box; width: 100%; margin: 0 !important; }
+.ev-code .cm-panels .cm-search .ev-fw .ev-clear { grid-area: 1 / 1; position: static; transform: none; align-self: center; justify-self: end; margin: 0 8px 0 0 !important; }
