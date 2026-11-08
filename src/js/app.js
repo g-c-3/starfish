@@ -28,13 +28,13 @@ import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
 import { openStoredFile, openDecryptedFile, purgeOpenCopies, isVideoExt, mimeForExtension } from './fileopen.js';
-import { splitNoteStyle, joinNoteStyle } from './notestyle.js';
+import { splitNoteStyle, joinNoteStyle, plainNoteText } from './notestyle.js';
 import { DEFAULT_COLS, clampCols, attachGridPinch, pinchBlocked } from './gallerygrid.js';
 import { DEFAULT_COLS as NOTE_DEFAULT_COLS, clampCols as clampNoteCols, attachNoteGridPinch } from './notegrid.js';
 import { attachDragSelect, dragBlocked } from './dragselect.js';
 import { attachVideoPlayer } from './videoplayer.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
-import { initFiles, migratePlainFiles, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, readParts as readEntryParts, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
+import { initFiles, migratePlainFiles, fileSize, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, readParts as readEntryParts, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
@@ -57,6 +57,7 @@ import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
 import { attachNoteSwipe } from './noteswipe.js';
+import '../css/rowsize.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -2011,7 +2012,8 @@ function formatBytes(n) {
   if (n === null || n === undefined) return 'unknown';
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 // ---- Row/icon rendering shared by Home folders, Vault folders and both search lists (Decision 86).
@@ -2043,18 +2045,43 @@ async function loadCurrencySymbol() {
   return currencySymbol;
 }
 // Row line for a Money details object (Home and Vault share it).
-function moneyRowMeta(d) {
+// savedMs: the last change, else the saved time, shown as in every other category (Decision 426).
+function moneyRowMeta(d, savedMs) {
   const st = Money.status(d);
   const state = st === 'partly returned' ? `${Money.STATUS_LABELS[st]}, ${Money.formatAmount(Money.remaining(d), currencySymbol)} left` : (st ? Money.STATUS_LABELS[st] : '');
-  return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
+  return { meta: [Money.KIND_LABELS[d.kind], Money.formatAmount(d.amount, currencySymbol), state, savedMs ? formatSavedDate(savedMs) : formatEntryDate(d.at)].filter(Boolean).join(' · '), done: st === 'settled' };
+}
+// Size on the right of the date line in a category's list view (Decision 427): Notes, Voice, Gallery, Pdf and Files. Notes are read
+// from the text at once; a Home file is measured after the rows are drawn (fillRowSizes) and remembered per row and change time.
+const SIZED_TYPES = new Set(['note', 'voice', 'image', 'pdf', 'file']);
+const rowSizeCache = new Map();
+const rowSizeKey = (r) => `${r.id}:${r.updated_at || r.created_at || 0}`;
+function rowSizeProps(row) {
+  if (!SIZED_TYPES.has(row.type)) return {};
+  if (row.type === 'note') return { size: new Blob([plainNoteText(row.body_text || '')]).size };
+  if (!row.file_path) return {};
+  const hit = rowSizeCache.get(rowSizeKey(row));
+  return hit !== undefined ? { size: hit } : { lazySize: true };
+}
+// Fills the size placeholders of Home rows just drawn in box; rows are the items they were drawn from.
+function fillRowSizes(box, rows) {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  box.querySelectorAll('.row-size[data-size-for]').forEach(async (el) => {
+    const row = byId.get(el.dataset.sizeFor);
+    if (!row) return;
+    let n = 0;
+    try { n = await fileSize(row); } catch { n = 0; }
+    if (n) rowSizeCache.set(rowSizeKey(row), n); // 0 is a missing file: not remembered, nothing shown
+    if (n && el.isConnected) el.textContent = formatBytes(n);
+  });
 }
 // inFolder: the list sits inside its own category, so the category name is left out. The time is the last change (Decision 306).
 function rowMeta(row, inFolder = false) {
   if (row.type === 'money' || row.type === 'expense') {
     const d = Money.fromRow(row);
-    if (d) return moneyRowMeta(d);
+    if (d) return moneyRowMeta(d, row.updated_at || row.created_at);
   }
-  if (row.type !== 'reminder') return { meta: [inFolder ? '' : typeLabelFor(row.type), formatSavedDate(row.updated_at || row.created_at)].filter(Boolean).join(' · '), done: false };
+  if (row.type !== 'reminder') return { meta: [inFolder ? '' : typeLabelFor(row.type), formatSavedDate(row.updated_at || row.created_at)].filter(Boolean).join(' · '), done: false, ...(inFolder && row.id ? rowSizeProps(row) : {}) };
   const st = reminderStatus(row);
   const when = formatEntryDate(reminderNextDue(row));
   const lead = st === 'done' ? 'Done' : st === 'fired' ? 'Fired' : 'Due';
@@ -2083,7 +2110,7 @@ function rowIconHtml(type, ext) {
 // The five buttons under a row (edit, share, download, move, delete) are not drawn (Decision 303): Edit is a tap on the row, and
 // the rest are in the selection bar and the viewers. actionPrefix is kept so the callers and the idle handlers need no change.
 // thumb: a Gallery list row, the icon is replaced by the item's thumbnail (filled by loadThumbsInto).
-function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false, play = false, alert = null }, actionPrefix = null) {
+function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext = '', thumb = false, play = false, alert = null, size = null, lazySize = false }, actionPrefix = null) {
   const icon = play
     ? `<button type="button" class="row-icon row-play" data-id="${escapeHtml(id)}" aria-label="Play">${PLAY_INNER(false)}</button>`
     : thumb
@@ -2094,7 +2121,9 @@ function entryRowHtml({ id, type, label, meta = '', tags = [], done = false, ext
       ${icon}
       <span class="row-main">
         <span class="row-title">${escapeHtml(label)}</span>
-        <span class="row-meta">${escapeHtml(meta)}</span>
+        ${size !== null || lazySize
+          ? `<span class="row-meta row-meta-sz"><span class="row-when">${escapeHtml(meta)}</span><span class="row-size"${lazySize ? ` data-size-for="${escapeHtml(id)}"` : ''}>${lazySize ? '' : escapeHtml(formatBytes(size))}</span></span>`
+          : `<span class="row-meta">${escapeHtml(meta)}</span>`}
         ${tags && tags.length ? `<span class="row-tags">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</span>` : ''}
       </span>
       ${alert ? `<button type="button" class="row-alert ${alert}" data-id="${escapeHtml(id)}" aria-label="Sound and vibration for this reminder" title="Sound and vibration">${iconSvg('speaker')}</button>` : ''}
@@ -2713,7 +2742,31 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       ed = mod.createCodeEditor(edOpts(text, spans));
       // The list panel (Decision 414) opens under the tool row; a second tap, or a tap on the text, closes it.
       const pops = {};
-      const closePops = () => { for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); } };
+      // While a panel is open over a selection, the phone's own Cut / Copy toolbar and handles and our colour bar are hidden (Decision 428):
+      // the editor is blurred (the selection stays in the editor's state) and focused again when the last panel closes; the keyboard
+      // comes back only if it was up.
+      let selUi = null;
+      const hideSelectionUi = () => {
+        if (selUi || !ed || !ed.view.hasFocus || ed.view.state.selection.main.empty) return;
+        selUi = { kb: document.body.classList.contains('kb-open') };
+        ed.view.contentDOM.blur();
+        floatBar.classList.add('hidden');
+      };
+      const restoreSelectionUi = () => {
+        if (!selUi) return;
+        const { kb } = selUi; selUi = null;
+        if (!ed || closed) return;
+        const cd = ed.view.contentDOM, prev = cd.getAttribute('inputmode');
+        if (!kb) cd.setAttribute('inputmode', 'none'); // focus without raising the keyboard
+        ed.view.focus();
+        if (!kb) setTimeout(() => { if (prev === null) cd.removeAttribute('inputmode'); else cd.setAttribute('inputmode', prev); }, 400);
+        placeFloat(ed.styleInfo());
+      };
+      const anyPopOpen = () => Object.values(pops).some((q) => !q.el.classList.contains('hidden'));
+      const closePops = (keepSelUi = false) => {
+        for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); }
+        if (keepSelUi !== true) restoreSelectionUi();
+      };
       const makePop = (key, btn, html) => {
         const el = document.createElement('div');
         el.className = 'ev-pop hidden'; el.innerHTML = html;
@@ -2722,11 +2775,12 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       };
       const togglePop = (key) => {
         const was = !pops[key].el.classList.contains('hidden');
-        closePops();
-        if (was) return;
+        closePops(true);
+        if (was) { restoreSelectionUi(); return; }
         const r = bar.getBoundingClientRect(), s = screen.getBoundingClientRect();
         pops[key].el.style.top = `${Math.round(r.bottom - s.top + 6)}px`;
         pops[key].el.classList.remove('hidden'); pops[key].btn.classList.add('on');
+        hideSelectionUi();
       };
       // First tool (Decision 422): three lines; opens a panel with the two switches that were separate buttons, Text Wrap and Ruled Lines
       // (ruled lines kept in meta, note_ruled). The text size is by pinch.
@@ -2810,7 +2864,7 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       const placeFloat = (inf) => {
         const v = ed && ed.view, { from, to } = v ? v.state.selection.main : { from: 0, to: 0 };
         const a = v && from !== to ? v.coordsAtPos(from) : null, b = a ? v.coordsAtPos(to) : null;
-        if (!a || !b || Math.min(a.top, b.top) - host.getBoundingClientRect().top > 120) { floatBar.classList.add('hidden'); return; }
+        if (anyPopOpen() || !a || !b || Math.min(a.top, b.top) - host.getBoundingClientRect().top > 120) { floatBar.classList.add('hidden'); return; }
         floatBar.classList.remove('hidden');
         floatBar.style.top = `${Math.max(a.bottom, b.bottom) + 44}px`; // under the selection handles
         floatBar.style.left = `${Math.max(8, (window.innerWidth - floatBar.offsetWidth) / 2)}px`;
@@ -4249,8 +4303,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Counts and lists read the in-memory index (Decision 39), never the DB. ----
   // Vault Money rows show kind, amount, status and date from the unlocked index; the label is the readable summary, as on Home (Decision 143).
   function vaultRowProps(e, inFolder = false) {
-    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money) : e.type === 'reminder' ? rowMeta(e, inFolder) : rowMeta({ type: e.type, created_at: e.createdAt, updated_at: e.updatedAt }, inFolder);
-    return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m };
+    const m = e.type === 'money' && e.money ? moneyRowMeta(e.money, vSavedAt(e)) : e.type === 'reminder' ? rowMeta(e, inFolder) : rowMeta({ type: e.type, created_at: e.createdAt, updated_at: e.updatedAt }, inFolder);
+    return { id: e.id, type: e.type, label: e.label, tags: e.tags, ext: e.extension, ...m, ...(inFolder && SIZED_TYPES.has(e.type) ? { size: e.sizeBytes || 0 } : {}) }; // the size comes from the unlocked index (Decision 427)
   }
   function vaultRowsHtml(items, finding = false) {
     return groupedHtml(items, vSavedAt, (e) => entryRowHtml({ ...vaultRowProps(e, true), play: e.type === 'voice' }, 'vault')) || emptyStateHtml(finding ? 'search' : 'folder');
@@ -4368,7 +4422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!d) { if (!draft.locked) await draft.clear(); return; }
         const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
         if (d.alert !== undefined) setReminderAlert(id, d.alert); // Decision 363
-        setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch }), 700); // Decision 369
+        setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch, metaGet, metaSet }), 700); // Decisions 369, 429
         await draft.clear();
         renderVault();
         try {
@@ -5009,7 +5063,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
       if (d.alert !== undefined) setReminderAlert(id, d.alert); // before it is scheduled, so it goes out on its own channel (Decision 363)
-      setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch }), 700); // Decision 369
+      setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch, metaGet, metaSet }), 700); // Decisions 369, 429
       await applyTags(id, d.tags);
       await draft.clear(); // saved: the draft is no longer needed
       try {
@@ -5354,6 +5408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
         id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
       }, 'main'))) || emptyStateHtml(finding ? 'search' : 'folder');
+    fillRowSizes(document.getElementById('folder-list'), rows); // Decision 427
     if (openFolderType === 'voice') { voiceFolderItems.home = rows; paintRowPlay(); }
 
     document.querySelectorAll('#folder-list .entry-row').forEach((r) => r.addEventListener('click', async (e) => {
@@ -6672,7 +6727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // note's words, so the text is cut and runs of blank lines are shortened without moving them.
   function noteRichPreviewHtml(raw) {
     const { text, spans } = splitNoteStyle(raw || '');
-    const start = text.length - text.trimStart().length, end = Math.min(text.length, start + 320);
+    const lead = /^\s*\n/.exec(text), start = lead ? lead[0].length : 0, end = Math.min(text.length, start + 320); // blank lines only: the first line keeps its indent (Decision 425)
     const keyAt = (i) => {
       let b = 0, it = 0, u = 0, c = '';
       for (const [k, f, t, v] of spans) if (i >= f && i < t) { if (k === 'b') b = 1; else if (k === 'i') it = 1; else if (k === 'u') u = 1; else if (k === 'c') c = v; }
@@ -6734,6 +6789,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await openImageViewer(items, items.findIndex((i) => i.id === t.dataset.id), isVault);
       await reopen();
     }));
+    if (list && !isVault) fillRowSizes(box, items); // Decision 427
     loadThumbsInto(box, items, isVault);
     paintSelection();
   }
