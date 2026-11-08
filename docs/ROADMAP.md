@@ -85,6 +85,7 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
+- [ ] 103 — Dictation panel: unfinished reduced-motion rule completed (Session 206, Decision 423; DP227 open, not run through CI or a device)
 - [ ] 102 — Note editor: ghost title offset fixed, list indentation (Origin, Full, None), Lines panel, Tab, centred clear buttons (Session 205, Decisions 420 to 422; DP226 open, not run through CI or a device)
 - [ ] 101 — Ruled lines stay through a text size change (Session 203, Decision 418; DP224 open, not run through CI or a device)
 - [ ] 100 — One name for Title and file, ruled lines, text size to 42, centred grid titles (Session 202, Decision 417; DP223 open, not run through CI or a device)
@@ -804,6 +805,10 @@ individual items) can be picked up in any order once prerequisites are met.
   - Removed: the reminder-wording offer ("Also set a reminder?") that came with the first Save of a note; the Mic is not yet in the Save button's place (Phase 92).
   - Files: `src/js/app.js`, `src/js/notestyle.js`, `src/index.html`, `src/css/style.css`.
   - [x] DP215 (confirmed on the device) — Device pass for Decision 407. (1) New note, type a word: the note appears in the folder named by its first words after leaving; leave at once and reopen: text intact. (2) Type a Title: the name changes to it; clear it: back to the first words. (3) Rename in the dialog: the name shown is the current one, tags and description kept; then type in Title: the name does not change; rename again: it does. (4) Type only "." or ",": the name is that. Delete all text and title: the note stays, named Untitled. (5) Existing notes from before: open, edit the text: the name does not change; type a Title: it does. (6) Vault: the same, then lock while typing: after unlock the last text is there, no duplicate Autosave note. (7) Background the app mid-typing and return. (8) Search finds new and edited notes; the Title and name text do not appear as part of the body.
+- [ ] **103 — Dictation panel reduced motion (Decision 423; Session 206).** Built; not run through CI or a device. The last rule of `dictation.css` was cut off; completed so the panel and its level bars have no transition under reduced motion.
+
+  - [ ] DP227 — Device pass for Decision 423. With the phone's reduced motion (remove animations) on: the dictation panel appears and goes without sliding; with it off, it slides as before.
+
 - [ ] **102 — Note editor follow-ups (Decisions 420 to 422; Session 205).** Built; not run through CI or a device.
   - The ghost title and count no longer start offset: a clone carried the live element's drag transform (Decision 420).
   - List indentation: Origin, Full, None in the list panel; default None; the choice is kept (`list_indent`) and used by the next list (Decision 421).

@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 206**
+
+Start: two CI logs. First run: install failed on a download from the image library host (a gateway time-out); second run: install, web build and signing passed, then the build tool's own download timed out after 10 s. Both are network failures outside the repo; re-run is the fix.
+- Found in the second log: a CSS warning, unexpected end of file in the last rule of `dictation.css`. Decision 423. Phase 103 built.
+- Replaced: `src/css/dictation.css`.
+- Not tested beyond reading the file; not run through CI or a device.
+- Open: DP222 to DP227. CI has not yet completed a build of Phases 93 to 103.
+- Next start: CI result, DP222 to DP227 results, then the next roadmap item.
+
+---
+
 **Session 205**
 
 Start: a recording of the note swipe, two screenshots (list panel, Find panel) and five requests: remove the title shift at the end of a swipe, list indentation with Origin, Full and None, centred Find and Replace clear buttons, the first tool as three lines opening a Text Wrap and Ruled Lines panel, and a Tab tool in place of Ruled Lines.
