@@ -1,0 +1,7 @@
+/* noteswipe.css — swipe between the notes of a folder (Decision 419). */
+#editor-name, #editor-count { touch-action: pan-y; }
+#editor-screen.ev-swiping { overflow: hidden; }
+#editor-screen.ev-swiping #editor-name,
+#editor-screen.ev-swiping #editor-host,
+#editor-screen.ev-swiping #editor-count { will-change: transform; }
+#editor-screen .ev-ghostpage { z-index: 1; overflow: hidden; }
