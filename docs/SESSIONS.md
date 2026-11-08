@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 205**
+
+Start: a recording of the note swipe, two screenshots (list panel, Find panel) and five requests: remove the title shift at the end of a swipe, list indentation with Origin, Full and None, centred Find and Replace clear buttons, the first tool as three lines opening a Text Wrap and Ruled Lines panel, and a Tab tool in place of Ruled Lines.
+- Measured (recording, title text position per frame, with timestamps): the ghost title ended 25 px (first swipe) and 54 px (second swipe) off the live title's place; the gutter line was at the same x in ghost and live. Cause: the clone carried the live element's drag transform in its style attribute. Fixed, Decision 420.
+- Measured (screenshot): the clear button's circle centre was 5 px below the middle of its field in both fields. Fixed with a shared grid cell, Decision 422.
+- Decisions 420 to 422. Phase 102 built.
+- New: `src/css/notetools.css`. Replaced: `src/js/codeeditor.js`, `src/js/app.js`.
+- Tested: list, indent and Tab with the real editor in a simulated page (27 cases: each mode, switching, own indent kept, toggle off, No list, blank lines, hanging style on Full only, Tab at the cursor, twice, on a selection, over lines, one undo step). `app.js` and `codeeditor.js` parse. The panels, the clear button layout and the swipe fix were not drawn or run on a screen: not run through CI or a device.
+- Open: DP222 to DP226.
+- Next start: DP222 to DP226 results, then the next roadmap item.
+
+---
+
 **Session 204**
 
 Start: "Go". Last session: 203 (ruled lines kept through a text size change). Open then: DP222, DP223, DP224. Next item: Phase 93.
