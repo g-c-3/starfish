@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 207**
+
+Start: a third CI log. Install, web build and signing passed; the build tool's distribution download timed out after 10 s again, ten minutes after the previous run. The CSS warning from Session 206 is gone from the log (Decision 423 confirmed in CI output).
+- Decision 424. Phase 104 built: retries for `npm ci` and a separate Gradle download step with a longer time-out.
+- Replaced: `.github/workflows/build-android.yml`.
+- Tested: the workflow parses as YAML with the new step placed before the signed build; both shell scripts run against fake `npm` and `gradlew` (pass first try, pass after retries, fail after the last try, time-out line replaced or appended with its newline). Not run on Actions.
+- Open: DP222 to DP228. CI has not yet completed a build of Phases 93 to 104.
+- Next start: the CI result of the run this push starts, then DP222 to DP228.
+
+---
+
 **Session 206**
 
 Start: two CI logs. First run: install failed on a download from the image library host (a gateway time-out); second run: install, web build and signing passed, then the build tool's own download timed out after 10 s. Both are network failures outside the repo; re-run is the fix.

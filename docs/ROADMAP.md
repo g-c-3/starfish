@@ -85,6 +85,7 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
+- [ ] 104 — CI: retries for the install and the Gradle download (Session 207, Decision 424; DP228 open, not run on Actions)
 - [ ] 103 — Dictation panel: unfinished reduced-motion rule completed (Session 206, Decision 423; DP227 open, not run through CI or a device)
 - [ ] 102 — Note editor: ghost title offset fixed, list indentation (Origin, Full, None), Lines panel, Tab, centred clear buttons (Session 205, Decisions 420 to 422; DP226 open, not run through CI or a device)
 - [ ] 101 — Ruled lines stay through a text size change (Session 203, Decision 418; DP224 open, not run through CI or a device)
@@ -805,6 +806,10 @@ individual items) can be picked up in any order once prerequisites are met.
   - Removed: the reminder-wording offer ("Also set a reminder?") that came with the first Save of a note; the Mic is not yet in the Save button's place (Phase 92).
   - Files: `src/js/app.js`, `src/js/notestyle.js`, `src/index.html`, `src/css/style.css`.
   - [x] DP215 (confirmed on the device) — Device pass for Decision 407. (1) New note, type a word: the note appears in the folder named by its first words after leaving; leave at once and reopen: text intact. (2) Type a Title: the name changes to it; clear it: back to the first words. (3) Rename in the dialog: the name shown is the current one, tags and description kept; then type in Title: the name does not change; rename again: it does. (4) Type only "." or ",": the name is that. Delete all text and title: the note stays, named Untitled. (5) Existing notes from before: open, edit the text: the name does not change; type a Title: it does. (6) Vault: the same, then lock while typing: after unlock the last text is there, no duplicate Autosave note. (7) Background the app mid-typing and return. (8) Search finds new and edited notes; the Title and name text do not appear as part of the body.
+- [ ] **104 — CI network retries (Decision 424; Session 207).** Built; the shell logic was run against fakes, the workflow has not run on Actions yet. `npm ci` tries up to three times; a new step before the signed build raises the wrapper's download time-out to 120 s and fetches the Gradle distribution up to four times. The signed build step is unchanged.
+
+  - [ ] DP228 — Run check for Decision 424. A run on this workflow passes the new step ("Fetch the Gradle distribution") and reaches the signed build; the log shows `Gradle 8.2.1` from `--version`. If a download fails, the log shows the attempt count and the run continues on the next try.
+
 - [ ] **103 — Dictation panel reduced motion (Decision 423; Session 206).** Built; not run through CI or a device. The last rule of `dictation.css` was cut off; completed so the panel and its level bars have no transition under reduced motion.
 
   - [ ] DP227 — Device pass for Decision 423. With the phone's reduced motion (remove animations) on: the dictation panel appears and goes without sliding; with it off, it slides as before.

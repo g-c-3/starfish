@@ -414,3 +414,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-08 | Session 204 | Decision 419 | Phase 93: swipe between notes (ghost page, editor swapped under it); DP225 added; not run through CI or a device |
 | 2026-11-08 | Session 205 | Decisions 420 to 422 | Phase 102: ghost title offset fixed, list indentation (Origin, Full, None), Lines panel, Tab tool, centred clear buttons; DP226 added; not run through CI or a device |
 | 2026-11-08 | Session 206 | Decision 423 | Phase 103: unfinished reduced-motion rule in dictation.css completed; two CI runs failed on network downloads; DP227 added; not run through CI or a device |
+| 2026-11-08 | Session 207 | Decision 424 | Phase 104: workflow retries for npm ci and the Gradle download; Decision 423 seen fixed in CI output; DP228 added; not run on Actions |

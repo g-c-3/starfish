@@ -815,7 +815,7 @@ None (Decisions 269, 280). Nothing is built, installed or planned.
 
 ## 11. Build pipeline (GitHub Actions, no local machine needed)
 See `.github/workflows/build-android.yml`. On push to `main`, it:
-1. Installs Node deps (`npm ci`, from the committed `package-lock.json`; Decision 258).
+1. Installs Node deps (`npm ci`, from the committed `package-lock.json`; Decision 258; up to three tries, Decision 424).
 2. **Builds the web assets** (`npm run build` → Vite bundles `src/` into `www/`). Required, not
    optional: browsers cannot resolve bare npm-package specifiers
    (`import { X } from '@capacitor/filesystem'`) on their own — only a bundler or a hand-authored
@@ -824,7 +824,7 @@ See `.github/workflows/build-android.yml`. On push to `main`, it:
    device-test failures).
 3. Adds the Android platform if `android/` isn't committed yet, applies the `scripts/patch-*.js` steps (R8: Decision 259; signature check: Decision 261, after the keystore is decoded), generates app icons, runs
    `npx cap sync android` (copies the now-bundled `www/` into the native project).
-4. Builds a signed release APK using a keystore stored in GitHub Secrets.
+4. Fetches the Gradle distribution first (longer time-out, up to four tries; Decision 424), then builds a signed release APK using a keystore stored in GitHub Secrets.
 5. Uploads the APK as a workflow artifact.
 
 `.github/workflows/cleanup-runs.yml` (Decision 187) runs only when started by hand from the Actions tab: it keeps the latest 3 completed runs of each workflow and deletes the older ones with their logs and artifacts. Releases are not touched.
