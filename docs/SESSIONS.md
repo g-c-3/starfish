@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 204**
+
+Start: "Go". Last session: 203 (ruled lines kept through a text size change). Open then: DP222, DP223, DP224. Next item: Phase 93.
+- Decision 419. Phase 93 built: swipe between the notes of the open folder, Home and Vault.
+- New: `src/js/noteswipe.js`, `src/css/noteswipe.css`. Replaced: `src/js/app.js`.
+- Tested in a simulated page (18 cases: left and right commit, short drag returns, vertical drag, blocked start, no neighbour, failed save, button touch, flick, second finger, detach). `app.js` and `noteswipe.js` parse. The editor swap and the ghost editor were not run: not run through CI or a device.
+- Open: DP222, DP223, DP224, DP225.
+- Next start: DP222 to DP225 results, then the next roadmap item.
+
+---
+
 **Session 203**
 
 Start: recording of a text size change with ruled lines on: the lines disappear.

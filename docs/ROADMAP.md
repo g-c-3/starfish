@@ -93,7 +93,7 @@
 - [x] 96 — Dictation panel refinements: quiet errors, compact header, Auto-detect, cursor kept above the panel (Session 198, Decision 413; confirmed on the device)
 - [x] 95 — Dictation panel: language menu with Recent, Start and Stop, live phrase and level, no toast on stop (Session 197, Decision 412; confirmed on the device)
 - [x] 94 — Mic: online dictation in the phone's languages, own script (Session 196, Decision 411; confirmed on the device)
-- [ ] 93 — Notes: swipe to the next or previous note (planned; keyboard closed; Decision 406)
+- [ ] 93 — Notes: swipe to the next or previous note (Session 204, Decision 419; DP225 open, not run through CI or a device)
 - [x] 92 — Notes: Mic button and centred Title (Session 195, Decisions 408 to 410; confirmed on the device)
 - [x] 91 — Notes: every change saved at once, Title line, name rules (Session 194, Decision 407; confirmed on the device)
 - [x] 90 — Swipe between Voice, Reminder and Location pages, no blank (Session 193, Decision 405; confirmed on the device)
@@ -864,7 +864,9 @@ individual items) can be picked up in any order once prerequisites are met.
   - `scripts/patch-manifest.js` adds the `RecognitionService` package query (needed from Android 11 to see the phone's recognizer).
   - Files: `scripts/java/ArklySpeechBridge.java`, `src/js/speech.js`, `scripts/patch-manifest.js`, `src/js/app.js`, `src/index.html`, `android-notes/native-setup.md`.
   - [x] DP217 (confirmed on the device) — Device pass for Decision 411. (1) CI builds. (2) First tap: the notice appears once; Cancel starts nothing; Continue then the microphone prompt. (3) Languages English (India) and Tamil: the dialog lists both; choose Tamil, speak Tamil: the text is in Tamil script; English: English text. (4) Pauses do not stop it; tap again stops. (5) Airplane mode: the message says it needs the internet. (6) Vault note: no Mic. (7) Dictated text is saved as typed; leaving and a lock stop it. (8) Voice recorder and the other bridges still work.
-- [ ] **93 — Notes: swipe to the next or previous note (planned; Decision 406).** Answers given: swipe anywhere while the keyboard is closed; a note with unsaved changes is saved first, then the swipe goes on.
+- [ ] **93 — Notes: swipe to the next or previous note (Decision 419; Session 204).** Built; not run through CI or a device. Swipe anywhere on the title, text or count while the keyboard is closed; the note on screen is saved first, then the swipe goes on. The neighbour is the next or previous note of the open folder (Home or Vault).
+
+  - [ ] DP225 — Device pass for Decision 419. (1) Open a note from a folder of several, swipe left and right: the next and previous note slide in with the finger, nothing blank, no jump when the slide ends. (2) Edit a note, swipe at once: the edit is in the note when you come back. (3) First and last note: the page resists and returns. (4) Keyboard open, dictation panel open, or text selected: no swipe. (5) Ruled lines, wrap and text size carry over to the next note. (6) Vault notes the same; lock while swiping leaves nothing readable. (7) Scroll the text up and down: no swipe. Pinch the text: no swipe. (8) Back after swiping: the folder shows the last note's changes.
   - Needs: the note editor rebuilt in place for the neighbour (its body, tools and session swapped, not closed and reopened, so no second page transition); the folder's notes in order as `swipeItems`; a text ghost as the neighbour page; no swipe on landing pages; empty text that cannot be saved stays and says so.
   - Not started: the editor's build code is one closure; the change is larger and riskier than the viewers, so it is its own phase. With saving at once there is no unsaved state to handle first.
 - [x] **90 — Swipe between Voice, Reminder and Location pages (Decision 405; Session 193).** Confirmed on the device.

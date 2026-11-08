@@ -411,3 +411,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-07 | Session 201 | Decision 416 | DP220 and DP221 confirmed; Phase 99: offline message, tool order, pinch text size, styled grid previews; DP222 added; not run through CI or a device |
 | 2026-11-08 | Session 202 | Decision 417 | Phase 100: Title and file name one, ruled lines, text size to 42, centred grid names; DP223 added; not run through CI or a device |
 | 2026-11-08 | Session 203 | Decision 418 | Phase 101: ruled lines kept through a text size change (class moved off the editor root); DP224 added; not run through CI or a device |
+| 2026-11-08 | Session 204 | Decision 419 | Phase 93: swipe between notes (ghost page, editor swapped under it); DP225 added; not run through CI or a device |
