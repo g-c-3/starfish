@@ -56,6 +56,7 @@ import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT }
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
+import { attachNoteSwipe } from './noteswipe.js';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -195,14 +196,14 @@ let moneyMonth = null; // { y, m } month shown in the Money folder header; null 
 let vaultMoneyMonth = null; // same for the Vault Money folder (Decision 135)
 let moneyChartMode = 'month'; // chart under the month header: 'month' (6 months) or 'week' (weeks of the shown month); per folder, in memory (Decision 263)
 let vaultMoneyChartMode = 'month';
-const swipeItems = { home: { reminder: [], location: [] }, vault: { reminder: [], location: [] } }; // the reminders and locations shown in an open folder, in order: what their viewers swipe through (Decision 405)
+const swipeItems = { home: { reminder: [], location: [], note: [] }, vault: { reminder: [], location: [], note: [] } }; // the reminders, locations and notes shown in an open folder, in order: what their viewers and the note editor swipe through (Decisions 405, 419)
 const voiceFolderItems = { home: [], vault: [] }; // the recordings shown in an open Voice folder, in order: what the viewer swipes through (Decision 313)
 let openFolderType = null; // which Home folder (card type) is open, or null for the card grid (Decision 81)
 function closeFolder() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.home = [];
-  swipeItems.home = { reminder: [], location: [] };
+  swipeItems.home = { reminder: [], location: [], note: [] };
   openFolderType = null;
   document.getElementById('folder-view')?.classList.add('hidden');
   document.getElementById('home-main')?.classList.remove('hidden');
@@ -312,7 +313,7 @@ function closeVaultFolder() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.vault = [];
-  swipeItems.vault = { reminder: [], location: [] };
+  swipeItems.vault = { reminder: [], location: [], note: [] };
   openVaultFolderType = null;
   vaultMoneyMonth = null;
   const vms = document.getElementById('vault-money-summary'); // amounts must not stay in the page once the folder closes or the Vault locks
@@ -1331,7 +1332,7 @@ function lockVault() {
   exitSelection();
   stopRowPlay();
   voiceFolderItems.vault = [];
-  swipeItems.vault = { reminder: [], location: [] };
+  swipeItems.vault = { reminder: [], location: [], note: [] };
   dismissOverlays(true);
   clearSecretInputs(VAULT_SECRET_INPUT_IDS);
   privateSessionKey = null;
@@ -2552,9 +2553,10 @@ setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => loadCodeEdit
 // explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
 // onRename(text): the Save dialog with name, tags and description; returns true when the title changed.
 // text: the note as stored: its words, then its styles when it has any (notestyle.js).
-function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
+function openTextEditor({ text: stored = '', isVault = false, session, nav = null } = {}) {
   return new Promise((resolve) => {
-    const { text, spans } = splitNoteStyle(stored);
+    let { text, spans } = splitNoteStyle(stored);
+    let swipeCtl = null;
     const $ = (id) => document.getElementById(id);
     const screen = $('editor-screen'), host = $('editor-host'), bar = $('editor-tools'), nameEl = $('editor-name'), micBtn = $('editor-mic-btn');
     const raw = () => joinNoteStyle(ed.getValue(), ed.getFormat(), { title: nameEl.value, named: !!session.named }); // what is stored and drafted
@@ -2571,15 +2573,18 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       try { changed = await session.onRename(ed ? raw() : stored); } catch (err) { toast(`Could not rename: ${err.message || err}`); }
       if (changed && !closed) { $('editor-title').textContent = session.title; nameEl.value = session.titleText; touch(); }
     };
+    const countLine = (v, rows) => { // rows: the lines as numbered beside the text
+      const words = v.trim() ? v.trim().split(/\s+/).length : 0;
+      return `${words} word${words === 1 ? '' : 's'} · ${v.length} characters · ${rows} line${rows === 1 ? '' : 's'}`;
+    };
     const updateCount = () => {
       const v = ed ? ed.getValue() : text;
-      const words = v.trim() ? v.trim().split(/\s+/).length : 0;
-      const rows = ed ? ed.rowCount() : v.split('\n').length; // the lines as numbered beside the text
-      $('editor-count').textContent = `${words} word${words === 1 ? '' : 's'} · ${v.length} characters · ${rows} line${rows === 1 ? '' : 's'}`;
+      $('editor-count').textContent = countLine(v, ed ? ed.rowCount() : v.split('\n').length);
     };
     updateCount();
     const finish = (discarded = false) => {
       stopDictation(); if (panel) panel.destroy();
+      if (swipeCtl) { swipeCtl.detach(); swipeCtl = null; }
       window.removeEventListener('resize', caretSoon); if (window.visualViewport) window.visualViewport.removeEventListener('resize', caretSoon);
       if (closed) return;
       closed = true;
@@ -2614,7 +2619,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
     const settle = async () => { // Back: the last change is written before the editor leaves
       clearTimeout(saveTimer); saveTimer = null;
       for (let i = 0; saving && i < 100; i++) await new Promise((r) => setTimeout(r, 50));
-      await flush();
+      return flush();
     };
     const requestBack = async () => { if (panel && panel.isOpen()) { panel.close(); return; } await settle(); if (!closed) finish(); }; // Back closes the dictation panel first
     $('editor-back-btn').onclick = requestBack;
@@ -2695,8 +2700,8 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
         b.onclick = fn; host2.appendChild(b); return b;
       };
       let paintStyle = () => {};
-      ed = mod.createCodeEditor({
-        parent: host, text, spans, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
+      const edOpts = (t, sp) => ({
+        parent: host, text: t, spans: sp, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
         onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
         onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
         onSelect: (inf) => paintStyle(inf),
@@ -2705,6 +2710,7 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
           clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150);
         }
       });
+      ed = mod.createCodeEditor(edOpts(text, spans));
       // The list panel (Decision 414) opens under the tool row; a second tap, or a tap on the text, closes it.
       const pops = {};
       const closePops = () => { for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); } };
@@ -2796,6 +2802,62 @@ function openTextEditor({ text: stored = '', isVault = false, session } = {}) {
       paintStyle(ed.styleInfo());
       ed.setEditing(true, !text); // keyboard up at once for a new note only
       sync();
+      // Swipe to the next or previous note of the open folder (Decision 419): keyboard closed, dictation panel closed, no selection.
+      // The note on screen is saved first (a failed save cancels the swipe). The neighbour is a ghost page with a read-only editor
+      // built the same way as the live one; on release the live editor is swapped to the neighbour under the ghost.
+      if (nav) {
+        const countEl = $('editor-count');
+        const bgOf = () => { for (let n = screen; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) return c; } return '#fff'; };
+        swipeCtl = attachNoteSwipe({
+          screen,
+          movers: () => [nameEl, host, countEl],
+          canStart: () => !!ed && !closed && !(panel && panel.isOpen()) && !document.body.classList.contains('kb-open') && ed.view.state.selection.main.empty,
+          has: (step) => nav.has(step),
+          onStart: () => { closePops(); floatBar.classList.add('hidden'); },
+          prepare: async (step) => {
+            const id = nav.peek(step);
+            if (id === null) return null;
+            const [n, saved] = await Promise.all([nav.load(id), settle()]);
+            if (!n || saved === false || closed || !ed) return null;
+            const sr = screen.getBoundingClientRect(), nr = nameEl.getBoundingClientRect(), cr = countEl.getBoundingClientRect();
+            const g = document.createElement('div');
+            g.className = 'ev-ghostpage'; g.setAttribute('aria-hidden', 'true');
+            g.style.cssText = `position:absolute;left:0;right:0;top:${nr.top - sr.top}px;height:${cr.bottom - nr.top}px;display:flex;flex-direction:column;background:${bgOf()};pointer-events:none;will-change:transform;transform:translateX(${step * screen.clientWidth}px)`;
+            const gn = nameEl.cloneNode(false);
+            gn.removeAttribute('id'); gn.value = n.session.titleText || ''; gn.readOnly = true; gn.tabIndex = -1;
+            const gh = document.createElement('div');
+            gh.className = host.className;
+            const gc = countEl.cloneNode(false);
+            gc.removeAttribute('id');
+            g.append(gn, gh, gc);
+            screen.appendChild(g);
+            const m = splitNoteStyle(n.text);
+            const ge = mod.createCodeEditor({ parent: gh, text: m.text, spans: m.spans, name: '', kind: 'note', editable: false, ui: { askText: async () => null } });
+            if (ed.isRuled()) ge.setRuled(true);
+            gc.textContent = countLine(m.text, ge.rowCount());
+            return { el: g, data: n, dispose: () => ge.destroy() };
+          },
+          onCommit: (step, n) => {
+            if (closed || !ed) return;
+            try {
+              const ruled = ed.isRuled(), old = session;
+              clearTimeout(saveTimer); saveTimer = null; clearTimeout(draftTimer); draftTimer = null; clearTimeout(countTimer);
+              if (old.clear) Promise.resolve(old.clear()).catch(() => {}); // saved already: no draft stays behind
+              ed.destroy();
+              session = n.session; stored = n.text; ({ text, spans } = splitNoteStyle(n.text));
+              dirty = false; pending = false;
+              nav.commit(n.id);
+              $('editor-title').textContent = session.title;
+              nameEl.value = session.titleText || '';
+              ed = mod.createCodeEditor(edOpts(text, spans));
+              if (ruled) ed.setRuled(true);
+              ed.view.scrollDOM.addEventListener('scroll', () => placeFloat(ed.styleInfo()), { passive: true });
+              ed.setEditing(true, false);
+              updateCount(); sync(); paintStyle(ed.styleInfo());
+            } catch (err) { toast(`Could not open the note: ${err.message || err}`); finish(true); }
+          }
+        });
+      }
     })();
   });
 }
@@ -4189,6 +4251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabItems = openVaultFolderType === 'reminder' ? reminderTabItems(items, vaultReminderLog, reminderTab.vault, { savedAt: vSavedAt, newestFirst: false }) : null; // Decision 357
     if (tabItems) swipeItems.vault.reminder = tabItems.map((it) => it.row);
     if (openVaultFolderType === 'location') swipeItems.vault.location = items;
+    if (openVaultFolderType === 'note') swipeItems.vault.note = items;
     container.innerHTML = tabItems
       ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
       : (openVaultFolderType === 'note' && noteView === 'grid' && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
@@ -5261,6 +5324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabItems = openFolderType === 'reminder' ? reminderTabItems(rows, await loadReminderLog(db), reminderTab.home, { savedAt }) : null; // Upcoming, Completed or All (Decision 357)
     if (tabItems) swipeItems.home.reminder = tabItems.map((it) => it.row);
     if (openFolderType === 'location') swipeItems.home.location = rows;
+    if (openFolderType === 'note') swipeItems.home.note = rows;
     document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
       ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
@@ -5980,7 +6044,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openNote(item, isVault) {
     const text = isVault ? await vaultNoteText(item.id) : (item.body_text || '');
     const session = makeNoteSession({ isVault, item, raw: text });
-    await openTextEditor({ text, isVault, session });
+    await openTextEditor({ text, isVault, session, nav: noteNav(item.id, isVault) });
+  }
+  // The notes of the open folder, for the editor's swipe (Decision 419). Neighbours are found by id in the folder's current list, so a
+  // redraw of the list while the editor is open does not move the place; a note outside the list (or a new one) has no neighbours.
+  function noteNav(startId, isVault) {
+    let cur = startId;
+    const ids = () => swipeItems[isVault ? 'vault' : 'home'].note.map((r) => r.id);
+    const at = (step) => { const a = ids(), i = a.indexOf(cur); return i < 0 || a[i + step] === undefined ? null : a[i + step]; };
+    return {
+      has: (step) => at(step) !== null,
+      peek: at,
+      commit: (id) => { cur = id; },
+      async load(id) { // the neighbour as stored now, with its own session
+        const item = isVault
+          ? (getVaultIndex() || []).find((e) => e.id === id)
+          : ((await db.query(`SELECT * FROM entries WHERE id=? AND deleted_at IS NULL`, [id])).values || [])[0];
+        if (!item || item.type !== 'note') return null;
+        const text = isVault ? await vaultNoteText(item.id) : (item.body_text || '');
+        return { id, text, session: makeNoteSession({ isVault, item, raw: text }) };
+      }
+    };
   }
 
   // Entry viewer shell (Decision 92). render(bodyEl, helpers) fills the body; call helpers.refresh() after a change.
