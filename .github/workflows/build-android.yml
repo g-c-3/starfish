@@ -32,8 +32,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # Decision 424 — a download inside the install (the image library host, for one) can answer with a 5xx: up to three tries.
       - name: Install Node dependencies
-        run: npm ci
+        run: |
+          for i in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci failed (attempt $i of 3)"
+            sleep $((i * 15))
+          done
+          exit 1
 
       # Decision 272 — Google Drive on/off. With the repository variable GDRIVE_WEB_CLIENT_ID set (a client ID, not a secret), the
       # Drive sign-in block is written into capacitor.config.json here (workspace only) and the web build turns the guard on.
@@ -196,6 +203,25 @@ jobs:
 
       - name: Add the signature check (native bridge)
         run: node scripts/patch-signature.js
+
+      # Decision 424 — the wrapper's download of the Gradle distribution has a 10 s time-out and failed on two runs in a row. Time-out
+      # raised and the download tried up to four times here; the build step below then finds it in place. No secret is used in this step.
+      - name: Fetch the Gradle distribution (retries, longer time-out)
+        working-directory: android
+        run: |
+          PROPS=gradle/wrapper/gradle-wrapper.properties
+          if grep -q '^networkTimeout=' "$PROPS"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$PROPS"
+          else
+            printf '\nnetworkTimeout=120000\n' >> "$PROPS"
+          fi
+          chmod +x ./gradlew
+          for i in 1 2 3 4; do
+            ./gradlew --version && exit 0
+            echo "Gradle download failed (attempt $i of 4)"
+            sleep $((i * 20))
+          done
+          exit 1
 
       - name: Build signed release APK
         working-directory: android
