@@ -1,0 +1,70 @@
+ARKLY PROPRIETARY LICENSE
+Personal testing and personal use only. No commercial use. No copying.
+
+Copyright (c) the author of Arkly (GitHub account g-c-3). All rights reserved.
+
+1. WHAT THIS COVERS
+
+"Arkly" means the application and everything in this repository or built from it: source code, build scripts, workflows, user interface,
+design, layout, text, icons, graphics, documentation, data formats and structure, in any form, including compiled or packaged builds.
+
+"Version" means any version of Arkly: every commit, branch, tag, release, build and copy, made available at any time, before or after
+the date of this license.
+
+2. ALL VERSIONS
+
+This license applies to every Version, past and present, from the first one made available. No Version has been made available under
+any open-source or other permissive license, and none is granted by anything in this repository or its history. Any earlier absence of a
+license notice was not permission. Where the law lets an earlier statement or grant be withdrawn, it is withdrawn.
+
+3. WHAT YOU MAY DO
+
+You may, for yourself only and for no commercial purpose:
+(a) read the source code;
+(b) install and run a Version for personal use, testing and evaluation.
+
+4. WHAT YOU MAY NOT DO
+
+Without the author's prior written permission, you may not:
+(a) use Arkly, or anything learned or taken from it, for a commercial purpose: selling, licensing, renting or leasing it; offering it as,
+    or inside, a paid or advertising-supported product or service; or using it in the operations of a business, employer or organization;
+(b) copy, reproduce, mirror, host, publish or distribute Arkly or any part of it, in source or built form, to anyone, including by
+    copying it into another repository, archive, collection or data set;
+(c) modify, adapt, translate or build on Arkly, or create anything derived from it;
+(d) reuse any part of its code, design, interface, text, assets, structure or documentation in another work;
+(e) use Arkly, its source or its documentation as the basis or reference for a product or service that reproduces its distinctive
+    features, design or structure;
+(f) decompile, disassemble or reverse engineer a build, except as far as the law gives you that right regardless of this license;
+(g) remove or change any copyright or license notice;
+(h) allow anyone else to do any of the above.
+
+"Commercial purpose" means a use aimed at commercial advantage or money, or made by or for a business, employer or organization.
+
+5. THIRD-PARTY COMPONENTS
+
+Software packages and fonts that Arkly uses or bundles (for example the fonts in src/fonts, each with its own license text) belong to their
+authors and remain under their own licenses. This license does not change those licenses and claims no rights in those components.
+
+6. GITHUB
+
+Nothing here limits the rights that GitHub's Terms of Service give GitHub users to view and fork this repository on GitHub.
+
+7. OWNERSHIP
+
+Arkly is licensed, not sold. The author keeps all rights not expressly granted here. No right is granted by implication, estoppel or
+otherwise. Use of the Arkly name or logo is not granted.
+
+8. ENDING
+
+Your rights under this license end at once, without notice, if you break any of its terms. You must then stop using Arkly and delete
+every copy you hold. Sections 4 to 10 continue after the end.
+
+9. NO WARRANTY, LIMIT OF LIABILITY
+
+ARKLY IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING FITNESS FOR A PARTICULAR PURPOSE AND
+NON-INFRINGEMENT. TO THE FULLEST EXTENT THE LAW ALLOWS, THE AUTHOR IS NOT LIABLE FOR ANY CLAIM, DAMAGE, LOSS OF DATA OR OTHER LIABILITY
+ARISING FROM THE USE OF ARKLY. Test builds can lose or damage data; keep your own backups.
+
+10. PERMISSION FOR OTHER USES
+
+For any use not allowed above, ask first through the GitHub account g-c-3. Nothing is permitted until the author agrees in writing.
