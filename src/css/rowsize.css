@@ -1,0 +1,4 @@
+/* rowsize.css — the size on the right of the date line in a list view (Decision 427). */
+.entry-row .row-meta.row-meta-sz { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.entry-row .row-meta .row-when { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-row .row-meta .row-size { flex: none; font-variant-numeric: tabular-nums; }
