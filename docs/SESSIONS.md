@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 203**
+
+Start: recording of a text size change with ruled lines on: the lines disappear.
+- Measured: the line signal in the empty part of the page is 0.93 until the first size change, then 0.02 in that same frame and 0 after. Reproduced with the real editor: its root class is rewritten on a theme change.
+- Decision 418. Phase 101 built. Replaced: `src/js/codeeditor.js`.
+- Tested: the editor root loses the class on a size change and the holder keeps it (4 cases, real editor in a simulated page). Parses. Not run through CI or a device.
+- Open: DP222, DP223, DP224.
+- Next start: DP222 to DP224 results, then Phase 93 (notes swipe).
+
+---
+
 **Session 202**
 
 Start: screenshots of the tool row and the grid. Requests: Title and file name the same, grid names centred, size up to 42, ruled lines in place of A±.
