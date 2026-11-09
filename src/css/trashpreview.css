@@ -1,0 +1,9 @@
+/* trashpreview.css — a trashed item opened read only (Decision 433). */
+.trash-row { cursor: pointer; }
+.tp-box .tp-sub { margin: 0 0 10px; color: var(--muted, #6b6b80); font-size: 13px; }
+.tp-box .tp-body { margin: 0 0 14px; max-height: 46vh; overflow: auto; text-align: left; }
+.tp-box .tp-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; padding: 10px 12px; border-radius: 12px; background: rgba(120, 110, 200, 0.08); }
+.tp-box .tp-note { font-size: 14px; color: var(--muted, #6b6b80); padding: 6px 2px; }
+.tp-box .tp-media { display: block; max-width: 100%; max-height: 42vh; margin: 0 auto; border-radius: 12px; object-fit: contain; }
+.tp-box audio.tp-media { width: 100%; }
+.tp-box .tp-body button { width: 100%; }
