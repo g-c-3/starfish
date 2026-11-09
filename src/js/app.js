@@ -59,6 +59,7 @@ import { attachPageSwipe } from './pageswipe.js';
 import { attachNoteSwipe } from './noteswipe.js';
 import '../css/rowsize.css';
 import '../css/trashpreview.css';
+import '../css/panelmotion.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -2733,9 +2734,10 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
         b.onclick = fn; host2.appendChild(b); return b;
       };
       let paintStyle = () => {};
+      let findIsOpen = false, lastPopClose = 0; // one of Find and the panels is open at a time (Decision 438)
       const edOpts = (t, sp) => ({
         parent: host, text: t, spans: sp, name: '', kind: 'note', editable: true, ui: { askText: (o) => askText({ ...o, isVault }) },
-        onFind: (open) => { if (findBtn) findBtn.classList.toggle('on', open); },
+        onFind: (open) => { findIsOpen = open; if (findBtn) findBtn.classList.toggle('on', open); },
         onRows: () => { clearTimeout(countTimer); countTimer = setTimeout(updateCount, 150); },
         onSelect: (inf) => paintStyle(inf),
         onChange: () => {
@@ -2770,8 +2772,10 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
         placeFloat(ed.styleInfo());
       };
       const anyPopOpen = () => Object.values(pops).some((q) => !q.el.classList.contains('hidden'));
+      // A panel fades out while it is still painted (class mx-out for 0.2 s); the next one arrives after the gap (panelmotion.css).
+      const fadePop = (el) => { if (el.classList.contains('hidden')) return; el.classList.add('hidden', 'mx-out'); setTimeout(() => el.classList.remove('mx-out'), 200); };
       const closePops = (keepSelUi = false) => {
-        for (const q of Object.values(pops)) { q.el.classList.add('hidden'); q.btn.classList.remove('on'); }
+        for (const q of Object.values(pops)) { if (!q.el.classList.contains('hidden')) lastPopClose = Date.now(); fadePop(q.el); q.btn.classList.remove('on'); }
         if (keepSelUi !== true) restoreSelectionUi();
       };
       const makePop = (key, btn, html) => {
@@ -2782,11 +2786,14 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       };
       const togglePop = (key) => {
         const was = !pops[key].el.classList.contains('hidden');
+        const swap = anyPopOpen() || findIsOpen; // something is leaving: the new one arrives after it, never over it
         closePops(true);
         if (was) { restoreSelectionUi(); return; }
+        if (findIsOpen && ed) ed.closeFind();
         const r = bar.getBoundingClientRect(), s = screen.getBoundingClientRect();
         pops[key].el.style.top = `${Math.round(r.bottom - s.top + 6)}px`;
-        pops[key].el.classList.remove('hidden'); pops[key].btn.classList.add('on');
+        pops[key].el.classList.toggle('mx-after', swap);
+        pops[key].el.classList.remove('hidden', 'mx-out'); pops[key].btn.classList.add('on');
         hideSelectionUi();
       };
       // First tool (Decision 422): three lines; opens a panel with the two switches that were separate buttons, Text Wrap and Ruled Lines
@@ -2810,7 +2817,11 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       mk(bar, 'ev-tool ev-ico', iconSvg('goto'), 'Go to line', () => ed.goTo());
       undoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('undo'), 'Undo', () => { ed.undo(); sync(); });
       redoBtn = mk(bar, 'ev-tool ev-ico', iconSvg('redo'), 'Redo', () => { ed.redo(); sync(); });
-      findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => ed.find()); // a second tap closes it
+      findBtn = mk(bar, 'ev-tool ev-ico', iconSvg('search'), 'Find and replace', () => { // a second tap closes it; a panel that is open leaves first
+        const since = Date.now() - lastPopClose, wait = anyPopOpen() ? 110 : since < 200 ? Math.max(0, 110 - since) : 0;
+        if (anyPopOpen()) closePops();
+        if (wait) setTimeout(() => { if (ed && !closed) ed.find(); }, wait); else ed.find();
+      });
       const listBtn = mk(bar, 'ev-tool ev-ico', iconSvg('list'), 'List', () => togglePop('list'));
       const LISTS = [
         ['Bullets', [['dot', '\u2022', 'Dots'], ['circle', '\u25CB', 'Circles'], ['square', '\u25AA', 'Squares'], ['arrow', '\u2192', 'Arrows'], ['dash', '\u2013', 'Dashes'], ['check', '\u2713', 'Checks']]],
@@ -4092,8 +4103,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ---- Trash preview (Decision 433): a trashed item opens read only, to check it is the right one before it is restored or deleted for
-  // good. Notes show their text; photos, videos and recordings play from memory (dropped on close); Pdf and Files and open with the phone's
-  // own app; Reminder, Money and Location show their details line. Restore asks first; Delete permanently is the Trash's own question.
+  // good. Notes show their text; photos, videos and recordings play from memory (dropped on close); Pdf and Files open in Arkly's own
+  // viewers, read only and full screen (text and code, Word, Excel, PowerPoint, PDF, audio), with an "Open as" choice of every viewer for a
+  // type that has none or a file with no extension (Decision 440); no phone app is ever offered for a trashed file. Reminder, Money and
+  // Location show their details line. Restore asks first; Delete permanently is the Trash's own question.
   async function openTrashPreview(id, isVault) {
     if (activeTrashPreview) return;
     const listRow = (isVault ? vaultTrashRows : trashRows).find((r) => r.id === id);
@@ -4149,11 +4162,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el.tagName !== 'IMG') el.controls = true;
         add(el);
       } else if (type === 'pdf' || type === 'file') {
-        text(`${type === 'pdf' ? 'PDF' : 'File'}${full.extension ? ` · .${full.extension}` : ''}`);
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'secondary-btn'; b.textContent = 'Open with the phone’s app';
-        b.onclick = () => openFile(full, isVault); // the phone's own viewer: it cannot change the stored file
-        add(b);
+        const own = type === 'pdf' ? 'pdf' : arklyKind(full.extension);
+        text(`${type === 'pdf' ? 'PDF' : 'File'}${full.extension ? ` · .${full.extension}` : ' · no extension'}`);
+        const item = isVault ? { id, type, label: listRow.label, extension: full.extension || '' } : full;
+        const media = document.createElement('div'); media.className = 'tp-view';
+        const FORCED_EXT = { image: 'jpg', video: 'mp4', audio: 'mp3' };
+        const showMedia = async (kind) => { // photo, video or sound shown here from memory
+          media.replaceChildren();
+          const note2 = document.createElement('div'); note2.className = 'tp-note'; note2.textContent = 'Loading…'; media.appendChild(note2);
+          try {
+            const bytes = isVault ? base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, id)).content.fileData) : await readEntryBytes(full);
+            if (closed) return;
+            const ext = arklyKind(full.extension) === kind ? full.extension : FORCED_EXT[kind];
+            const url = URL.createObjectURL(new Blob([bytes], { type: mimeTypeForVaultRow({ type: 'image', extension: ext }) }));
+            urls.push(url);
+            const el = document.createElement(kind === 'audio' ? 'audio' : kind === 'video' ? 'video' : 'img');
+            el.className = 'tp-media'; el.src = url;
+            if (el.tagName !== 'IMG') el.controls = true;
+            media.replaceChildren(el);
+          } catch (err) { if (!closed) note2.textContent = `Could not show it as ${kind}: ${err.message || err}`; }
+        };
+        // Everything else opens in the full-screen viewer, read only; the preview waits behind it and is back when the viewer closes.
+        const run = async (kind) => {
+          if (kind === 'image' || kind === 'video' || kind === 'audio') { await showMedia(kind); return; }
+          media.replaceChildren();
+          dlg.classList.add('hidden');
+          try { await openFileInArkly(item, isVault, { viewOnly: true, forceKind: kind }); }
+          catch (err) { toast(`Could not open it: ${err.message || err}`); }
+          finally { if (!closed) { dlg.classList.remove('hidden'); updateBackButtonState(); } }
+        };
+        const mkBtn = (label, kind, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.onclick = () => run(kind); return b; };
+        if (own) add(mkBtn('Open', own, 'tp-open'));
+        else text('There is no viewer for this type yet. Choose how to read it:');
+        const chips = add(document.createElement('div'));
+        chips.className = 'tp-chips';
+        const lab = document.createElement('span'); lab.textContent = 'Open as'; chips.appendChild(lab);
+        for (const [label, kind] of [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx']]) chips.appendChild(mkBtn(label, kind, 'tp-chip'));
+        add(media);
       } else if (type === 'money' && isVault) {
         const { row, content } = await loadVaultEntryContent(db, privateSessionKey, id);
         text(content.money ? moneyRowMeta(content.money, row.updated_at || row.created_at).meta : 'Details cannot be read');
@@ -6245,7 +6290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Entry viewer shell (Decision 92). render(bodyEl, helpers) fills the body; call helpers.refresh() after a change.
   // onClose runs on every close, including a lock's forced close. guard() (optional) is asked on Back only and may refuse.
-  function openViewer({ title, isVault = false, render, onEdit, onClose = null, guard = null, entry = null }) {
+  function openViewer({ title, isVault = false, render, onEdit, onClose = null, guard = null, entry = null, viewOnly = false }) {
     return new Promise((resolve) => {
       const $ = (id) => document.getElementById(id);
       const screen = $('viewer-screen'), body = $('viewer-body');
@@ -6262,11 +6307,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const back = async () => { if (!guard || await guard()) finish(); };
       const refresh = async () => { await render(body, { refresh, close: finish }); };
       $('viewer-back-btn').onclick = back;
-      $('viewer-edit-btn').classList.toggle('hidden', !onEdit);
+      $('viewer-edit-btn').classList.toggle('hidden', !onEdit || viewOnly); // viewOnly: a trashed file, no edit, share, move or delete (Decision 440)
       $('viewer-edit-btn').onclick = async () => { if (onEdit) { await onEdit(); await refresh(); } };
       // Share, Download, Move and Delete after Edit, the same order as the rows and the image viewer (Decisions 134, 141, 284).
       screen.querySelectorAll('.vwr-act').forEach((n) => n.remove());
-      if (entry) {
+      if (entry && !viewOnly) {
         const add = (label, icon, extra, run) => {
           const b = document.createElement('button');
           b.type = 'button'; b.className = `vwr-act icon-btn${extra}`; b.title = label; b.setAttribute('aria-label', label);
@@ -7199,7 +7244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isVault) { if (!privateSessionKey) throw new Error('Vault locked'); await captureToVault(args); } else await captureFile('pdf', args);
   }
 
-  async function openPdf(item, isVault) {
+  async function openPdf(item, isVault, viewOnly = false) {
     const viewerScreen = document.getElementById('viewer-screen');
     let view = null, tools = null, chrome = null, foldStop = null, token = 0, pwResolve = null;
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
@@ -7257,7 +7302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pagesCtx = { ...markupCtx, save: (bytes, { suffix }) => saveMarkedPdf(item, bytes, { replace: false, isVault, suffix }) };
     viewerScreen.classList.add('pdf-mode');
     await openViewer({
-      title: item.label || 'PDF', isVault,
+      title: item.label || 'PDF', isVault, viewOnly,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       guard: async () => !(tools && await tools.closeTop()), // Back closes the form or mark-up, then the Pages panel, then Find, before it leaves the viewer (Decisions 153, 166)
       onClose: () => { token++; if (pwResolve) pwResolve(null); viewerScreen.classList.remove('pdf-mode'); clearHeader(); if (tools) { tools.destroy(); tools = null; } if (chrome) { chrome.destroy(); chrome = null; } if (foldStop) { foldStop(); foldStop = null; } viewerScreen.querySelector('.editor-bar')?.classList.remove('bar-folded'); if (view) { view.destroy(); view = null; } },
@@ -7298,14 +7343,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { mountPdfTools } = await import('./pdftools.js');
           if (mine !== token || !body.isConnected) return; // closed or locked while the tools loaded
           tools = mountPdfTools(body, view, { onActivity: arm });
-          try { // mark-up is an extra: if it cannot load, the reading tools stay
+          if (!viewOnly) try { // mark-up is an extra: if it cannot load, the reading tools stay
             const base = tools;
             const { mountMarkup } = await import('./pdfmark-ui.js');
             if (mine !== token || !body.isConnected) return;
             const mk = mountMarkup(body, view, markupCtx);
             tools = { closeTop: async () => (await mk.closeTop()) || base.closeTop(), destroy: () => { mk.destroy(); base.destroy(); } };
           } catch { /* reading tools only */ }
-          try { // page tools are an extra too: if they cannot load, the tools so far stay
+          if (!viewOnly) try { // page tools are an extra too: if they cannot load, the tools so far stay
             const base = tools;
             const { mountPageTools } = await import('./pdfpages-ui.js');
             if (mine !== token || !body.isConnected) return;
@@ -7314,8 +7359,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           } catch { /* tools so far only */ }
         } catch (err) {
           if (mine !== token) return;
-          scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}<button type="button" class="pdf-fallback">Open with app</button></div>`;
-          scroll.querySelector('.pdf-fallback').onclick = async () => {
+          scroll.innerHTML = `<div class="pdf-msg">${escapeHtml(pdfErrorMessage(err))}${viewOnly ? '' : '<button type="button" class="pdf-fallback">Open with app</button>'}</div>`;
+          const fallbackBtn = scroll.querySelector('.pdf-fallback');
+          if (fallbackBtn) fallbackBtn.onclick = async () => {
             try {
               if (isVault) { if (!b64) throw new Error('Vault locked'); await openDecryptedFile(item.id, 'pdf', b64); }
               else if (dbRow) await openStoredFile(dbRow);
@@ -7327,11 +7373,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // A stored file in Arkly's own viewer (Decision 333). Resolves true when a viewer took it, false when the phone's apps should (no viewer for the type).
-  async function openFileInArkly(item, isVault) {
-    const kind = arklyKind(item.extension);
+  async function openFileInArkly(item, isVault, { viewOnly = false, forceKind = null } = {}) {
+    const kind = forceKind || arklyKind(item.extension); // forceKind: the person chose how to read a file (Decision 440)
     if (!kind) return false;
     if (kind === 'image' || kind === 'video') { await openImageViewer([item], 0, isVault); return true; }
-    if (kind === 'pdf') { await openPdf(item, isVault); return true; }
+    if (kind === 'pdf') { await openPdf(item, isVault, viewOnly); return true; }
     const viewerScreen = document.getElementById('viewer-screen');
     const arm = isVault ? armVaultAutoLock : armAppAutoLock;
     const ui = { askYesNo, askText, attachZoomPan, onActivity: arm };
@@ -7347,7 +7393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shut = () => { if (mounted) { try { mounted.destroy(); } catch { /* closing anyway */ } mounted = null; } if (url) { URL.revokeObjectURL(url); url = null; } };
     viewerScreen.classList.add('file-mode');
     await openViewer({
-      title: item.label || 'File', isVault, entry: item,
+      title: item.label || 'File', isVault, entry: item, viewOnly,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
       onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode'); },
       render: async (body) => {
@@ -7358,7 +7404,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           body.replaceChildren();
           const box = document.createElement('div'); box.className = 'pdf-msg';
           const p = document.createElement('p'); p.textContent = text; box.appendChild(p);
-          if (withApps) { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = "Open in the phone's apps"; b.onclick = () => openFile(item, isVault); box.appendChild(b); }
+          if (withApps && !viewOnly) { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = "Open in the phone's apps"; b.onclick = () => openFile(item, isVault); box.appendChild(b); }
           body.appendChild(box);
         };
         say('Loading…', false);
@@ -7379,7 +7425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (kind === 'text') { const m = await mountTextFile(body, bytes, `${item.label || 'file'}.${item.extension || 'txt'}`, ui); if (mine !== token) { m.destroy(); return; } mounted = m; return; }
           const m = await mountOfficeFile(body, kind, bytes, {
             ui, setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
-            openWith: () => openFile(item, isVault)
+            openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault) // no phone app for a trashed file
           });
           if (mine !== token) { m.destroy(); return; }
           mounted = m;

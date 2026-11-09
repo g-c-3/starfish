@@ -243,7 +243,11 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
         if (u.docChanged || u.heightChanged || u.geometryChanged) onRows(); // the number of rows can change without the text changing
         if (note && (u.geometryChanged || u.heightChanged || u.transactions.some((t) => t.reconfigured))) paintRule(u.view, parent);
         const open = searchPanelOpen(u.state);
-        if (open !== findOpen) { findOpen = open; onFind(open); }
+        if (open !== findOpen) {
+          findOpen = open; onFind(open);
+          // The panel pushes the text down by its height: the text slides there with the panel's fade instead of jumping (Decision 438).
+          if (open) requestAnimationFrame(() => { const pn = view.dom.querySelector('.cm-panels-top'); if (pn) slideText(-pn.offsetHeight); });
+        }
       })
     ]
   });
@@ -282,7 +286,13 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
   const endDrag = () => { dragging = false; place(); };
   thumb.addEventListener('pointerup', endDrag); thumb.addEventListener('pointercancel', endDrag);
 
-  let findOpen = false;
+  let findOpen = false, leaving = null;
+  const reduced = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+  // transform only, the duration and curve of the arriving page (motion.css tokens)
+  const slideText = (from) => {
+    if (!from || reduced()) return;
+    try { view.scrollDOM.animate([{ transform: `translateY(${from}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }); } catch { /* no animation support: it just moves */ }
+  };
   const api = {
     view,
     getValue: () => view.state.doc.toString(),
@@ -302,11 +312,24 @@ export function createCodeEditor({ parent, text, name, kind = 'file', editable =
     undo: () => undo(view), redo: () => redo(view),
     canUndo: () => undoDepth(view.state) > 0, canRedo: () => redoDepth(view.state) > 0,
     find() { // the Find tool opens the panel and closes it again; returns whether it is open now
-      if (searchPanelOpen(view.state)) { closeSearchPanel(view); return false; }
+      if (searchPanelOpen(view.state)) { api.closeFind(); return false; }
+      if (leaving) return false; // still closing
       openSearchPanel(view);
       return true;
     },
-    closeFind() { closeSearchPanel(view); },
+    // The panel fades out (0.17 s), then goes, and the text slides up to its place (Decision 438). Instant under reduced motion.
+    closeFind() {
+      if (!searchPanelOpen(view.state) || leaving) return;
+      const pn = view.dom.querySelector('.cm-panels-top .cm-panel.cm-search');
+      if (!pn || reduced()) { closeSearchPanel(view); return; }
+      const h = view.dom.querySelector('.cm-panels-top').offsetHeight || 0;
+      pn.classList.add('mx-leaving');
+      leaving = setTimeout(() => {
+        leaving = null;
+        try { if (searchPanelOpen(view.state)) { closeSearchPanel(view); slideText(h); } } catch { /* the editor is gone */ }
+      }, 170);
+    },
+    isFindOpen: () => searchPanelOpen(view.state),
     async goTo() {
       const n = view.state.doc.lines;
       const v = await ui.askText({ title: 'Go to line', text: `1 to ${n}`, placeholder: 'Line number', ok: 'Go' });
