@@ -58,6 +58,7 @@ import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.
 import { attachPageSwipe } from './pageswipe.js';
 import { attachNoteSwipe } from './noteswipe.js';
 import '../css/rowsize.css';
+import '../css/trashpreview.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -334,7 +335,8 @@ const BACK_MODALS = [
   ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
   ['new-chooser-modal', 'new-chooser-cancel-btn'],
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
-  ['select-files-screen', 'select-files-close-btn']
+  ['select-files-screen', 'select-files-close-btn'],
+  ['trash-preview-dialog', 'tp-close-btn']
 ];
 // The dismissal of one static modal: its own Cancel button, after Discard when it holds typed input (Decision 133).
 function modalDismiss(id, btn) {
@@ -2212,6 +2214,7 @@ function offerUndo(ids, { isVault = false, message = null, after = null } = {}) 
 }
 
 let activeSaveDialog = null; // { finish, isVault, requestLeave }
+let activeTrashPreview = null; // { close, isVault } — a trashed item open read only (Decision 433)
 let activeYesNo = null;      // { finish } — the in-app Yes/No dialog
 let activeText = null;       // { finish, isVault } — the in-app single-field text sheet
 let activeCompose = null;    // { finish, isVault } — the order sheet of Merge PDFs and Make a PDF (Decision 168)
@@ -2398,6 +2401,7 @@ function dismissOverlays(vaultOnly = false) {
   for (const s of draftSources) if (!vaultOnly || s.isVault) { s.locked = true; s.flush().catch(() => {}); } // before the dialogs close (Decision 189)
   if (undoState && (!vaultOnly || undoState.isVault)) hideToast(); // no Undo button on the lock screen or after a Vault lock
   if (activeYesNo) activeYesNo.finish(false);
+  if (activeTrashPreview && (!vaultOnly || activeTrashPreview.isVault)) activeTrashPreview.close(); // the opened content is dropped
   if (activeText && (!vaultOnly || activeText.isVault)) activeText.finish(null); // clears the typed value too
   if (activeCompose && (!vaultOnly || activeCompose.isVault)) activeCompose.finish(null);
   if (activeCoords && (!vaultOnly || activeCoords.isVault)) activeCoords.finish(null); // clears the pasted text too
@@ -2747,7 +2751,7 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       // comes back only if it was up.
       let selUi = null;
       const hideSelectionUi = () => {
-        if (selUi || !ed || !ed.view.hasFocus || ed.view.state.selection.main.empty) return;
+        if (selUi || !ed || !ed.view.hasFocus) return; // a plain caret has its own handle, hidden the same way
         selUi = { kb: document.body.classList.contains('kb-open') };
         ed.view.contentDOM.blur();
         // A blurred editor keeps its text selected in the page, which the phone then treats as a plain text selection (its Copy / Share
@@ -4060,6 +4064,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-trash-title').addEventListener('click', (e) => { if (e.target.closest('.title-search')) { armVaultAutoLock(); toggleFolderFind('vtrash'); } });
   document.getElementById('trash-list').addEventListener('click', async (e) => {
     const restore = e.target.closest('.trash-restore-btn'), purge = e.target.closest('.trash-purge-btn');
+    const rowEl = e.target.closest('.trash-row');
+    if (!restore && !purge && rowEl && !e.target.closest('.row-actions')) { openTrashPreview(rowEl.dataset.id, false); return; }
     if (restore) {
       const id = restore.dataset.id, was = trashRows.find((r) => r.id === id)?.deleted_at ?? Date.now();
       await window.Arkly.restoreEntry(id);
@@ -4084,6 +4090,80 @@ document.addEventListener('DOMContentLoaded', async () => {
       } });
     }
   });
+
+  // ---- Trash preview (Decision 433): a trashed item opens read only, to check it is the right one before it is restored or deleted for
+  // good. Notes show their text; photos, videos and recordings play from memory (dropped on close); Pdf and Files and open with the phone's
+  // own app; Reminder, Money and Location show their details line. Restore asks first; Delete permanently is the Trash's own question.
+  async function openTrashPreview(id, isVault) {
+    if (activeTrashPreview) return;
+    const listRow = (isVault ? vaultTrashRows : trashRows).find((r) => r.id === id);
+    const listEl = document.getElementById(isVault ? 'vault-trash-list' : 'trash-list');
+    const rowEl = listEl.querySelector(`.trash-row[data-id="${CSS.escape(id)}"]`);
+    if (!listRow || !rowEl || (isVault && !privateSessionKey)) return;
+    const dlg = document.getElementById('trash-preview-dialog'), body = document.getElementById('tp-body');
+    const urls = [];
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true; activeTrashPreview = null;
+      body.querySelectorAll('audio, video').forEach((m) => { try { m.pause(); } catch { /* not playing */ } });
+      body.replaceChildren();
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      dlg.classList.add('hidden');
+      updateBackButtonState();
+    };
+    activeTrashPreview = { close, isVault };
+    document.getElementById('tp-title').textContent = listRow.label;
+    document.getElementById('tp-sub').textContent = (rowEl.querySelector('.row-when') || rowEl.querySelector('.row-meta')).textContent;
+    body.replaceChildren();
+    const add = (el) => { if (!closed) body.appendChild(el); return el; };
+    const text = (t, cls = 'tp-note') => { const el = document.createElement('div'); el.className = cls; el.textContent = t; return add(el); };
+    const act = (id2) => listEl.querySelector(`.${isVault ? 'vtrash' : 'trash'}-${id2}-btn[data-id="${CSS.escape(id)}"]`);
+    document.getElementById('tp-close-btn').onclick = close;
+    document.getElementById('tp-restore-btn').onclick = async () => {
+      if (!(await askYesNo({ title: 'Restore this item?', text: 'It goes back to where it was.', yes: 'Restore', no: 'Not now' }))) return;
+      const b = act('restore');
+      close();
+      if (b) b.click();
+    };
+    document.getElementById('tp-purge-btn').onclick = () => { const b = act('purge'); if (!b) return; close(); b.click(); }; // asks "Delete permanently?" and keeps its Undo
+    dlg.classList.remove('hidden');
+    updateBackButtonState();
+    try {
+      const full = ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+      if (!full || closed) return;
+      const type = full.type;
+      if (type === 'note') {
+        const raw = isVault ? await vaultNoteText(id) : full.body_text || '';
+        const t = plainNoteText(raw || '');
+        text(t.trim() ? t : 'Empty note', t.trim() ? 'tp-text' : 'tp-note');
+      } else if (type === 'image' || type === 'voice') {
+        let url;
+        const mime = mimeTypeForVaultRow(full);
+        if (isVault) url = (await openVaultEntry(id)).blobUrl;
+        else url = URL.createObjectURL(new Blob([await readEntryBytes(full)], { type: mime }));
+        urls.push(url);
+        if (closed) return;
+        const el = document.createElement(type === 'voice' ? 'audio' : mime.startsWith('video/') ? 'video' : 'img');
+        el.className = 'tp-media'; el.src = url;
+        if (el.tagName !== 'IMG') el.controls = true;
+        add(el);
+      } else if (type === 'pdf' || type === 'file') {
+        text(`${type === 'pdf' ? 'PDF' : 'File'}${full.extension ? ` · .${full.extension}` : ''}`);
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'secondary-btn'; b.textContent = 'Open with the phone’s app';
+        b.onclick = () => openFile(full, isVault); // the phone's own viewer: it cannot change the stored file
+        add(b);
+      } else if (type === 'money' && isVault) {
+        const { row, content } = await loadVaultEntryContent(db, privateSessionKey, id);
+        text(content.money ? moneyRowMeta(content.money, row.updated_at || row.created_at).meta : 'Details cannot be read');
+      } else if (type === 'money' || type === 'expense' || type === 'reminder' || type === 'location') {
+        const m = rowMeta(full, true).meta;
+        if (m) text(m);
+        if (!isVault && full.description) text(full.description, 'tp-text');
+      } else text('Nothing to show for this item.');
+    } catch (err) { if (!closed) { body.replaceChildren(); text(`Could not open it: ${err.message || err}`); } }
+  }
 
   // ---- Private Vault ----
   async function refreshVaultGateView({ prompt = true } = {}) {
@@ -4562,6 +4642,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('vault-open-trash-btn').addEventListener('click', openVaultTrash);
   document.getElementById('vault-trash-list').addEventListener('click', async (e) => {
     const restore = e.target.closest('.vtrash-restore-btn'), purge = e.target.closest('.vtrash-purge-btn');
+    const rowEl = e.target.closest('.trash-row');
+    if (!restore && !purge && rowEl && !e.target.closest('.row-actions')) { armVaultAutoLock(); openTrashPreview(rowEl.dataset.id, true); return; }
     if (restore) {
       const id = restore.dataset.id, was = vaultTrashRows.find((r) => r.id === id)?.deleted_at ?? Date.now();
       await restoreEntry(id);
