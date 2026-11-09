@@ -7,3 +7,10 @@
 .tp-box .tp-media { display: block; max-width: 100%; max-height: 42vh; margin: 0 auto; border-radius: 12px; object-fit: contain; }
 .tp-box audio.tp-media { width: 100%; }
 .tp-box .tp-body button { width: 100%; }
+
+/* "Open as": the viewers Arkly has, offered for any file (Decision 440). */
+.tp-box .tp-body .tp-open { margin-bottom: 10px; }
+.tp-box .tp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 10px; }
+.tp-box .tp-chips > span { font-size: 12px; color: var(--muted, #6b6b80); margin-right: 2px; }
+.tp-box .tp-body .tp-chip { width: auto; min-height: 34px; padding: 4px 12px; border-radius: 999px; font-size: 13px; background: transparent; border: 1px solid var(--border, #d9d6ee); color: var(--brand, #5b45d6); }
+.tp-box .tp-view { margin-top: 4px; }

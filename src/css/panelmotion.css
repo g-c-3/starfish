@@ -1,0 +1,9 @@
+/* panelmotion.css — editor panels open and close with the one recipe (Decision 438): the old one fades out (0.17 s), the new one
+   arrives after the gap (0.3 s). Opacity only; the keyframes and tokens are motion.css's. Nothing moves under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .ev-pop:not(.hidden) { animation: mx-fade-in 0.3s var(--mx-settle) both; }
+  .ev-pop.mx-after:not(.hidden) { animation-delay: var(--mx-gap); }
+  .ev-pop.mx-out.mx-out.hidden { display: block !important; pointer-events: none; animation: mx-fade-out 0.17s var(--mx-leave) both; }
+  .ev-code .cm-panel.cm-search { animation: mx-fade-in 0.3s var(--mx-settle) both; }
+  .ev-code .cm-panel.cm-search.mx-leaving { animation: mx-fade-out 0.17s var(--mx-leave) both; pointer-events: none; }
+}

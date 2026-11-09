@@ -2,3 +2,6 @@
 .entry-row .row-meta.row-meta-sz { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .entry-row .row-meta .row-when { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry-row .row-meta .row-size { flex: none; font-variant-numeric: tabular-nums; }
+
+/* The Notes grid preview keeps the person's spaces and tab steps (Decision 439); long lines still wrap. */
+.note-grid .note-card .nc-body { white-space: pre-wrap; }
