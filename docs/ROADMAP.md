@@ -85,6 +85,12 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
+- [ ] 113 — Viewer: EPUB and rendered RTF for stored files (planned)
+- [ ] 112 — Viewer: binary and unknown files as a hex and details view (planned)
+- [ ] 111 — Viewer: Markdown and HTML rendered, beside the source view (planned)
+- [ ] 110 — Viewer: old Office (doc, xls, ppt) and OpenDocument (odt, ods, odp) (planned)
+- [ ] 109 — Viewer: archives (zip, 7z, rar, tar, gz) listed and previewed from the Trash and Files (planned)
+- [ ] 108 — Find and panels open and close with the one recipe, one at a time; Notes grid keeps tab steps; Trash opens every file in Arkly's own viewers, read only (Session 211, Decisions 438 to 440; DP232 open, not run through CI or a device)
 - [ ] 107 — Trash preview, volume keys stop ring and vibration, quiet notification under the card, centred card, caret handle under panels (Session 210, Decisions 433 to 437; DP231 open, not compiled, not run through CI or a device)
 - [ ] 106 — Selection tools cleared under panels, sizes in the Trash lines, LICENSE (Session 209, Decisions 430 to 432; DP230 open, not run through CI or a device; trash opening and volume-key vibration waiting on answers)
 - [ ] 105 — Notes grid first-line indent, Money date line, row sizes in list views, selection tools hidden under panels, lock-screen offer once (Session 208, Decisions 425 to 429; DP229 open, not run through CI or a device)
@@ -809,6 +815,18 @@ individual items) can be picked up in any order once prerequisites are met.
   - Removed: the reminder-wording offer ("Also set a reminder?") that came with the first Save of a note; the Mic is not yet in the Save button's place (Phase 92).
   - Files: `src/js/app.js`, `src/js/notestyle.js`, `src/index.html`, `src/css/style.css`.
   - [x] DP215 (confirmed on the device) — Device pass for Decision 407. (1) New note, type a word: the note appears in the folder named by its first words after leaving; leave at once and reopen: text intact. (2) Type a Title: the name changes to it; clear it: back to the first words. (3) Rename in the dialog: the name shown is the current one, tags and description kept; then type in Title: the name does not change; rename again: it does. (4) Type only "." or ",": the name is that. Delete all text and title: the note stays, named Untitled. (5) Existing notes from before: open, edit the text: the name does not change; type a Title: it does. (6) Vault: the same, then lock while typing: after unlock the last text is there, no duplicate Autosave note. (7) Background the app mid-typing and return. (8) Search finds new and edited notes; the Title and name text do not appear as part of the body.
+- [ ] **113 — EPUB and rendered RTF (planned).** An EPUB is a zip of pages: a reader view (chapters, text size). RTF now opens as source text; a rendered view.
+- [ ] **112 — Binary and unknown files (planned).** A file with no viewer, or opened as text that is not text: size, a guess at the type from the first bytes, and a hex view of the start, so the Trash and Files can always show something.
+- [ ] **111 — Markdown and HTML rendered (planned).** .md and .html open as source today (the text viewer). Add a rendered view with a switch, scripts never run and remote content never loads (the app makes no other network calls).
+- [ ] **110 — Old Office and OpenDocument (planned).** .doc, .xls, .ppt and .odt, .ods, .odp have no viewer. The OpenDocument ones are zips of XML, close to the Word, Excel and PowerPoint readers already here; the old binary formats need their own readers.
+- [ ] **109 — Archives (planned).** zip, 7z, rar, tar, gz stored as files: list the contents, preview one file in the viewer that fits it, read only. zip can be read in the app; 7z, rar and tar need the native archive helper on a temporary decrypted copy that is removed after.
+- [ ] **108 — Panels, grid preview, Trash viewers (Decisions 438 to 440; Session 211).** Built; not run through CI or a device.
+  - Find and the Lines and list panels fade out (0.17 s) and the next arrives after the gap (0.3 s); one is open at a time; the text slides to its place when Find opens or closes (Decision 438).
+  - Notes grid preview keeps spaces and tab steps (Decision 439).
+  - Trash: Pdf and File rows open in Arkly's own full-screen viewers, read only, with "Open as" for any viewer; no phone app (Decision 440).
+
+  - [ ] DP232 — Device pass for Decisions 438 to 440. (1) Tap Find: the panel fades in and the text slides down; tap again: it fades out and the text slides up. (2) With the list panel open, tap Find: the list fades, Find arrives after it, never both; the same the other way, and Lines to list. (3) A note with a tab step or several spaces in the middle: the grid card shows them. (4) Trash, Home and Vault: a .md, .java, .css, .html file opens as source text; .docx, .xlsx open in the Word and Excel viewers; .pdf in the PDF viewer without mark-up or page tools; .mp3 plays; none of them shows Share, Download, Move, Delete, Edit or Open with an app, and Back returns to the preview. (5) A .zip, a .7z and a file with no extension say there is no viewer yet and offer Open as Text, Image, Audio, Video, PDF, Document, Spreadsheet, Presentation; a wrong choice says it cannot show it, nothing breaks.
+
 - [ ] **107 — Device-pass follow-ups, round three (Decisions 433 to 437; Session 210).** Built; the Java was only parsed (no compiler here), not compiled, not run through CI or a device.
   - Trash: a row opens a read-only preview with Restore (asks first) and Delete permanently (the Trash's own question) (Decision 433).
   - Volume keys: either key stops sound and vibration at once, also with the screen off (Decision 434).

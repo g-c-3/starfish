@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 211**
+
+Start: six screenshots (the Find and list panels open together; the grid card; three Trash previews) and five requests: Find opens and closes smoothly, one panel at a time, tab steps in the grid preview, every Trash file in Arkly's own viewers, and a list of what has no viewer.
+- Cause of the double panels: Find and the panels were separate and did not know of each other. Cause of the lost tab step: the card's text collapsed spaces (`pre-line`).
+- Decisions 438 to 440. Phase 108 built; Phases 109 to 113 planned (viewers still missing).
+- Viewers that exist: text and code (.md .java .css .html and the other source types, as source), Word, Excel, PowerPoint, PDF, audio, image, video. Missing: archives (.zip .7z .rar .tar .gz), old Office and OpenDocument, rendered Markdown and HTML, binary and unknown files, EPUB and rendered RTF.
+- New: `src/css/panelmotion.css`. Replaced: `src/js/app.js`, `src/js/codeeditor.js`, `src/css/rowsize.css`, `src/css/trashpreview.css`.
+- Tested: the Trash chooser and read-only opening taken from `app.js` against a simulated page (40 cases); the viewer gating (normal shows Edit and the four actions, view only shows none); Find opening, the fade-out then close, repeat requests, `closeFind`, callbacks, with the real editor. Both scripts parse. The look of the fades, the text slide, the panel order and the viewers on real files were not run: not run through CI or a device. The native code of Session 210 is still not compiled.
+- Open: DP222 to DP232. CI has not yet completed a build of Phases 93 to 108.
+- Next start: the CI result, then DP222 to DP232, then Phase 109.
+
+---
+
 **Session 210**
 
 Start: answers (Trash opens read only with confirmed Restore and Delete; either volume key stops ring and vibration; the license as drafted is enough) and three issues: the plain caret handle over the list panel, the reminder card off-centre in landscape, the heads-up and the card both showing.
