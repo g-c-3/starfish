@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 210**
+
+Start: answers (Trash opens read only with confirmed Restore and Delete; either volume key stops ring and vibration; the license as drafted is enough) and three issues: the plain caret handle over the list panel, the reminder card off-centre in landscape, the heads-up and the card both showing.
+- Decisions 433 to 437. Phase 107 built.
+- New: `src/css/trashpreview.css`. Replaced: `src/js/app.js`, `src/index.html`, `scripts/java/ArklyReminderSoundService.java`, `scripts/java/ArklyReminderCard.java`, `scripts/java/ArklyReminderSound.java`.
+- Tested: the Trash preview behaviour taken from `app.js` against a simulated page (note, photo, video, recording, Pdf, file, money, reminder, error, restore asking and declining, purge, Vault note, Vault lock, one at a time, URLs revoked). The Java files parse with a Java parser; there is no compiler here, so they are not compiled: CI compiles them first. Volume-key interception, the quiet channel and the card centring depend on the phone and were not run: not run through CI or a device.
+- Cause notes: the card's off-centre place is from the window's cutout handling; the double alert is the high-importance channel's heads-up beside the overlay card.
+- Open: DP222 to DP231. CI has not yet completed a build of Phases 93 to 107; this one adds native code, so read its log first.
+- Next start: the CI result, then DP222 to DP231.
+
+---
+
 **Session 209**
 
 Start: three screenshots (a second phone toolbar and handles over the list panel, the normal selection state, the Trash) and five requests: clear the remaining selection tools under a panel, the volume key not stopping the vibration with the screen off, sizes in the Trash, opening items from the Trash, a license file. Questions were invited.
