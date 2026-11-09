@@ -210,6 +210,8 @@ public final class ArklyReminderSound {
         shown = n; shownId = id;
         try {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || n == null) return n;
+            Notification q = quiet(c, n);
+            if (q != null) { shown = q; return q; }
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return n;
             if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) return n;
@@ -222,6 +224,37 @@ public final class ArklyReminderSound {
             shown = out;
             return out;
         } catch (Throwable t) { return n; }
+    }
+
+    // Decision 435: with the screen on and unlocked and the card allowed (display over other apps), the card is the alert, so the
+    // notification is posted on a twin of its channel with normal importance: the same sound, no heads-up, and it stays in the shade.
+    // In every other case (card not allowed, screen off or locked) it is posted as before. Null when not applicable.
+    private static final String QUIET_SUFFIX = "_q";
+    private static Notification quiet(Context c, Notification n) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !ArklyReminderCard.allowed(c)) return null;
+            PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            if (pm == null || !pm.isInteractive()) return null;
+            android.app.KeyguardManager km = (android.app.KeyguardManager) c.getSystemService(Context.KEYGUARD_SERVICE);
+            if (km != null && km.isKeyguardLocked()) return null;
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            String id = n.getChannelId();
+            if (nm == null || id == null || !id.startsWith(CHANNEL_PREFIX) || id.endsWith(QUIET_SUFFIX)) return null;
+            NotificationChannel orig = nm.getNotificationChannel(id);
+            if (orig == null) return null;
+            String qid = id + QUIET_SUFFIX;
+            if (nm.getNotificationChannel(qid) == null) {
+                NotificationChannel ch = new NotificationChannel(qid, "Reminders (card showing)", NotificationManager.IMPORTANCE_DEFAULT);
+                ch.setDescription("Arkly reminder alerts while the reminder card is shown");
+                ch.setLockscreenVisibility(orig.getLockscreenVisibility());
+                ch.setSound(orig.getSound(), orig.getAudioAttributes());
+                ch.enableVibration(false);
+                nm.createNotificationChannel(ch);
+            }
+            String stored = alerts(c).getString("chan_" + id, "");
+            if (!stored.isEmpty()) alerts(c).edit().putString("chan_" + qid, stored).apply(); // onFire reads the setting by the posted channel
+            return Notification.Builder.recoverBuilder(c, n).setChannelId(qid).build();
+        } catch (Throwable t) { return null; }
     }
 
     // If the screen is off, turns it on for ten seconds, so the reminder is on the lock screen even when the phone does not open the

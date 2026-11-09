@@ -45,6 +45,34 @@ public class ArklyReminderSoundService extends Service {
         @Override public void onReceive(Context c, Intent i) { silenceRing(); }
     };
     private final Runnable stopper = this::endSound;
+    // Volume keys while a ring plays (Decision 434): a remote-volume media session receives them, also with the screen off and when the
+    // volume is already at an end (where the system sends no volume change). Either key silences the sound and the vibration, and the
+    // keys then work as usual again. Armed for the length of a ring only.
+    private android.media.session.MediaSession keySession;
+    private final Runnable keysOff = this::disarmKeys;
+    private void armKeys() {
+        disarmKeys();
+        try {
+            android.media.session.MediaSession s = new android.media.session.MediaSession(this, "ArklyReminderKeys");
+            s.setPlaybackState(new android.media.session.PlaybackState.Builder()
+                .setState(android.media.session.PlaybackState.STATE_PLAYING, 0L, 1f).build());
+            s.setPlaybackToRemote(new android.media.VolumeProvider(android.media.VolumeProvider.VOLUME_CONTROL_RELATIVE, 100, 50) {
+                @Override public void onAdjustVolume(int direction) { handler.post(() -> silenceRing()); }
+            });
+            s.setActive(true);
+            keySession = s;
+            handler.postDelayed(keysOff, CAP_MS + 2000L);
+        } catch (Throwable ignored) { /* the volume broadcast and the card screen's own keys remain */ }
+    }
+    private void disarmKeys() {
+        handler.removeCallbacks(keysOff);
+        android.media.session.MediaSession s = keySession;
+        keySession = null;
+        if (s != null) {
+            try { s.setActive(false); } catch (Throwable ignored) { /* already inactive */ }
+            try { s.release(); } catch (Throwable ignored) { /* already released */ }
+        }
+    }
     // While a reminder card is on screen the service stays in the foreground, so the phone does not end the app and the card with it.
     private final Runnable holdCheck = new Runnable() {
         @Override public void run() {
@@ -82,6 +110,7 @@ public class ArklyReminderSoundService extends Service {
     }
 
     private void silenceRing() {
+        disarmKeys();
         handler.removeCallbacks(stopper);
         ArklyReminderSound.cancelVibration(this);
         endSound();
@@ -90,7 +119,8 @@ public class ArklyReminderSoundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || ACTION_STOP.equals(intent.getAction())) { finish(); return START_NOT_STICKY; }
-        if (ACTION_HOLD.equals(intent.getAction())) { showNotice(intent.getIntExtra("nid", 0)); startHolding(); return START_NOT_STICKY; }
+        if (ACTION_HOLD.equals(intent.getAction())) { showNotice(intent.getIntExtra("nid", 0)); startHolding(); armKeys(); return START_NOT_STICKY; }
+        armKeys();
         holdAwake();
         showNotice(intent.getIntExtra("nid", 0));
         release();
@@ -196,6 +226,7 @@ public class ArklyReminderSoundService extends Service {
         handler.removeCallbacks(stopper);
         handler.removeCallbacks(holdCheck);
         try { unregisterReceiver(keys); } catch (Throwable ignored) { /* not registered */ }
+        disarmKeys();
         if (current == this) current = null;
         release();
         try { stopForeground(Service.STOP_FOREGROUND_DETACH); } catch (Throwable ignored) { /* already out of the foreground */ }

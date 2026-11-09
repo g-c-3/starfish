@@ -92,14 +92,28 @@ public final class ArklyReminderCard {
 
             if (container == null) {
                 wm = (WindowManager) c.getSystemService(Context.WINDOW_SERVICE);
-                container = new LinearLayout(c);
+                // Centred on the screen (Decision 436): at most 600 dp wide with the same space on both sides, and clear of a camera cutout on
+                // either side, so in landscape it is not pushed to the side away from the cutout. Recomputed on every measure, so a rotation follows.
+                container = new LinearLayout(c) {
+                    @Override protected void onMeasure(int w, int h) {
+                        float dd = getResources().getDisplayMetrics().density;
+                        int side = Math.max((int) (14 * dd), (android.view.View.MeasureSpec.getSize(w) - (int) (600 * dd)) / 2);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            android.view.WindowInsets wi = getRootWindowInsets();
+                            android.view.DisplayCutout dc = wi == null ? null : wi.getDisplayCutout();
+                            if (dc != null) side = Math.max(side, Math.max(dc.getSafeInsetLeft(), dc.getSafeInsetRight()) + (int) (14 * dd));
+                        }
+                        if (getPaddingLeft() != side || getPaddingRight() != side) setPadding(side, 0, side, 0);
+                        super.onMeasure(w, h);
+                    }
+                };
                 container.setOrientation(LinearLayout.VERTICAL);
-                container.setPadding((int) (14 * d), 0, (int) (14 * d), 0);
                 int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
                 WindowManager.LayoutParams wp = new WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, type,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                     PixelFormat.TRANSLUCENT);
                 wp.gravity = Gravity.CENTER;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) wp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                 wm.addView(container, wp);
             }
             container.addView(card, lp);
