@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 212**
+
+Start: three screenshots (a Trash note without its colours, the editor's selection tools, the Files text viewer) and requests: richer Trash previews for every kind, the text viewer's title bar and pinch, a Reminder settings gear, the full-screen option in the reminder form, and volume keys that stop the vibration too.
+- Cause of the vibration continuing: two Context objects hold two Vibrator objects and a cancel reaches only vibrations started through the same one (Decision 441). Cause of the lost formatting: the Trash note was shown as plain text (Decision 442).
+- Decisions 441 to 444. Phase 114 built; Phase 115 planned (explorer text viewer).
+- New: `src/css/textchrome.css`, `src/css/reminderset.css`. Replaced: `src/js/app.js`, `src/js/filesview.js`, `src/css/trashpreview.css`, `src/index.html`, `scripts/java/ArklyReminderSound.java`, `scripts/java/ArklyAlarmActivity.java`, `scripts/java/ArklySoundBridge.java`.
+- Tested against the code itself in a simulated page (22 cases): the note shown in a read-only editor, money, reminder, location, size and dates; the settings dialog (rows, states, opening pages, refresh on return, stop refreshing when closed, no Android app); the text viewer with icons in a title bar, no A- / A+, pinch moves taken, chips when there is no title bar. The five Java files parse; not compiled. The vibration fix, the keys, the fades, the title bar look and the pinch feel were not run: not run through CI or a device.
+- Not done: the explorer's own text viewer (Phase 115); a card that takes the volume keys while it rings, only if DP233 check 2 shows the unlocked case still needs it; a smooth change of text size while pinching (the size steps in whole points).
+- Open: DP222 to DP233. CI has not yet completed a build of Phases 93 to 114; two sessions of native code are uncompiled, so read the CI log first.
+- Next start: the CI result, then DP222 to DP233.
+
+---
+
 **Session 211**
 
 Start: six screenshots (the Find and list panels open together; the grid card; three Trash previews) and five requests: Find opens and closes smoothly, one panel at a time, tab steps in the grid preview, every Trash file in Arkly's own viewers, and a list of what has no viewer.
