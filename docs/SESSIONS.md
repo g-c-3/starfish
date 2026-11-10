@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 215**
+
+Start: owner confirmed Phase 116 (DP235). Next roadmap item: Phase 109.
+- Decision 447. Phase 109 built; Phases 110 to 113 still planned.
+- New: `src/js/archivepeek.js`. Replaced: `src/js/explorer.js`, `src/js/app.js`, `src/js/filesview.js`.
+- Tested: `archivepeek.js` against a mocked file plugin (7 MB in three kinds of piece, a name with odd characters, the copy removed): the bytes written equal the bytes read, the path comes back plain. All four scripts parse. The archive view from a stored file, the Trash path, the Vault lock, passwords and the cache clean-up were not run: not run through CI or a device.
+- Open: DP236.
+- Next start: DP236, then Phase 110.
+
+---
+
 **Session 214**
 
 Start: two screenshots (the Reminder settings dialog, the Current location plot) and a report: the dialog froze on open and neither Close, Back nor a tap outside closed it; North in the plot to be red and bold, with E, S and W in dark grey and bold. All other device passes worked.

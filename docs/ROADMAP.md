@@ -85,14 +85,14 @@
 - [x] 80 — Media starts at the top and fits by shape, a third-of-a-pixel strip (Session 184, Decision 381; DP207 closed by the owner — Session 187). Owner confirmed DP188 to DP206 worked, except the strip for non-image pages
 - [x] 81 — Centred media with a blurred backdrop, no zoom (Session 185, Decision 382; DP208 closed by the owner — Session 187)
 - [x] 82 — Decision recorded: saved PDF marks stay fixed (Session 186, Decision 383). The side margins of non-image pages in the image viewer: closed by the owner without a located cause — Session 187, Decision 384
-- [ ] 116 — Reminder settings dialog closes (Close, Back, outside tap), readable row titles; location plot shows N in red and E, S, W in dark grey (Session 214, Decision 446; DP235 open, not run through CI or a device)
+- [x] 116 — Reminder settings dialog closes (Close, Back, outside tap), readable row titles; location plot shows N in red and E, S, W in dark grey (Session 214, Decision 446; DP235 open, not run through CI or a device; confirmed on the device — Session 215)
 - [x] 115 — Explorer text viewer: the same title-bar icons and pinch as the Files text viewer (Session 213, Decision 445; DP234 open, not run through CI or a device; confirmed on the device — Session 214)
 - [x] 114 — Vibration stops with the sound (one Vibrator), richer Trash previews, text viewer title bar and pinch, Reminder settings gear (Session 212, Decisions 441 to 444; DP233 open, Java not compiled, not run through CI or a device; confirmed on the device except the Reminder settings dialog, which froze: fixed in Phase 116 — Session 214)
 - [ ] 113 — Viewer: EPUB and rendered RTF for stored files (planned)
 - [ ] 112 — Viewer: binary and unknown files as a hex and details view (planned)
 - [ ] 111 — Viewer: Markdown and HTML rendered, beside the source view (planned)
 - [ ] 110 — Viewer: old Office (doc, xls, ppt) and OpenDocument (odt, ods, odp) (planned)
-- [ ] 109 — Viewer: archives (zip, 7z, rar, tar, gz) listed and previewed from the Trash and Files (planned)
+- [ ] 109 — Viewer: archives (zip, 7z, rar, tar, gz) listed and previewed from the Trash and Files (Session 215, Decision 447; DP236 open, not run through CI or a device)
 - [x] 108 — Find and panels open and close with the one recipe, one at a time; Notes grid keeps tab steps; Trash opens every file in Arkly's own viewers, read only (Session 211, Decisions 438 to 440; DP232 open, not run through CI or a device; confirmed on the device — Session 214)
 - [x] 107 — Trash preview, volume keys stop ring and vibration, quiet notification under the card, centred card, caret handle under panels (Session 210, Decisions 433 to 437; DP231 open, not compiled, not run through CI or a device; confirmed on the device — Session 214)
 - [x] 106 — Selection tools cleared under panels, sizes in the Trash lines, LICENSE (Session 209, Decisions 430 to 432; DP230 open, not run through CI or a device; trash opening and volume-key vibration waiting on answers; confirmed on the device — Session 214)
@@ -818,12 +818,12 @@ individual items) can be picked up in any order once prerequisites are met.
   - Removed: the reminder-wording offer ("Also set a reminder?") that came with the first Save of a note; the Mic is not yet in the Save button's place (Phase 92).
   - Files: `src/js/app.js`, `src/js/notestyle.js`, `src/index.html`, `src/css/style.css`.
   - [x] DP215 (confirmed on the device) — Device pass for Decision 407. (1) New note, type a word: the note appears in the folder named by its first words after leaving; leave at once and reopen: text intact. (2) Type a Title: the name changes to it; clear it: back to the first words. (3) Rename in the dialog: the name shown is the current one, tags and description kept; then type in Title: the name does not change; rename again: it does. (4) Type only "." or ",": the name is that. Delete all text and title: the note stays, named Untitled. (5) Existing notes from before: open, edit the text: the name does not change; type a Title: it does. (6) Vault: the same, then lock while typing: after unlock the last text is there, no duplicate Autosave note. (7) Background the app mid-typing and return. (8) Search finds new and edited notes; the Title and name text do not appear as part of the body.
-- [ ] **116 — Reminder settings dialog and location plot (Decision 446; Session 214).** Built; not run through CI or a device.
+- [x] **116 — Reminder settings dialog and location plot (Decision 446; Session 214).** Built; not run through CI or a device. Confirmed on the device — Session 215.
 
   - Reminder settings: Close now hides the dialog; Back and a tap outside end there too. Row titles are readable.
   - Location plot: N red and bold; E, S, W dark grey and bold; each letter sits at its own bearing; the scale label moved to the bottom right corner.
 
-  - [ ] DP235 — Device pass for Decision 446. (1) Reminder category gear: the dialog opens; Close, system Back and a tap outside each close it; it opens again after. (2) The three row titles are readable in light and dark; a tap opens the phone's page and the state refreshes on return. (3) Location, Current location: N is red and bold, E, S, W dark grey and bold; turn the phone: all four follow the compass; no letter overlaps the ring label. (4) Both themes.
+  - [x] DP235 — Device pass for Decision 446. (1) Reminder category gear: the dialog opens; Close, system Back and a tap outside each close it; it opens again after. (2) The three row titles are readable in light and dark; a tap opens the phone's page and the state refreshes on return. (3) Location, Current location: N is red and bold, E, S, W dark grey and bold; turn the phone: all four follow the compass; no letter overlaps the ring label. (4) Both themes. Confirmed on the device — Session 215.
 
 - [x] **115 — Explorer text viewer (Decision 445; Session 213).** Built; not run through CI or a device. Confirmed on the device — Session 214.
 
@@ -844,7 +844,14 @@ individual items) can be picked up in any order once prerequisites are met.
 - [ ] **112 — Binary and unknown files (planned).** A file with no viewer, or opened as text that is not text: size, a guess at the type from the first bytes, and a hex view of the start, so the Trash and Files can always show something.
 - [ ] **111 — Markdown and HTML rendered (planned).** .md and .html open as source today (the text viewer). Add a rendered view with a switch, scripts never run and remote content never loads (the app makes no other network calls).
 - [ ] **110 — Old Office and OpenDocument (planned).** .doc, .xls, .ppt and .odt, .ods, .odp have no viewer. The OpenDocument ones are zips of XML, close to the Word, Excel and PowerPoint readers already here; the old binary formats need their own readers.
-- [ ] **109 — Archives (planned).** zip, 7z, rar, tar, gz stored as files: list the contents, preview one file in the viewer that fits it, read only. zip can be read in the app; 7z, rar and tar need the native archive helper on a temporary decrypted copy that is removed after.
+- [ ] **109 — Archives (Decision 447; Session 215).** Built; not run through CI or a device.
+
+  - A stored archive (zip, 7z, rar, tar, gz and the other endings the File explorer knows) opens from the Files folder, the Vault Files list and the Trash in the File explorer's archive view, read only: folders, tap a file to open it in the viewer that fits, nested archives, password asked when needed.
+  - The native reader needs a file, so a decrypted copy sits in the app's private cache until the view closes (removed on close, on a lock, and at the next start).
+  - No Extract and no drive list in this view. Over 256 MB, or without the native reader, the file goes to the phone's apps (the Trash says so).
+
+  - [ ] DP236 — Device pass for Decision 447. (1) Files folder: tap a .zip: the contents list; a folder opens; Back goes up, then leaves. (2) Tap a text, image, PDF and Office file inside: each opens in its viewer, read only. (3) A 7z, a rar and a tar.gz list too. (4) A password zip asks for the password; a wrong one is refused. (5) An archive inside the archive opens and Back returns to the outer one. (6) No Extract button, no Extract in a selection. (7) Trash: open an archive from the preview: the same view, and the preview is back after it closes. (8) Vault Files: the same; lock the Vault while it is open: it closes. (9) After closing, nothing is left: the app's cache folder arkly-peek is gone (Settings, Storage, Clear cache is not needed). (10) A very large archive goes to the phone's apps, or says so in the Trash.
+
 - [x] **108 — Panels, grid preview, Trash viewers (Decisions 438 to 440; Session 211).** Built; not run through CI or a device. Confirmed on the device — Session 214.
   - Find and the Lines and list panels fade out (0.17 s) and the next arrives after the gap (0.3 s); one is open at a time; the text slides to its place when Find opens or closes (Decision 438).
   - Notes grid preview keeps spaces and tab steps (Decision 439).
