@@ -3,6 +3,7 @@
 // the body of the entry viewer and returns { destroy }. Images, video and PDF use the viewers they already had.
 import { kindOf } from './explorer.js';
 import { inspectText, TEXT_MAX, OFFICE_MAX } from './explorer-view.js';
+import { attachTextPinch } from './textpinch.js';
 
 const ARKLY_KINDS = new Set(['text', 'image', 'video', 'pdf', 'audio', 'docx', 'xlsx', 'pptx']);
 // The viewer for a file's extension, or null: it goes to the phone's apps (archives, old Office formats, unknown types).
@@ -15,25 +16,6 @@ export function arklyKind(extension) {
 export const FILE_LIMIT = { text: TEXT_MAX, docx: OFFICE_MAX, xlsx: OFFICE_MAX, pptx: OFFICE_MAX };
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
-
-// Two fingers on the text change its size, following the fingers (Decision 443); the same rule as a note. Returns a function that removes it.
-function attachTextPinch(host, ed) {
-  let start = null, raf = 0, want = 0;
-  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  const onStart = (e) => { if (e.touches.length === 2) start = { d: dist(e.touches), size: ed.getSize().size }; };
-  const onMove = (e) => {
-    if (!start || e.touches.length !== 2) return;
-    e.preventDefault();
-    want = start.size * (dist(e.touches) / start.d);
-    if (!raf) raf = requestAnimationFrame(() => { raf = 0; ed.setSize(want); });
-  };
-  const onEnd = (e) => { if (e.touches.length < 2) start = null; };
-  host.addEventListener('touchstart', onStart, { passive: true });
-  host.addEventListener('touchmove', onMove, { passive: false });
-  host.addEventListener('touchend', onEnd, { passive: true });
-  host.addEventListener('touchcancel', onEnd, { passive: true });
-  return () => { if (raf) cancelAnimationFrame(raf); host.removeEventListener('touchstart', onStart); host.removeEventListener('touchmove', onMove); host.removeEventListener('touchend', onEnd); host.removeEventListener('touchcancel', onEnd); };
-}
 
 // bytes -> a read-only code view with Find, Go to and Wrap; the text size is by pinch (no A- / A+ buttons). Throws { notText: true } for
 // binary data. chrome: { add(icon, title, fn) -> button } puts the three tools as icons in the title bar (Decision 443); without it they

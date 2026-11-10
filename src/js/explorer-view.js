@@ -3,6 +3,7 @@
 // anywhere, and no database row is written. The screen's own lock rules apply: destroy() runs on an app or Vault lock.
 
 import { chromeOnScroll } from './chrome-scroll.js';
+import { attachTextPinch } from './textpinch.js';
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
@@ -40,6 +41,7 @@ export function openFileViewer(file, ctx) {
   let current = file, token = 0, closed = false, changed = false;
   let guard = async () => true; // resolves false when Back must not leave yet
   let cleanup = () => {};
+  let textFull = false; let textBtns = []; let stopPinch = () => {};
   let fullOpen = false; let menuBtn = null; let chromeHidden = false; let stopScroll = () => {};
   const header = root.querySelector('.editor-bar');
   const closeMenus = () => { body.classList.remove('pdf-menu-open'); const h = body.querySelector('.eo-host'); if (h) h.classList.remove('eo-menu-open'); };
@@ -75,12 +77,31 @@ export function openFileViewer(file, ctx) {
     if (menuBtn) { menuBtn.remove(); menuBtn = null; }
     root.classList.remove('ev-full'); document.body.classList.remove('ev-full');
   }
+  // The text view uses the slim see-through title bar of the other full views (Decision 445): its tools are icons in the bar and two fingers
+  // change the text size. The text starts below the bar and scrolls under it (`--ev-text-top`, the bar's height).
+  function enterText() {
+    textFull = true; root.classList.add('ev-full', 'ev-text'); document.body.classList.add('ev-full');
+    root.style.setProperty('--ev-text-top', `${header.offsetHeight}px`);
+  }
+  function leaveText() {
+    if (!textFull) return;
+    textFull = false; stopPinch(); stopPinch = () => {};
+    textBtns.forEach((b) => b.remove()); textBtns = [];
+    root.classList.remove('ev-full', 'ev-text'); document.body.classList.remove('ev-full'); root.style.removeProperty('--ev-text-top');
+    openBtn.classList.remove('hidden');
+  }
+  const iconBtn = (icon, title, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'icon-btn ev-ibtn'; b.title = title; b.setAttribute('aria-label', title);
+    b.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-${icon}"/></svg>`;
+    b.onclick = fn; saveBtn.before(b); textBtns.push(b); return b;
+  };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const note = (text) => { body.replaceChildren(); const b = el('div', 'pdf-msg'); b.appendChild(el('p', '', text)); body.appendChild(b); };
   const reset = () => {
     try { cleanup(); } catch { /* a teardown must not block the next file */ }
     cleanup = () => {}; guard = async () => true;
-    leaveFull();
+    leaveFull(); leaveText();
     token++;
     saveBtn.classList.add('hidden'); saveBtn.disabled = true; saveBtn.onclick = null;
     countEl.textContent = '';
@@ -117,12 +138,13 @@ export function openFileViewer(file, ctx) {
     const editable = !info.binary && !info.lossy && !readOnly && !big; // readOnly: a copy taken out of an archive; saving would be lost
     if (readOnly && !info.lossy && !info.binary) wrap.appendChild(el('div', 'ev-banner', 'Opened from an archive: read only. Extract the archive to edit.'));
     else if (big && !info.lossy && !info.binary) wrap.appendChild(el('div', 'ev-banner', 'Larger than 2 MB: open for reading only.'));
-    const bar = el('div', 'ev-tools'); const host = el('div', 'ev-code');
-    wrap.append(bar, host); body.appendChild(wrap);
+    const host = el('div', 'ev-code');
+    wrap.append(host); body.appendChild(wrap);
     let ed, make;
     try { ({ createCodeEditor: make } = await import('./codeeditor.js')); }
     catch (e) { if (mine === token) note(`The editor could not be loaded${errText(e)}`); return; }
     if (mine !== token || closed) return;
+    enterText();
     let saving = false;
     const sync = () => {
       const dirty = ed.isDirty();
@@ -130,18 +152,22 @@ export function openFileViewer(file, ctx) {
       ui.onActivity();
     };
     ed = make({ parent: host, text, name: f.name, editable, ui, onChange: sync });
-    const tool = (label, title, fn) => { const b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = fn; bar.appendChild(b); return b; };
-    const editBtn = editable ? tool('Edit', 'Edit this file', () => setEdit(!ed.isEditing())) : null;
-    const undoBtn = tool('Undo', 'Undo', () => { ed.undo(); sync(); }); const redoBtn = tool('Redo', 'Redo', () => { ed.redo(); sync(); });
-    const findBtn = tool('Find', 'Find and replace', () => { findBtn.classList.toggle('on', ed.find()); }); tool('Go to', 'Go to line', () => ed.goTo()); // a second tap closes it
-    const wrapBtn = tool('Wrap', 'Wrap long lines', () => { wrapBtn.classList.toggle('on', ed.toggleWrap()); });
+    const undoBtn = iconBtn('undo', 'Undo', () => { ed.undo(); sync(); }); const redoBtn = iconBtn('redo', 'Redo', () => { ed.redo(); sync(); });
+    const editBtn = editable ? iconBtn('edit', 'Edit this file', () => setEdit(!ed.isEditing())) : null;
+    const findBtn = iconBtn('search', 'Find and replace', () => { ui.onActivity(); findBtn.classList.toggle('on', ed.find()); }); // a second tap closes it
+    iconBtn('goto', 'Go to line', () => { ui.onActivity(); ed.goTo(); });
+    const wrapBtn = iconBtn('wrap', 'Wrap long lines', () => { ui.onActivity(); wrapBtn.classList.toggle('on', ed.toggleWrap()); });
     wrapBtn.classList.toggle('on', ed.isWrapped());
-    tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1)); tool('A+', 'Larger text', () => ed.bumpSize(1));
+    stopPinch = attachTextPinch(host, ed);
     function setEdit(v) {
       ed.setEditing(v);
-      if (editBtn) { editBtn.textContent = v ? 'Done' : 'Edit'; editBtn.classList.toggle('on', v); }
+      if (editBtn) {
+        editBtn.title = v ? 'Done editing' : 'Edit this file'; editBtn.setAttribute('aria-label', editBtn.title);
+        editBtn.querySelector('use').setAttribute('href', v ? '#i-check' : '#i-edit'); editBtn.classList.toggle('on', v);
+      }
       undoBtn.classList.toggle('hidden', !v); redoBtn.classList.toggle('hidden', !v);
-      saveBtn.classList.toggle('hidden', !v); sync();
+      saveBtn.classList.toggle('hidden', !v); openBtn.classList.toggle('hidden', v); // room for the tools while editing
+      sync();
     }
     setEdit(false);
     if (editable) {
