@@ -129,7 +129,10 @@ function errText(err) {
 // leaving() runs just before the screen hands over to another app or to Android's settings, so the app's lock-on-background
 // does not fire for that one pause (the same flag the file pickers set, Decision 73).
 // ui carries the app's own dialogs, image zoom and auto-lock timer for the built-in viewers (explorer-view.js).
-export function openExplorer({ isVault = false, toast = () => {}, onClose = () => {}, leaving = () => {}, ui = {} } = {}) {
+// archive: { path, name, cleanup } opens that archive at once, read only (Decision 447): a stored archive from the Files folder or the Trash, as a
+// temporary decrypted copy in the app's cache. There is no drive list and no Extract; leaving the archive closes the screen, then `cleanup`
+// removes the copy.
+export function openExplorer({ isVault = false, toast = () => {}, onClose = () => {}, leaving = () => {}, ui = {}, archive: peek = null } = {}) {
   const $ = (id) => document.getElementById(id);
   const screen = $('explorer-screen'), body = $('explorer-body'), titleEl = $('explorer-title');
   const crumbsEl = $('explorer-crumbs'), toolsEl = $('explorer-tools'), filterEl = $('explorer-filter');
@@ -146,7 +149,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     titleEl.textContent = title;
     crumbsEl.classList.toggle('hidden', !(folder || archive));
     toolsEl.classList.toggle('hidden', !(folder || archive));
-    $('explorer-extract-btn').classList.toggle('hidden', !archive);
+    $('explorer-extract-btn').classList.toggle('hidden', !archive || !!peek);
     document.querySelector('#explorer-tools [data-sort="date"]')?.classList.toggle('hidden', archive); // entries carry no date
     $('explorer-hidden-btn').classList.toggle('hidden', !folder);
     $('explorer-new-btn').classList.toggle('hidden', !folder);
@@ -172,7 +175,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     $('explorer-sel-delete').classList.toggle('hidden', arc); // an archive is read-only
     $('explorer-sel-share').disabled = arc || trash || selectedEntries().some((e) => e.isDir); // only files can be shared
     const one = n === 1 && !trash && !arc ? selectedEntries()[0] : null;
-    $('explorer-sel-extract').classList.toggle('hidden', !(arc || (one && !one.isDir && isArchive(one.name))));
+    $('explorer-sel-extract').classList.toggle('hidden', !!peek || !(arc || (one && !one.isDir && isArchive(one.name))));
     const del = $('explorer-sel-delete');
     del.setAttribute('aria-label', trash ? 'Delete forever' : 'Delete'); del.title = trash ? 'Delete forever' : 'Delete';
   }
@@ -872,7 +875,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     } else if (res.state !== 'cancelled') {
       toast(errorText(res, !!password));
     }
-    if (!closed && st.view === 'arcopen') returnToFolder();
+    if (!closed && st.view === 'arcopen') { if (peek) finish(); else returnToFolder(); }
   }
   async function showArchiveDir(prefix) {
     if (!st.arc) return;
@@ -890,7 +893,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       showArchiveDir(st.arc.prefix);
       return;
     }
-    leaveArchive(); returnToFolder();
+    leaveArchive();
+    if (peek) { finish(); return; }
+    returnToFolder();
   }
   // An archive inside the open archive (Decision 296): copied to the cache like any entry, then listed on top of the outer one.
   async function openNestedArchive(file, password = '') {
@@ -1174,6 +1179,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (browse) browse.cancel();
     thumbCtl.destroy(); ptrCtl.destroy();
     leaveArchive(); // closes the list and removes the copies taken out for viewing
+    if (peek) { try { Promise.resolve(peek.cleanup?.()).catch(() => {}); } catch { /* the copy is swept at the next start */ } }
     if (viewer) viewer.destroy(); // closed is already set, so the folder is not listed again
     document.removeEventListener('visibilitychange', onVisible);
     screen.classList.add('hidden');
@@ -1245,6 +1251,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   $('explorer-hidden-btn').setAttribute('aria-pressed', 'false');
   $('explorer-hidden-btn').querySelector('use').setAttribute('href', '#i-eye');
   screen.classList.remove('hidden');
-  if (hasAccess()) showRoots(); else showGate();
+  if (peek) {
+    if (!archiveApi()) { toast('Opening archives works in the Android app.'); setTimeout(finish, 0); } // the copy is removed by finish
+    else openArchive({ name: peek.name, path: peek.path });
+  } else if (hasAccess()) showRoots(); else showGate();
   return { finish, back, isVault };
 }

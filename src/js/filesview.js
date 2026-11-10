@@ -5,8 +5,8 @@ import { kindOf } from './explorer.js';
 import { inspectText, TEXT_MAX, OFFICE_MAX } from './explorer-view.js';
 import { attachTextPinch } from './textpinch.js';
 
-const ARKLY_KINDS = new Set(['text', 'image', 'video', 'pdf', 'audio', 'docx', 'xlsx', 'pptx']);
-// The viewer for a file's extension, or null: it goes to the phone's apps (archives, old Office formats, unknown types).
+const ARKLY_KINDS = new Set(['text', 'image', 'video', 'pdf', 'audio', 'docx', 'xlsx', 'pptx', 'archive']);
+// The viewer for a file's extension, or null: it goes to the phone's apps (old Office formats, unknown types). 'archive' is the File explorer's archive view (Decision 447).
 export function arklyKind(extension) {
   const ext = String(extension || '').replace(/^\./, '').toLowerCase();
   if (!ext) return null;

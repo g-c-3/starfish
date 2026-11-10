@@ -53,6 +53,7 @@ import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { openExplorer } from './explorer.js';
 import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT } from './filesview.js';
+import { makePeekCopy, sweepPeek, PEEK_MAX } from './archivepeek.js';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
@@ -3819,7 +3820,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   purgeUpdateDownload(); // the downloaded APK from an earlier update (Decision 164)
   initFiles(db); sweepHomeThumbs().catch(() => {}); // stored thumbnails of Home images that no longer exist (Decision 311)
   import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbtmp', directory: Directory.Cache, recursive: true })).catch(() => {}); // a decrypted frame source left by an interrupted thumbnail (Decision 320)
-  import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cached by earlier versions (Decision 162)
+  import('@capacitor/filesystem').then(({ Filesystem, Directory }) => Filesystem.rmdir({ path: 'thumbs', directory: Directory.Cache, recursive: true })).catch(() => {}); // plain thumbnails cache
+  sweepPeek(); // a decrypted archive copy left by a crash or a kill (Decision 447)d by earlier versions (Decision 162)
 
   // Resets the app-level idle timer on any activity — a single delegated listener rather than
   // calling armAppAutoLock() from every capture/search/browse function individually. Harmless
@@ -7456,10 +7458,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // A stored archive in the File explorer's archive view, read only (Decision 447): the contents are listed and one file opens in the viewer that
+  // fits it. The native reader needs a file, so a decrypted copy sits in the app's private cache until the view closes. Resolves true when the
+  // view took the archive, false when the phone's apps should (no native reader, or too large).
+  async function openArchivePeek(item, isVault, viewOnly) {
+    if (!window.ArklyArchive) { if (viewOnly) toast('Opening archives works in the Android app.'); return false; }
+    if (activeExplorer) return true;
+    const name = `${item.label || 'archive'}.${item.extension || 'zip'}`;
+    const tooBig = () => { if (viewOnly) toast('This archive is too large to open here.'); return false; };
+    let copy;
+    try {
+      let parts;
+      if (isVault) {
+        if (!privateSessionKey) throw new Error('Vault locked');
+        const bytes = base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
+        if (bytes.length > PEEK_MAX) return tooBig();
+        parts = [bytes];
+      } else {
+        const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [item.id])).values || [])[0] || item;
+        if ((await fileSize(row)) > PEEK_MAX) return tooBig();
+        parts = await readEntryParts(row);
+      }
+      copy = await makePeekCopy(name, parts);
+    } catch (err) { toast(`Could not open it: ${err.message || err}`); return true; }
+    const arm = isVault ? armVaultAutoLock : armAppAutoLock;
+    await new Promise((resolve) => {
+      activeExplorer = openExplorer({
+        isVault, toast, leaving: beginPickerLaunch, archive: { path: copy.path, name, cleanup: copy.remove },
+        ui: { askYesNo, askText, attachZoomPan, onActivity: arm },
+        onClose: () => { activeExplorer = null; updateBackButtonState(); resolve(); }
+      });
+      updateBackButtonState();
+    });
+    return true;
+  }
+
   // A stored file in Arkly's own viewer (Decision 333). Resolves true when a viewer took it, false when the phone's apps should (no viewer for the type).
   async function openFileInArkly(item, isVault, { viewOnly = false, forceKind = null } = {}) {
     const kind = forceKind || arklyKind(item.extension); // forceKind: the person chose how to read a file (Decision 440)
     if (!kind) return false;
+    if (kind === 'archive') return openArchivePeek(item, isVault, viewOnly);
     if (kind === 'image' || kind === 'video') { await openImageViewer([item], 0, isVault); return true; }
     if (kind === 'pdf') { await openPdf(item, isVault, viewOnly); return true; }
     const viewerScreen = document.getElementById('viewer-screen');
