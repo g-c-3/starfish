@@ -65,7 +65,7 @@ const PLOT = `<svg class="lf-plot" viewBox="0 0 320 320" role="img" aria-label="
   <g class="lf-trail"></g>
   </g>
   <circle class="lf-halo" cx="160" cy="160" r="11"/><circle class="lf-pin" cx="160" cy="160" r="5"/>
-  <text class="lf-n" x="160" y="14" dominant-baseline="central">N</text><text class="lf-scale" x="300" y="154" text-anchor="end"></text>
+  <text class="lf-n" x="160" y="14" dominant-baseline="central">N</text><text class="lf-dir" x="306" y="160" dominant-baseline="central">E</text><text class="lf-dir" x="160" y="306" dominant-baseline="central">S</text><text class="lf-dir" x="14" y="160" dominant-baseline="central">W</text><text class="lf-scale" x="312" y="312" text-anchor="end"></text>
 </svg>`;
 
 // Heading (radians clockwise from north) of where the phone points, from an absolute orientation reading.
@@ -111,7 +111,7 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
     const accLine = q('.lf-acc-line'), stateEl = q('.lf-state'), coordsEl = q('.lf-coords'), hintEl = q('.lf-hint');
     const useBtn = q('.lf-use'), accCircle = q('.lf-acc'), trailG = q('.lf-trail'), scaleEl = q('.lf-scale');
     const box = q('.lf-box');
-    const rot = q('.lf-rot'), nEl = q('.lf-n');
+    const rot = q('.lf-rot'), nEl = q('.lf-n'), dirEls = [[q('.lf-n'), 0], ...[...el.querySelectorAll('.lf-dir')].map((t, i) => [t, (i + 1) * Math.PI / 2])]; // N, E, S, W
 
     // North follows the phone's magnetometer: the plot turns so N sits where north is. No sensor reading = north stays at the top.
     // Read on the phone only, nothing stored or sent (Decision 349).
@@ -120,8 +120,10 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
       frame = 0;
       const h = Math.atan2(hx, hy); // phone heading, radians clockwise from north
       rot.setAttribute('transform', `rotate(${(-h * 180 / Math.PI).toFixed(1)} 160 160)`);
-      nEl.setAttribute('x', (160 - 146 * Math.sin(h)).toFixed(1));
-      nEl.setAttribute('y', (160 - 146 * Math.cos(h)).toFixed(1));
+      for (const [t, a] of dirEls) { // each letter sits where its direction is: bearing a, seen from a phone heading h
+        t.setAttribute('x', (160 + 146 * Math.sin(a - h)).toFixed(1));
+        t.setAttribute('y', (160 - 146 * Math.cos(a - h)).toFixed(1));
+      }
     }
     function onOrient(e) {
       if (done || e.alpha == null || e.beta == null || e.gamma == null) return;

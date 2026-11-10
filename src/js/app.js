@@ -5803,6 +5803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('visibilitychange', onBack);
     new MutationObserver((_, ob) => { if (dlg.classList.contains('hidden')) { document.removeEventListener('visibilitychange', onBack); ob.disconnect(); } }).observe(dlg, { attributes: true, attributeFilter: ['class'] });
     paint();
+    document.getElementById('rs2-close-btn').onclick = () => { dlg.classList.add('hidden'); updateBackButtonState(); }; // the one dismissal: Close, Back and a tap outside all end here (Decisions 104, 299)
     dlg.classList.remove('hidden');
     updateBackButtonState();
   }
