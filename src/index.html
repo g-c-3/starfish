@@ -537,6 +537,9 @@
           <option value="weekly">Repeats weekly</option>
           <option value="monthly">Repeats monthly</option>
         </select>
+        <div id="sd-fs" class="hidden">
+          <button type="button" id="sd-fs-btn" class="secondary-btn sd-fs-btn"><svg class="ic" aria-hidden="true"><use href="#i-reminder"/></svg><span>Allow full-screen reminders<small>Off. Tap to turn it on in the phone's settings.</small></span></button>
+        </div>
         <div id="sd-alert" class="hidden">
           <label class="field-label" for="sd-alert-btn">Sound and vibration</label>
           <button type="button" id="sd-alert-btn" class="secondary-btn sd-alert-btn"><svg class="ic" aria-hidden="true"><use href="#i-speaker"/></svg><span class="sd-alert-text">Same as all reminders</span></button>
@@ -656,6 +659,15 @@
       <button id="yesno-extra-btn" class="hidden"></button>
       <button id="yesno-yes-btn">Yes</button>
       <button id="yesno-no-btn" class="secondary-btn">No</button>
+    </div>
+  </div>
+
+  <div id="reminder-settings-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rs2-title">
+    <div class="modal-box rs2-box">
+      <h3 id="rs2-title">Reminder settings</h3>
+      <p class="rs2-sub">What the phone lets Arkly do when a reminder goes off. A tap opens the phone's own page, where each can be turned on or off.</p>
+      <div id="rs2-list"></div>
+      <button id="rs2-close-btn" class="secondary-btn">Close</button>
     </div>
   </div>
 
