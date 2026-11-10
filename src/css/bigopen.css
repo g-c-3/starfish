@@ -1,0 +1,7 @@
+/* bigopen.css — the small dialog for an archive over the size limit (Decision 448). Show and hide with the hidden class; the dialog is a
+   .modal-overlay, so it enters and leaves with the one recipe. */
+.bo-box { text-align: left; }
+.bo-box h3 { margin: 0 0 6px; }
+.bo-text { margin: 0 0 14px; font-size: 13.5px; color: var(--muted, #6b6b80); word-break: break-word; }
+.bo-btns { display: flex; flex-direction: column; gap: 8px; }
+.bo-btns button { width: 100%; }
