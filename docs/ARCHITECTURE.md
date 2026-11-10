@@ -1204,5 +1204,4 @@ A static dialog listed in `BACK_MODALS` (`app.js`) is left by its own Close or C
 
 ## Archives in Files, the Vault and the Trash (Decision 447)
 
-`openArchivePeek` (`app.js`) is the route for a stored file whose kind is `archive` (`filesview.js`). It writes a decrypted copy with `archivepeek.js` (`makePeekCopy`, private cache folder `arkly-peek`, 3 MB slices, limit `PEEK_MAX` 256 MB) and opens `openExplorer({ archive: { path, name, cleanup } })`. In that mode the explorer starts in the archive view, hides Extract, and `finish` runs `cleanup`. `sweepPeek` runs at start, before each copy and on cleanup. A lock closes it through `activeExplorer.finish`.
-
+`openArchivePeek` (`app.js`) is the route for a stored file whose kind is `archive` (`filesview.js`). It writes a decrypted copy with `archivepeek.js` (`makePeekCopy`, private cache folder `arkly-peek`, 3 MB slices, limit `PEEK_MAX` 256 MB) and opens `openExplorer({ archive: { path, name, cleanup } })`. In that mode the explorer starts in the archive view, hides Extract, and `finish` runs `cleanup`. `sweepPeek` runs at start, before each copy and on cleanup. A lock closes it through `activeExplorer.finish`. Over `PEEK_MAX`, `askBigArchive` (`app.js`, dialog `#big-open-dialog`, in `BACK_MODALS`) decides first (Decision 448): setting `big_archive_open` is `arkly` or `phone`; empty means ask.

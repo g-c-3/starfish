@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 216**
+
+Start: owner asked that an archive over 256 MB give a choice instead of always going to the phone's apps, remembered, with a brief dialog (1.5 s) showing where it opens, with Stop and Open.
+- Decision 448. Phase 109 extended.
+- New: `src/css/bigopen.css`. Replaced: `src/index.html`, `src/js/app.js`, `src/js/archivepeek.js` (comment only).
+- Tested: the dialog logic against a fake page: first choice remembered, automatic open after 1.5 s, Open at once, Stop, switching, the Trash (Arkly only, nothing saved), a lock during the countdown. Both scripts parse. The dialog on a device, its enter and exit, and a real archive over 256 MB were not run: not run through CI or a device.
+- Open: DP236, DP237.
+- Next start: DP236, DP237, then Phase 110.
+
+---
+
 **Session 215**
 
 Start: owner confirmed Phase 116 (DP235). Next roadmap item: Phase 109.

@@ -423,3 +423,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-10 | Session 213 | Decision 445 | Phase 115: explorer text view with the title-bar icons and pinch, shared `textpinch.js`; DP234 added; not run through CI or a device |
 | 2026-11-10 | Session 214 | Decision 446 | Phase 116: Reminder settings dialog closes and its titles are readable; compass letters in the location plot; DP222 to DP234 confirmed on the device except the dialog; DP235 added; not run through CI or a device |
 | 2026-11-10 | Session 215 | Decision 447 | Phase 116 confirmed on the device; Phase 109: stored archives open in the explorer's archive view from Files, the Vault and the Trash; DP236 added; not run through CI or a device |
+| 2026-11-10 | Session 216 | Decision 448 | Archives over 256 MB: ask Arkly or Phone app once and remember, then a 1.5 s dialog with Stop and Open; DP237 added; not run through CI or a device |
