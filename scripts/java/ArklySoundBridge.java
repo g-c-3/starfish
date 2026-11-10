@@ -105,6 +105,25 @@ public class ArklySoundBridge {
         }
     }
 
+    // Whether notifications are allowed for Arkly (Decision 444).
+    @JavascriptInterface
+    public boolean canNotify() {
+        try {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            return nm == null || nm.areNotificationsEnabled();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    // Opens the phone's notification page for Arkly, where notifications are turned on or off.
+    @JavascriptInterface
+    public void openNotificationSettings() {
+        try {
+            ctx.startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Throwable t) { /* nothing to open */ }
+    }
+
     // Whether Arkly may show the reminder card over other apps (a user setting).
     @JavascriptInterface
     public boolean canOverlay() {

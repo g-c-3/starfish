@@ -84,13 +84,16 @@ public class ArklyAlarmActivity extends Activity {
     }
 
     // A volume key silences this ring's sound and vibration; the screen and the swipe track stay (Decision 376).
+    // Either volume key (or mute) silences sound and vibration; the key is taken whole, press and release, so the phone neither changes the
+    // volume nor shows its panel (Decision 441).
     @Override
-    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
-        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
-            ArklyReminderSoundService.silenceNow(this);
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        int k = event.getKeyCode();
+        if (k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || k == android.view.KeyEvent.KEYCODE_VOLUME_MUTE) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) ArklyReminderSoundService.silenceNow(this);
             return true;
         }
-        return super.onKeyDown(keyCode, event);
+        return super.dispatchKeyEvent(event);
     }
 
     @Override

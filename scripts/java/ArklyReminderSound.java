@@ -326,16 +326,24 @@ public final class ArklyReminderSound {
         return n;
     }
 
-    private static Vibrator vibrator(Context c) {
+    // One Vibrator for the whole app (Decision 441). The phone's cancel only reaches a vibration that was started through the same
+    // Vibrator object, and each Context hands out its own: a vibration started from the notification publisher could not be cancelled
+    // from the sound service or the reminder screen, so the sound stopped on a volume key and the vibration ran on. The object is taken
+    // once from the application context and used to start and to cancel.
+    private static Vibrator sVibrator;
+    private static synchronized Vibrator vibrator(Context c) {
+        if (sVibrator != null) return sVibrator;
         Vibrator v = null;
         try {
+            Context app = c.getApplicationContext() != null ? c.getApplicationContext() : c;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                android.os.VibratorManager vm = (android.os.VibratorManager) c.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                android.os.VibratorManager vm = (android.os.VibratorManager) app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
                 if (vm != null) v = vm.getDefaultVibrator();
             }
-            if (v == null) v = (Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
+            if (v == null) v = (Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
         } catch (Throwable ignored) { /* none */ }
-        return v != null && v.hasVibrator() ? v : null;
+        if (v != null && v.hasVibrator()) sVibrator = v;
+        return sVibrator;
     }
 
     // One minute of vibration: a 3 s wait, then a burst of three 0.6 s buzzes with 0.7 s between them (about 3 s), a 3 s pause, the next
@@ -362,6 +370,8 @@ public final class ArklyReminderSound {
 
     public static void cancelVibration(Context c) {
         try { Vibrator v = vibrator(c); if (v != null) v.cancel(); } catch (Throwable ignored) { /* not vibrating */ }
+        // a second cancel a moment later, for a buzz that was being handed to the motor as the first one ran
+        try { new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> { try { Vibrator v2 = vibrator(c); if (v2 != null) v2.cancel(); } catch (Throwable ignored) { /* done */ } }, 350L); } catch (Throwable ignored) { /* no looper */ }
     }
 
     // Two short buzzes (0.3 s, 0.3 s apart) for the Test button, then it stops.
