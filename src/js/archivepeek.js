@@ -4,7 +4,7 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const DIR = 'arkly-peek';
-export const PEEK_MAX = 256 * 1024 * 1024; // the whole file is held in memory while the copy is written
+export const PEEK_MAX = 256 * 1024 * 1024; // above this the person is asked first (Decision 448): the whole file is held in memory while the copy is written
 const SLICE = 3 * 1024 * 1024; // a multiple of 3, so every slice encodes to base64 without padding in the middle
 
 const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };

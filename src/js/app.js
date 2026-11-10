@@ -63,6 +63,7 @@ import '../css/trashpreview.css';
 import '../css/panelmotion.css';
 import '../css/textchrome.css';
 import '../css/reminderset.css';
+import '../css/bigopen.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -334,6 +335,7 @@ function closeVaultFolder() {
 //   Vault: open folder or open Vault Settings card -> Vault landing; Vault landing (or locked gate) -> nothing.
 // Static modals and the button that dismisses each one (Decision 104). Listed top-most first by the order Back checks them.
 const BACK_MODALS = [
+  ['big-open-dialog', 'bo-stop-btn'],
   ['coords-dialog', 'coords-cancel-btn'],
   ['loc-source-dialog', 'loc-source-cancel-btn'],
   ['overwrite-confirm-dialog', 'overwrite-cancel-btn'],
@@ -7458,26 +7460,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // The dialog for an archive over the size limit (Decision 448). Resolves 'arkly', 'phone', or null when stopped. The first time it asks and
+  // remembers the answer (`big_archive_open`); after that it shows "Opening in ..." for 1.5 s: Open goes at once, Stop ends it, and the other
+  // choice is one tap and is remembered. canPhone false (the Trash has no phone app for a trashed file): Arkly only, nothing remembered.
+  async function askBigArchive({ name, size, canPhone }) {
+    const $b = (id) => document.getElementById(id);
+    const dlg = $b('big-open-dialog'), title = $b('bo-title'), text = $b('bo-text'), openB = $b('bo-open-btn'), altB = $b('bo-alt-btn'), stopB = $b('bo-stop-btn');
+    const label = (w) => (w === 'phone' ? 'Phone app' : 'Arkly');
+    const sz = size >= 1073741824 ? `${(size / 1073741824).toFixed(1)} GB` : `${Math.round(size / 1048576)} MB`;
+    let saved = canPhone ? await metaGet('big_archive_open', '') : 'arkly';
+    if (saved !== 'arkly' && saved !== 'phone') saved = '';
+    return new Promise((resolve) => {
+      let timer = 0;
+      const end = (way, remember) => {
+        clearTimeout(timer); timer = 0;
+        openB.onclick = altB.onclick = stopB.onclick = null;
+        dlg.classList.add('hidden'); updateBackButtonState();
+        if (remember && way) metaSet('big_archive_open', way).catch(() => {});
+        resolve(way);
+      };
+      stopB.onclick = () => end(null, false);
+      if (!saved) {
+        title.textContent = 'Large archive';
+        text.textContent = `"${name}" is ${sz}. In Arkly a copy is kept in memory while it is open, so a very large archive can make the app stop. Choose where it opens; this is remembered.`;
+        openB.textContent = 'Arkly'; openB.onclick = () => end('arkly', true);
+        altB.textContent = 'Phone app'; altB.classList.toggle('hidden', !canPhone); altB.onclick = () => end('phone', true);
+        stopB.textContent = 'Cancel';
+      } else {
+        const other = saved === 'phone' ? 'arkly' : 'phone';
+        title.textContent = `Opening in ${label(saved)}`;
+        text.textContent = `"${name}" · ${sz}`;
+        openB.textContent = 'Open'; openB.onclick = () => end(saved, false);
+        altB.textContent = `Use ${label(other)} instead`; altB.classList.toggle('hidden', !canPhone); altB.onclick = () => end(other, true);
+        stopB.textContent = 'Stop';
+        timer = setTimeout(() => end(dlg.classList.contains('hidden') ? null : saved, false), 1500); // a lock that hid the dialog stops it
+      }
+      dlg.classList.remove('hidden'); updateBackButtonState();
+    });
+  }
   // A stored archive in the File explorer's archive view, read only (Decision 447): the contents are listed and one file opens in the viewer that
   // fits it. The native reader needs a file, so a decrypted copy sits in the app's private cache until the view closes. Resolves true when the
-  // view took the archive, false when the phone's apps should (no native reader, or too large).
+  // view took the archive, false when the phone's apps should (no native reader, or the person chose them for a large one).
   async function openArchivePeek(item, isVault, viewOnly) {
     if (!window.ArklyArchive) { if (viewOnly) toast('Opening archives works in the Android app.'); return false; }
     if (activeExplorer) return true;
     const name = `${item.label || 'archive'}.${item.extension || 'zip'}`;
-    const tooBig = () => { if (viewOnly) toast('This archive is too large to open here.'); return false; };
     let copy;
     try {
-      let parts;
+      let parts = null, row = null, big = 0;
       if (isVault) {
         if (!privateSessionKey) throw new Error('Vault locked');
         const bytes = base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
-        if (bytes.length > PEEK_MAX) return tooBig();
+        if (bytes.length > PEEK_MAX) big = bytes.length;
         parts = [bytes];
       } else {
-        const row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [item.id])).values || [])[0] || item;
-        if ((await fileSize(row)) > PEEK_MAX) return tooBig();
-        parts = await readEntryParts(row);
+        row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [item.id])).values || [])[0] || item;
+        const size = await fileSize(row);
+        if (size > PEEK_MAX) big = size; else parts = await readEntryParts(row);
+      }
+      if (big) { // over the limit: the person decides, and the choice is remembered (Decision 448)
+        const way = await askBigArchive({ name, size: big, canPhone: !viewOnly });
+        if (way === null) return true; // stopped
+        if (way === 'phone') return false; // the phone's apps
+        if (isVault && !privateSessionKey) return true; // locked while the dialog was up
+        if (!parts) parts = await readEntryParts(row);
       }
       copy = await makePeekCopy(name, parts);
     } catch (err) { toast(`Could not open it: ${err.message || err}`); return true; }
