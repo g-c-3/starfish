@@ -12,7 +12,12 @@
 .lf-plot .lf-trail circle { fill: rgb(var(--tc-rgb, 91 74 222)); }
 .lf-plot .lf-halo { fill: rgba(var(--tc-rgb, 91 74 222), 0.25); }
 .lf-plot .lf-pin { fill: rgb(var(--tc-rgb, 91 74 222)); stroke: var(--surface); stroke-width: 2; }
-.lf-plot .lf-n, .lf-plot .lf-scale { fill: var(--muted); font-size: 11px; font-weight: 600; text-anchor: middle; }
+.lf-plot .lf-n, .lf-plot .lf-dir, .lf-plot .lf-scale { fill: var(--muted); font-size: 11px; font-weight: 600; text-anchor: middle; }
+.lf-plot .lf-n, .lf-plot .lf-dir { font-weight: 700; font-size: 13px; }
+.lf-plot .lf-n { fill: #d62d2d; } /* north red, the other three directions dark grey */
+.lf-plot .lf-dir { fill: #4a4a55; }
+:root[data-theme="dark"] .lf-plot .lf-n { fill: #ff5a5a; }
+:root[data-theme="dark"] .lf-plot .lf-dir { fill: #b4b4c2; }
 .lf-plot .lf-scale { text-anchor: end; }
 @keyframes lf-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .lf-plot .lf-sweep { animation: none; } .lf-plot .lf-acc { transition: none; } }
