@@ -9,7 +9,7 @@ import { reminderOffer, suggestLabel } from './intents.js';
 import { retireOldChannel, scheduleReminder, refillRepeatingReminders, cancelReminder, cancelSnooze, snoozeReminder, listenForReminderActions, requestPermissions, registerActionTypes } from './notifications.js';
 import { reminderStatus, reminderNextDue, isReminderActive, repeatLabel, reminderTabItems } from './reminders.js';
 import { logClosedOccurrence, loadReminderLog } from './reminderlog.js';
-import { offerLockScreen, openSoundDialog, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary } from './remindersound.js';
+import { openSoundDialog, stopSound, getReminderAlert, setReminderAlert, reminderAlertState, alertSummary } from './remindersound.js';
 import '../css/remindertabs.css';
 import { ALL_CATEGORIES, createBackup, restoreBackup, readBackupHeader, listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX } from './backup.js';
 import { isDue, DEFAULT_TIME } from './autoschedule.js';
@@ -60,6 +60,8 @@ import { attachNoteSwipe } from './noteswipe.js';
 import '../css/rowsize.css';
 import '../css/trashpreview.css';
 import '../css/panelmotion.css';
+import '../css/textchrome.css';
+import '../css/reminderset.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -337,7 +339,8 @@ const BACK_MODALS = [
   ['new-chooser-modal', 'new-chooser-cancel-btn'],
   ['auto-backup-due-banner', 'auto-backup-skip-btn'],
   ['select-files-screen', 'select-files-close-btn'],
-  ['trash-preview-dialog', 'tp-close-btn']
+  ['trash-preview-dialog', 'tp-close-btn'],
+  ['reminder-settings-dialog', 'rs2-close-btn']
 ];
 // The dismissal of one static modal: its own Cancel button, after Discard when it holds typed input (Decision 133).
 function modalDismiss(id, btn) {
@@ -2223,6 +2226,8 @@ let activeLocSource = null;  // { finish, isVault } — New location: current fi
 let activeCoords = null;     // { finish, isVault } — paste coordinates / map link dialog
 let activeLocFix = null;     // { finish, isVault } — live location fix sheet (Decision 341)
 let activeRemSound = null;   // { finish } — Reminder sound dialog (Decision 359)
+let sdFsRefresh = null;      // re-checks the full-screen option of the open reminder form when the app comes back (Decision 444)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && sdFsRefresh) sdFsRefresh(); });
 let activeLocProv = null;    // { finish } — map provider dialog (Decision 345)
 let activeMoney = null;      // { finish, leave, isVault } — Money form or repayment dialog
 // Unsaved-work rule (Decision 133): Back and every Cancel ask this before dropping changes. Resolves true to discard.
@@ -2444,6 +2449,11 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
     const alertNow = () => (alertStage !== undefined ? alertStage : (reminder && reminder.id ? getReminderAlert(reminder.id) : null));
     const paintAlert = () => { alertBtn.querySelector('.sd-alert-text').textContent = alertSummary(alertNow()); };
     alertRow.classList.toggle('hidden', !reminder || !window.ArklySound);
+    // Full-screen reminders off: offered here, while the reminder is made; hidden once on (Decision 444).
+    const fsRow = $('sd-fs'), fsOff = () => !!(window.ArklySound && typeof window.ArklySound.canFullScreen === 'function' && !window.ArklySound.canFullScreen());
+    sdFsRefresh = () => fsRow.classList.toggle('hidden', !reminder || !fsOff());
+    sdFsRefresh();
+    $('sd-fs-btn').onclick = () => { try { beginPickerLaunch(); window.ArklySound.openFullScreenSettings(); } catch { /* nothing to open */ } };
     if (reminder) {
       paintAlert();
       alertBtn.onclick = async () => {
@@ -4114,11 +4124,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rowEl = listEl.querySelector(`.trash-row[data-id="${CSS.escape(id)}"]`);
     if (!listRow || !rowEl || (isVault && !privateSessionKey)) return;
     const dlg = document.getElementById('trash-preview-dialog'), body = document.getElementById('tp-body');
-    const urls = [];
+    const urls = [], editors = [];
     let closed = false;
     const close = () => {
       if (closed) return;
       closed = true; activeTrashPreview = null;
+      editors.forEach((e) => { try { e.destroy(); } catch { /* gone */ } });
       body.querySelectorAll('audio, video').forEach((m) => { try { m.pause(); } catch { /* not playing */ } });
       body.replaceChildren();
       urls.forEach((u) => URL.revokeObjectURL(u));
@@ -4131,6 +4142,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     body.replaceChildren();
     const add = (el) => { if (!closed) body.appendChild(el); return el; };
     const text = (t, cls = 'tp-note') => { const el = document.createElement('div'); el.className = cls; el.textContent = t; return add(el); };
+    // A labelled list of facts (Decision 442); empty values are left out.
+    const kv = (pairs, cls = 'tp-dl') => {
+      const ok = pairs.filter(([, v]) => v !== undefined && v !== null && v !== '');
+      if (!ok.length) return null;
+      const dl = document.createElement('dl'); dl.className = cls;
+      for (const [k, v] of ok) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
+      return add(dl);
+    };
     const act = (id2) => listEl.querySelector(`.${isVault ? 'vtrash' : 'trash'}-${id2}-btn[data-id="${CSS.escape(id)}"]`);
     document.getElementById('tp-close-btn').onclick = close;
     document.getElementById('tp-restore-btn').onclick = async () => {
@@ -4147,9 +4166,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!full || closed) return;
       const type = full.type;
       if (type === 'note') {
+        // the note as it was written: colours, bold, italic, underline, lists and their indent, in a read-only editor (Decision 442)
         const raw = isVault ? await vaultNoteText(id) : full.body_text || '';
-        const t = plainNoteText(raw || '');
-        text(t.trim() ? t : 'Empty note', t.trim() ? 'tp-text' : 'tp-note');
+        const { text: t, spans } = splitNoteStyle(raw || '');
+        if (!t.trim()) text('Empty note');
+        else {
+          const holder = document.createElement('div'); holder.className = 'tp-editor ev-code'; add(holder);
+          const mod = await loadCodeEditor();
+          if (closed) return;
+          editors.push(mod.createCodeEditor({ parent: holder, text: t, spans, name: '', kind: 'note', editable: false, ui: { askText: async () => null } }));
+        }
       } else if (type === 'image' || type === 'voice') {
         let url;
         const mime = mimeTypeForVaultRow(full);
@@ -4199,14 +4225,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lab = document.createElement('span'); lab.textContent = 'Open as'; chips.appendChild(lab);
         for (const [label, kind] of [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx']]) chips.appendChild(mkBtn(label, kind, 'tp-chip'));
         add(media);
-      } else if (type === 'money' && isVault) {
-        const { row, content } = await loadVaultEntryContent(db, privateSessionKey, id);
-        text(content.money ? moneyRowMeta(content.money, row.updated_at || row.created_at).meta : 'Details cannot be read');
-      } else if (type === 'money' || type === 'expense' || type === 'reminder' || type === 'location') {
-        const m = rowMeta(full, true).meta;
-        if (m) text(m);
-        if (!isVault && full.description) text(full.description, 'tp-text');
+      } else if (type === 'money' || type === 'expense') {
+        const d = isVault ? (await loadVaultEntryContent(db, privateSessionKey, id)).content.money : Money.fromRow(full);
+        if (!d) text('Details cannot be read');
+        else {
+          const fmt = (n) => Money.formatAmount(n, currencySymbol), loan = Money.isLoan(d), st = Money.status(d);
+          kv([['Kind', Money.KIND_LABELS[d.kind]], ['Amount', fmt(d.amount)], ['Category', d.category], ['Method', d.method], ['Date', formatSavedDate(d.at)],
+            ...(loan ? [['Person', d.person], ['Due', d.due ? formatSavedDate(d.due) : ''], ['Status', Money.STATUS_LABELS[st]], ['Returned', fmt(Money.repaid(d))], ['Remaining', fmt(Money.remaining(d))]] : [])]);
+          if (loan && d.repayments && d.repayments.length) {
+            const h = document.createElement('div'); h.className = 'tp-h'; h.textContent = `Repayments (${d.repayments.length})`; add(h);
+            kv(d.repayments.map((r) => [formatSavedDate(r.at), [fmt(r.amount), r.method, r.note].filter(Boolean).join(' · ')]), 'tp-dl tp-dl-tight');
+          }
+        }
+        if (!isVault && full.description) kv([['Notes', full.description]]);
+      } else if (type === 'reminder') {
+        kv([['When', full.fire_at ? formatSavedDate(full.fire_at) : ''], ['Repeats', { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[full.repeat_rule] || (full.fire_at ? 'Once' : '')],
+          ['Done', full.completed_at ? formatSavedDate(full.completed_at) : full.fire_at ? 'Not marked done' : ''], ['Snoozed until', full.snoozed_until ? formatSavedDate(full.snoozed_until) : '']]);
+        if (!isVault && full.description) kv([['Notes', full.description]]);
+      } else if (type === 'location') {
+        // the coordinates and the grid plot the entry was saved with (no map tiles are ever stored)
+        let la = null, lo = null;
+        if (isVault) { const loc = (await loadVaultEntryContent(db, privateSessionKey, id)).content.location; if (loc) { la = loc.latitude; lo = loc.longitude; } }
+        else { la = full.latitude; lo = full.longitude; }
+        if (la == null || lo == null) text('No coordinates saved');
+        else {
+          const plot = document.createElement('div'); plot.className = 'tp-plot'; plot.innerHTML = locationPlotSvg(la, lo); add(plot);
+          kv([['Coordinates', formatCoords(la, lo)], ['Decimal', `${la.toFixed(6)}, ${lo.toFixed(6)}`]]);
+        }
+        kv([['Name', listRow.label]]);
+        if (!isVault && full.description) kv([['Notes', full.description]]);
       } else text('Nothing to show for this item.');
+      if (closed) return;
+      // what every kind shows last: the size of a file and when it was made and last changed (Decision 442)
+      let size = 0;
+      if (type === 'image' || type === 'voice' || type === 'pdf' || type === 'file') { try { size = isVault ? await vaultTrashSize(db, privateSessionKey, full) : await fileSize(full); } catch { size = 0; } }
+      if (closed) return;
+      kv([['Size', size ? formatBytes(size) : ''], ['Created', full.created_at ? formatSavedDate(full.created_at) : ''], ['Last changed', full.updated_at && full.updated_at !== full.created_at ? formatSavedDate(full.updated_at) : '']]);
     } catch (err) { if (!closed) { body.replaceChildren(); text(`Could not open it: ${err.message || err}`); } }
   }
 
@@ -4561,7 +4615,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!d) { if (!draft.locked) await draft.clear(); return; }
         const id = await captureToVault({ type: 'reminder', label: d.name, tags: d.tags, description: d.description, fireAt: d.fire_at, repeatRule: d.repeat_rule });
         if (d.alert !== undefined) setReminderAlert(id, d.alert); // Decision 363
-        setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch, metaGet, metaSet }), 700); // Decisions 369, 429
         await draft.clear();
         renderVault();
         try {
@@ -4624,7 +4677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     closeFolderFind(true);
     if (type === 'voice') await loadVoiceOut();
     if (type === 'note') await loadNotePrefs();
-    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
+    vTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button><button type="button" class="title-act rem-set-btn" aria-label="Reminder settings" title="Reminder settings">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
     document.getElementById('vault-main').classList.add('hidden');
     document.getElementById('vault-folder-view').classList.remove('hidden');
     await showPdfSwitch('vault-pdf-inapp-wrap', 'vault-pdf-inapp-toggle', type);
@@ -5205,7 +5258,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const saved = { label: d.name, fire_at: d.fire_at, repeat_rule: d.repeat_rule };
       await insertEntry(db, { id, type: 'reminder', ...saved, description: d.description || null });
       if (d.alert !== undefined) setReminderAlert(id, d.alert); // before it is scheduled, so it goes out on its own channel (Decision 363)
-      setTimeout(() => offerLockScreen({ askYesNo, leaving: beginPickerLaunch, metaGet, metaSet }), 700); // Decisions 369, 429
       await applyTags(id, d.tags);
       await draft.clear(); // saved: the draft is no longer needed
       try {
@@ -5718,10 +5770,41 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   for (const isVault of [false, true]) {
     document.getElementById(isVault ? 'vault-folder-title' : 'folder-title').addEventListener('click', async (e) => {
+      if (e.target.closest('.rem-set-btn')) { if (isVault) armVaultAutoLock(); openReminderSettings(); return; }
       if (!e.target.closest('.rem-sound-btn') || activeRemSound) return;
       if (isVault) armVaultAutoLock();
       await openSoundDialog({ toast, leaving: beginPickerLaunch, onApplied: applyReminderSound, register: (h) => { activeRemSound = h; updateBackButtonState(); } });
     });
+  }
+  // The Reminder settings gear (Decision 444): what the phone allows, each row opening the phone's own page for it, and refreshed when
+  // the person comes back from that page. Android does not let an app switch these itself.
+  function openReminderSettings() {
+    const dlg = document.getElementById('reminder-settings-dialog'), list = document.getElementById('rs2-list');
+    if (!dlg.classList.contains('hidden')) return;
+    const b = window.ArklySound || null;
+    const call = (name) => { try { return b && typeof b[name] === 'function' ? !!b[name]() : null; } catch { return null; } };
+    const ROWS = [
+      ['Notifications', 'Reminders appear in the notification shade.', () => call('canNotify'), 'openNotificationSettings'],
+      ['Display over other apps', 'The reminder card shows over whatever you are doing.', () => call('canOverlay'), 'openOverlaySettings'],
+      ['Full-screen notifications', 'A reminder takes the whole screen when the phone is locked.', () => call('canFullScreen'), 'openFullScreenSettings']
+    ];
+    const paint = () => {
+      list.replaceChildren();
+      for (const [title, hint, state, open] of ROWS) {
+        const on = state();
+        const row = document.createElement('button');
+        row.type = 'button'; row.className = 'rs2-row'; row.dataset.on = String(on === true);
+        row.innerHTML = `<span class="rs2-txt"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(on === null ? 'Available in the Android app.' : hint)}</span></span><span class="rs2-pill">${on === null ? '—' : on ? 'On' : 'Off'}</span><svg class="ic rs2-chev" aria-hidden="true"><use href="#i-chevron"/></svg>`;
+        row.onclick = () => { if (on === null) return; try { beginPickerLaunch(); b[open](); } catch { /* nothing to open */ } };
+        list.appendChild(row);
+      }
+    };
+    const onBack = () => { if (!document.hidden && !dlg.classList.contains('hidden')) paint(); };
+    document.addEventListener('visibilitychange', onBack);
+    new MutationObserver((_, ob) => { if (dlg.classList.contains('hidden')) { document.removeEventListener('visibilitychange', onBack); ob.disconnect(); } }).observe(dlg, { attributes: true, attributeFilter: ['class'] });
+    paint();
+    dlg.classList.remove('hidden');
+    updateBackButtonState();
   }
   async function openFolder(type, btn) {
     openFolderType = type;
@@ -5735,7 +5818,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     closeFolderFind(false);
     if (type === 'voice') await loadVoiceOut();
     if (type === 'note') await loadNotePrefs();
-    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
+    hTitle.innerHTML = `<span class="title-ico">${iconSvg(TYPE_ICON[type])}</span><span>${escapeHtml(VAULT_TYPE_LABELS[type])}</span>${type === 'image' ? galleryViewBtnHtml() : ''}${type === 'voice' ? voiceOutHtml() : ''}${type === 'location' ? `<button type="button" class="title-act loc-prov-btn" aria-label="Map provider" title="Map provider">${iconSvg('gear')}</button>` : ''}${type === 'reminder' ? `<button type="button" class="title-act rem-sound-btn" aria-label="Reminder sound and vibration" title="Reminder sound and vibration">${iconSvg('speaker')}</button><button type="button" class="title-act rem-set-btn" aria-label="Reminder settings" title="Reminder settings">${iconSvg('gear')}</button>` : ''}${findBtnHtml()}${type === 'note' ? noteViewBtnHtml() : ''}`;
     document.getElementById('home-main').classList.add('hidden');
     document.getElementById('folder-view').classList.remove('hidden');
     await showPdfSwitch('pdf-inapp-wrap', 'pdf-inapp-toggle', type);
@@ -6954,7 +7037,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         redraw();
         return;
       }
-      if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn') || e.target.closest('.rem-sound-btn')) return;
+      if (!e.target.closest('.title-act') || e.target.closest('.loc-prov-btn') || e.target.closest('.rem-sound-btn') || e.target.closest('.rem-set-btn')) return;
       galleryView = galleryView === 'grid' ? 'list' : 'grid';
       await metaSet('gallery_view', galleryView);
       paintGalleryBtn(isVault);
@@ -7392,10 +7475,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     let mounted = null, url = null, token = 0;
     const shut = () => { if (mounted) { try { mounted.destroy(); } catch { /* closing anyway */ } mounted = null; } if (url) { URL.revokeObjectURL(url); url = null; } };
     viewerScreen.classList.add('file-mode');
+    if (kind === 'text') viewerScreen.classList.add('pdf-mode', 'text-mode'); // the slim see-through title bar of the PDF view (Decision 443)
     await openViewer({
       title: item.label || 'File', isVault, entry: item, viewOnly,
       onEdit: async () => { await editEntryUI(await fresh(), isVault); },
-      onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode'); },
+      onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode', 'pdf-mode', 'text-mode'); },
       render: async (body) => {
         const mine = ++token;
         shut();
@@ -7422,7 +7506,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           const bytes = isVault ? await vaultBytes() : await readEntryBytes(row);
           if (mine !== token) return;
           if (bytes.length > (FILE_LIMIT[kind] || Infinity)) { say('This file is too large to open here.'); return; }
-          if (kind === 'text') { const m = await mountTextFile(body, bytes, `${item.label || 'file'}.${item.extension || 'txt'}`, ui); if (mine !== token) { m.destroy(); return; } mounted = m; return; }
+          if (kind === 'text') {
+            const header = viewerScreen.querySelector('.editor-bar');
+            const chrome = { add: (icon, title, fn) => { // the tools are icons at the right of the title bar
+              const b = document.createElement('button');
+              b.type = 'button'; b.className = 'icon-btn vwr-menu'; b.title = title; b.setAttribute('aria-label', title);
+              b.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-${icon}"/></svg>`;
+              b.onclick = () => fn(b); header.appendChild(b); return b; } };
+            const m = await mountTextFile(body, bytes, `${item.label || 'file'}.${item.extension || 'txt'}`, ui, chrome);
+            if (mine !== token) { m.destroy(); return; }
+            mounted = m; return;
+          }
           const m = await mountOfficeFile(body, kind, bytes, {
             ui, setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
             openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault) // no phone app for a trashed file

@@ -16,8 +16,29 @@ export const FILE_LIMIT = { text: TEXT_MAX, docx: OFFICE_MAX, xlsx: OFFICE_MAX, 
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
-// bytes -> a read-only code view with Find, Go to, Wrap and size tools. Throws { notText: true } for binary data.
-export async function mountTextFile(body, bytes, name, ui) {
+// Two fingers on the text change its size, following the fingers (Decision 443); the same rule as a note. Returns a function that removes it.
+function attachTextPinch(host, ed) {
+  let start = null, raf = 0, want = 0;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const onStart = (e) => { if (e.touches.length === 2) start = { d: dist(e.touches), size: ed.getSize().size }; };
+  const onMove = (e) => {
+    if (!start || e.touches.length !== 2) return;
+    e.preventDefault();
+    want = start.size * (dist(e.touches) / start.d);
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; ed.setSize(want); });
+  };
+  const onEnd = (e) => { if (e.touches.length < 2) start = null; };
+  host.addEventListener('touchstart', onStart, { passive: true });
+  host.addEventListener('touchmove', onMove, { passive: false });
+  host.addEventListener('touchend', onEnd, { passive: true });
+  host.addEventListener('touchcancel', onEnd, { passive: true });
+  return () => { if (raf) cancelAnimationFrame(raf); host.removeEventListener('touchstart', onStart); host.removeEventListener('touchmove', onMove); host.removeEventListener('touchend', onEnd); host.removeEventListener('touchcancel', onEnd); };
+}
+
+// bytes -> a read-only code view with Find, Go to and Wrap; the text size is by pinch (no A- / A+ buttons). Throws { notText: true } for
+// binary data. chrome: { add(icon, title, fn) -> button } puts the three tools as icons in the title bar (Decision 443); without it they
+// are chips above the text.
+export async function mountTextFile(body, bytes, name, ui, chrome = null) {
   const text = new TextDecoder('utf-8').decode(bytes);
   const info = inspectText(text);
   if (info.binary) throw Object.assign(new Error('This is not a text file.'), { notText: true });
@@ -25,18 +46,23 @@ export async function mountTextFile(body, bytes, name, ui) {
   const wrap = el('div', 'ev-text-wrap');
   if (info.lossy) wrap.appendChild(el('div', 'ev-banner', 'Parts of this file are not valid text and may look garbled.'));
   const bar = el('div', 'ev-tools'), host = el('div', 'ev-code');
-  wrap.append(bar, host); body.appendChild(wrap);
+  if (chrome) wrap.append(host); else wrap.append(bar, host);
+  body.appendChild(wrap);
   const { createCodeEditor } = await import('./codeeditor.js');
   const ed = createCodeEditor({ parent: host, text, name, editable: false, ui, onChange: () => ui.onActivity() });
   if (ed.setEditing) ed.setEditing(false, false);
-  const tool = (label, title, fn) => { const b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = () => { ui.onActivity(); fn(b); }; bar.appendChild(b); return b; };
-  tool('Find', 'Find', (b) => b.classList.toggle('on', ed.find()));
-  tool('Go to', 'Go to line', () => ed.goTo());
-  const w = tool('Wrap', 'Wrap long lines', (b) => b.classList.toggle('on', ed.toggleWrap()));
+  const tool = (icon, label, title, fn) => {
+    let b;
+    if (chrome) b = chrome.add(icon, title, (x) => { ui.onActivity(); fn(x); });
+    else { b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = () => { ui.onActivity(); fn(b); }; bar.appendChild(b); }
+    return b;
+  };
+  tool('search', 'Find', 'Find', (b) => b.classList.toggle('on', ed.find()));
+  tool('goto', 'Go to', 'Go to line', () => ed.goTo());
+  const w = tool('wrap', 'Wrap', 'Wrap long lines', (b) => b.classList.toggle('on', ed.toggleWrap()));
   w.classList.toggle('on', ed.isWrapped());
-  tool('A\u2212', 'Smaller text', () => ed.bumpSize(-1));
-  tool('A+', 'Larger text', () => ed.bumpSize(1));
-  return { destroy() { ed.destroy(); } };
+  const unpinch = attachTextPinch(host, ed);
+  return { destroy() { unpinch(); ed.destroy(); } };
 }
 
 // A blob URL of the decrypted audio, played with the phone's own controls; paused when the app is not in front.
