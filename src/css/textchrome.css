@@ -1,8 +1,18 @@
-/* textchrome.css — the text viewer's slim, see-through title bar and its tool icons (Decision 443). The bar itself is the PDF view's
-   (pdf-mode); the text starts below it and scrolls under it. */
+/* textchrome.css — the text viewers' slim, see-through title bar and its tool icons (Decisions 443, 445). The bar is the PDF view's
+   (Files viewer: pdf-mode) or the full view's (File explorer: ev-full); the text starts below it and scrolls under it. */
 #viewer-screen.text-mode .editor-bar .icon-btn.vwr-menu { width: 36px; height: 36px; min-width: 36px; }
 #viewer-screen.text-mode .editor-bar .icon-btn.vwr-menu.on { background: rgba(255, 255, 255, 0.28); border-radius: 12px; }
 #viewer-screen.text-mode .ev-text-wrap, #viewer-screen.text-mode .ev-code { height: 100%; }
 #viewer-screen.text-mode .ev-text-wrap .cm-scroller { padding-top: 46px; }
 #viewer-screen.text-mode .ev-text-wrap .cm-panels-top { padding-top: 46px; background: var(--bg, #f3f1fc); }
 #viewer-screen.text-mode .ev-text-wrap .cm-editor:has(.cm-panels-top .cm-panel) .cm-scroller { padding-top: 0; }
+
+/* File explorer text view: --ev-text-top is the bar's height, set by explorer-view.js */
+#explorer-viewer.ev-text .editor-bar .icon-btn.ev-ibtn { width: 32px; height: 32px; min-width: 32px; flex: none; }
+#explorer-viewer.ev-text .editor-bar .icon-btn.ev-ibtn.on { background: rgba(255, 255, 255, 0.28); border-radius: 10px; }
+#explorer-viewer.ev-text .ev-text-wrap, #explorer-viewer.ev-text .ev-code { height: 100%; }
+#explorer-viewer.ev-text .ev-text-wrap .cm-scroller { padding-top: var(--ev-text-top, 44px); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+#explorer-viewer.ev-text .ev-text-wrap .cm-panels-top { padding-top: var(--ev-text-top, 44px); background: var(--bg, #f3f1fc); }
+#explorer-viewer.ev-text .ev-text-wrap .cm-editor:has(.cm-panels-top .cm-panel) .cm-scroller { padding-top: 0; }
+#explorer-viewer.ev-text .ev-banner { margin-top: var(--ev-text-top, 44px); } /* a notice sits below the bar; the text then needs no extra room */
+#explorer-viewer.ev-text .ev-banner + .ev-code .cm-scroller, #explorer-viewer.ev-text .ev-banner + .ev-code .cm-panels-top { padding-top: 0; }
