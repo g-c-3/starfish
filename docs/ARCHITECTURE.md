@@ -1185,3 +1185,12 @@ is documented in `android-notes/` since it requires editing the generated `andro
 **Editor body.** The note editor is shown after its module has loaded (preloaded when startup is quiet), so its body exists when the slide starts (Decision 400).
 
 **Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.
+
+## Text viewers (Decisions 443, 445)
+
+Both text views are read-only code editors (`codeeditor.js`) under a slim, see-through title bar; the text scrolls under the bar.
+- **Files viewer** (`filesview.js`, `#viewer-screen.pdf-mode.text-mode`): icons appended to the bar; styles in `textchrome.css`.
+- **File explorer** (`explorer-view.js`, `#explorer-viewer.ev-full.ev-text`): `enterText` / `leaveText` set and clear the classes and `--ev-text-top` (the bar's height); `iconBtn` puts the icons before Save. `leaveText` runs in `reset`, so any other file kind gets its own bar back.
+- Pinch: `textpinch.js` (`attachTextPinch`), size 10 to 42, following the fingers. No A- / A+.
+- The bar's width is the limit: while editing, Open with app is hidden.
+

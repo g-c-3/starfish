@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 213**
+
+Start: Go. CI result not read: the unauthenticated GitHub API was rate-limited. Task: Phase 115.
+- Cause of the difference: the explorer's text view had its own tool row with text buttons and A- / A+, while the Files text viewer had icons in a see-through bar and pinch (Decision 443).
+- Decision 445. Phase 115 built.
+- New: `src/js/textpinch.js`. Replaced: `src/js/explorer-view.js`, `src/js/filesview.js` (pinch moved out), `src/css/textchrome.css`.
+- Checked: the three scripts parse. The explorer text view, the bar width while editing, the keyboard with the bar fixed, the pinch and the notices were not run: not run through CI or a device.
+- Open: DP222 to DP234. CI has not yet completed a build of Phases 93 to 115; two sessions of native code are uncompiled, so read the CI log first.
+- Not done: Phases 109 to 113 (viewers still missing).
+- Next start: the CI result, then DP222 to DP234, then Phase 109.
+
+---
+
 **Session 212**
 
 Start: three screenshots (a Trash note without its colours, the editor's selection tools, the Files text viewer) and requests: richer Trash previews for every kind, the text viewer's title bar and pinch, a Reminder settings gear, the full-screen option in the reminder form, and volume keys that stop the vibration too.
