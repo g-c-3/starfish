@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 214**
+
+Start: two screenshots (the Reminder settings dialog, the Current location plot) and a report: the dialog froze on open and neither Close, Back nor a tap outside closed it; North in the plot to be red and bold, with E, S and W in dark grey and bold. All other device passes worked.
+- Device passes DP222 to DP234 confirmed by the owner, except DP233 check 5 (the Reminder settings dialog).
+- Cause of the freeze: the Close button had no handler and every way out ends there. Cause of the invisible row titles: a button does not pass its text colour on (Decision 446).
+- Decision 446. Phase 116 built.
+- Replaced: `src/js/app.js`, `src/js/locfix.js`, `src/css/locfix.css`, `src/css/reminderset.css`.
+- Checked: both scripts parse. The dialog closing by each way, the readable titles and the four letters following the compass were not run: not run through CI or a device.
+- Open: DP235.
+- Not done: Phases 109 to 113 (viewers still missing).
+- Next start: DP235, then Phase 109.
+
+---
+
 **Session 213**
 
 Start: Go. CI result not read: the unauthenticated GitHub API was rate-limited. Task: Phase 115.

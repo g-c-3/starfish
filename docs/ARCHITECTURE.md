@@ -1194,3 +1194,11 @@ Both text views are read-only code editors (`codeeditor.js`) under a slim, see-t
 - Pinch: `textpinch.js` (`attachTextPinch`), size 10 to 42, following the fingers. No A- / A+.
 - The bar's width is the limit: while editing, Open with app is hidden.
 
+## Static dialogs and Back (Decisions 104, 299, 446)
+
+A static dialog listed in `BACK_MODALS` (`app.js`) is left by its own Close or Cancel button: Back and a tap outside click that button. The button's handler is wired where the dialog opens; without it nothing can dismiss the dialog.
+
+## Location plot letters (Decisions 349, 446)
+
+`locfix.js` draws N (red, bold) and E, S, W (dark grey, bold) at radius 146; each sits at its bearing minus the phone's heading, so the four follow the compass. The ring label is at the bottom right corner.
+
