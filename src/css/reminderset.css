@@ -1,0 +1,15 @@
+/* reminderset.css — the Reminder settings gear dialog and the full-screen option in the reminder form (Decision 444). */
+.rs2-box .rs2-sub { margin: 0 0 12px; font-size: 13px; color: var(--muted, #6b6b80); text-align: left; }
+#rs2-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.rs2-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--border, #e3e0f3); background: rgba(120, 110, 200, 0.06); text-align: left; transition: transform 0.18s ease, background 0.18s ease; }
+.rs2-row:active { transform: scale(0.985); background: rgba(120, 110, 200, 0.12); }
+.rs2-row .rs2-txt { flex: 1; min-width: 0; }
+.rs2-row .rs2-txt strong { display: block; font-size: 15px; color: inherit; }
+.rs2-row .rs2-txt span { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted, #6b6b80); font-weight: 400; }
+.rs2-pill { flex: none; padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: rgba(120, 120, 140, 0.16); color: var(--muted, #6b6b80); }
+.rs2-row[data-on="true"] .rs2-pill { background: rgba(30, 160, 90, 0.16); color: #1a8a50; }
+.rs2-chev { flex: none; width: 18px; height: 18px; opacity: 0.45; }
+.rem-set-btn svg { transition: transform 0.35s ease; }
+.rem-set-btn:active svg { transform: rotate(60deg); }
+.sd-fs-btn { display: flex; align-items: center; gap: 10px; text-align: left; margin-top: 8px; }
+.sd-fs-btn small { display: block; font-weight: 400; font-size: 12px; opacity: 0.7; }

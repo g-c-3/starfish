@@ -14,3 +14,14 @@
 .tp-box .tp-chips > span { font-size: 12px; color: var(--muted, #6b6b80); margin-right: 2px; }
 .tp-box .tp-body .tp-chip { width: auto; min-height: 34px; padding: 4px 12px; border-radius: 999px; font-size: 13px; background: transparent; border: 1px solid var(--border, #d9d6ee); color: var(--brand, #5b45d6); }
 .tp-box .tp-view { margin-top: 4px; }
+
+/* Richer previews (Decision 442): the note as written, details as a list, the location plot. */
+.tp-box .tp-body { max-height: 58vh; }
+.tp-box .tp-editor { height: 38vh; border-radius: 12px; overflow: hidden; border: 1px solid var(--border, #e3e0f3); }
+.tp-box .tp-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(120, 110, 200, 0.07); font-size: 14px; }
+.tp-box .tp-dl dt { color: var(--muted, #6b6b80); }
+.tp-box .tp-dl dd { margin: 0; overflow-wrap: anywhere; }
+.tp-box .tp-dl-tight { margin-top: 4px; font-size: 13px; }
+.tp-box .tp-h { margin: 12px 2px 0; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted, #6b6b80); }
+.tp-box .tp-plot { display: flex; justify-content: center; }
+.tp-box .tp-plot svg { max-width: 100%; height: auto; }

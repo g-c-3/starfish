@@ -1,0 +1,8 @@
+/* textchrome.css — the text viewer's slim, see-through title bar and its tool icons (Decision 443). The bar itself is the PDF view's
+   (pdf-mode); the text starts below it and scrolls under it. */
+#viewer-screen.text-mode .editor-bar .icon-btn.vwr-menu { width: 36px; height: 36px; min-width: 36px; }
+#viewer-screen.text-mode .editor-bar .icon-btn.vwr-menu.on { background: rgba(255, 255, 255, 0.28); border-radius: 12px; }
+#viewer-screen.text-mode .ev-text-wrap, #viewer-screen.text-mode .ev-code { height: 100%; }
+#viewer-screen.text-mode .ev-text-wrap .cm-scroller { padding-top: 46px; }
+#viewer-screen.text-mode .ev-text-wrap .cm-panels-top { padding-top: 46px; background: var(--bg, #f3f1fc); }
+#viewer-screen.text-mode .ev-text-wrap .cm-editor:has(.cm-panels-top .cm-panel) .cm-scroller { padding-top: 0; }
