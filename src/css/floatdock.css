@@ -1,0 +1,30 @@
+/* floatdock.css — floating progress cards (Decision 449). Same top position as the toast; only transform and opacity animate. */
+#float-dock { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 21; display: flex; flex-direction: column; gap: 8px; width: min(560px, calc(100% - 24px)); pointer-events: none; }
+.fd-card { pointer-events: auto; box-sizing: border-box; color: var(--bg); background: var(--fg); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 10px 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38); font-size: 12.5px; font-weight: 600; opacity: 0; transform: translateY(-10px); transition: opacity .2s ease, transform .2s ease; }
+.fd-card.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .fd-card { transition: opacity .01s; transform: none; } }
+.fd-save, .fd-open { display: flex; align-items: center; gap: 10px; }
+.fd-size { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fd-name { flex: none; max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-pct { flex: none; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.fd-bar { position: relative; flex: 1; min-width: 40px; height: 8px; border-radius: 99px; background: rgba(127, 127, 140, 0.35); overflow: hidden; }
+.fd-fill { position: absolute; inset: 0; border-radius: 99px; transform-origin: left center; transform: scaleX(0); transition: transform .25s linear; background: linear-gradient(90deg, #39ff14, #00e5ff 55%, #b44dff); box-shadow: 0 0 10px rgba(0, 229, 255, 0.75), 0 0 2px rgba(57, 255, 20, 0.9); }
+.fd-bar.ind .fd-fill { opacity: 0.4; }
+.fd-btn { flex: none; margin: 0; padding: 6px 12px; border: 0; border-radius: 10px; font-size: 12.5px; font-weight: 800; color: color-mix(in srgb, var(--brand) 40%, var(--bg)); background: transparent; }
+.fd-btn:active { background: rgba(127, 127, 140, 0.28); }
+.fd-btn:disabled { opacity: 0.5; }
+.fd-open-btn { background: linear-gradient(90deg, #39ff14, #00e5ff); color: #06210f; }
+.fd-x, .fd-mini { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.fd-job { display: flex; flex-direction: column; gap: 6px; }
+.fd-top { display: flex; align-items: center; gap: 8px; }
+.fd-ic { flex: none; display: inline-flex; color: #00e5ff; }
+.fd-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.fd-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.75; font-weight: 500; }
+.fd-row { display: flex; align-items: center; gap: 10px; }
+.fd-btns { display: flex; justify-content: flex-end; gap: 6px; }
+.fd-job.paused .fd-fill { filter: saturate(0.4); }
+/* minimised: one line — icon, title, bar, percent, expand */
+.fd-job.min { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(36px, 90px) auto auto; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; }
+.fd-job.min .fd-top, .fd-job.min .fd-row { display: contents; }
+.fd-job.min .fd-sub, .fd-job.min .fd-btns, .fd-job.min .fd-size { display: none; }
+.fd-job.min .fd-ic { order: 0; } .fd-job.min .fd-title { order: 1; font-size: 12.5px; } .fd-job.min .fd-bar { order: 2; } .fd-job.min .fd-pct { order: 3; } .fd-job.min .fd-mini { order: 4; }
