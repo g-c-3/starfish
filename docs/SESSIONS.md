@@ -10,10 +10,13 @@ Start: Phase 110, step 1.
 - Built: `src/js/office-odf.js` (odt, ods and odp readers into the existing models); `explorer.js` maps odt, ods and odp to the docx, xlsx and pptx kinds; `office-render.js` picks the reader by the file's `mimetype` entry.
 - Tested in a sandbox against hand-built odt, ods and odp files: styles, lists, merged cells, footnote, picture, header, repeated empty rows, notes. Not run through CI or a device.
 - Not read: the CI log for the Java files of Phases 117 and 118 (the unauthenticated API was rate-limited and run logs need a sign-in).
+- Built, step 2: `src/js/ole2.js` (OLE2 container reader), `src/js/office-xls.js` (xls into the Excel model); `explorer.js` lists xls under the xlsx kind; `office-render.js` picks the xls reader by the bytes. Sandbox test with a generated xls: strings across the string table, numbers, dates, percent, booleans, merges, widths, heights, fill, border, frozen pane. Formula results not exercised (the generator stores none).
+- Fixed in `office-odf.js`: ods colors are plain hex strings in the Excel model, not objects.
 - Weighed and rejected: Univer (conversion layer is paid and needs a server) and ZetaOffice (engine too large for a 15 MB app). Owner's rule: viewers and editors work for all formats with no substantial size increase.
 - Owner's plan: every file opens view only, an Edit button turns the tools on (Decision 454).
-- Decisions 452 to 454. DP240 added; DP241 planned.
-- Next start: the CI log, then Phase 110 step 2: xls (BIFF), then doc and ppt as text, more odp shapes, then the responsive tool shell.
+- Owner's choice: full-layout viewing for doc, ppt and xls (Phases 123 to 125, Decision 456).
+- Decisions 452 to 456. DP240 added; DP241 planned.
+- Next start: the CI log, then Phase 110 step 3: doc and ppt as text on `ole2.js`, more odp shapes, then the responsive tool shell.
 
 ---
 
