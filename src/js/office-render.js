@@ -6,6 +6,7 @@ import { chartSvg } from './office-chart.js';
 import { chromeOnScroll } from './chrome-scroll.js';
 import { paginate, paginateAuto, hasSavedBreaks, pickHF } from './office-pages.js';
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
+import { odfKind, readOdt, readOds, readOdp } from './office-odf.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
@@ -1197,7 +1198,9 @@ export function mountOffice(kind, bytes, host, ctx) {
   const faces = [];
   const bars = {};
   let inner = {};
-  const model = kind === 'docx' ? readDocx(bytes) : kind === 'xlsx' ? readXlsx(bytes) : kind === 'pptx' ? readPptx(bytes) : null;
+  // an OpenDocument file arrives under the same kind as its Word, Excel or PowerPoint counterpart (Decision 452)
+  const odf = odfKind(bytes);
+  const model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : readPptx(bytes)) : null;
   if (!model) throw new OfficeError('This type is not supported here.');
   if (kind === 'docx' && model.embedded.length && typeof FontFace !== 'undefined') {
     for (const f of model.embedded) {
