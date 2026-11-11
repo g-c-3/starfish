@@ -34,7 +34,7 @@ import { DEFAULT_COLS as NOTE_DEFAULT_COLS, clampCols as clampNoteCols, attachNo
 import { attachDragSelect, dragBlocked } from './dragselect.js';
 import { attachVideoPlayer } from './videoplayer.js';
 import { openPhoneGallery, mediaAvailable, mediaAccess, requestMediaAccess, openCamera, cameraSince, newCameraMedia, streamPhoneFile, phoneExtension, phoneThumb, phoneThumbError } from './phonegallery.js';
-import { initFiles, migratePlainFiles, fileSize, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as readEntryBytes, readParts as readEntryParts, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
+import { initFiles, migratePlainFiles, fileSize, saveBase64, beginFile, beginVaultFile, removeFile, readBytes as rawReadBytes, readParts as rawReadParts, putHomeThumb, getHomeThumb, sweepHomeThumbs } from './files.js';
 import { base64ToBytes, pdfErrorMessage } from './pdfmath.js';
 import { weakness } from './passcheck.js';
 import { App } from '@capacitor/app';
@@ -54,6 +54,8 @@ import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js'
 import { openExplorer } from './explorer.js';
 import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT } from './filesview.js';
 import { makePeekCopy, sweepPeek, PEEK_MAX } from './archivepeek.js';
+import { trackSave, startOpen, setDockToast } from './floatdock.js';
+import '../css/floatdock.css';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';
@@ -67,6 +69,14 @@ import '../css/bigopen.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
+
+// A big stored file that the opening card loaded ahead is handed to the next read of it, once (Decision 449).
+const preloaded = new Map();
+const stashLoaded = (id, parts) => { takeLoaded(id); preloaded.set(id, { parts, t: setTimeout(() => preloaded.delete(id), 60000) }); };
+function takeLoaded(id) { const h = preloaded.get(id); if (!h) return null; clearTimeout(h.t); preloaded.delete(id); return h.parts; }
+const readEntryParts = async (row, onProgress) => { const p = row && takeLoaded(row.id); if (p) { onProgress?.(1); return p; } return rawReadParts(row, onProgress); };
+const readEntryBytes = async (row) => { const p = row && takeLoaded(row.id); if (p) return new Uint8Array(await new Blob(p).arrayBuffer()); return rawReadBytes(row); };
+setDockToast((m) => toast(m));
 
 
 const CATEGORY_LABELS = {
@@ -4654,14 +4664,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!d) return;
             const numbered = !single && d.mode === 'number';
             const start = numbered ? nextBatchStart(getVaultIndex(), type, d.name) : 0; // continues after the highest "<name> N" (Decision 174)
-            for (let i = 0; i < files.length; i++) {
-              const f = files[i];
-              toast(single ? 'Saving…' : `Saving ${i + 1} of ${files.length}…`, true);
-              await savePicked(type, f, true, { label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description });
-            }
+            const prog = beginSaveCard(files);
+            try {
+              for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                await savePicked(type, f, true, { label: single ? d.name : numbered ? `${d.name} ${start + i + 1}` : f.name, tags: d.tags, description: d.description, prog });
+              }
+            } finally { prog.end(); }
             renderVault();
             toast(single ? 'Saved to the Vault' : `${files.length} files added to the Vault`);
-          } catch (err) { toast(`Could not save: ${err.message || err}`); renderVault(); }
+          } catch (err) { toast(saveFail(err)); renderVault(); }
         };
         beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
         input.click();
@@ -5094,11 +5106,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     return { name: file.name, file, extension: media ? file.type.split('/')[1].split(';')[0].replace('quicktime', 'mov') : file.name.split('.').pop() };
   });
   const PICK_SLICE = 1024 * 1024;
-  async function savePicked(type, f, isVault, { label, tags = [], description = '' }) {
+  // The Save card (Decision 449): bytes saved of the total, a bar and Cancel; a cancelled save removes the half-written file.
+  const saveCancelled = () => Object.assign(new Error('Save cancelled'), { cancelled: true });
+  const saveFail = (err) => (err && err.cancelled ? 'Save cancelled' : `Could not save: ${err.message || err}`);
+  const beginSaveCard = (list) => trackSave({ total: list.reduce((n, f) => n + (Number(f.file ? f.file.size : f.size) || 0), 0) });
+  async function savePicked(type, f, isVault, { label, tags = [], description = '', prog = null }) {
     const w = isVault ? await beginVaultFile(privateSessionKey) : await beginFile();
     let stored;
     try {
-      for (let off = 0; off < f.file.size; off += PICK_SLICE) await w.append(new Uint8Array(await f.file.slice(off, off + PICK_SLICE).arrayBuffer()));
+      for (let off = 0; off < f.file.size; off += PICK_SLICE) {
+        if (prog?.cancelled) throw saveCancelled();
+        const piece = new Uint8Array(await f.file.slice(off, off + PICK_SLICE).arrayBuffer());
+        await w.append(piece); prog?.add(piece.length);
+      }
       stored = await w.finish();
     } catch (err) { await w.abort(); throw err; }
     try {
@@ -5313,17 +5333,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         if (!d) return;
         let n = 0;
-        const note = () => toast(single ? 'Saving…' : `Saving ${++n} of ${files.length}…`, true);
+        const prog = beginSaveCard(files);
+        const note = () => { n++; };
         try {
           if (!single && d.mode === 'number') {
             const { ids, first, last } = await batchAddWithCommonLabel(type, d.name, files, d.tags, d.description,
-              (f, label) => { note(); return savePicked(type, f, false, { label, tags: d.tags, description: d.description }); });
+              (f, label) => { note(); return savePicked(type, f, false, { label, tags: d.tags, description: d.description, prog }); });
             toast(`${ids.length} files added: ${first} to ${last}`);
           } else {
-            for (const f of files) { note(); await savePicked(type, f, false, { label: single ? d.name : f.name, tags: d.tags, description: d.description }); }
+            for (const f of files) { note(); await savePicked(type, f, false, { label: single ? d.name : f.name, tags: d.tags, description: d.description, prog }); }
             toast(single ? 'Saved' : `${files.length} files added`);
           }
-        } catch (err) { toast(`Could not save: ${err.message || err}`); }
+        } catch (err) { toast(saveFail(err)); } finally { prog.end(); }
         await renderMainTimeline();
       };
       beginPickerLaunch(); // Decision 73 — this file chooser must not be mistaken for backgrounding
@@ -5398,12 +5419,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // One phone file streamed into the encrypted store, then its entry (Decision 319). Nothing is held whole in memory.
   let lastThumbMiss = ''; // why the last saved file got no thumbnail (shown once in the notice)
-  async function savePhoneItem(item, isVault, { label, tags = [], description = '' }) {
+  async function savePhoneItem(item, isVault, { label, tags = [], description = '', prog = null }) {
     lastThumbMiss = '';
     const w = isVault ? await beginVaultFile(privateSessionKey) : await beginFile();
     let stored;
     try {
-      await streamPhoneFile(item, (bytes) => w.append(bytes));
+      await streamPhoneFile(item, (bytes) => { if (prog?.cancelled) throw saveCancelled(); prog?.add(bytes.length); return w.append(bytes); });
       stored = await w.finish();
     } catch (err) { await w.abort(); throw err; }
     const extension = phoneExtension(item);
@@ -5432,9 +5453,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       count: items.length, isVault, discardLabel: 'Back'
     });
     if (!d) return false;
-    const progress = (i) => toast(single ? 'Saving…' : `Saving ${i} of ${items.length}…`, true);
+    const prog = beginSaveCard(items);
     try {
-      const one = (it, label, i) => { progress(i + 1); return savePhoneItem(it, isVault, { label, tags: d.tags, description: d.description }); };
+      const one = (it, label) => savePhoneItem(it, isVault, { label, tags: d.tags, description: d.description, prog });
       if (!single && d.mode === 'number' && !isVault) {
         const { ids, first, last } = await batchAddWithCommonLabel('image', d.name, items, d.tags, d.description, one);
         await renderMainTimeline();
@@ -5449,7 +5470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isVault) renderVault(); else await renderMainTimeline();
       toast(single ? (isVault ? 'Saved to the Vault' : 'Saved') : `${items.length} files added${isVault ? ' to the Vault' : ''}`);
       return true;
-    } catch (err) { toast(`Could not save: ${err.message || err}`); return false; }
+    } catch (err) { toast(saveFail(err)); return false; } finally { prog.end(); }
   }
 
   async function openPhone(isVault) {
@@ -7505,30 +7526,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!window.ArklyArchive) { if (viewOnly) toast('Opening archives works in the Android app.'); return false; }
     if (activeExplorer) return true;
     const name = `${item.label || 'archive'}.${item.extension || 'zip'}`;
-    let copy;
+    let row = null, bytes = null;
     try {
-      let parts = null, row = null, big = 0;
+      let size;
       if (isVault) {
         if (!privateSessionKey) throw new Error('Vault locked');
-        const bytes = base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
-        if (bytes.length > PEEK_MAX) big = bytes.length;
-        parts = [bytes];
+        bytes = base64ToBytes((await loadVaultEntryContent(db, privateSessionKey, item.id)).content.fileData);
+        size = bytes.length;
       } else {
         row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [item.id])).values || [])[0] || item;
-        const size = await fileSize(row);
-        if (size > PEEK_MAX) big = size; else parts = await readEntryParts(row);
+        size = await fileSize(row);
       }
-      if (big) { // over the limit: the person decides, and the choice is remembered (Decision 448)
-        const way = await askBigArchive({ name, size: big, canPhone: !viewOnly });
+      if (size > PEEK_MAX) { // over the limit: the person decides, and the choice is remembered (Decision 448)
+        const way = await askBigArchive({ name, size, canPhone: !viewOnly });
         if (way === null) return true; // stopped
         if (way === 'phone') return false; // the phone's apps
         if (isVault && !privateSessionKey) return true; // locked while the dialog was up
-        if (!parts) parts = await readEntryParts(row);
       }
-      copy = await makePeekCopy(name, parts);
     } catch (err) { toast(`Could not open it: ${err.message || err}`); return true; }
-    const arm = isVault ? armVaultAutoLock : armAppAutoLock;
-    await new Promise((resolve) => {
+    // The decrypting and copying run behind the opening card (Decision 449): it opens by itself in the same place, else it waits for Open.
+    const base = isVault ? 0 : 0.6;
+    const load = async (ctl) => makePeekCopy(name, isVault ? [bytes] : await readEntryParts(row, (f) => ctl.progress(f * base)), (f) => ctl.progress(base + f * (1 - base)));
+    const show = (copy) => new Promise((resolve) => {
+      if (activeExplorer) { copy.remove(); toast('Close the File explorer first.'); resolve(); return; }
+      const arm = isVault ? armVaultAutoLock : armAppAutoLock;
       activeExplorer = openExplorer({
         isVault, toast, leaving: beginPickerLaunch, archive: { path: copy.path, name, cleanup: copy.remove },
         ui: { askYesNo, askText, attachZoomPan, onActivity: arm },
@@ -7536,11 +7557,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       updateBackButtonState();
     });
+    await startOpen({ name: item.label || 'archive', here: () => placeKey(viewOnly), load, show, discard: (copy) => copy?.remove?.() });
     return true;
   }
 
   // A stored file in Arkly's own viewer (Decision 333). Resolves true when a viewer took it, false when the phone's apps should (no viewer for the type).
-  async function openFileInArkly(item, isVault, { viewOnly = false, forceKind = null } = {}) {
+  // Where the person is: a Home folder, a Vault folder or the Trash. A finished load opens by itself only in the same place (Decision 449).
+  const placeKey = (viewOnly) => (viewOnly ? 'trash' : !document.getElementById('vault-folder-view')?.classList.contains('hidden') ? `v:${openVaultFolderType}` : `h:${openFolderType}`);
+  const PRELOAD_MIN = 8 * 1024 * 1024; // a smaller file loads faster than the card would show
+  // A big stored file loads first, behind the opening card when it takes over 0.5 s, then opens. Vault files and archives open as before
+  // (an archive has its own loading, above).
+  async function openFileInArkly(item, isVault, opts = {}) {
+    const kind = opts.forceKind || arklyKind(item.extension);
+    if (!kind) return false;
+    if (kind === 'archive' || isVault) return openFileInArklyNow(item, isVault, opts);
+    let row = null, size = 0;
+    try { row = item.file_path ? item : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [item.id])).values || [])[0] || null; size = row ? await fileSize(row) : 0; } catch { row = null; }
+    if (!row || size < PRELOAD_MIN) return openFileInArklyNow(item, isVault, opts);
+    await startOpen({
+      name: item.label || 'file', here: () => placeKey(opts.viewOnly),
+      load: async (ctl) => { stashLoaded(row.id, await rawReadParts(row, (f) => ctl.progress(f))); return row.id; },
+      show: () => openFileInArklyNow(item, isVault, opts),
+      discard: (id) => { takeLoaded(id); },
+    });
+    return true;
+  }
+  async function openFileInArklyNow(item, isVault, { viewOnly = false, forceKind = null } = {}) {
     const kind = forceKind || arklyKind(item.extension); // forceKind: the person chose how to read a file (Decision 440)
     if (!kind) return false;
     if (kind === 'archive') return openArchivePeek(item, isVault, viewOnly);

@@ -48,7 +48,12 @@ export function startExtract(bridge, archivePath, { password = '', entries = nul
       onProgress(s);
     }
   })();
-  return { cancel() { try { bridge.cancel(id); } catch { /* already finished */ } }, done };
+  return {
+    cancel() { try { bridge.cancel(id); } catch { /* already finished */ } },
+    pause() { try { bridge.pause?.(id); } catch { /* a build without Pause */ } }, // Decision 449
+    resume() { try { bridge.resume?.(id); } catch { /* a build without Pause */ } },
+    done,
+  };
 }
 
 export const needsPassword = (r) => r?.state === 'error' && r.code === 'password';

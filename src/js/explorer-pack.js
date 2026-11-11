@@ -39,7 +39,12 @@ export function startPack(bridge, dir, baseName, { format = 'zip', level = 2, pa
       onProgress(s);
     }
   })();
-  return { cancel() { try { bridge.cancel(id); } catch { /* already finished */ } }, done };
+  return {
+    cancel() { try { bridge.cancel(id); } catch { /* already finished */ } },
+    pause() { try { bridge.pause?.(id); } catch { /* a build without Pause */ } }, // Decision 449
+    resume() { try { bridge.resume?.(id); } catch { /* a build without Pause */ } },
+    done,
+  };
 }
 
 // One line for a finished job. `size`: the formatted size of the new archive, or ''.

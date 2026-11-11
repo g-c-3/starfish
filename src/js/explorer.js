@@ -12,6 +12,7 @@ import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorTe
 import { attachScrollThumb } from './scrollthumb.js';
 import { attachPullToRefresh } from './pulltorefresh.js';
 import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
+import { trackJob } from './floatdock.js';
 
 const KIND_EXT = {
   text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics',
@@ -800,6 +801,13 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     body.appendChild(box);
     return line;
   };
+  // A running job shows as a floating card (Decision 449): Pause, Cancel, Minimise. Minimise gives the page back and the job goes on, even
+  // when the screen is left; it reports with a toast when it ends.
+  const jobCard = (title, minimise) => trackJob({
+    title, onPause: () => job?.pause?.(), onResume: () => job?.resume?.(), onCancel: () => job?.cancel(),
+    onMinimise: () => { if (job) job.detached = true; minimise(); },
+  });
+  const jobNote = (what) => { body.replaceChildren(); const box = el('div', 'explorer-note'); box.appendChild(el('p', 'explorer-meta', `${what} in the floating card. Minimise it to keep using the app.`)); body.appendChild(box); };
   // Puts a question into the body and resolves with its answer; Back resolves null (Decision 295).
   function askBody(build) {
     return new Promise((resolve) => {
@@ -1003,16 +1011,16 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     }
     st.view = 'extract'; st.gen++;
     chrome({ title: 'Extracting', folder: false });
-    const title = `Extracting "${e.name}"…`;
-    let line = panel(title, 'Starting…', () => job?.cancel());
+    jobNote('Extracting');
+    const card = jobCard(`Extracting "${e.name}"`, () => { if (!closed && st.view === 'extract') returnView(); });
     job = startExtract(api, e.path, {
       password, entries, mode, destParent: intoDir,
-      onConflict: async (rel) => { const c = await askFileClash(rel); if (!closed) line = panel(title, 'Continuing…', () => job?.cancel()); return c; },
-      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${plural(p.files, 'file')} · ${formatSize(p.bytes)}${p.current ? ` · ${p.current}` : ''}`; },
+      onConflict: async (rel) => { if (job?.detached) return 'skip'; /* the page is not here to ask; existing files are kept and counted */ const c = await askFileClash(rel); if (!closed) jobNote('Extracting'); return c; },
+      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: null, size: formatSize(p.bytes), detail: `${plural(p.files, 'file')}${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
     });
     const res = await job.done;
-    job = null;
-    if (closed) return;
+    job = null; card.close();
+    if (closed && needsPassword(res)) return;
     if (res.state === 'done') {
       const name = res.dest ? res.dest.split('/').pop() : '';
       if (res.files || res.kept) {
@@ -1031,8 +1039,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       const t = errorText(res, !!password);
       toast(res.merging ? t.replace('Nothing was kept.', 'Files already written were kept.') : t);
     }
-    if (closed || st.view !== 'extract') return;
-    await returnView();
+    if (closed) return;
+    if (st.view === 'extract' || (!arc && st.view === 'folder' && st.cwd === cwd)) await returnView();
   }
 
   // ---- Compress (Decision 295): the selection of a folder becomes one zip or 7z beside the originals ----
@@ -1098,19 +1106,20 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (closed) return;
     if (!choice) { await showFolder(cwd); return; }
     chrome({ title: 'Compressing', folder: false });
-    let line = panel(`Compressing ${plural(items.length, 'item')}…`, 'Starting…', () => job?.cancel());
+    jobNote('Compressing');
+    const card = jobCard(`Compressing ${plural(items.length, 'item')}`, () => { if (!closed && st.view === 'extract') showFolder(cwd); });
     const base = packBaseName(items, cwd === st.volume.path ? '' : cwd.split('/').pop());
     job = startPack(api, cwd, base, {
       ...choice, paths: items.map((i) => i.path),
-      onProgress: (p) => { ui.onActivity?.(); line.textContent = `${p.files} of ${p.total} files · ${formatSize(p.bytes)}${p.bytesTotal ? ` of ${formatSize(p.bytesTotal)}` : ''}${p.current ? ` · ${p.current}` : ''}`; },
+      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: p.bytesTotal ? p.bytes / p.bytesTotal : null, size: p.bytesTotal ? `${formatSize(p.bytes)} / ${formatSize(p.bytesTotal)}` : formatSize(p.bytes), detail: `${p.files} of ${p.total} files${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
     });
     const res = await job.done;
-    job = null;
-    if (closed) return;
+    job = null; card.close();
     let size = '';
     if (res.state === 'done') { try { size = formatSize((await fsApi.stat(res.dest)).size); } catch { size = ''; } }
     toast(packResultText(res, size));
-    if (st.view === 'extract') await showFolder(cwd);
+    if (closed) return;
+    if ((st.view === 'extract' || st.view === 'folder') && st.cwd === cwd) await showFolder(cwd);
   }
   function actExtractSel() {
     if (st.view === 'archive') {
@@ -1174,7 +1183,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function finish() {
     if (closed) return;
     closed = true;
-    if (job) job.cancel(); // the native side removes what it wrote
+    if (job && !job.detached) job.cancel(); // the native side removes what it wrote; a minimised job goes on and reports with a toast
     st.pick = null; st.resolve = null;
     if (browse) browse.cancel();
     thumbCtl.destroy(); ptrCtl.destroy();

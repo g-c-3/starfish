@@ -13,14 +13,16 @@ const safe = (name) => String(name || 'archive').replace(/[\\/:*?"<>|\u0000-\u00
 export const sweepPeek = () => Filesystem.rmdir({ path: DIR, directory: Directory.Cache, recursive: true }).catch(() => {});
 
 // parts: Uint8Array, ArrayBuffer or Blob pieces in order. Resolves { path, remove() }; path is a plain file path for the archive reader.
-export async function makePeekCopy(name, parts) {
+export async function makePeekCopy(name, parts, onProgress = () => {}) {
   await sweepPeek();
   const rel = `${DIR}/${Date.now()}/${safe(name)}`;
-  let first = true;
+  let first = true, wrote = 0;
+  const total = parts.reduce((n, x) => n + (x.length ?? x.size ?? x.byteLength ?? 0), 0) || 1;
   const put = async (bytes) => {
     const data = b64(bytes);
     if (first) { await Filesystem.writeFile({ path: rel, directory: Directory.Cache, data, recursive: true }); first = false; }
     else await Filesystem.appendFile({ path: rel, directory: Directory.Cache, data });
+    wrote += bytes.length; onProgress(Math.min(1, wrote / total));
   };
   try {
     for (const p of parts) {
