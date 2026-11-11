@@ -450,6 +450,7 @@ public class ArklyArchiveBridge {
         volatile int files = 0;
         volatile int skipped = 0;
         volatile long written = 0;
+        volatile long total = 0; // uncompressed bytes this run will write, when the archive lists them (zip, 7z, rar); 0 when not known (Decision 450)
         private long lastCheck = 0;
         private boolean created = false;
         private String destRoot = null;
@@ -558,7 +559,7 @@ public class ArklyArchiveBridge {
         String json() {
             return "{\"state\":\"" + state + "\",\"code\":\"" + esc(code) + "\",\"message\":\"" + esc(message) + "\",\"files\":" + files
                     + ",\"skipped\":" + skipped + ",\"kept\":" + kept + ",\"replaced\":" + replaced + ",\"pending\":\"" + esc(pending) + "\",\"merging\":" + merging
-                    + ",\"paused\":" + paused + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
+                    + ",\"paused\":" + paused + ",\"total\":" + total + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
         }
 
         @Override
@@ -746,6 +747,17 @@ public class ArklyArchiveBridge {
                 zf.setPassword(password.toCharArray());
             }
             List<net.lingala.zip4j.model.FileHeader> headers = zf.getFileHeaders();
+            try {
+                long sum = 0;
+                for (net.lingala.zip4j.model.FileHeader h0 : headers) {
+                    if (!h0.isDirectory() && wanted(h0.getFileName())) {
+                        sum += Math.max(0, h0.getUncompressedSize());
+                    }
+                }
+                total = sum;
+            } catch (Exception ignore) {
+                total = 0;
+            }
             for (net.lingala.zip4j.model.FileHeader h : headers) {
                 if (cancelled) {
                     throw new Cancel();
@@ -774,6 +786,17 @@ public class ArklyArchiveBridge {
         private void do7z() throws Exception {
             SevenZFile sz = password.length() == 0 ? new SevenZFile(archive) : new SevenZFile(archive, password.toCharArray());
             try {
+                try {
+                    long sum = 0;
+                    for (SevenZArchiveEntry e0 : sz.getEntries()) {
+                        if (!e0.isDirectory() && wanted(e0.getName())) {
+                            sum += Math.max(0, e0.getSize());
+                        }
+                    }
+                    total = sum;
+                } catch (Exception ignore) {
+                    total = 0;
+                }
                 SevenZArchiveEntry e;
                 while ((e = sz.getNextEntry()) != null) {
                     if (cancelled) {
@@ -809,6 +832,17 @@ public class ArklyArchiveBridge {
         private void doRar() throws Exception {
             com.github.junrar.Archive a = password.length() == 0 ? new com.github.junrar.Archive(archive) : new com.github.junrar.Archive(archive, password);
             try {
+                try {
+                    long sum = 0;
+                    for (com.github.junrar.rarfile.FileHeader h0 : a.getFileHeaders()) {
+                        if (!h0.isDirectory() && wanted(h0.getFileName())) {
+                            sum += Math.max(0, h0.getFullUnpackSize());
+                        }
+                    }
+                    total = sum;
+                } catch (Exception ignore) {
+                    total = 0;
+                }
                 com.github.junrar.rarfile.FileHeader h;
                 while ((h = a.nextFileHeader()) != null) {
                     if (cancelled) {
