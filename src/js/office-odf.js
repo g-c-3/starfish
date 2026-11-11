@@ -394,14 +394,14 @@ export function readOds(bytes) {
     if (key in xfIndex) return xfIndex[key];
     const r = resolve(st, 'table-cell', name);
     const t = textProps(r.text, null);
-    const font = { name: t.font || defFont.name, size: t.size ? t.size / PX_PT : defFont.size, b: !!t.b, i: !!t.i, u: !!t.u, s: !!t.s, color: t.color ? { hex: t.color } : null };
+    const font = { name: t.font || defFont.name, size: t.size ? t.size / PX_PT : defFont.size, b: !!t.b, i: !!t.i, u: !!t.u, s: !!t.s, color: t.color || null };
     const bd = cellBorders(r.cell);
-    const bs = (s) => (s && !s.none ? { style: s.style === 'dashed' ? 'dashed' : s.style === 'double' ? 'double' : s.w > 1 ? 'medium' : 'thin', color: { hex: s.color } } : null);
+    const bs = (s) => (s && !s.none ? { style: s.style === 'dashed' ? 'dashed' : s.style === 'double' ? 'double' : s.w > 1 ? 'medium' : 'thin', color: s.color } : null);
     const border = bd.t || bd.b || bd.l || bd.r ? { l: bs(bd.l), r: bs(bd.r), t: bs(bd.t), b: bs(bd.b) } : null;
     const bg = hex(r.cell['background-color']);
     const al = r.para['text-align'];
     xfs.push({
-      code: 'General', date: false, font, fill: bg ? { hex: bg } : null, border,
+      code: 'General', date: false, font, fill: bg || null, border,
       h: al ? (ALIGN[al] === 'justify' ? 'justify' : ALIGN[al]) : 'general', v: r.cell['vertical-align'] === 'middle' ? 'center' : r.cell['vertical-align'] === 'top' ? 'top' : 'bottom',
       wrap: r.cell['wrap-option'] === 'wrap', indent: 0
     });
