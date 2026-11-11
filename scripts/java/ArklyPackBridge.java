@@ -115,6 +115,23 @@ public class ArklyPackBridge {
         }
     }
 
+    // Pause and resume a running compression (Decision 449).
+    @JavascriptInterface
+    public void pause(String id) {
+        Pack j = id == null ? null : jobs.get(id);
+        if (j != null) {
+            j.paused = true;
+        }
+    }
+
+    @JavascriptInterface
+    public void resume(String id) {
+        Pack j = id == null ? null : jobs.get(id);
+        if (j != null) {
+            j.paused = false;
+        }
+    }
+
     @JavascriptInterface
     public void release(String id) {
         if (id != null) {
@@ -220,6 +237,7 @@ public class ArklyPackBridge {
         volatile String message = "";
         volatile String current = "";
         volatile boolean cancelled = false;
+        volatile boolean paused = false;
         volatile int files = 0;
         volatile int total = 0;
         volatile int skipped = 0;
@@ -238,9 +256,21 @@ public class ArklyPackBridge {
             this.startFree = dir.getUsableSpace();
         }
 
+        // Pause (Decision 449): the read loop waits here, so a pause takes hold within one buffer; Cancel ends the wait.
+        private void hold() {
+            while (paused && !cancelled) {
+                try {
+                    Thread.sleep(80);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+
         String json() {
             return "{\"state\":\"" + state + "\",\"code\":\"" + esc(code) + "\",\"message\":\"" + esc(message) + "\",\"files\":" + files
-                    + ",\"total\":" + total + ",\"skipped\":" + skipped + ",\"bytes\":" + read + ",\"bytesTotal\":" + bytesTotal
+                    + ",\"total\":" + total + ",\"skipped\":" + skipped + ",\"paused\":" + paused + ",\"bytes\":" + read + ",\"bytesTotal\":" + bytesTotal
                     + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(out.getAbsolutePath()) + "\"}";
         }
 
@@ -337,6 +367,7 @@ public class ArklyPackBridge {
 
         // Counts the bytes read, honours Cancel and stops before the storage fills up.
         private void account(int n) throws IOException {
+            hold();
             if (cancelled) {
                 throw new Cancel();
             }

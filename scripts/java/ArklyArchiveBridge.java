@@ -238,6 +238,23 @@ public class ArklyArchiveBridge {
         }
     }
 
+    // Pause and resume a running extraction (Decision 449).
+    @JavascriptInterface
+    public void pause(String id) {
+        Job j = id == null ? null : jobs.get(id);
+        if (j != null) {
+            j.paused = true;
+        }
+    }
+
+    @JavascriptInterface
+    public void resume(String id) {
+        Job j = id == null ? null : jobs.get(id);
+        if (j != null) {
+            j.paused = false;
+        }
+    }
+
     @JavascriptInterface
     public void release(String id) {
         if (id != null) {
@@ -429,6 +446,7 @@ public class ArklyArchiveBridge {
         volatile String message = "";
         volatile String current = "";
         volatile boolean cancelled = false;
+        volatile boolean paused = false;
         volatile int files = 0;
         volatile int skipped = 0;
         volatile long written = 0;
@@ -525,10 +543,22 @@ public class ArklyArchiveBridge {
             return "replace".equals(got) ? "replace" : "skip";
         }
 
+        // Pause (Decision 449): the byte loop waits here, so a pause takes hold within one buffer; Cancel ends the wait.
+        private void hold() {
+            while (paused && !cancelled) {
+                try {
+                    Thread.sleep(80);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+
         String json() {
             return "{\"state\":\"" + state + "\",\"code\":\"" + esc(code) + "\",\"message\":\"" + esc(message) + "\",\"files\":" + files
                     + ",\"skipped\":" + skipped + ",\"kept\":" + kept + ",\"replaced\":" + replaced + ",\"pending\":\"" + esc(pending) + "\",\"merging\":" + merging
-                    + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
+                    + ",\"paused\":" + paused + ",\"bytes\":" + written + ",\"current\":\"" + esc(current) + "\",\"dest\":\"" + esc(dest.getAbsolutePath()) + "\"}";
         }
 
         @Override
@@ -627,6 +657,7 @@ public class ArklyArchiveBridge {
             @Override
             public void write(byte[] b, int off, int len) throws IOException {
                 try {
+                    hold();
                     if (cancelled) {
                         throw new Cancel();
                     }
