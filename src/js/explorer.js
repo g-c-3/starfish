@@ -13,6 +13,7 @@ import { attachScrollThumb } from './scrollthumb.js';
 import { attachPullToRefresh } from './pulltorefresh.js';
 import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
 import { trackJob } from './floatdock.js';
+import { openSheet } from './sheet.js';
 
 const KIND_EXT = {
   text: ['txt', 'md', 'log', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'java', 'kt', 'py', 'sh', 'sql', 'rtf', 'srt', 'vcf', 'ics',
@@ -381,29 +382,36 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     toast(r.failed ? `${what} moved to trash, ${r.failed} could not be moved${why(r)}.` : `${what} moved to trash.`);
     await afterChange(cwd);
   }
+  // Properties is a dashboard dialog over the list (Decision 450): Close, a tap outside and Back end it.
   async function showProps(e) {
-    const gen = ++st.gen;
-    st.view = 'props';
-    chrome({ title: 'Properties', folder: false });
-    body.replaceChildren();
-    const box = el('div', 'explorer-props');
-    body.appendChild(box);
-    const prop = (label, value) => { const r = el('div', 'prop'); r.appendChild(el('span', 'prop-label', label)); const v = el('span', 'prop-value', value); r.appendChild(v); box.appendChild(r); return v; };
+    let live = true;
     const stamp = (ms) => (ms ? new Date(ms).toLocaleString() : '—');
-    prop('Name', e.name);
-    prop('Location', parentOf(e.path));
-    prop('Type', e.isDir ? 'Folder' : (extOf(e.name) ? `${extOf(e.name).toUpperCase()} file` : 'File'));
-    const size = prop('Size', e.isDir ? 'Calculating…' : sizeText(e.size));
-    const mod = prop('Modified', stamp(e.mtime));
-    const cont = e.isDir ? prop('Contains', 'Calculating…') : null;
+    let size, mod, cont;
+    sheet({
+      title: 'Properties', onClose: () => { live = false; },
+      build: (host) => {
+        const hero = el('div', 'sheet-hero'), ic = el('div', 'sheet-hero-ic'), txt = el('div', '');
+        ic.innerHTML = e.isDir ? '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>'
+          : '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></svg>';
+        txt.append(el('div', 'sheet-hero-name', e.name), el('div', 'sheet-hero-type', e.isDir ? 'Folder' : (extOf(e.name) ? `${extOf(e.name).toUpperCase()} file` : 'File')));
+        hero.append(ic, txt);
+        const grid = el('div', 'sheet-grid');
+        const card = (k, v, cls = '') => { const c = el('div', `sheet-card ${cls}`); c.append(el('div', 'k', k)); const val = el('div', 'v', v); c.append(val); grid.append(c); return val; };
+        size = card('Size', e.isDir ? 'Calculating…' : sizeText(e.size), 'big');
+        mod = card('Modified', stamp(e.mtime));
+        if (e.isDir) cont = card('Contains', 'Calculating…', 'wide');
+        card('Location', parentOf(e.path), 'wide');
+        host.append(hero, grid);
+      },
+    });
     try {
       const p = await manage.propertiesOf(fsApi, e);
-      if (gen !== st.gen || closed) return;
+      if (!live || closed) return;
       size.textContent = sizeText(p.size) + (p.partial ? ' or more' : '');
       mod.textContent = stamp(p.mtime || e.mtime);
       if (cont) cont.textContent = `${plural(p.files, 'file')}, ${plural(p.folders, 'folder')}${p.partial ? ' or more (counting stopped in a very large folder)' : ''}`;
     } catch {
-      if (gen !== st.gen || closed) return;
+      if (!live || closed) return;
       size.textContent = 'Not available';
       if (cont) cont.textContent = 'Not available';
     }
@@ -801,6 +809,19 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     body.appendChild(box);
     return line;
   };
+  // One dashboard dialog at a time; Back and finish close it (Decision 450).
+  let activeSheet = null;
+  const sheet = (opts) => {
+    activeSheet?.close(null);
+    const sh = openSheet({ ...opts, onClose: (v) => { if (activeSheet === sh) activeSheet = null; opts.onClose?.(v); } });
+    activeSheet = sh; return sh;
+  };
+  // A question in a dashboard dialog: resolves with its answer, or null for Close, a tap outside and Back.
+  const askSheet = (title, build) => new Promise((resolve) => {
+    const ask = { done: (v) => sh.close(v), cancel: () => sh.close(null) };
+    const sh = sheet({ title, build: (host, close) => build(host, close), onClose: (v) => { if (st.ask === ask) st.ask = null; resolve(v ?? null); } });
+    st.ask = ask;
+  });
   // A running job shows as a floating card (Decision 449): Pause, Cancel, Minimise. Minimise gives the page back and the job goes on, even
   // when the screen is left; it reports with a toast when it ends.
   const jobCard = (title, minimise) => trackJob({
@@ -1016,7 +1037,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     job = startExtract(api, e.path, {
       password, entries, mode, destParent: intoDir,
       onConflict: async (rel) => { if (job?.detached) return 'skip'; /* the page is not here to ask; existing files are kept and counted */ const c = await askFileClash(rel); if (!closed) jobNote('Extracting'); return c; },
-      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: null, size: formatSize(p.bytes), detail: `${plural(p.files, 'file')}${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
+      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: p.total > 0 ? Math.min(1, p.bytes / p.total) : null, size: p.total > 0 ? `${formatSize(p.bytes)} / ${formatSize(p.total)}` : formatSize(p.bytes), short: `${p.files} files · ${formatSize(p.bytes)}`, detail: `${plural(p.files, 'file')}${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
     });
     const res = await job.done;
     job = null; card.close();
@@ -1060,10 +1081,9 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     return wrap;
   };
   // Resolves { format, level, password } or null.
-  const askPack = (count) => askBody((done) => {
+  const askPack = (count) => askSheet(`Compress ${plural(count, 'item')}`, (host, done) => {
     const opt = { format: 'zip', level: 2 };
-    const box = el('div', 'explorer-banner pack-form');
-    box.appendChild(el('div', '', `Compress ${plural(count, 'item')}`));
+    const box = el('div', 'pack-form');
     const pwHint = el('div', 'explorer-meta', 'Optional. Anyone with the password can open the archive; without it nothing can. It cannot be recovered.');
     const pw = document.createElement('input'), pw2 = document.createElement('input');
     for (const [i, ph] of [[pw, 'Password (optional)'], [pw2, 'Repeat password']]) { i.type = 'password'; i.placeholder = ph; i.autocomplete = 'off'; i.setAttribute('autocapitalize', 'off'); i.spellcheck = false; }
@@ -1090,7 +1110,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
       btn('Cancel', 'secondary-btn', () => done(null)),
     );
     box.appendChild(a);
-    body.appendChild(box);
+    host.appendChild(box);
     syncPw();
   });
   async function actCompress() {
@@ -1100,18 +1120,16 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     const items = selectedEntries(), cwd = st.cwd;
     if (!items.length) return;
     clearSel();
+    const choice = await askPack(items.length); // a dashboard dialog over the list
+    if (closed || !choice) return;
     st.view = 'extract'; st.gen++;
-    chrome({ title: 'Compress', folder: false });
-    const choice = await askPack(items.length);
-    if (closed) return;
-    if (!choice) { await showFolder(cwd); return; }
     chrome({ title: 'Compressing', folder: false });
     jobNote('Compressing');
     const card = jobCard(`Compressing ${plural(items.length, 'item')}`, () => { if (!closed && st.view === 'extract') showFolder(cwd); });
     const base = packBaseName(items, cwd === st.volume.path ? '' : cwd.split('/').pop());
     job = startPack(api, cwd, base, {
       ...choice, paths: items.map((i) => i.path),
-      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: p.bytesTotal ? p.bytes / p.bytesTotal : null, size: p.bytesTotal ? `${formatSize(p.bytes)} / ${formatSize(p.bytesTotal)}` : formatSize(p.bytes), detail: `${p.files} of ${p.total} files${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
+      onProgress: (p) => { ui.onActivity?.(); card.update({ pct: p.bytesTotal ? p.bytes / p.bytesTotal : null, size: p.bytesTotal ? `${formatSize(p.bytes)} / ${formatSize(p.bytesTotal)}` : formatSize(p.bytes), short: `${p.files}/${p.total} · ${formatSize(p.bytes)}`, detail: `${p.files} of ${p.total} files${p.current ? ` · ${p.current}` : ''}`, paused: !!p.paused }); },
     });
     const res = await job.done;
     job = null; card.close();
@@ -1183,6 +1201,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   function finish() {
     if (closed) return;
     closed = true;
+    activeSheet?.close(null);
     if (job && !job.detached) job.cancel(); // the native side removes what it wrote; a minimised job goes on and reports with a toast
     st.pick = null; st.resolve = null;
     if (browse) browse.cancel();
@@ -1197,6 +1216,7 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     onClose();
   }
   function back() {
+    if (activeSheet) { activeSheet.close(null); return; }
     if (viewer) { viewer.back(); return; }
     if (selecting()) { clearSel(); return; }
     if (st.view === 'extract') { st.ask?.cancel(); job?.cancel(); return; }

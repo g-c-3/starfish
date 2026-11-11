@@ -56,6 +56,7 @@ import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT }
 import { makePeekCopy, sweepPeek, PEEK_MAX } from './archivepeek.js';
 import { trackSave, startOpen, setDockToast } from './floatdock.js';
 import '../css/floatdock.css';
+import '../css/sheet.css';
 import { nextBatchStart } from './batch-number.js';
 import { PERIODS, browse, typeCounts, toolbarHtml, bindToolbar } from './browse.js';
 import { attachPageSwipe } from './pageswipe.js';

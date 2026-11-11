@@ -58,20 +58,20 @@ export function trackJob({ title, onPause, onResume, onCancel, onMinimise } = {}
   const card = addCard('fd-job');
   const ic = el('span', 'fd-ic'); ic.innerHTML = svg('<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>');
   const t = el('b', 'fd-title', title), pct = el('span', 'fd-pct', ''), sub = el('div', 'fd-sub', 'Starting…');
-  const sizes = el('span', 'fd-size'), b = bar(), row = el('div', 'fd-row'); row.append(sizes, b.el);
+  const sizes = el('span', 'fd-size'), short = el('span', 'fd-short'), b = bar(), row = el('div', 'fd-row'); row.append(sizes, b.el);
   let paused = false, minimised = false, cancelling = false;
   const mini = btn('fd-mini', '', 'Minimise', () => { minimised = !minimised; card.classList.toggle('min', minimised); mini.innerHTML = minimised ? ICON.max : ICON.min; mini.setAttribute('aria-label', minimised ? 'Expand' : 'Minimise'); if (minimised) onMinimise?.(); });
   mini.innerHTML = ICON.min;
   const pauseBtn = btn('fd-pause', 'Pause', 'Pause', () => { paused = !paused; paint(); (paused ? onPause : onResume)?.(); });
   const cancelBtn = btn('fd-cancel', 'Cancel', 'Cancel', () => { cancelling = true; cancelBtn.disabled = pauseBtn.disabled = true; sub.textContent = 'Cancelling…'; onCancel?.(); });
   const btns = el('div', 'fd-btns'); btns.append(pauseBtn, cancelBtn);
-  const top = el('div', 'fd-top'); top.append(ic, t, pct, mini);
+  const top = el('div', 'fd-top'); top.append(ic, t, short, pct, mini);
   card.append(top, sub, row, btns);
   const paint = () => { pauseBtn.textContent = paused ? 'Resume' : 'Pause'; pauseBtn.setAttribute('aria-label', pauseBtn.textContent); card.classList.toggle('paused', paused); t.textContent = paused ? `${title} · paused` : title; };
   return {
-    update({ pct: p = null, size = '', detail = '', paused: ps } = {}) {
+    update({ pct: p = null, size = '', short: sh = '', detail = '', paused: ps } = {}) { // short: what the one-line version shows
       if (ps != null && ps !== paused) { paused = ps; paint(); }
-      b.set(p); pct.textContent = p == null ? '' : `${Math.round(p * 100)}%`; sizes.textContent = size;
+      b.set(p); pct.textContent = p == null ? '' : `${Math.round(p * 100)}%`; sizes.textContent = size; short.textContent = sh;
       if (!cancelling) sub.textContent = detail;
     },
     get minimised() { return minimised; },
