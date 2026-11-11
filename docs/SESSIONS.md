@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 219**
+
+Start: DP239 confirmed (Phase 118). Next roadmap item: Phase 110.
+- No code written. Scoping: the Office viewers (Decision 226) are in-house on `fflate`; OpenDocument fits that with no new dependency; the old binary formats need new readers or a library (a dependency and a lock file change, which the build must accept).
+- Owner's choice: all six formats in-house, doc and ppt as text only. Then asked for a sophisticated viewer with full editing tools that stay hidden on a phone behind one button and show in full on a tablet or foldable: confirmed, with editing split into Phases 119 to 122.
+- Decision 451.
+- Open: nothing on a device. The CI log for the Java files of Phases 117 and 118 is still the first thing to read.
+- Next start: the CI log, then Phase 110 (viewers for all six formats and the responsive tool shell).
+
+---
+
 **Session 218**
 
 Start: DP238 confirmed (Phase 117). Asked for: Properties and Compress options as dashboard dialogs (Close, tap outside); semi-transparent cards; size on the minimised card; a brighter extract bar and, if the archive allows, a percent.
