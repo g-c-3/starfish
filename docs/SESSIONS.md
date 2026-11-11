@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 220**
+
+Start: Phase 110, step 1.
+- Built: `src/js/office-odf.js` (odt, ods and odp readers into the existing models); `explorer.js` maps odt, ods and odp to the docx, xlsx and pptx kinds; `office-render.js` picks the reader by the file's `mimetype` entry.
+- Tested in a sandbox against hand-built odt, ods and odp files: styles, lists, merged cells, footnote, picture, header, repeated empty rows, notes. Not run through CI or a device.
+- Not read: the CI log for the Java files of Phases 117 and 118 (the unauthenticated API was rate-limited and run logs need a sign-in).
+- Weighed and rejected: Univer (conversion layer is paid and needs a server) and ZetaOffice (engine too large for a 15 MB app). Owner's rule: viewers and editors work for all formats with no substantial size increase.
+- Owner's plan: every file opens view only, an Edit button turns the tools on (Decision 454).
+- Decisions 452 to 454. DP240 added; DP241 planned.
+- Next start: the CI log, then Phase 110 step 2: xls (BIFF), then doc and ppt as text, more odp shapes, then the responsive tool shell.
+
+---
+
 **Session 219**
 
 Start: DP239 confirmed (Phase 118). Next roadmap item: Phase 110.

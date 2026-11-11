@@ -427,3 +427,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-11 | Session 217 | Decision 449 | Phase 117: floating Save card, compress and extract dashboard with Pause, Cancel and Minimise, opening card for big files; DP236 and DP237 confirmed; DP238 added; not run through CI or a device |
 | 2026-11-11 | Session 218 | Decision 450 | Phase 118: Properties and Compress options as dashboard dialogs, see-through cards, size on the minimised card, extract total for zip, 7z and rar; DP238 confirmed; DP239 added; not run through CI or a device |
 | 2026-11-11 | Session 219 | Decision 451 | Phase 118 confirmed on the device (DP239); Phase 110 scoped, editing Phases 119 to 122 added; no code |
+| 2026-11-12 | Session 220 | Decisions 452 to 454 | Phase 110 step 1: odt, ods and odp viewers on the existing Office renderers; DP240 added; size rule set (in-house only); view-only open with an Edit button; not run through CI or a device |
