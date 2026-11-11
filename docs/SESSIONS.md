@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 217**
+
+Start: DP236 and DP237 confirmed. The owner's recording showed an archive open: the dialog ended at about 3 s, then about 17 s of nothing while the file was decrypted and copied, then the view. Asked for: a Save card with size and Cancel; a floating dashboard for compress and extract with Pause, Cancel and Minimise; an opening card for big files. Answers: real Pause in the native helper; the card shows when loading takes over 0.5 s; the two-at-once limit counts only opening cards.
+- Decision 449. Phase 117 built.
+- New: `src/js/floatdock.js`, `src/css/floatdock.css`. Replaced: `src/js/app.js`, `src/js/archivepeek.js`, `src/js/explorer.js`, `src/js/explorer-pack.js`, `src/js/explorer-archive.js`, `scripts/java/ArklyArchiveBridge.java`, `scripts/java/ArklyPackBridge.java`.
+- Tested in a simulated page: the dock (a fast save shows nothing; the size pair and bar; Cancel; Pause, Resume, Minimise, expand; automatic open in the same place; Open in another; the third refused). `makePeekCopy` progress against a mocked file plugin. All scripts parse; the Java files are brace-balanced. Not run: anything on a device, the Java (not compiled), the explorer job flow, the preloaded read path for video, PDF and audio: not run through CI or a device.
+- Open: DP238. First check the CI log for the two Java files.
+- Not done: Phases 110 to 113; Vault files other than archives have no opening card; no card for the PDF editing saves.
+- Next start: CI, DP238, then Phase 110.
+
+---
+
 **Session 216**
 
 Start: owner asked that an archive over 256 MB give a choice instead of always going to the phone's apps, remembered, with a brief dialog (1.5 s) showing where it opens, with Stop and Open.

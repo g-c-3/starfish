@@ -1205,3 +1205,11 @@ A static dialog listed in `BACK_MODALS` (`app.js`) is left by its own Close or C
 ## Archives in Files, the Vault and the Trash (Decision 447)
 
 `openArchivePeek` (`app.js`) is the route for a stored file whose kind is `archive` (`filesview.js`). It writes a decrypted copy with `archivepeek.js` (`makePeekCopy`, private cache folder `arkly-peek`, 3 MB slices, limit `PEEK_MAX` 256 MB) and opens `openExplorer({ archive: { path, name, cleanup } })`. In that mode the explorer starts in the archive view, hides Extract, and `finish` runs `cleanup`. `sweepPeek` runs at start, before each copy and on cleanup. A lock closes it through `activeExplorer.finish`. Over `PEEK_MAX`, `askBigArchive` (`app.js`, dialog `#big-open-dialog`, in `BACK_MODALS`) decides first (Decision 448): setting `big_archive_open` is `arkly` or `phone`; empty means ask.
+
+## Floating progress cards (Decision 449)
+
+`floatdock.js` mounts `#float-dock` (top, the toast's place) and exports `trackSave`, `trackJob`, `startOpen` and `setDockToast`.
+- **Save:** `beginSaveCard` (`app.js`) makes a card for a list of files; `savePicked` and `savePhoneItem` call `prog.add(bytes)` and stop on `prog.cancelled`.
+- **Job:** `explorer.js` (`jobCard`, `jobNote`) shows compress and extract; `startPack` and `startExtract` return `pause`, `resume`, `cancel`; the bridges answer `pause(id)`, `resume(id)` and report `paused`. A minimised job is `detached`; `finish` does not cancel it.
+- **Open:** `openFileInArkly` loads a stored file of 8 MB or more through `startOpen`, then runs `openFileInArklyNow`; `readEntryParts` and `readEntryBytes` in `app.js` return the preloaded parts once. `placeKey` says where the person is. `openArchivePeek` loads behind the same card.
+
