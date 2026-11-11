@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 218**
+
+Start: DP238 confirmed (Phase 117). Asked for: Properties and Compress options as dashboard dialogs (Close, tap outside); semi-transparent cards; size on the minimised card; a brighter extract bar and, if the archive allows, a percent.
+- Decision 450. Phase 118 built.
+- New: `src/js/sheet.js`, `src/css/sheet.css`. Replaced: `src/js/explorer.js`, `src/js/floatdock.js`, `src/css/floatdock.css`, `src/js/app.js` (one import), `scripts/java/ArklyArchiveBridge.java`.
+- The extract total is possible for zip, 7z and rar, because their lists carry sizes; tar and gz need a full read, so they stay without a percent.
+- Tested in a simulated page: the sheet (open, tap inside keeps it, tap outside, Close, one close value, the answer value, removed after the exit) and the dock again. Scripts parse; the Java file is brace-balanced. Not run: the dialogs and cards on a device, the Java (not compiled): not run through CI or a device.
+- Open: DP239. The CI log for the Java files of Phases 117 and 118.
+- Not done: Phases 110 to 113.
+- Next start: CI, DP239, then Phase 110.
+
+---
+
 **Session 217**
 
 Start: DP236 and DP237 confirmed. The owner's recording showed an archive open: the dialog ended at about 3 s, then about 17 s of nothing while the file was decrypted and copied, then the view. Asked for: a Save card with size and Cancel; a floating dashboard for compress and extract with Pause, Cancel and Minimise; an opening card for big files. Answers: real Pause in the native helper; the card shows when loading takes over 0.5 s; the two-at-once limit counts only opening cards.

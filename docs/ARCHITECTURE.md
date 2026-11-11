@@ -1213,3 +1213,9 @@ A static dialog listed in `BACK_MODALS` (`app.js`) is left by its own Close or C
 - **Job:** `explorer.js` (`jobCard`, `jobNote`) shows compress and extract; `startPack` and `startExtract` return `pause`, `resume`, `cancel`; the bridges answer `pause(id)`, `resume(id)` and report `paused`. A minimised job is `detached`; `finish` does not cancel it.
 - **Open:** `openFileInArkly` loads a stored file of 8 MB or more through `startOpen`, then runs `openFileInArklyNow`; `readEntryParts` and `readEntryBytes` in `app.js` return the preloaded parts once. `placeKey` says where the person is. `openArchivePeek` loads behind the same card.
 
+## Dashboard dialogs (Decision 450)
+
+`sheet.js` (`openSheet`) builds a `.modal-overlay` with a title, a Close button and a body; a tap on the overlay and `close()` hide it and remove it after the exit. In `explorer.js`, `sheet` keeps one open (`activeSheet`, closed by Back and `finish`) and `askSheet` resolves a question (`null` for every way out). Properties (`showProps`) and the Compress options (`askPack`) use them; the list view behind does not change.
+
+The archive job status carries `total` (uncompressed bytes of the chosen entries; 0 when unknown): zip, 7z and rar read it from their lists before extracting.
+
