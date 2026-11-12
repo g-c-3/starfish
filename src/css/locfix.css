@@ -30,3 +30,6 @@
 .lf-hint { font-size: 12px; color: var(--muted); margin: 6px 0 12px; min-height: 16px; }
 .lf-use { width: 100%; margin-bottom: 8px; }
 .lf-cancel { width: 100%; }
+/* Until the compass has settled (Decision 460) the letters are dimmed: north is not known yet. Opacity only. */
+.lf-box .lf-n, .lf-box .lf-dir { transition: opacity 0.25s ease; }
+.lf-box.lf-wait .lf-n, .lf-box.lf-wait .lf-dir { opacity: 0.4; }
