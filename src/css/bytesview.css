@@ -1,0 +1,10 @@
+/* bytesview.css — the byte view (Decision 467). Nothing enters or leaves: it fills the viewer that is already open. */
+.bv { position: absolute; inset: 0; overflow: auto; padding: 14px 14px calc(24px + env(safe-area-inset-bottom, 0px)); color: var(--fg); -webkit-overflow-scrolling: touch; }
+#explorer-viewer .bv { position: relative; inset: auto; height: 100%; box-sizing: border-box; }
+.bv-info { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.bv-info dt { color: var(--muted); }
+.bv-info dd { margin: 0; overflow-wrap: anywhere; }
+.bv-note { margin: 10px 0; font-size: 12.5px; color: var(--muted); }
+.bv-h { margin: 16px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.bv-hex { margin: 0; padding: 10px 12px; overflow-x: auto; border-radius: 12px; background: var(--surface-2); font: 11.5px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre; }
+.bv-more { margin: 8px 0; }
