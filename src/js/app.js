@@ -67,6 +67,7 @@ import '../css/panelmotion.css';
 import '../css/textchrome.css';
 import '../css/reminderset.css';
 import '../css/bigopen.css';
+import '../css/notesplit.css';
 import { speechPresent } from './speech.js';
 import { createDictationPanel } from './dictpanel.js';
 import { VAULT_TYPES, saveVaultEntry, loadVaultEntryContent, base64ToBlobUrl, buildVaultIndex, refreshVaultIndexEntries, getVaultIndex, clearVaultIndex, searchVaultIndex, searchVaultBodies, vaultTrashSize, vaultTrashLabel, getVaultThumb, putVaultThumb, sweepVaultThumbs, vaultLabelSuggestions } from './vault.js';
@@ -107,6 +108,41 @@ let expectingPickerReturn = false;
 // keeps it current. backAction() is the single place that says what Back would do right now (or
 // null at a landing page, where the button is dimmed and does nothing).
 let currentLocation = 'home';
+// ---- Notes split view (Decision 458): in a window 600 px wide or more, the open Notes folder (Home or Vault) is a fixed left pane and the
+// note editor fills the rest (`#editor-screen.np-pane`). Narrower, the editor is a full-screen layer as before. ----
+const SPLIT_MQ = window.matchMedia('(min-width: 600px)');
+let notesSplitKey = null; // 'home', 'vault' or null: which Notes folder is split now
+let activeNoteId = null;  // the note on view in the pane, for the list highlight
+const npOn = () => document.body.classList.contains('np-split');
+function notesSplitFolder() { // the Notes folder on view, whatever the width
+  const shown = (id) => { const e = document.getElementById(id); return !!e && !e.closest('.hidden'); };
+  if (openFolderType === 'note' && shown('folder-view')) return 'home';
+  if (openVaultFolderType === 'note' && shown('vault-folder-view')) return 'vault';
+  return null;
+}
+function syncNotesSplit() {
+  const folder = notesSplitFolder();
+  const which = SPLIT_MQ.matches ? folder : null;
+  if (which === notesSplitKey) return;
+  notesSplitKey = which;
+  const b = document.body;
+  b.classList.toggle('np-split', !!which);
+  if (which) b.dataset.np = which; else delete b.dataset.np;
+  const ed = document.getElementById('editor-screen');
+  if (ed && !ed.classList.contains('hidden') && ed.classList.contains('np-pane') && !folder && activeEditor) activeEditor.requestBack(); // the folder is gone: the note is saved and closes
+  else if (ed && !ed.classList.contains('hidden')) ed.classList.toggle('np-pane', !!which); // an editor already open joins the pane, or goes full screen
+  if (!which && !activeEditor) activeNoteId = null;
+  window.dispatchEvent(new Event('arkly-notes-split'));
+}
+SPLIT_MQ.addEventListener('change', () => { syncNotesSplit(); window.dispatchEvent(new Event('arkly-notes-relayout')); });
+function markActiveNote() { // the note on view in the pane is lit in the list
+  for (const id of ['folder-list', 'vault-folder-list']) {
+    const box = document.getElementById(id);
+    if (!box) continue;
+    box.querySelectorAll('.np-active').forEach((n) => n.classList.remove('np-active'));
+    if (npOn() && activeNoteId) { const row = box.querySelector(`[data-id="${CSS.escape(activeNoteId)}"]`); if (row) row.classList.add('np-active'); }
+  }
+}
 function recordLocation(loc) {
   currentLocation = loc;
   updateBackButtonState();
@@ -492,6 +528,7 @@ function backAction() {
 }
 
 function updateBackButtonState() {
+  syncNotesSplit();
   const action = backAction();
   document.getElementById('nav-back-btn')?.classList.toggle('disabled', !action);
   if (exitNoticeUp && action) { lastLandingBackAt = 0; hideToast(); } // left the landing page: the "again to exit" notice goes at once (Decision 289)
@@ -2611,7 +2648,19 @@ setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => loadCodeEdit
 // explicit discard, the text goes to persist; a clean close or a discard calls clear. The next unlock commits what persist stored.
 // onRename(text): the Save dialog with name, tags and description; returns true when the title changed.
 // text: the note as stored: its words, then its styles when it has any (notestyle.js).
-function openTextEditor({ text: stored = '', isVault = false, session, nav = null } = {}) {
+// A note already on view in the pane is saved and leaves, then this one arrives (Decision 458); otherwise as before.
+let editorSwapBusy = false;
+async function openTextEditor(opts = {}) {
+  if (!('swapDir' in opts)) { activeNoteId = null; markActiveNote(); } // a new note is not in the list yet
+  const prior = activeEditor;
+  if (prior && prior.release && npOn()) {
+    if (editorSwapBusy) return null;
+    editorSwapBusy = true;
+    try { await prior.release(opts.swapDir || 'r'); } finally { editorSwapBusy = false; }
+  }
+  return openTextEditorCore(opts);
+}
+function openTextEditorCore({ text: stored = '', isVault = false, session, nav = null, swapDir = 'r' } = {}) {
   return new Promise((resolve) => {
     let { text, spans } = splitNoteStyle(stored);
     let swipeCtl = null;
@@ -2640,7 +2689,7 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       $('editor-count').textContent = countLine(v, ed ? ed.rowCount() : v.split('\n').length);
     };
     updateCount();
-    const finish = (discarded = false) => {
+    const finish = (discarded = false, keep = false) => { // keep: the pane stays on view for the next note
       stopDictation(); if (panel) panel.destroy();
       if (swipeCtl) { swipeCtl.detach(); swipeCtl = null; }
       window.removeEventListener('resize', caretSoon); if (window.visualViewport) window.visualViewport.removeEventListener('resize', caretSoon);
@@ -2651,7 +2700,7 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       if (!discarded) { if (dirty) saveDraft(); else if (session.clear) Promise.resolve(session.clear()).catch(() => {}); } // lock, screen-off: keep the text
       if (ed) { ed.destroy(); ed = null; } // the text leaves the page with the editor
       bar.replaceChildren(); floatCleanup();
-      screen.classList.add('hidden');
+      if (!keep) { screen.classList.add('hidden'); clearPaneFx(); clearTimeout(screen._npT); screen._npT = setTimeout(() => screen.classList.remove('np-pane'), 450); } // np-pane stays while the exit plays
       activeEditor = null;
       updateBackButtonState();
       resolve(null);
@@ -2679,7 +2728,29 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
       for (let i = 0; saving && i < 100; i++) await new Promise((r) => setTimeout(r, 50));
       return flush();
     };
-    const requestBack = async () => { if (panel && panel.isOpen()) { panel.close(); return; } await settle(); if (!closed) finish(); }; // Back closes the dictation panel first
+    // The parts of the page that make up the note on view: they leave and arrive as one when the pane switches notes (Decision 458).
+    const paneEls = () => [$('editor-title'), bar, nameEl, host, $('editor-count')];
+    const PANE_FX = ['np-out-l', 'np-out-r', 'np-in-l', 'np-in-r'];
+    const clearPaneFx = () => paneEls().forEach((n) => n && n.classList.remove(...PANE_FX));
+    const requestBack = async () => { // Back closes the dictation panel first; in the pane, Back leaves the Notes folder
+      if (panel && panel.isOpen()) { panel.close(); return; }
+      const inPane = screen.classList.contains('np-pane'), vaultPane = screen.dataset.np === 'vault';
+      await settle();
+      if (closed) return;
+      finish();
+      if (inPane) { if (vaultPane) closeVaultFolder(); else closeFolder(); }
+    };
+    const release = async (dir) => { // another note is opening in the pane: save this one, let it leave, then give way
+      if (closed) return;
+      stopDictation();
+      await settle();
+      if (closed) return;
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        paneEls().forEach((n) => n.classList.add(dir === 'l' ? 'np-out-r' : 'np-out-l'));
+        await new Promise((r) => setTimeout(r, 110)); // the old note has faded; the new one arrives after this gap
+      }
+      if (!closed) finish(false, true);
+    };
     $('editor-back-btn').onclick = requestBack;
     // Mic (Decisions 408, 411, 412): opens the dictation panel at the bottom. Dictated text goes in at the cursor like typing, so the note
     // saves it like typing. The voice goes to Google's speech service while it runs (told once); not in the Vault, where a private
@@ -2740,13 +2811,18 @@ function openTextEditor({ text: stored = '', isVault = false, session, nav = nul
     nameEl.value = session.titleText || '';
     nameEl.oninput = () => touch();
     nameEl.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); if (ed) ed.view.focus(); } };
-    activeEditor = { finish: (r) => finish(r === true), requestBack, isVault };
+    activeEditor = { finish: (r) => finish(r === true), requestBack, release, isVault };
     (async () => {
       let mod;
       try { mod = await loadCodeEditor(); }
       catch (e) { if (!closed) { toast('The editor could not be loaded'); finish(true); } return; }
       if (closed) return;
       // Shown only now: the body below is built in the same task, before the slide's first frame (Decision 400).
+      const swapping = !screen.classList.contains('hidden'); // a note already on view in the pane has just left
+      clearTimeout(screen._npT);
+      screen.classList.toggle('np-pane', npOn());
+      if (npOn()) screen.dataset.np = document.body.dataset.np || 'home'; else delete screen.dataset.np;
+      if (swapping) { clearPaneFx(); paneEls().forEach((n) => n.classList.add(swapDir === 'l' ? 'np-in-l' : 'np-in-r')); setTimeout(clearPaneFx, 450); }
       screen.classList.remove('hidden');
       updateBackButtonState();
       let undoBtn, redoBtn;
@@ -4456,7 +4532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // above it (CSS: body.overlay-open) and Back dismisses it (Decision 104). Class changes cover every open/close path,
   // including a lock's forced close.
   const syncOverlayChrome = () => {
-    const open = !!document.querySelector('#editor-screen:not(.hidden), #viewer-screen:not(.hidden), #explorer-screen:not(.hidden), #phone-screen, .modal-overlay:not(.hidden)');
+    const open = !!document.querySelector('#editor-screen:not(.hidden):not(.np-pane), #viewer-screen:not(.hidden), #explorer-screen:not(.hidden), #phone-screen, .modal-overlay:not(.hidden)');
     document.body.classList.toggle('overlay-open', open);
     updateBackButtonState();
   };
@@ -4540,8 +4616,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (openVaultFolderType === 'note') swipeItems.vault.note = items;
     container.innerHTML = tabItems
       ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
-      : (openVaultFolderType === 'note' && noteView === 'grid' && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
-    if (openVaultFolderType === 'note' && noteView === 'grid') fillVaultNotePreviews(container);
+      : (openVaultFolderType === 'note' && noteView === 'grid' && !npOn() && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
+    if (openVaultFolderType === 'note' && noteView === 'grid' && !npOn()) fillVaultNotePreviews(container);
     if (tabItems) { // the log is read from the database; the list redraws once if it differs from the copy drawn
       loadReminderLog(db).then((l) => {
         if (!privateSessionKey || openVaultFolderType !== 'reminder' || JSON.stringify(l) === JSON.stringify(vaultReminderLog)) return;
@@ -5623,7 +5699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tabItems) swipeItems.home.reminder = tabItems.map((it) => it.row);
     if (openFolderType === 'location') swipeItems.home.location = rows;
     if (openFolderType === 'note') swipeItems.home.note = rows;
-    document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
+    document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && !npOn() && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
       ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
         id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
@@ -6346,6 +6422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           : await captureText(rawNow, 'note', { label, tags: held.tags, description: held.description });
         await session.clear();
         st.id = id; st.desc = held.description || '';
+        activeNoteId = id; markActiveNote();
         Object.assign(session, noteDraftHandlers({ isVault, entryId: id }));
       } else {
         await window.Arkly.editEntry(st.id, { text: rawNow, label }, {});
@@ -6353,6 +6430,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (isVault) await refreshVaultIndexEntries(db, privateSessionKey, [st.id]);
       }
       session.title = label;
+      window.dispatchEvent(new Event('arkly-note-saved'));
       return true;
     };
     return session;
@@ -6373,9 +6451,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Text note: opens with its text and Title; every change is saved at once (Decision 407). Rename edits name, tags and description.
   async function openNote(item, isVault) {
+    syncNotesSplit();
+    if (npOn() && activeEditor && activeNoteId === item.id) return; // already on view in the pane
+    const ids = swipeItems[isVault ? 'vault' : 'home'].note.map((r) => r.id);
+    const swapDir = ids.indexOf(item.id) < ids.indexOf(activeNoteId) ? 'l' : 'r'; // a note higher in the list arrives from the left
     const text = isVault ? await vaultNoteText(item.id) : (item.body_text || '');
     const session = makeNoteSession({ isVault, item, raw: text });
-    await openTextEditor({ text, isVault, session, nav: noteNav(item.id, isVault) });
+    activeNoteId = item.id; markActiveNote();
+    try { await openTextEditor({ text, isVault, session, nav: noteNav(item.id, isVault), swapDir }); }
+    finally { if (activeNoteId === item.id && !activeEditor) { activeNoteId = null; markActiveNote(); } }
   }
   // The notes of the open folder, for the editor's swipe (Decision 419). Neighbours are found by id in the folder's current list, so a
   // redraw of the list while the editor is open does not move the place; a note outside the list (or a new one) has no neighbours.
@@ -6386,7 +6470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return {
       has: (step) => at(step) !== null,
       peek: at,
-      commit: (id) => { cur = id; },
+      commit: (id) => { cur = id; activeNoteId = id; markActiveNote(); },
       async load(id) { // the neighbour as stored now, with its own session
         const item = isVault
           ? (getVaultIndex() || []).find((e) => e.id === id)
@@ -6966,6 +7050,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     noteView = (await metaGet('note_view', 'list')) === 'grid' ? 'grid' : 'list';
     noteCols = clampNoteCols(await metaGet('note_cols', String(NOTE_DEFAULT_COLS)));
   }
+  // ---- Notes split view (Decision 458): the lit row, the first note on arrival, the list kept current while a note is edited. ----
+  const autoOpen = { home: false, vault: false }; // open the first note once the list has drawn
+  function npAfterDraw(isVault) {
+    markActiveNote();
+    const key = isVault ? 'vault' : 'home';
+    if (!npOn() || document.body.dataset.np !== key) return;
+    if (activeEditor && activeNoteId) { // a note deleted from the list leaves the pane
+      const id = activeNoteId;
+      Promise.resolve(isVault ? (getVaultIndex() || []).some((e) => e.id === id) : db.query(`SELECT 1 FROM entries WHERE id=? AND deleted_at IS NULL`, [id]).then((r) => (r.values || []).length > 0))
+        .then((alive) => { if (!alive && activeEditor && activeNoteId === id) { activeEditor.finish(true); autoOpen[key] = true; npAfterDraw(isVault); } }).catch(() => {});
+      return;
+    }
+    if (!autoOpen[key] || activeEditor) return;
+    const row = document.getElementById(isVault ? 'vault-folder-list' : 'folder-list').querySelector('.entry-row[data-id]');
+    if (!row) return;
+    autoOpen[key] = false;
+    openEntry(row.dataset.id, isVault).catch(() => {});
+  }
+  for (const [boxId, vault] of [['folder-list', false], ['vault-folder-list', true]]) {
+    const box = document.getElementById(boxId);
+    if (box) new MutationObserver(() => requestAnimationFrame(() => npAfterDraw(vault))).observe(box, { childList: true });
+  }
+  window.addEventListener('arkly-notes-split', () => { // the split turned on or off
+    if (!npOn()) { autoOpen.home = autoOpen.vault = false; return; }
+    autoOpen[document.body.dataset.np] = !activeEditor;
+    requestAnimationFrame(() => npAfterDraw(document.body.dataset.np === 'vault'));
+  });
+  window.addEventListener('arkly-notes-relayout', () => { // the window changed width: the list is drawn again as list or grid
+    if (openFolderType === 'note') renderMainTimeline();
+    if (openVaultFolderType === 'note') renderVault();
+  });
+  let npRefreshT = 0;
+  window.addEventListener('arkly-note-saved', () => {
+    if (!npOn()) return;
+    clearTimeout(npRefreshT);
+    npRefreshT = setTimeout(() => { if (!npOn()) return; if (document.body.dataset.np === 'vault') renderVault(); else renderMainTimeline(); }, 1200);
+  });
   // The title-bar button shows the layout a tap switches to.
   function noteViewBtnHtml() {
     const toGrid = noteView === 'list';

@@ -85,18 +85,20 @@ function under(layer) {
 function layerOrDialog(el, was, now) {
   const layer = el.matches(LAYERS), dialog = !layer && el.matches(DIALOGS);
   if (!layer && !dialog) return false;
+  const pane = layer && el.classList.contains('np-pane'); // the editor beside the Notes list (Decision 458): nothing under it leaves or returns
   if (was && !now) { // shown
     el.classList.remove('mx-out');
     if (layer) {
       try { el.style.setProperty('--mx-d', getComputedStyle(el).display); } catch { /* default applies */ }
       if (locked()) return true;
+      if (pane) { play(el, ['mx-in', 'mx-view', 'mx-from-r']); return true; }
       const list = under(el); // the page under leaves and stays gone until the file has arrived
       list.forEach((u) => { u.classList.remove(...ALL); u.classList.add('mx-u-out'); });
       play(el, ['mx-in', 'mx-view', 'mx-from-r', 'mx-after'], () => list.forEach((u) => u.classList.remove('mx-u-out')));
     }
   } else if (!was && now && !locked()) { // hidden: stays painted while it leaves
     if (!el.style.getPropertyValue('--mx-d')) el.style.setProperty('--mx-d', 'flex');
-    if (layer) under(el).forEach((u) => play(u, ['mx-u-in'])); // the page under returns once the file has left
+    if (layer && !pane) under(el).forEach((u) => play(u, ['mx-u-in'])); // the page under returns once the file has left
     play(el, layer ? ['mx-out', 'mx-view', 'mx-to-r'] : ['mx-out']);
   }
   return true;

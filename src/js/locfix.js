@@ -68,13 +68,23 @@ const PLOT = `<svg class="lf-plot" viewBox="0 0 320 320" role="img" aria-label="
   <text class="lf-n" x="160" y="14" dominant-baseline="central">N</text><text class="lf-dir" x="306" y="160" dominant-baseline="central">E</text><text class="lf-dir" x="160" y="306" dominant-baseline="central">S</text><text class="lf-dir" x="14" y="160" dominant-baseline="central">W</text><text class="lf-scale" x="312" y="312" text-anchor="end"></text>
 </svg>`;
 
+// Rotation of the screen from the device's natural position, 0, 90, 180 or 270. The orientation reading is in the device's own frame, so
+// the screen's up edge is the device's top edge only at 0 (Decision 460).
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
+  return ((Math.round(a / 90) * 90) % 360 + 360) % 360;
+}
+
 // Heading (radians clockwise from north) of where the phone points, from an absolute orientation reading.
-// Lying flat that is its top edge; held upright, its back. The two horizontal directions are summed, so it holds in between.
-function compassHeading(alpha, beta, gamma) {
+// Lying flat that is the screen's up edge; held upright, the back. The two horizontal directions are summed, so it holds in between.
+function compassHeading(alpha, beta, gamma, angle = 0) {
   const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
   const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b), sg = Math.sin(g), cg = Math.cos(g);
-  const east = -sa * cb + (-sg * ca - cg * sb * sa);
-  const north = ca * cb + (-sg * sa + cg * sb * ca);
+  const topE = -sa * cb, topN = ca * cb; // the device's top edge, east and north parts
+  const rightE = ca * cg - sa * sb * sg, rightN = sa * cg + ca * sb * sg; // the device's right edge
+  const [upE, upN] = angle === 90 ? [rightE, rightN] : angle === 180 ? [-topE, -topN] : angle === 270 ? [-rightE, -rightN] : [topE, topN];
+  const east = upE + (-sg * ca - cg * sb * sa);
+  const north = upN + (-sg * sa + cg * sb * ca);
   return Math.atan2(east, north);
 }
 
@@ -114,8 +124,11 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
     const rot = q('.lf-rot'), nEl = q('.lf-n'), dirEls = [[q('.lf-n'), 0], ...[...el.querySelectorAll('.lf-dir')].map((t, i) => [t, (i + 1) * Math.PI / 2])]; // N, E, S, W
 
     // North follows the phone's magnetometer: the plot turns so N sits where north is. No sensor reading = north stays at the top.
-    // Read on the phone only, nothing stored or sent (Decision 349).
+    // The first readings after the sensor starts can be far off while it settles, so the plot turns only once about 0.7 s of readings
+    // agree (Decision 460); until then the letters are dimmed. Read on the phone only, nothing stored or sent (Decision 349).
     let hx = 0, hy = 0, haveHeading = false, frame = 0;
+    const recent = []; // [time, sin, cos] of the readings of the last second, until the heading is trusted
+    box.classList.add('lf-wait');
     function drawNorth() {
       frame = 0;
       const h = Math.atan2(hx, hy); // phone heading, radians clockwise from north
@@ -128,10 +141,17 @@ export async function openLiveFix({ formatCoords, beforeLaunch, register }) {
     function onOrient(e) {
       if (done || e.alpha == null || e.beta == null || e.gamma == null) return;
       if (e.type === 'deviceorientation' && !e.absolute) return; // a relative reading has no north
-      const h = compassHeading(e.alpha, e.beta, e.gamma);
-      const k = haveHeading ? 0.15 : 1; // smoothed on the circle, so 359° to 1° does not swing round
-      hx += (Math.sin(h) - hx) * k; hy += (Math.cos(h) - hy) * k;
-      haveHeading = true;
+      const h = compassHeading(e.alpha, e.beta, e.gamma, screenAngle());
+      if (!haveHeading) {
+        const now = performance.now();
+        recent.push([now, Math.sin(h), Math.cos(h)]);
+        while (recent.length && now - recent[0][0] > 1000) recent.shift();
+        const sx = recent.reduce((s, q) => s + q[1], 0), sy = recent.reduce((s, q) => s + q[2], 0);
+        if (recent.length < 5 || now - recent[0][0] < 700 || Math.hypot(sx, sy) / recent.length < 0.985) return; // still settling (spread beyond about 10°)
+        hx = sx / recent.length; hy = sy / recent.length; haveHeading = true; box.classList.remove('lf-wait');
+      } else {
+        hx += (Math.sin(h) - hx) * 0.15; hy += (Math.cos(h) - hy) * 0.15; // smoothed on the circle, so 359° to 1° does not swing round
+      }
       if (!frame) frame = requestAnimationFrame(drawNorth);
     }
     window.addEventListener('deviceorientationabsolute', onOrient, true);
