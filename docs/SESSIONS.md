@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 224**
+
+Start: a screen recording and a report that the compass was still wrong: right when upright or flat, 180° off when raised from the bottom, upside down, or sideways.
+- Measured: the recording at 30 fps, tracking the red N: steady at 273°, then 273° to 112° within 3 frames at 1.2 s, steady near 100°, then back to 273° at 2.2 s. A 170° jump in 0.1 s cannot be the phone turning: it is a discontinuity in the formula.
+- Cause: Decision 462 took the back of the phone as the heading. Raising the bottom edge tilts the screen to face away, so the back then points toward the person: the opposite of the top edge. Sideways and upside-down holds failed the same way, since the dial's top is not the person's up when the screen is not turned.
+- Fix: `compassHeading` blends north on the screen's plane (near flat) with gravity's up on the screen less the back's heading (upright, tilted), by flatness. Correct because both give the same dial wherever the screen faces up, and each is well defined where the other is not.
+- Tested in a sandbox: tilt sweeps from flat to upright, both ways, show no change in the dial; a sweep of 1° steps in tilt and roll moves it at most 0.7°; flat, upside down, sideways and bottom-raised holds give the expected side. Syntax checked. Not run through CI or a device.
+- Decision 463. DP248 added (replaces DP247).
+- Next start: the CI log, then Phase 110: more odp shapes, then the responsive tool shell.
+
+---
+
 **Session 223**
 
 Start: two requests (grid option in the split view; compass 180° off upside down).

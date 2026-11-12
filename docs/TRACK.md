@@ -431,3 +431,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-12 | Session 221 | Decision 457 | Phase 110 step 3: doc and ppt text viewers on the OLE2 reader, notice banner; DP242 added; not run through CI or a device |
 | 2026-11-12 | Session 222 | Decisions 458 to 460 | Phases 126 to 128: Notes split view, ready card Open button, compass settling; DP243 to DP245 added; not run through CI or a device |
 | 2026-11-12 | Session 223 | Decisions 461 and 462 | Phases 129 and 130: grid in the Notes pane, compass by the back of the phone; DP246 and DP247 added; not run through CI or a device |
+| 2026-11-12 | Session 224 | Decision 463 | Phase 131: compass in every hold, no 180° flip raised, upside down or sideways; DP248 added; not run through CI or a device |
