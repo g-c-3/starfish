@@ -5,8 +5,7 @@
 
 /* the list pane */
 body[data-np="home"] #main-screen, body[data-np="vault"] #vault-screen { width: var(--np-w); box-sizing: border-box; }
-body.np-split .title-noteview { display: none; } /* the pane is always a list */
-body.np-split #folder-title:has(.title-act), body.np-split #vault-folder-title:has(.title-act) { padding-right: 110px; }
+body.np-split #folder-title:has(.title-act), body.np-split #vault-folder-title:has(.title-act) { padding-right: 104px; }
 body.np-split .entry-row .row-title { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; } /* a long name wraps to the next line */
 .entry-row.np-active { border-color: var(--brand); background: var(--brand-tint); }
 
