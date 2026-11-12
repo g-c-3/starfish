@@ -75,21 +75,30 @@ function screenAngle() {
   return ((Math.round(a / 90) * 90) % 360 + 360) % 360;
 }
 
-// Heading (radians clockwise from north) of where the phone points, from an absolute orientation reading.
-// The back of the phone is the direction it points whenever it is held upright, tilted, sideways or upside down, so it carries the
-// heading; the screen's up edge (turned by `angle`) takes over only as the phone nears flat, where the back has no horizontal direction
-// (Decision 460). Summing the top edge in at all angles, as before, made an upside-down phone point the other way.
+// The heading the dial turns by (radians, clockwise from north): the plot turns so N sits where north is on the screen, whatever way the
+// phone is held (Decision 463). Two readings of the same thing are blended:
+//  - near flat: the screen is a compass card, so north is the screen-plane part of the north direction;
+//  - upright or tilted: the way up (against gravity) as it lies on the screen, less the direction the phone's back faces, which is
+//    where the person looks. Held upside down or sideways with the screen not turned, the dial's top is then not the person's up, and N
+//    still lands on the side they see as ahead.
+// They agree wherever the screen faces up, so the blend (by how flat the phone is) has no jump. `angle` is the screen's own turn.
 function compassHeading(alpha, beta, gamma, angle = 0) {
   const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
   const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b), sg = Math.sin(g), cg = Math.cos(g);
-  const topE = -sa * cb, topN = ca * cb; // the device's top edge, east and north parts
-  const rightE = ca * cg - sa * sb * sg, rightN = sa * cg + ca * sb * sg; // the device's right edge
-  const flat = Math.abs(cb * cg); // 1 lying flat, 0 upright
-  const [eE, eN] = angle === 90 ? [rightE, rightN] : angle === 180 ? [-topE, -topN] : angle === 270 ? [-rightE, -rightN] : [topE, topN];
-  const wf = Math.pow(flat, 8);
-  const east = (-sg * ca - cg * sb * sa) + wf * eE;
-  const north = (-sg * sa + cg * sb * ca) + wf * eN;
-  return Math.atan2(east, north);
+  // the device's right edge, top edge and screen normal: [east, north, up]
+  const X = [ca * cg - sa * sb * sg, sa * cg + ca * sb * sg, -cb * sg];
+  const Y = [-sa * cb, ca * cb, sb];
+  const Z = [ca * sg + sa * sb * cg, sa * sg - ca * sb * cg, cb * cg];
+  const neg = (v) => [-v[0], -v[1], -v[2]];
+  const [R, U] = angle === 90 ? [neg(Y), X] : angle === 180 ? [neg(X), neg(Y)] : angle === 270 ? [Y, neg(X)] : [X, Y]; // the screen's right and up
+  const flatP = Math.atan2(R[1], U[1]); // north as it lies on the screen
+  const upOnScreen = Math.atan2(R[2], U[2]); // up (against gravity) as it lies on the screen
+  const back = Math.atan2(-Z[0], -Z[1]); // heading the back of the phone faces
+  const steepP = upOnScreen - back;
+  const flat = Math.abs(Z[2]);
+  const wf = Math.min(1, Math.max(0, (flat - 0.75) / 0.15)); // 0 beyond about 41° from flat, 1 within about 26°
+  const vx = wf * Math.sin(flatP) + (1 - wf) * Math.sin(steepP), vy = wf * Math.cos(flatP) + (1 - wf) * Math.cos(steepP);
+  return -Math.atan2(vx, vy);
 }
 
 // Opens the sheet and resolves { lat, lng, accuracy } when the person taps Use this location, null on Cancel, Back or a lock.
