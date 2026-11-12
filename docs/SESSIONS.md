@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 229**
+
+Start: a report from the owner: a file with no extension in Files offers only the phone's apps, whatever the Files switch says, while the Trash offers Arkly's viewers.
+- Bug: cause: the Files tap went to an Arkly viewer only for a known extension, and otherwise straight to the phone's apps; the Open as list existed only in the Trash preview. Fix: a stored file with no extension or an unknown type opens a sheet (Phone's apps, then Arkly's nine viewers); Decision 468. Why correct: those files have no viewer for the switch to choose, so asking is the only way to reach one; types with a viewer, and known types with none, are unchanged.
+- Changed: `src/js/app.js` (`askOpenHow`, `OPEN_AS`, the file branch of `openEntry`; imports `isUnknownType` and `openSheet`).
+- Tested in a sandbox: the sheet (ten choices with the phone first, the extensionless and unknown-type wording, a choice returns its value, closing returns nothing). Syntax checked. The tap routing itself was not run: not run through CI or a device.
+- Size: about 1.7 KB of source added (Decision 453).
+- Decision 468. DP253 added.
+- Next start: the CI log, then Phase 113 (EPUB and rendered RTF), or Phase 119 (text editor) with the shell mount.
+
+---
+
 **Session 228**
 
 Start: "Do next": Phase 112 (binary and unknown files).
