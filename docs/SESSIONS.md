@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 230**
+
+Start: the owner confirmed Decision 468 on the device and asked whether the File explorer should also ask, since it opens a file with no extension straight in the text viewer.
+- Change: Decision 469: the explorer's open paths (tap, cached archive entry, Open with in a folder) ask by the same sheet for a file with no extension or an unknown type; the old two-button question for unknown types is replaced. `src/js/explorer.js` only.
+- Confirmed on the device: Decision 468 (Files folders ask how to open).
+- Tested: syntax checked; the sheet is the one tested in Session 229. The three routes were not run: not run through CI or a device.
+- Size: about 1.1 KB of source added (Decision 453).
+- Decision 469. DP254 added.
+- Next start: the CI log, then Phase 113 (EPUB and rendered RTF), or Phase 119 (text editor) with the shell mount.
+
+---
+
 **Session 229**
 
 Start: a report from the owner: a file with no extension in Files offers only the phone's apps, whatever the Files switch says, while the Trash offers Arkly's viewers.

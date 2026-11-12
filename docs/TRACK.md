@@ -437,3 +437,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-12 | Session 227 | Decision 466 | Phase 111: Markdown and HTML rendered view with a switch in both text viewers; DP251 added; not run through CI or a device |
 | 2026-11-12 | Session 228 | Decision 467 | Phase 112: byte view (size, type guess, hex dump) reachable from the explorer, Files viewer and Trash; DP252 added; not run through CI or a device |
 | 2026-11-12 | Session 229 | Decision 468 | Fix: a Files file with no extension or an unknown type asks how to open (phone's apps or an Arkly viewer); DP253 added; not run through CI or a device |
+| 2026-11-12 | Session 230 | Decision 469 | File explorer asks how to open a file with no extension or an unknown type; Decision 468 confirmed on the device; DP254 added; not run through CI or a device |
