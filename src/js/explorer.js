@@ -10,6 +10,7 @@ import * as manage from './explorer-manage.js';
 import { startOps, destProblem, resultText, findConflicts, canReplace } from './explorer-ops.js';
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText, baseNameOf } from './explorer-archive.js';
 import { attachScrollThumb } from './scrollthumb.js';
+import { openSheet } from './sheet.js';
 import { attachPullToRefresh } from './pulltorefresh.js';
 import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
 import { trackJob } from './floatdock.js';
@@ -49,7 +50,7 @@ export function kindOf(name) {
   return 'other';
 }
 // Unknown: in no list of the viewer kinds and with no known type, so it may be text (Decision 293).
-// No extension at all is not asked: it opens in the text viewer, which offers the choice itself when the file is not text.
+// No extension at all is not an unknown type here; `needsAsk` below asks for it as well (Decision 469).
 export const isUnknownType = (name) => extOf(name) !== '' && kindOf(name) === 'other' && !MIME[extOf(name)];
 export const mimeOf = (name) => MIME[extOf(name)] || '*/*'; // '*/*' lets Android list every app that takes a file
 
@@ -986,18 +987,35 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     }
     if (!closed && st.arc === arc) await showArchiveDir(prefix);
   }
-  // An unknown file type asks once: Arkly's text viewer or other apps. Resolves 'text', 'apps' or null (dismissed).
-  async function askUnknown(f) {
-    if (!ui.askYesNo) return 'apps';
-    const r = await ui.askYesNo({ title: 'Open this file how?', text: `\"${f.name}\" is a type Arkly does not know. Open it in the Arkly text editor, or in another app?`, yes: 'Arkly editor', no: 'Other apps', explicitNo: true });
-    return r === true ? 'text' : r === 'no' ? 'apps' : null;
+  // A file with no extension, or of a type Arkly does not know, asks how to open: the phone's apps or one of Arkly's viewers (Decision 469).
+  // Resolves 'apps', a viewer kind, or null (dismissed).
+  const needsAsk = (name) => (extOf(name) === '' ? kindOf(name) === 'other' : isUnknownType(name));
+  const OPEN_AS = [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx'], ['Bytes', 'bytes']];
+  function askUnknown(f) {
+    return new Promise((resolve) => {
+      let value = null;
+      openSheet({
+        title: f.name,
+        build: (h, close) => {
+          const p = document.createElement('p'); p.className = 'tp-note';
+          p.textContent = extOf(f.name) === '' ? 'This file has no extension. Open it with:' : 'Arkly does not know this type. Open it with:';
+          h.appendChild(p);
+          const mk = (label, v) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = label; b.onclick = () => { value = v; close(v); }; h.appendChild(b); };
+          mk("Phone's apps", 'apps');
+          for (const [label, kind] of OPEN_AS) mk(`Arkly: ${label}`, kind);
+        },
+        onClose: () => resolve(value)
+      });
+    });
   }
   async function openCached(file, how = 'auto') {
     if (how === 'apps') { openExternal(file, true); return; }
     let kind = kindOf(file.name);
     if (how === 'viewer') kind = openWithKind(file.name);
-    else if (extOf(file.name) === '' && kind === 'other') kind = 'text';
-    else if (!viewer && ui.onActivity && isUnknownType(file.name)) { const c = await askUnknown(file); if (c === null) return; if (c === 'text') kind = 'text'; }
+    else if (needsAsk(file.name)) {
+      if (!viewer && ui.onActivity) { const c = await askUnknown(file); if (c === null) return; if (c !== 'apps') kind = c; }
+      else if (extOf(file.name) === '') kind = 'text';
+    }
     if (viewer || !VIEW_KINDS.includes(kind) || !ui.onActivity) { openExternal(file); return; }
     viewer = openFileViewer(file, {
       kind, siblings: [], toUri: toFileUri, ui, toast, isVault, readOnly: true, external: openExternal, leaving,
@@ -1155,8 +1173,10 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
   async function openFile(e) {
     if (isArchive(e.name)) { openArchive(e); return undefined; }
     let kind = kindOf(e.name);
-    if (extOf(e.name) === '' && kind === 'other') kind = 'text';
-    else if (!viewer && ui.onActivity && isUnknownType(e.name)) { const c = await askUnknown(e); if (c === null || closed) return undefined; if (c === 'text') kind = 'text'; }
+    if (needsAsk(e.name)) {
+      if (!viewer && ui.onActivity) { const c = await askUnknown(e); if (c === null || closed) return undefined; if (c !== 'apps') kind = c; }
+      else if (extOf(e.name) === '') kind = 'text';
+    }
     return openInViewer(e, kind);
   }
   function openInViewer(e, kind) {
@@ -1178,6 +1198,11 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
     if (list.length !== 1 || list[0].isDir || (st.view !== 'folder' && !inArc)) return;
     const e = list[0], kind = openWithKind(e.name), label = VIEWER_NAME[kind];
     const apps = () => { clearSel(); if (inArc) openArcEntry(e, 'apps'); else openExternal(e, true); };
+    if (!inArc && needsAsk(e.name) && ui.onActivity) { // no viewer for it: the same choice as a tap (Decision 469)
+      const c = await askUnknown(e); if (closed || c === null) return;
+      if (c === 'apps') apps(); else { clearSel(); openInViewer(e, c); }
+      return;
+    }
     if (!label || !ui.askYesNo || (kind !== 'archive' && !VIEW_KINDS.includes(kind))) { apps(); return; }
     const r = await ui.askYesNo({ title: 'Open with', text: `"${e.name}"`, yes: label, no: 'Phone apps', explicitNo: true });
     if (closed || (r !== true && r !== 'no')) return;
