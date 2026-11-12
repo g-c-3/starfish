@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 225**
+
+Start: "Go". Tier 1 and the Phase 110 entries read; Decisions and Architecture read for the Motion rules and the odp reader only.
+- Built: more odp shapes in `src/js/office-odf.js` (Decision 464): lines and connectors, polygons, polylines and paths, strokes, rotation, shape geometry names, rounded rectangles, tables in frames, a note for charts and embedded objects. No renderer change.
+- Tested in a sandbox against a hand-built odp (lines drawn up and down, polygon, polyline and path with a view box that does not start at 0,0, a custom shape turned 90 degrees with a translate, a triangle, a rounded rectangle, a table with a merged cell, an embedded object): every model value checked by hand. Syntax checked. Not run through CI or a device.
+- Not tested: real files from LibreOffice or other writers (generated files only); the order of `rotate` and `translate` in `draw:transform` is read as a final position; arrowheads, gradients, arcs, shadows and cropped pictures are not drawn.
+- Not read: the CI log (run logs need a sign-in; the unauthenticated API was rate limited).
+- Size: about 7.5 KB of source added (Decision 453).
+- Decision 464. DP249 added; DP240 to DP248 still open.
+- Next start: the CI log, then Phase 110: the responsive tool shell (Decision 454).
+
+---
+
 **Session 224**
 
 Start: a screen recording and a report that the compass was still wrong: right when upright or flat, 180° off when raised from the bottom, upside down, or sideways.
