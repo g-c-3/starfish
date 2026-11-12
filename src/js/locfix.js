@@ -76,15 +76,19 @@ function screenAngle() {
 }
 
 // Heading (radians clockwise from north) of where the phone points, from an absolute orientation reading.
-// Lying flat that is the screen's up edge; held upright, the back. The two horizontal directions are summed, so it holds in between.
+// The back of the phone is the direction it points whenever it is held upright, tilted, sideways or upside down, so it carries the
+// heading; the screen's up edge (turned by `angle`) takes over only as the phone nears flat, where the back has no horizontal direction
+// (Decision 460). Summing the top edge in at all angles, as before, made an upside-down phone point the other way.
 function compassHeading(alpha, beta, gamma, angle = 0) {
   const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
   const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b), sg = Math.sin(g), cg = Math.cos(g);
   const topE = -sa * cb, topN = ca * cb; // the device's top edge, east and north parts
   const rightE = ca * cg - sa * sb * sg, rightN = sa * cg + ca * sb * sg; // the device's right edge
-  const [upE, upN] = angle === 90 ? [rightE, rightN] : angle === 180 ? [-topE, -topN] : angle === 270 ? [-rightE, -rightN] : [topE, topN];
-  const east = upE + (-sg * ca - cg * sb * sa);
-  const north = upN + (-sg * sa + cg * sb * ca);
+  const flat = Math.abs(cb * cg); // 1 lying flat, 0 upright
+  const [eE, eN] = angle === 90 ? [rightE, rightN] : angle === 180 ? [-topE, -topN] : angle === 270 ? [-rightE, -rightN] : [topE, topN];
+  const wf = Math.pow(flat, 8);
+  const east = (-sg * ca - cg * sb * sa) + wf * eE;
+  const north = (-sg * sa + cg * sb * ca) + wf * eN;
   return Math.atan2(east, north);
 }
 

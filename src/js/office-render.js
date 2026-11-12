@@ -8,6 +8,8 @@ import { paginate, paginateAuto, hasSavedBreaks, pickHF } from './office-pages.j
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 import { odfKind, readOdt, readOds, readOdp } from './office-odf.js';
 import { readXls, isXls } from './office-xls.js';
+import { readDoc, isDoc } from './office-doc.js';
+import { readPpt, isPpt } from './office-ppt.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
@@ -723,6 +725,7 @@ function mountDocx(model, host, u, ui, bars) {
     parent.appendChild(fn);
   };
   const flowDom = () => {
+    if (model.notice) banner(model.notice);
     if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
     if (auto === 'busy') banner('Laying out pages\u2026');
     else if (!lay && auto === 'done' && !saved && model.blocks.length && prefs.doc === 'page') banner('Pages could not be laid out for this file. Shown as one sheet.');
@@ -752,6 +755,7 @@ function mountDocx(model, host, u, ui, bars) {
     heads.length = 0; for (const rec of recs) heads.push(...rec.heads); // in document order
   };
   const sheetsDom = () => {
+    if (model.notice) banner(model.notice);
     if (model.truncated) banner(`Showing the first ${DOC_BLOCK_MAX.toLocaleString()} paragraphs. Use Open with app for the rest.`);
     if (lay.note) banner(lay.note);
     const col = el('div', 'eo-sheetcol');
@@ -1201,7 +1205,7 @@ export function mountOffice(kind, bytes, host, ctx) {
   let inner = {};
   // an OpenDocument file arrives under the same kind as its Word, Excel or PowerPoint counterpart (Decision 452)
   const odf = odfKind(bytes);
-  const model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : isXls(bytes) ? readXls(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : readPptx(bytes)) : null;
+  const model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : isDoc(bytes) ? readDoc(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : isXls(bytes) ? readXls(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : isPpt(bytes) ? readPpt(bytes) : readPptx(bytes)) : null;
   if (!model) throw new OfficeError('This type is not supported here.');
   if (kind === 'docx' && model.embedded.length && typeof FontFace !== 'undefined') {
     for (const f of model.embedded) {
@@ -1233,6 +1237,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
+  if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }
   const fnote = fontNotice(host);
   // the notice folds away with the title bar on scroll (Decision 243)
   const stopChrome = chromeOnScroll(host, (h) => { if (fnote) fnote.classList.toggle('eo-folded', h); if (ctx.onChrome) ctx.onChrome(h); }, '.eo-scroll, .eo-grid');

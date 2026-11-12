@@ -134,7 +134,7 @@ function syncNotesSplit() {
   if (!which && !activeEditor) activeNoteId = null;
   window.dispatchEvent(new Event('arkly-notes-split'));
 }
-SPLIT_MQ.addEventListener('change', () => { syncNotesSplit(); window.dispatchEvent(new Event('arkly-notes-relayout')); });
+SPLIT_MQ.addEventListener('change', syncNotesSplit);
 function markActiveNote() { // the note on view in the pane is lit in the list
   for (const id of ['folder-list', 'vault-folder-list']) {
     const box = document.getElementById(id);
@@ -4616,8 +4616,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (openVaultFolderType === 'note') swipeItems.vault.note = items;
     container.innerHTML = tabItems
       ? (groupedHtml(tabItems, reminderTab.vault === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ ...vaultRowProps(it.row, true), ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'vault'), Date.now(), reminderTab.vault === 'upcoming' ? upcomingLabel : undefined) || emptyStateHtml(folderFind.vault ? 'search' : 'folder'))
-      : (openVaultFolderType === 'note' && noteView === 'grid' && !npOn() && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
-    if (openVaultFolderType === 'note' && noteView === 'grid' && !npOn()) fillVaultNotePreviews(container);
+      : (openVaultFolderType === 'note' && noteView === 'grid' && items.length ? noteGridHtml(items, vSavedAt, true) : vaultRowsHtml(items, !!folderFind.vault));
+    if (openVaultFolderType === 'note' && noteView === 'grid') fillVaultNotePreviews(container);
     if (tabItems) { // the log is read from the database; the list redraws once if it differs from the copy drawn
       loadReminderLog(db).then((l) => {
         if (!privateSessionKey || openVaultFolderType !== 'reminder' || JSON.stringify(l) === JSON.stringify(vaultReminderLog)) return;
@@ -5699,7 +5699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tabItems) swipeItems.home.reminder = tabItems.map((it) => it.row);
     if (openFolderType === 'location') swipeItems.home.location = rows;
     if (openFolderType === 'note') swipeItems.home.note = rows;
-    document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && !npOn() && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
+    document.getElementById('folder-list').innerHTML = (openFolderType === 'note' && noteView === 'grid' && rows.length ? noteGridHtml(rows, savedAt, false) : tabItems
       ? groupedHtml(tabItems, reminderTab.home === 'upcoming' ? upcomingDue : (it) => it.at, (it) => entryRowHtml({ id: it.row.id, type: 'reminder', label: it.row.label, tags: it.row.tags, ...reminderItemMeta(it), alert: reminderAlertOf(it) }, 'main'), Date.now(), reminderTab.home === 'upcoming' ? upcomingLabel : undefined)
       : groupedHtml(rows, savedAt, (row) => entryRowHtml({
         id: row.id, type: row.type, label: row.label, tags: row.tags, ext: row.extension, play: row.type === 'voice', ...rowMeta(row, true)
@@ -7076,10 +7076,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!npOn()) { autoOpen.home = autoOpen.vault = false; return; }
     autoOpen[document.body.dataset.np] = !activeEditor;
     requestAnimationFrame(() => npAfterDraw(document.body.dataset.np === 'vault'));
-  });
-  window.addEventListener('arkly-notes-relayout', () => { // the window changed width: the list is drawn again as list or grid
-    if (openFolderType === 'note') renderMainTimeline();
-    if (openVaultFolderType === 'note') renderVault();
   });
   let npRefreshT = 0;
   window.addEventListener('arkly-note-saved', () => {
