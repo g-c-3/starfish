@@ -34,6 +34,13 @@
   .mx-out.mx-out.hidden.mx-view.mx-to-r { animation: mx-out-r 0.17s var(--mx-leave) both; }
   .mx-out.mx-out.hidden.mx-view.mx-to-l { animation: mx-out-l 0.17s var(--mx-leave) both; }
 
+  /* Notes pane (Decision 458): the note on view leaves and the next one arrives, with the page recipe's timings and easing. The arrival
+     starts 0.11 s after the leave (set in app.js), when the old note has faded. Forward = from the right; a note higher in the list = from the left. */
+  .np-out-l { animation: mx-out-l 0.17s var(--mx-leave) both; will-change: transform, opacity; }
+  .np-out-r { animation: mx-out-r 0.17s var(--mx-leave) both; will-change: transform, opacity; }
+  .np-in-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+  .np-in-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+
   /* Dialogs (Select files, confirmations): the box drops away first, then the backdrop clears. */
   .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.26s cubic-bezier(0.3, 0, 0.6, 1) both; }
   .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.24s cubic-bezier(0.4, 0, 0.9, 0.4) both; }

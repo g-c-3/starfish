@@ -1,0 +1,21 @@
+/* notesplit.css — Notes split view (Decision 458). In a window 600 px wide or more, the open Notes folder is a fixed left pane and the note
+   editor fills the rest. app.js sets body.np-split and body[data-np] (home or vault) while a Notes folder is on view in such a window, and
+   #editor-screen.np-pane while the editor sits beside the list. Nothing here animates: the motion is in motion.css and motion.js. */
+:root { --np-w: min(380px, 46vw); }
+
+/* the list pane */
+body[data-np="home"] #main-screen, body[data-np="vault"] #vault-screen { width: var(--np-w); box-sizing: border-box; }
+body.np-split .title-noteview { display: none; } /* the pane is always a list */
+body.np-split #folder-title:has(.title-act), body.np-split #vault-folder-title:has(.title-act) { padding-right: 110px; }
+body.np-split .entry-row .row-title { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; } /* a long name wraps to the next line */
+.entry-row.np-active { border-color: var(--brand); background: var(--brand-tint); }
+
+/* the fixed buttons and the nav belong to the list pane */
+body.np-split #bottom-nav { right: calc(100% - var(--np-w) + 12px); }
+body.np-split:has(#editor-screen.np-pane:not(.hidden)) #bottom-nav { display: flex; }
+body.np-split #power-close-btn { right: calc(100% - var(--np-w) + 14px); }
+body.np-split #lock-toggle-btn { right: calc(100% - var(--np-w) + 62px); }
+
+/* the editor pane: kept clipped so a note sliding in or out never draws over the list */
+#editor-screen.np-pane { left: var(--np-w); overflow: hidden; border-left: 1px solid var(--border); }
+:root #editor-screen.np-pane { padding-left: 0; }
