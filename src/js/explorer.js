@@ -1171,8 +1171,8 @@ export function openExplorer({ isVault = false, toast = () => {}, onClose = () =
 
   // Open with (Decision 294), one selected file: the Arkly viewer for its kind, or the phone's apps for its type.
   const VIEWER_NAME = { text: 'Arkly text editor', image: 'Arkly image viewer', pdf: 'Arkly PDF viewer', audio: 'Arkly player', video: 'Arkly player',
-    docx: 'Arkly document viewer', xlsx: 'Arkly sheet viewer', pptx: 'Arkly slide viewer', archive: 'Arkly archive browser' };
-  const openWithKind = (name) => { const k = kindOf(name); return k === 'other' && (extOf(name) === '' || isUnknownType(name)) ? 'text' : k; }; // a type that may be text
+    docx: 'Arkly document viewer', xlsx: 'Arkly sheet viewer', pptx: 'Arkly slide viewer', archive: 'Arkly archive browser', bytes: 'Arkly byte viewer' };
+  const openWithKind = (name) => { const k = kindOf(name); return k === 'other' ? (extOf(name) === '' || isUnknownType(name) ? 'text' : 'bytes') : k; }; // a type that may be text; else the byte view (Decision 467)
   async function actOpenWith() {
     const list = selectedEntries(), inArc = st.view === 'archive';
     if (list.length !== 1 || list[0].isDir || (st.view !== 'folder' && !inArc)) return;

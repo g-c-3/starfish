@@ -52,7 +52,7 @@ import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiom
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
 import { openExplorer } from './explorer.js';
-import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, FILE_LIMIT } from './filesview.js';
+import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, mountBytesFile, FILE_LIMIT } from './filesview.js';
 import { makePeekCopy, sweepPeek, PEEK_MAX } from './archivepeek.js';
 import { trackSave, startOpen, setDockToast } from './floatdock.js';
 import '../css/floatdock.css';
@@ -4314,7 +4314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chips = add(document.createElement('div'));
         chips.className = 'tp-chips';
         const lab = document.createElement('span'); lab.textContent = 'Open as'; chips.appendChild(lab);
-        for (const [label, kind] of [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx']]) chips.appendChild(mkBtn(label, kind, 'tp-chip'));
+        for (const [label, kind] of [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx'], ['Bytes', 'bytes']]) chips.appendChild(mkBtn(label, kind, 'tp-chip'));
         add(media);
       } else if (type === 'money' || type === 'expense') {
         const d = isVault ? (await loadVaultEntryContent(db, privateSessionKey, id)).content.money : Money.fromRow(full);
@@ -7736,6 +7736,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (withApps && !viewOnly) { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = "Open in the phone's apps"; b.onclick = () => openFile(item, isVault); box.appendChild(b); }
           body.appendChild(box);
         };
+        const nameOf = `${item.label || 'file'}${item.extension ? `.${item.extension}` : ''}`;
         say('Loading…', false);
         try {
           const row = isVault ? null : await fresh();
@@ -7751,6 +7752,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           const bytes = isVault ? await vaultBytes() : await readEntryBytes(row);
           if (mine !== token) return;
           if (bytes.length > (FILE_LIMIT[kind] || Infinity)) { say('This file is too large to open here.'); return; }
+          if (kind === 'bytes') {
+            const m = await mountBytesFile(body, bytes, nameOf, ui);
+            if (mine !== token) { m.destroy(); return; }
+            mounted = m; return;
+          }
           if (kind === 'text') {
             const header = viewerScreen.querySelector('.editor-bar');
             const chrome = { add: (icon, title, fn) => { // the tools are icons at the right of the title bar
@@ -7776,6 +7782,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) {
           if (mine !== token) return;
           say(err && (err.office || err.notText) ? err.message : 'This file cannot be shown here.');
+          if (err && err.notText) { // not text: the byte view is the way to look (Decision 467)
+            const vb = document.createElement('button'); vb.type = 'button'; vb.className = 'secondary-btn'; vb.textContent = 'View bytes';
+            vb.onclick = async () => {
+              try {
+                const raw = isVault ? await vaultBytes() : await readEntryBytes(await fresh());
+                if (mine !== token) return;
+                viewerScreen.classList.remove('pdf-mode', 'text-mode'); viewerScreen.querySelectorAll('.vwr-menu').forEach((n) => n.remove());
+                const m = await mountBytesFile(body, raw, nameOf, ui);
+                if (mine !== token) { m.destroy(); return; }
+                mounted = m;
+              } catch { say('The file could not be read.', false); }
+            };
+            const box = body.querySelector('.pdf-msg'); if (box) box.appendChild(vb);
+          }
         }
       }
     });

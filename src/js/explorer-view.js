@@ -7,7 +7,7 @@ import { attachTextPinch } from './textpinch.js';
 import { Filesystem, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
-export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx'];
+export const VIEW_KINDS = ['text', 'image', 'pdf', 'audio', 'video', 'docx', 'xlsx', 'pptx', 'bytes'];
 export const TEXT_MAX = 10 * 1024 * 1024; // larger text goes to another app; the whole file is read into memory
 export const TEXT_EDIT_MAX = 2 * 1024 * 1024; // above this a text file opens for reading only: the saved copy would travel whole through the file plugin, untested at that size
 export const PDF_MAX = 150 * 1024 * 1024; // the whole file is held in memory while it is open
@@ -126,6 +126,7 @@ export function openFileViewer(file, ctx) {
       const row = el('div', 'ev-choice');
       const mk = (label, fn, on) => { const b = el('button', on ? 'ev-tool on' : 'ev-tool', label); b.type = 'button'; b.onclick = fn; row.appendChild(b); };
       mk('Open in Arkly editor', () => { if (mine === token && !closed) showText(f, mine, true, text); }, true);
+      mk('View bytes', () => { if (mine === token && !closed) showBytes(f, mine); });
       mk('Other apps', () => { if (!closed) external(f, true); });
       body.querySelector('.pdf-msg').appendChild(row);
       return;
@@ -320,6 +321,28 @@ export function openFileViewer(file, ctx) {
     }
   }
 
+  // ---- Bytes (Decision 467) ----
+  // Only the start is read: a range request, or the stream read up to the cap and then cancelled, so a large file is never held whole.
+  async function showBytes(f, mine) {
+    body.replaceChildren(); body.appendChild(el('div', 'pdf-msg', 'Loading…'));
+    try {
+      const { mountBytes, HEAD_MAX } = await import('./bytesview.js');
+      const res = await fetch(mediaSrc(toUri(f.path)), { headers: { Range: `bytes=0-${HEAD_MAX - 1}` } });
+      if (!res.ok) throw new Error('The file could not be read.');
+      let head;
+      if (res.body && res.body.getReader) {
+        const rd = res.body.getReader(); const parts = []; let n = 0;
+        while (n < HEAD_MAX) { const { done, value } = await rd.read(); if (done) break; parts.push(value); n += value.length; }
+        try { await rd.cancel(); } catch { /* already done */ }
+        head = new Uint8Array(Math.min(n, HEAD_MAX)); let o = 0;
+        for (const p of parts) { const take = p.subarray(0, Math.min(p.length, head.length - o)); head.set(take, o); o += take.length; if (o >= head.length) break; }
+      } else head = new Uint8Array(await res.arrayBuffer()).subarray(0, HEAD_MAX);
+      if (mine !== token || closed) return;
+      const m = mountBytes(body, { name: f.name, size: f.size, head, ui });
+      cleanup = () => { m.destroy(); };
+    } catch (e) { if (mine === token) note(`The file could not be read${errText(e)}`); }
+  }
+
   // ---- Audio and video ----
   function showMedia(f, kind) {
     const box = el('div', kind === 'video' ? 'ev-media' : 'ev-media ev-audio');
@@ -347,6 +370,7 @@ export function openFileViewer(file, ctx) {
     else if (kind === 'image') showImage(f);
     else if (kind === 'pdf') showPdf(f, mine);
     else if (kind === 'docx' || kind === 'xlsx' || kind === 'pptx') showOffice(f, kind, mine);
+    else if (kind === 'bytes') showBytes(f, mine);
     else showMedia(f, kind);
   }
 

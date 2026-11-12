@@ -13,7 +13,7 @@ export function arklyKind(extension) {
   const kind = kindOf(`x.${ext}`);
   return ARKLY_KINDS.has(kind) ? kind : null;
 }
-export const FILE_LIMIT = { text: TEXT_MAX, docx: OFFICE_MAX, xlsx: OFFICE_MAX, pptx: OFFICE_MAX };
+export const FILE_LIMIT = { text: TEXT_MAX, docx: OFFICE_MAX, xlsx: OFFICE_MAX, pptx: OFFICE_MAX, bytes: 64 * 1024 * 1024 };
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
@@ -53,6 +53,12 @@ export async function mountTextFile(body, bytes, name, ui, chrome = null) {
     } catch { /* the source view stays */ }
   }
   return { destroy() { if (rnd) rnd.destroy(); unpinch(); ed.destroy(); } };
+}
+
+// bytes -> the byte view: size, a guess at the type from the first bytes, a hex dump of the start (Decision 467). For a file with no viewer or one that is not text.
+export async function mountBytesFile(body, bytes, name, ui) {
+  const { mountBytes, HEAD_MAX } = await import('./bytesview.js');
+  return mountBytes(body, { name, size: bytes.length, head: bytes.subarray(0, HEAD_MAX), ui });
 }
 
 // A blob URL of the decrypted audio, played with the phone's own controls; paused when the app is not in front.
