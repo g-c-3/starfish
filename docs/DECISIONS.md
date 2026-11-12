@@ -4082,3 +4082,7 @@ Supersedes the unwired draft of `batchAddWithCommonLabel()` described in Decisio
 
 **460. Location compass settling.** The heading uses the screen's up edge (the device's top edge turned by `screen.orientation.angle`) plus the back direction, so a turned screen no longer shows north 90° or 180° off. The plot stays north-up with the letters dimmed until about 0.7 s of readings agree within about 10°, then follows the sensor as before. A steady but uncalibrated reading is not caught.
 
+**461. Grid in the Notes pane.** The split view (Decision 458) keeps the List and Grid button of the title bar and draws the grid in the list pane when chosen; the sentence of Decision 458 that the pane always lists no longer holds. The title row reserves 104 px for the lock and power buttons.
+
+**462. Compass heading by the back of the phone.** `compassHeading` uses the direction of the phone's back, which is where it points however it is held (upright, tilted, sideways, upside down), and adds the screen's up edge (turned by the screen angle, Decision 460) weighted by flatness^8, so it counts only near flat where the back has no horizontal direction. The earlier sum of the top edge and the back made an upside-down phone point 180° off. The settling hold and dimmed letters of Decision 460 stay.
+

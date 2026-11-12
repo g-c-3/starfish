@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 223**
+
+Start: two requests (grid option in the split view; compass 180° off upside down).
+- Built: grid and its button return in the Notes pane (`app.js`, `notesplit.css`; Decision 461). Compass heading by the back of the phone (`locfix.js`; Decision 462).
+- Cause, compass: the top edge and the back were summed at every tilt; upside down, the top edge points the other way from the back, so the sum was 180° off or cancelled. Fix: the back carries the heading, the top edge only near flat. Correct because the back faces where the phone points in every non-flat hold.
+- Tested in a sandbox: 9,000 random poses, heading within 37° of the back (the old formula disagreed in more than half); flat poses follow the screen's up edge at each screen angle. Syntax checked. Not run through CI or a device.
+- Not done: reverse portrait on a phone is left to the system's auto-rotate setting (forcing it would override the person's rotation lock).
+- Decisions 461 and 462. DP246 and DP247 added.
+- Next start: the CI log, then Phase 110: more odp shapes, then the responsive tool shell.
+
+---
+
 **Session 222**
 
 Start: three requests from the owner (Notes split view, ready card Open button, compass in the first seconds).
