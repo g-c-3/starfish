@@ -1,0 +1,39 @@
+/* office-shell.css — the tool shell of the Office viewers (Decisions 451, 454). Opacity-only enter and exit, the tokens and keyframes of motion.css. */
+.eo-shell { flex: none; position: relative; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.eo-fade.hidden { display: none !important; }
+.eo-sh-view { display: flex; justify-content: flex-end; padding: 6px 10px; }
+.eo-sh-edit { display: block; padding: 6px 10px; }
+.eo-sh-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.eo-sh-acts { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.eo-sh-btn { width: auto; margin: 0; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); color: var(--fg); font-size: 14px; box-shadow: none; }
+.eo-sh-btn:active { filter: brightness(0.92); }
+.eo-sh-btn:disabled { opacity: 0.5; }
+.eo-sh-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.eo-ribbon, .eo-sh-tools { display: none; }
+.eo-shell.eo-wide .eo-ribbon { display: block; flex-basis: 100%; }
+.eo-shell.eo-compact .eo-sh-tools { display: inline-flex; }
+.eo-tabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.eo-tab { width: auto; margin: 0; padding: 7px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
+.eo-tab.on { color: var(--fg); border-bottom-color: var(--brand); font-weight: 600; }
+.eo-rbody { position: relative; padding: 8px 0 4px; }
+.eo-pane { display: flex; flex-wrap: wrap; gap: 6px; }
+.eo-tool { width: auto; margin: 0; min-width: 56px; padding: 6px 10px; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--fg); font-size: 12px; box-shadow: none; }
+.eo-tool:active { filter: brightness(0.92); }
+.eo-tool.on { background: var(--surface); border-color: var(--brand); color: var(--brand); }
+.eo-tool:disabled { opacity: 0.4; }
+.modal-overlay.eo-panel-ov { align-items: flex-end; padding: 0; }
+.eo-panel-ov .sheet-box { width: min(560px, 100vw); border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.eo-ph { margin: 14px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.eo-pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.eo-pgrid .eo-tool { background: var(--surface-2); }
+.eo-pgrid .eo-tool.on { background: var(--surface-2); }
+.eo-leave-t { margin: 4px 0 14px; font-size: 15px; }
+.eo-leave-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.eo-leave-row .eo-sh-btn { flex: 1; justify-content: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .eo-fade:not(.hidden) { animation: mx-fade-in 0.3s var(--mx-settle) both; }
+  .eo-fade.mx-after:not(.hidden) { animation-delay: var(--mx-gap); }
+  .eo-fade.mx-out.mx-out.hidden { display: block !important; pointer-events: none; animation: mx-fade-out 0.17s var(--mx-leave) both; }
+  .eo-sh-view.mx-out.mx-out.hidden { display: flex !important; }
+  .eo-pane.mx-out.mx-out.hidden { display: flex !important; position: absolute; left: 0; right: 0; }
+}
