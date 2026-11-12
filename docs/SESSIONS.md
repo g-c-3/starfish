@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 226**
+
+Start: "Do next": Phase 110, the responsive tool shell (Decision 454).
+- Built: `src/js/office-shell.js` (new), `src/css/office-shell.css` (new). Editor registry; edit bar with Edit, Tools, Save, Save as copy and Done; compact bottom-sheet panel; wide ribbon with tabs; live width follow; leave-with-changes sheet; groups and saves handed over after a lazy editor load (Decision 465).
+- Motion: read ARCHITECTURE's Motion section, `motion.js`, `sheet.js`, `panelmotion.css` and the way `app.js` fades its panels first. The panel is a `.modal-overlay` (sheet); the bar and ribbon panes fade as the editor panels do. `motion.js` and `motion.css` are unchanged.
+- Tested in a sandbox, in a simulated page: 27 checks (registry; invalid tools and empty groups dropped; view and edit rows swap with the leaving one kept and the arriving one delayed; compact panel opens as a bottom sheet and closes after a tool; wide and compact switch live; tab swap never shows two panes steady; lit state; a second Save tap while busy is ignored; leave sheet returns discard and keep; Done; destroy removes the width listener; a lazy editor hands over tools and saves). Syntax checked. Not run through CI or a device.
+- Not done: `mountOffice` does not mount the shell yet, so nothing shows in the app; the system Back guard; the host layout of the bar (a strip under the viewer's own bar) is unseen on a device.
+- Not read: the CI log (run logs need a sign-in).
+- Size: about 12.4 KB of source added (9.0 KB script, 3.3 KB style; Decision 453).
+- Decision 465. DP250 added.
+- Next start: the CI log, then Phase 119 (text editor): first editor, mounts the shell, fixes the editor contract and the Back guard; or Phase 111 if the owner prefers a visible result first.
+
+---
+
 **Session 225**
 
 Start: "Go". Tier 1 and the Phase 110 entries read; Decisions and Architecture read for the Motion rules and the odp reader only.

@@ -433,3 +433,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-12 | Session 223 | Decisions 461 and 462 | Phases 129 and 130: grid in the Notes pane, compass by the back of the phone; DP246 and DP247 added; not run through CI or a device |
 | 2026-11-12 | Session 224 | Decision 463 | Phase 131: compass in every hold, no 180° flip raised, upside down or sideways; DP248 added; not run through CI or a device |
 | 2026-11-12 | Session 225 | Decision 464 | Phase 110: more odp shapes (lines, outlines, strokes, rotation, shape names, tables in frames); DP249 added; the tool shell remains; not run through CI or a device |
+| 2026-11-12 | Session 226 | Decision 465 | Phase 110: responsive tool shell built apart from the editors (registry, Edit, compact panel, wide ribbon, leave sheet); not mounted yet; DP250 added; not run through CI or a device |
