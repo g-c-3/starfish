@@ -556,6 +556,90 @@ export function readOdp(bytes) {
     const pos = (e) => ({ x: px(at(e, 'x')) || 0, y: px(at(e, 'y')) || 0, w: px(at(e, 'width')) || 0, h: px(at(e, 'height')) || 0 });
     const gfxOf = (e) => resolve(st, 'graphic', at(e, 'style-name')).gfx;
     const textBody = (paras, g) => (paras.length ? { anchor: g['textarea-vertical-align'] === 'middle' ? 'ctr' : g['textarea-vertical-align'] === 'bottom' ? 'b' : 't', l: 10, r: 10, t: 5, b: 5, wrap: true, scale: 1, paras } : null);
+    // stroke of a graphic style as the models hold it, or null
+    const lineOf = (g) => {
+      const k = g.stroke;
+      if (!k || k === 'none') return null;
+      return { w: Math.max(1, px(g['stroke-width']) || 1), color: { hex: hex(g['stroke-color']) || '000000', a: 1 }, dash: k === 'dash' ? (/dot/i.test(g['stroke-dash'] || '') ? 'dotted' : 'dashed') : 'solid' };
+    };
+    // box of a shape; `draw:transform` rotates about the top-left corner (angle in radians, counter-clockwise), then moves it
+    const place = (e) => {
+      const b = pos(e);
+      const tr = at(e, 'transform');
+      if (!tr) return b;
+      const r = /rotate\s*\(\s*([-+\d.eE]+)/i.exec(tr); const t = /translate\s*\(\s*(-?[\d.]+\w*)[\s,]+(-?[\d.]+\w*)/i.exec(tr);
+      const th = r ? Number(r[1]) || 0 : 0;
+      const tx = t ? px(t[1]) : b.x; const ty = t ? px(t[2]) : b.y;
+      if (tx === null || ty === null) return b;
+      const cx = tx + (b.w / 2) * Math.cos(th) + (b.h / 2) * Math.sin(th); const cy = ty - (b.w / 2) * Math.sin(th) + (b.h / 2) * Math.cos(th);
+      return { x: cx - b.w / 2, y: cy - b.h / 2, w: b.w, h: b.h, rot: -th * 180 / Math.PI };
+    };
+    const GEOM = { 'round-rectangle': 'roundRect', ellipse: 'ellipse', diamond: 'diamond', 'isosceles-triangle': 'triangle', triangle: 'triangle', 'right-triangle': 'rtTriangle', parallelogram: 'parallelogram', trapezoid: 'trapezoid', hexagon: 'hexagon', pentagon: 'pentagon', 'right-arrow': 'rightArrow', 'left-arrow': 'leftArrow', chevron: 'chevron', 'pentagon-right': 'homePlate' };
+    const geomOf = (e) => {
+      const eg = kid(e, 'enhanced-geometry'); const ty = at(eg, 'type') || '';
+      const k = ty.startsWith('ooxml-') ? ty.slice(6) : GEOM[ty];
+      return k && (Object.values(GEOM).includes(k) || k === 'rect') ? k : 'rect';
+    };
+    // svg path shifted so that its view box starts at 0,0 (absolute commands only; relative ones are unaffected)
+    const shiftPath = (d, ox, oy) => {
+      if (!ox && !oy) return d;
+      let out = ''; let first = true;
+      for (const m of d.matchAll(/([a-zA-Z])([^a-zA-Z]*)/g)) {
+        const c = m[1]; const nums = (m[2].match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) || []).map(Number);
+        const abs = c === c.toUpperCase() || first; first = false;
+        if (abs && nums.length) {
+          const C = c.toUpperCase();
+          if (C === 'H') nums.forEach((_, i) => { nums[i] -= ox; });
+          else if (C === 'V') nums.forEach((_, i) => { nums[i] -= oy; });
+          else if (C === 'A') for (let i = 0; i + 6 < nums.length; i += 7) { nums[i + 5] -= ox; nums[i + 6] -= oy; }
+          else if (C !== 'Z') nums.forEach((_, i) => { nums[i] -= i % 2 ? oy : ox; });
+        }
+        out += c + nums.join(' ');
+      }
+      return out;
+    };
+    // free-form outline from points or a path, in view box units
+    const outline = (e, closed) => {
+      const vb = (at(e, 'viewBox') || '').trim().split(/[\s,]+/).map(Number);
+      if (vb.length !== 4 || vb.some((v) => !isFinite(v)) || !(vb[2] > 0) || !(vb[3] > 0)) return null;
+      let d = at(e, 'd');
+      if (d) d = shiftPath(d, vb[0], vb[1]);
+      else {
+        const pts = (at(e, 'points') || '').trim().split(/[\s]+/).map((q) => q.split(',').map(Number)).filter((q) => q.length === 2 && isFinite(q[0]) && isFinite(q[1]));
+        if (pts.length < 2) return null;
+        d = pts.map((q, i) => `${i ? 'L' : 'M'}${q[0] - vb[0]} ${q[1] - vb[1]}`).join(' ') + (closed ? ' Z' : '');
+      }
+      return { d, w: vb[2], h: vb[3], nf: !closed };
+    };
+    const cellOf = (tc, covered) => {
+      if (covered) return { span: 1, rowSpan: 1, skip: true, fill: null, bd: {}, anchor: 't', pl: 0, pr: 0, pt: 0, pb: 0, body: { paras: [] } };
+      const cs = resolve(st, 'table-cell', at(tc, 'style-name'));
+      const bg = hex(cs.cell['background-color']);
+      const bd = {};
+      for (const [k, v] of Object.entries(cellBorders(cs.cell))) bd[k] = v && !v.none ? { w: v.w, color: { hex: v.color, a: 1 }, dash: v.style === 'dashed' ? 'dashed' : 'solid' } : null;
+      const pad = px(cs.cell.padding);
+      const pv = (n, d) => { const v = px(cs.cell[n]); return v !== null ? v : pad !== null ? pad : d; };
+      const paras = []; for (const c of tc.children) if (c.localName === 'p' || c.localName === 'h' || c.localName === 'list') parasOf({ children: [c] }, null, 0, paras);
+      const va = cs.cell['vertical-align'];
+      return { span: Number(at(tc, 'number-columns-spanned') || 1), rowSpan: Number(at(tc, 'number-rows-spanned') || 1), skip: false, fill: bg ? { hex: bg, a: 1 } : null, bd, anchor: va === 'middle' ? 'ctr' : va === 'bottom' ? 'b' : 't', pl: pv('padding-left', 7), pr: pv('padding-right', 7), pt: pv('padding-top', 4), pb: pv('padding-bottom', 4), body: { anchor: 't', l: 0, r: 0, t: 0, b: 0, wrap: true, scale: 1, paras } };
+    };
+    const tableOf = (tbl, b) => {
+      const cols = [];
+      for (const c of kids(tbl, 'table-column')) { const w = px(resolve(st, 'table-column', at(c, 'style-name')).col['column-width']) || 96; for (let k = 0; k < Math.min(Number(at(c, 'number-columns-repeated') || 1), 64); k++) cols.push(w); }
+      const rows = [];
+      for (const tr of desc(tbl, 'table-row')) {
+        const rs = resolve(st, 'table-row', at(tr, 'style-name')).row;
+        const cells = [];
+        for (const c of tr.children) if ((c.localName === 'table-cell' || c.localName === 'covered-table-cell') && cells.length < 64) {
+          const rep = Math.min(Number(at(c, 'number-columns-repeated') || 1), 64 - cells.length);
+          for (let k = 0; k < rep; k++) cells.push(cellOf(c, c.localName === 'covered-table-cell'));
+        }
+        rows.push({ h: px(rs['row-height']) || px(rs['min-row-height']) || 30, cells });
+        if (rows.length >= 200) break;
+      }
+      if (!cols.length || !rows.length) return null;
+      return { t: 'table', ...b, rot: 0, cols, rows };
+    };
     const walk = (parent, depth) => {
       for (const e of parent.children) {
         const n = e.localName;
@@ -564,23 +648,38 @@ export function readOdp(bytes) {
           notes = desc(e, 'p').map((p) => p.textContent).join('\n').trim();
           continue;
         }
-        const b = pos(e);
+        const b = place(e);
         if (n === 'frame') {
-          const im = kid(e, 'image'); const tb = kid(e, 'text-box');
+          const im = kid(e, 'image'); const tb = kid(e, 'text-box'); const tbl = kid(e, 'table');
           const img = im && image(files, at(im, 'href'));
-          if (img) { media[img.path] = { bytes: img.bytes, mime: img.mime }; items.push({ t: 'pic', ...b, rot: 0, path: img.path, line: null, crop: null }); }
+          const cls = at(e, 'class');
+          const g = resolve(st, 'presentation', at(e, 'style-name')).gfx;
+          const gg = Object.keys(g).length ? g : gfxOf(e);
+          if (img) { media[img.path] = { bytes: img.bytes, mime: img.mime }; items.push({ t: 'pic', ...b, rot: b.rot || 0, path: img.path, line: lineOf(gg), crop: null }); }
           else if (tb) {
-            const cls = at(e, 'class');
-            const g = resolve(st, 'presentation', at(e, 'style-name')).gfx;
-            const gg = Object.keys(g).length ? g : gfxOf(e);
             const text = textBody(parasOf(tb, cls, 0, []), cls === 'title' ? { 'textarea-vertical-align': 'middle' } : gg);
-            if (text) items.push({ t: 'shape', ...b, rot: 0, geom: 'rect', adj: null, fill: bgOf(gg), line: null, text });
-          }
-        } else if (n === 'custom-shape' || n === 'rect' || n === 'ellipse' || n === 'circle') {
+            if (text) items.push({ t: 'shape', ...b, rot: b.rot || 0, geom: 'rect', adj: null, fill: bgOf(gg), line: lineOf(gg), text });
+          } else if (tbl) { const t = tableOf(tbl, b); if (t) items.push(t); }
+          else if (kid(e, 'object') || kid(e, 'object-ole') || kid(e, 'plugin')) items.push({ t: 'note', ...b, rot: 0, text: 'Chart or embedded object not shown' });
+        } else if (n === 'custom-shape' || n === 'rect' || n === 'ellipse' || n === 'circle' || n === 'regular-polygon') {
           const g = gfxOf(e);
           const text = textBody(parasOf(e, null, 0, []), { 'textarea-vertical-align': 'middle' });
           if (text) text.paras.forEach((p) => { p.algn = p.algn === 'left' ? 'center' : p.algn; });
-          items.push({ t: 'shape', ...b, rot: 0, geom: n === 'ellipse' || n === 'circle' ? 'ellipse' : 'rect', adj: null, fill: g.fill === 'none' ? null : bgOf(g), line: null, text });
+          let geom = n === 'ellipse' || n === 'circle' ? 'ellipse' : n === 'custom-shape' ? geomOf(e) : 'rect';
+          let adj = null;
+          const cr = px(at(e, 'corner-radius'));
+          if (n === 'rect' && cr && Math.min(b.w, b.h) > 0) { geom = 'roundRect'; adj = Math.min(50000, cr / Math.min(b.w, b.h) * 100000); }
+          items.push({ t: 'shape', ...b, rot: b.rot || 0, geom, adj, fill: g.fill === 'none' ? null : bgOf(g), line: lineOf(g), text });
+        } else if (n === 'line' || n === 'connector') {
+          const g = gfxOf(e);
+          const x1 = px(at(e, n === 'line' ? 'x1' : 'start-x')); const y1 = px(at(e, n === 'line' ? 'y1' : 'start-y'));
+          const x2 = px(at(e, n === 'line' ? 'x2' : 'end-x')); const y2 = px(at(e, n === 'line' ? 'y2' : 'end-y'));
+          if ([x1, y1, x2, y2].some((v) => v === null)) continue;
+          items.push({ t: 'shape', x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1), rot: 0, fv: (x2 - x1) * (y2 - y1) < 0, geom: 'line', adj: null, fill: null, line: lineOf(g) || { w: 1, color: { hex: '000000', a: 1 }, dash: 'solid' }, text: null });
+        } else if (n === 'polygon' || n === 'polyline' || n === 'path') {
+          const g = gfxOf(e);
+          const o = outline(e, n !== 'polyline');
+          if (o) items.push({ t: 'shape', ...b, rot: b.rot || 0, geom: 'rect', adj: null, fill: g.fill === 'none' || o.nf ? null : bgOf(g), line: lineOf(g), text: null, cust: o });
         }
       }
     };
