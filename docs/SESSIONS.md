@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 221**
+
+Start: Phase 110, step 3 (Session 220's plan).
+- Built: `src/js/office-doc.js` (doc text on `ole2.js`), `src/js/office-ppt.js` (ppt slide text and notes on `ole2.js`). `explorer.js` lists doc under the docx kind and ppt under the pptx kind; `office-render.js` picks the reader by the bytes and shows the model's `notice` as a banner (docx, both layouts; pptx above the slides).
+- Tested in a sandbox with hand-built OLE2 files: doc with 8-bit and 16-bit pieces, curly quotes, a table row, a field, a line break; ppt with two saves (the newer slide object overrides the older), placeholders by reference, a text box, a slide whose object is missing (falls back to the slide list), notes, a password-protected file refused. Not run through CI or a device.
+- Not tested: real files from Word or PowerPoint (generated files only); the banner above the slides (layout of the fit not checked); the mini stream path of `ole2.js` with doc or ppt.
+- Not read: the CI log for the Java files of Phases 117 and 118 (run logs need a sign-in).
+- Size: about 14 KB of source added (Decision 453).
+- Decision 457. DP242 added; DP241 still planned.
+- Next start: the CI log, then Phase 110: more odp shapes, then the responsive tool shell.
+
+---
+
 **Session 220**
 
 Start: Phase 110, step 1.
