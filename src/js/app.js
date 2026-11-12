@@ -51,7 +51,8 @@ import { VoiceRecorder } from 'cap-voice-rec';
 import { isBiometricAvailable, enableBiometric, disableBiometric, unlockWithBiometric, unlockWithBiometricEx, biometricPromptBusy, singleFlight } from './biometric.js';
 import { setPrivacyScreen } from './privacy-screen.js';
 import { initPasswordEyes, hidePasswords, setPasswordField } from './passeye.js';
-import { openExplorer } from './explorer.js';
+import { openExplorer, isUnknownType } from './explorer.js';
+import { openSheet } from './sheet.js';
 import { arklyKind, mountTextFile, mountAudioFile, mountOfficeFile, mountBytesFile, FILE_LIMIT } from './filesview.js';
 import { makePeekCopy, sweepPeek, PEEK_MAX } from './archivepeek.js';
 import { trackSave, startOpen, setDockToast } from './floatdock.js';
@@ -7818,6 +7819,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (item.type === 'voice') await openVoice(item, isVault, isVault ? voiceFolderItems.vault : voiceFolderItems.home);
     else if (item.type === 'image') await openImageViewer([item], 0, isVault);
     else if (item.type === 'file') {
+      // No extension, or a type Arkly does not know: there is no viewer to pick, so ask how to read it, whatever the Files switch says (Decision 468).
+      const ext = String(item.extension || '').replace(/^\./, '');
+      if (!arklyKind(ext) && (!ext || isUnknownType(`x.${ext}`))) {
+        const how = await askOpenHow(item);
+        if (how === 'apps') await openFile(item, isVault);
+        else if (how && !(await openFileInArkly(item, isVault, { forceKind: how }))) await openFile(item, isVault);
+        return;
+      }
       // Arkly's own viewer for the kinds it has, when the Files switch is on; anything else, or a switch that is off, goes to the phone's apps (Decision 333).
       if ((await metaGet('files_inapp_viewer', 'on')) === 'on' && (await openFileInArkly(item, isVault))) return;
       await openFile(item, isVault);
@@ -7828,6 +7837,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     else toast(`Opening ${typeLabelFor(item.type).toLowerCase()} entries is coming in a later step.`);
   }
+
+  // How to open a file that has no viewer of its own: the phone's apps, or one of Arkly's viewers, the Trash's "Open as" list (Decisions 440, 468).
+  const OPEN_AS = [['Text', 'text'], ['Image', 'image'], ['Audio', 'audio'], ['Video', 'video'], ['PDF', 'pdf'], ['Document', 'docx'], ['Spreadsheet', 'xlsx'], ['Presentation', 'pptx'], ['Bytes', 'bytes']];
+  const askOpenHow = (item) => new Promise((resolve) => {
+    let value = null;
+    openSheet({
+      title: item.label || 'Open this file',
+      build: (h, close) => {
+        const p = document.createElement('p'); p.className = 'tp-note';
+        p.textContent = item.extension ? 'Arkly does not know this type. Open it with:' : 'This file has no extension. Open it with:';
+        h.appendChild(p);
+        const mk = (label, v) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = label; b.onclick = () => { value = v; close(v); }; h.appendChild(b); };
+        mk("Phone's apps", 'apps');
+        for (const [label, kind] of OPEN_AS) mk(`Arkly: ${label}`, kind);
+      },
+      onClose: () => resolve(value)
+    });
+  });
 
   // ---- Search (Decision 146): a full-screen layer that grows out of its tile, with type filter, period and sort ----
   const searchState = { type: 'all', sort: 'default', period: 'any' };
