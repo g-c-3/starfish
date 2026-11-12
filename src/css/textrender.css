@@ -1,0 +1,39 @@
+/* textrender.css — the rendered Markdown and HTML view (Decision 466). Opacity-only enter and exit, the tokens and keyframes of motion.css. */
+.tr-pane { position: absolute; inset: 0; z-index: 2; overflow: auto; background: var(--bg, #f3f1fc); color: var(--fg); -webkit-overflow-scrolling: touch; }
+#viewer-screen.text-mode .tr-pane { padding-top: 46px; }
+#explorer-viewer.ev-text .tr-pane { padding-top: var(--ev-text-top, 44px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tr-pane.tr-html { overflow: hidden; display: flex; flex-direction: column; }
+.tr-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+.tr-md { --tr-size: 16px; padding: 14px 16px 28px; max-width: 760px; margin: 0 auto; font-size: var(--tr-size, 16px); line-height: 1.55; overflow-wrap: anywhere; }
+.tr-mdpane { --tr-size: 16px; }
+.tr-md > :first-child { margin-top: 0; }
+.tr-md h1, .tr-md h2, .tr-md h3, .tr-md h4, .tr-md h5, .tr-md h6 { margin: 1.2em 0 0.4em; line-height: 1.25; }
+.tr-md h1 { font-size: 1.8em; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+.tr-md h2 { font-size: 1.45em; border-bottom: 1px solid var(--border); padding-bottom: 0.15em; }
+.tr-md h3 { font-size: 1.2em; }
+.tr-md h4, .tr-md h5, .tr-md h6 { font-size: 1em; }
+.tr-md h6 { color: var(--muted); }
+.tr-md p, .tr-md ul, .tr-md ol, .tr-md pre, .tr-md blockquote, .tr-md .tr-tscroll { margin: 0 0 0.9em; }
+.tr-md ul, .tr-md ol { padding-left: 1.5em; }
+.tr-md li > ul, .tr-md li > ol { margin: 0.2em 0 0; }
+.tr-md li.tr-task { list-style: none; margin-left: -1.2em; }
+.tr-box { margin-right: 0.4em; }
+.tr-md code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 6px; }
+.tr-md pre { background: var(--surface-2); padding: 10px 12px; border-radius: 12px; overflow-x: auto; }
+.tr-md pre code { background: transparent; padding: 0; font-size: 0.85em; white-space: pre; }
+.tr-md pre.tr-fm { color: var(--muted); }
+.tr-md blockquote { padding: 0 0 0 12px; border-left: 3px solid var(--border-strong); color: var(--muted); }
+.tr-md hr { border: 0; border-top: 1px solid var(--border); margin: 1.2em 0; }
+.tr-tscroll { overflow-x: auto; }
+.tr-md table { border-collapse: collapse; font-size: 0.95em; }
+.tr-md th, .tr-md td { border: 1px solid var(--border-strong); padding: 5px 10px; text-align: left; }
+.tr-md th { background: var(--surface-2); }
+.tr-a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.tr-img { color: var(--muted); font-style: italic; }
+.tr-fade.hidden { display: none !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .tr-fade:not(.hidden) { animation: mx-fade-in 0.3s var(--mx-settle) both; }
+  .tr-fade.mx-after:not(.hidden) { animation-delay: var(--mx-gap); }
+  .tr-fade.mx-out.mx-out.hidden { display: block !important; pointer-events: none; animation: mx-fade-out 0.17s var(--mx-leave) both; }
+  .tr-pane.tr-html.mx-out.mx-out.hidden { display: flex !important; }
+}
