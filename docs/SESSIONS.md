@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 227**
+
+Start: "Do next": Phase 111, the next incomplete item by number (Markdown and HTML rendered).
+- Built: `src/js/textrender.js` (new), `src/css/textrender.css` (new); `src/js/filesview.js` and `src/js/explorer-view.js` mount the switch (Decision 466). Architecture, Text viewers section, updated.
+- Motion: read the Motion section, `motion.js`, `panelmotion.css`, `textchrome.css`. The rendered page is laid over the code view (absolute inside the wrap), so no layout moves; the two fade by the panel recipe; no change to `motion.js` or `motion.css`.
+- Tested in a sandbox, in a simulated page: 30 checks. Markdown: headings (both kinds), emphasis, snake_case kept as text, rule, nested and ordered lists, task lists, fenced code escaped, quotes, tables with alignment, raw HTML shown as text, links inert, pictures as placeholders, front matter, hard break; a 60 000-character inline run and 3 000 unclosed marks parse in under 50 ms. HTML: script, frames, object, link, base, refresh, handlers, form actions and every remote address removed (the policy meta is first in the head and the only place a policy string appears); data pictures kept; frame has an empty sandbox and a no-referrer policy. Swap: source leaves and page arrives after, and back; destroy; over 1 MB has no rendered view. Syntax checked on the two viewers. Not run through CI or a device; the two viewer files were not run (they need the editor and the file plugin).
+- Not done: remote and relative pictures, link following, math, footnotes.
+- Not read: the CI log (run logs need a sign-in).
+- Size: about 18.3 KB of source added (Decision 453).
+- Decision 466. DP251 added.
+- Next start: the CI log, then Phase 112 or 113 (next by number); or Phase 119 (text editor) with the shell mount.
+
+---
+
 **Session 226**
 
 Start: "Do next": Phase 110, the responsive tool shell (Decision 454).

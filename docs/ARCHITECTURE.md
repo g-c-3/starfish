@@ -1193,6 +1193,7 @@ Both text views are read-only code editors (`codeeditor.js`) under a slim, see-t
 - **File explorer** (`explorer-view.js`, `#explorer-viewer.ev-full.ev-text`): `enterText` / `leaveText` set and clear the classes and `--ev-text-top` (the bar's height); `iconBtn` puts the icons before Save. `leaveText` runs in `reset`, so any other file kind gets its own bar back.
 - Pinch: `textpinch.js` (`attachTextPinch`), size 10 to 42, following the fingers. No A- / A+.
 - The bar's width is the limit: while editing, Open with app is hidden.
+- **Rendered view (Decision 466)** for Markdown and HTML (`textrender.js`, loaded on demand): an eye icon in the bar swaps the code view for a page laid over it (`.tr-pane`, absolute inside `.ev-text-wrap`, scrolling under the bar like the text). The two fade by the panel recipe (`tr-fade`, `hidden` plus `mx-out`). HTML is cleaned and shown in a frame with `sandbox=""` and a policy of inline style and `data:` images only; Markdown is built with DOM calls. Nothing remote loads and no link opens. Source-only tools hide while it shows.
 
 ## Static dialogs and Back (Decisions 104, 299, 446)
 

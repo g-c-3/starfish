@@ -434,3 +434,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-12 | Session 224 | Decision 463 | Phase 131: compass in every hold, no 180° flip raised, upside down or sideways; DP248 added; not run through CI or a device |
 | 2026-11-12 | Session 225 | Decision 464 | Phase 110: more odp shapes (lines, outlines, strokes, rotation, shape names, tables in frames); DP249 added; the tool shell remains; not run through CI or a device |
 | 2026-11-12 | Session 226 | Decision 465 | Phase 110: responsive tool shell built apart from the editors (registry, Edit, compact panel, wide ribbon, leave sheet); not mounted yet; DP250 added; not run through CI or a device |
+| 2026-11-12 | Session 227 | Decision 466 | Phase 111: Markdown and HTML rendered view with a switch in both text viewers; DP251 added; not run through CI or a device |
