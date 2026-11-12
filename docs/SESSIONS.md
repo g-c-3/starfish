@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 222**
+
+Start: three requests from the owner (Notes split view, ready card Open button, compass in the first seconds).
+- Built: Notes split view (`src/css/notesplit.css` new; `app.js`, `motion.js`, `motion.css`; Decision 458). Ready card Open button (`floatdock.css`; Decision 459). Compass (`locfix.js`, `locfix.css`; Decision 460).
+- Cause, Open button: `.fd-btn` had no width, the page's button rule made it full width. Fix: `width: auto`. Correct because every dock button is `flex: none` and sized by its content.
+- Cause, compass: the reading was taken in the device's frame, ignoring the screen's rotation, and the first readings were drawn at once. Fix: screen angle applied to the up edge; north-up and dimmed letters until the readings agree. Correct because the up edge is what the person faces; the back direction is unchanged by screen rotation. Whether the owner's first-seconds error was this or the sensor settling is not known from a screenshot.
+- Tested in a sandbox: the split state (wide, narrow, folder left, editor joins or leaves the pane) in a simulated page; the compass maths by hand for the four screen angles. Syntax checked. Not run through CI or a device.
+- Assumption: "automatically" means the first note opens with the list. Phone portrait stays full screen.
+- Risks: a narrow landscape phone (about 640 px) gives a tight list title row; the list redraws after each save and may flicker; the nav and lock buttons now sit inside the list pane; the first-note open after a lock and unlock is not done.
+- Decisions 458 to 460. DP243 to DP245 added; DP241 and DP242 still open.
+- Next start: the CI log, then Phase 110: more odp shapes, then the responsive tool shell.
+
+---
+
 **Session 221**
 
 Start: Phase 110, step 3 (Session 220's plan).

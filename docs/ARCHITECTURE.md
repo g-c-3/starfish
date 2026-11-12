@@ -1219,3 +1219,11 @@ A static dialog listed in `BACK_MODALS` (`app.js`) is left by its own Close or C
 
 The archive job status carries `total` (uncompressed bytes of the chosen entries; 0 when unknown): zip, 7z and rar read it from their lists before extracting.
 
+## Notes split view (Decision 458)
+
+`syncNotesSplit` (`app.js`, run from `updateBackButtonState`) sets `body.np-split` and `body[data-np]` when a Notes folder is on view and the window is 600 px wide or more (`SPLIT_MQ`). `openTextEditor` is a wrapper: with a note already in the pane it calls that editor's `release(dir)` (save, leave by `np-out-*`, wait 0.11 s, `finish(false, true)`), then opens the next, which arrives by `np-in-*` (`motion.css`, the page recipe's keyframes and tokens). `#editor-screen.np-pane` (set at open, kept 450 ms after hide so the exit plays) puts the editor at `left: var(--np-w)`; `motion.js` makes no page under it leave. `syncOverlayChrome` ignores a pane editor, so the nav, lock and power stay (`notesplit.css` moves them into the list pane). In the pane Back is `requestBack`, which saves, closes and leaves the folder. The closure in `app.js` holds `autoOpen` (first note once drawn), the list highlight (`markActiveNote`, `np-active`), the redraw 1.2 s after `arkly-note-saved`, and the check that the note on view still exists after each draw. Narrow again: the pane editor goes full screen; folder gone: it saves and closes.
+
+## Location compass (Decision 460)
+
+`compassHeading(alpha, beta, gamma, angle)` in `locfix.js` sums the screen's up edge (top edge for 0, right edge for 90, negated for 180 and 270) and the back direction. The letters are dimmed (`lf-wait`) and north stays up until 0.7 s of readings agree within about 10°.
+
