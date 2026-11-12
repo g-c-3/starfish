@@ -4,6 +4,20 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 228**
+
+Start: "Do next": Phase 112 (binary and unknown files).
+- Built: `src/js/bytesview.js` (new), `src/css/bytesview.css` (new); `filesview.js` (`mountBytesFile`, limit), `explorer-view.js` (`showBytes`, the not-text choice), `explorer.js` (`openWithKind`, viewer name), `app.js` (Trash chip, Files viewer branch and button). Architecture: Byte view section (Decision 467).
+- Tested in a sandbox: 25 checks on the type guess (png, jpeg, gif, pdf, heic and mp4 brands, webp, wav, epub, odt, ooxml, plain zip, apk, elf, exe, tar at offset 257, text kinds, utf-16, unknown, empty), hex rows (offset, two groups, text column, short last row aligned), and the mount (size both ways, extension, paging, caption, empty and small files, destroy); 6 checks on reading the head from a stream (cap exact across chunks, small, empty, exact, many chunks, no stream). Syntax checked on the four edited files. Not run through CI or a device; the viewer files were not run.
+- Not changed: a tap on a file still opens the phone's app for a type that has one.
+- Unseen: how the page scrolls inside the explorer's viewer body (the page is sized to the body); the Files viewer's title bar over it.
+- Not read: the CI log (run logs need a sign-in).
+- Size: about 12.5 KB of source added (Decision 453).
+- Decision 467. DP252 added.
+- Next start: the CI log, then Phase 113 (EPUB and rendered RTF), or Phase 119 (text editor) with the shell mount.
+
+---
+
 **Session 227**
 
 Start: "Do next": Phase 111, the next incomplete item by number (Markdown and HTML rendered).
