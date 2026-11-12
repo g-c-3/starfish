@@ -155,10 +155,23 @@ export function openFileViewer(file, ctx) {
     const undoBtn = iconBtn('undo', 'Undo', () => { ed.undo(); sync(); }); const redoBtn = iconBtn('redo', 'Redo', () => { ed.redo(); sync(); });
     const editBtn = editable ? iconBtn('edit', 'Edit this file', () => setEdit(!ed.isEditing())) : null;
     const findBtn = iconBtn('search', 'Find and replace', () => { ui.onActivity(); findBtn.classList.toggle('on', ed.find()); }); // a second tap closes it
-    iconBtn('goto', 'Go to line', () => { ui.onActivity(); ed.goTo(); });
+    const gotoBtn = iconBtn('goto', 'Go to line', () => { ui.onActivity(); ed.goTo(); });
     const wrapBtn = iconBtn('wrap', 'Wrap long lines', () => { ui.onActivity(); wrapBtn.classList.toggle('on', ed.toggleWrap()); });
     wrapBtn.classList.toggle('on', ed.isWrapped());
     stopPinch = attachTextPinch(host, ed);
+    // Markdown and HTML also open rendered, behind a switch (Decision 466); the source tools are hidden while it shows
+    let rnd = null;
+    if (/\.(md|markdown|mdown|html?|xhtml)$/i.test(f.name)) {
+      try {
+        const { mountRender } = await import('./textrender.js');
+        if (mine !== token || closed) { ed.destroy(); return; }
+        rnd = mountRender({ wrap, host, name: f.name, ui, getText: () => ed.getValue(), addTool: (icon, title, fn) => iconBtn(icon, title, fn),
+          onSwap: (on) => {
+            for (const b of [findBtn, gotoBtn, wrapBtn, editBtn]) if (b) b.classList.toggle('hidden', on);
+            if (on) { undoBtn.classList.add('hidden'); redoBtn.classList.add('hidden'); } else setEdit(ed.isEditing());
+          } });
+      } catch { /* the source view stays */ }
+    }
     function setEdit(v) {
       ed.setEditing(v);
       if (editBtn) {
@@ -183,7 +196,7 @@ export function openFileViewer(file, ctx) {
       };
       guard = async () => !ed.isDirty() || ui.askYesNo({ title: 'Discard changes?', text: 'This file has not been saved.', yes: 'Yes, discard', no: 'No, keep editing' });
     }
-    cleanup = () => { ed.destroy(); };
+    cleanup = () => { if (rnd) rnd.destroy(); ed.destroy(); };
   }
 
   // ---- Image ----

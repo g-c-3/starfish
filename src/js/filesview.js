@@ -39,12 +39,20 @@ export async function mountTextFile(body, bytes, name, ui, chrome = null) {
     else { b = el('button', 'ev-tool', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.onclick = () => { ui.onActivity(); fn(b); }; bar.appendChild(b); }
     return b;
   };
-  tool('search', 'Find', 'Find', (b) => b.classList.toggle('on', ed.find()));
-  tool('goto', 'Go to', 'Go to line', () => ed.goTo());
+  const fb = tool('search', 'Find', 'Find', (b) => b.classList.toggle('on', ed.find()));
+  const gb = tool('goto', 'Go to', 'Go to line', () => ed.goTo());
   const w = tool('wrap', 'Wrap', 'Wrap long lines', (b) => b.classList.toggle('on', ed.toggleWrap()));
   w.classList.toggle('on', ed.isWrapped());
   const unpinch = attachTextPinch(host, ed);
-  return { destroy() { unpinch(); ed.destroy(); } };
+  // Markdown and HTML also open rendered, behind a switch (Decision 466); the source tools are hidden while it shows
+  let rnd = null;
+  if (/\.(md|markdown|mdown|html?|xhtml)$/i.test(name)) {
+    try {
+      const { mountRender } = await import('./textrender.js');
+      rnd = mountRender({ wrap, host, name, ui, getText: () => text, addTool: (icon, title, fn) => tool(icon, 'Rendered', title, () => fn()), onSwap: (on) => { for (const b of [fb, gb, w]) b.classList.toggle('hidden', on); } });
+    } catch { /* the source view stays */ }
+  }
+  return { destroy() { if (rnd) rnd.destroy(); unpinch(); ed.destroy(); } };
 }
 
 // A blob URL of the decrypted audio, played with the phone's own controls; paused when the app is not in front.
