@@ -559,6 +559,7 @@ export function readDocx(bytes) {
   };
 
   const sectNodes = []; // sectPr of each paragraph that ends a section, in order
+  let pIdx = null; // body paragraph -> index among all w:p of the body, the order the editor's engine uses (Decision 474)
   // ---- paragraphs and tables ----
   const paragraph = (p) => {
     const pp = kid(p, 'pPr');
@@ -586,7 +587,7 @@ export function readDocx(bytes) {
     if (sp) { sectNodes.push(sp); sectEnd = sectNodes.length - 1; }
     if (list) { const t = runs.find((x) => x.text); list.fmt = t ? { font: t.font, size: t.size, b: t.b, i: t.i, color: t.color } : { font: rbase.font, size: rbase.size }; list.hang = eff.first < 0 ? -eff.first : 0; }
     const { outline, ...pr } = eff;
-    return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd };
+    return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd, src: pIdx ? pIdx.get(p) : undefined };
   };
   const blocksOf = (node, depth) => {
     const out = [];
@@ -636,6 +637,7 @@ export function readDocx(bytes) {
   }
 
   const body = kid(root, 'body') || root;
+  pIdx = new Map(); { let k = 0; for (const x of body.getElementsByTagName('*')) if (x.localName === 'p' && x.namespaceURI === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main') pIdx.set(x, k++); }
   const blocks = blocksOf(body, 0);
 
   // ---- page, header, footer, footnotes ----

@@ -8,6 +8,7 @@ import { paginate, paginateAuto, hasSavedBreaks, pickHF } from './office-pages.j
 import { readDocx, readXlsx, readPptx, colName, OfficeError, DOC_BLOCK_MAX, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 import { odfKind, readOdt, readOds, readOdp } from './office-odf.js';
 import { readXls, isXls } from './office-xls.js';
+import { registerEditor, hasEditor, loadEditor, createShell } from './office-shell.js';
 import { readDoc, isDoc } from './office-doc.js';
 import { readPpt, isPpt } from './office-ppt.js';
 
@@ -617,6 +618,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     if (pr.bg) fill = applyFill(p, pr.bg);
     if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if (bd.t || bd.b || bd.l || bd.r) st.padding = '2px 4px'; }
     if (pr.pb) p.classList.add('eo-pbb');
+    if (b.src !== undefined) p.dataset.pi = String(b.src);
     if (b.list) {
       const m = el('span', 'eo-mark', b.list.marker);
       const f = b.list.fmt || {};
@@ -704,6 +706,7 @@ function makeEnv(model, u) {
 }
 const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 2500))]);
 
+registerEditor('docx', () => import('./docview-edit.js'));
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
@@ -713,7 +716,7 @@ function mountDocx(model, host, u, ui, bars) {
   const timing = { ...(model.timing || {}), pages: performance.now() - TP }; // sheets from the saved breaks (Decision 242), the file's own breaks, or measuring (Decision 243); null: one sheet
   // 'check': the file's own sheets are drawn at once and a sample is measured afterwards (Decision 246); 'idle': measuring runs the first time Page view is shown
   let auto = saved || !model.blocks.length ? 'done' : hard0 ? 'check' : 'idle';
-  let gone = false;
+  let gone = false; let forceFlow = false; // editing is drawn in Reflow: every paragraph is one element (Decision 474)
   const pgOf = () => (lay ? { ...model.page, w: Math.max(...lay.sheets.map((s) => model.sections[s.sec].page.w)) } : model.page);
   let pg = pgOf();
   const heads = []; // top-level heading elements, for the outline (Decision 240); refilled on each build
@@ -782,10 +785,10 @@ function mountDocx(model, host, u, ui, bars) {
     if (io) io.disconnect(); io = null; recs = [];
     if (page && lay) sheetsDom(); else flowDom();
   };
-  const fit = () => (prefs.doc === 'page' && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
+  const fit = () => (prefs.doc === 'page' && !forceFlow && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
   const zoom = setupZoom(scroll, zoomer, fit, ui);
   const apply = () => {
-    const page = prefs.doc === 'page'; const sheeted = page && !!lay;
+    const page = prefs.doc === 'page' && !forceFlow; const sheeted = page && !!lay;
     if (page && (auto === 'idle' || auto === 'check')) { // idle: show the text at once, then lay the pages out
       auto = 'busy'; const before = lay;
       setTimeout(async () => {
@@ -829,7 +832,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, ensureAll, timing, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
+  return { heads, ensureAll, timing, flow(on) { forceFlow = on; apply(); }, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
@@ -1196,7 +1199,8 @@ function mountPptx(model, host, ui, count, u, bars, root) {
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
 // fit to show; any other error is shown as the generic one by the caller.
 export function mountOffice(kind, bytes, host, ctx) {
-  const { ui, setCount = () => {} } = ctx;
+  const { ui, setCount = () => {}, toast = () => {}, edit = null } = ctx;
+  let shell = null; let editor = null; // the tool shell and the editor of a docx that may be changed (Decision 474)
   const u = urls();
   host.classList.add('ev-office');
   usedFonts = new Set(); embeddedNames = new Set();
@@ -1222,6 +1226,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountDocx(model, holder, u, ui, tmp);
     tmp.tools = docTools(host, inner); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
+    if (edit && !odf && hasEditor('docx') && bytes[0] === 0x50 && bytes[1] === 0x4B) shell = makeShell(inner);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {
@@ -1238,8 +1243,39 @@ export function mountOffice(kind, bytes, host, ctx) {
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }
+  // Edit: the editor loads on the first tap; the page is drawn in Reflow while it is open. Save replaces the file, Save as copy never does.
+  function makeShell(view) {
+    const failed = (e) => toast(`Could not save the file${e && e.message ? `: ${e.message}` : '.'}`);
+    const saveNow = async () => { if (!editor) return false; try { await edit.save(editor.bytes()); editor.markClean(); return true; } catch (e) { failed(e); return false; } };
+    const sh = createShell(host, {
+      groups: [], onActivity: ui.onActivity, save: saveNow,
+      saveCopy: async () => { if (editor) { try { await edit.saveCopy(editor.bytes()); } catch (e) { failed(e); } } },
+      onEdit: async (on) => {
+        if (!on) { if (editor) editor.setEditable(false); return; }
+        if (editor) { editor.setEditable(true); return; }
+        try {
+          const mod = await loadEditor('docx');
+          view.flow(true);
+          editor = mod.mountEditor({ paper: host.querySelector('.eo-paper'), bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
+          sh.setGroups(editor.groups); editor.setEditable(true);
+          if (!editor.count) toast('Nothing in this file can be edited here.');
+        } catch (e) { view.flow(false); editor = null; toast(e && e.office ? e.message : 'This file cannot be edited here.'); sh.setEditing(false); }
+      },
+      onDone: async () => {
+        if (editor && editor.dirty()) {
+          const v = await sh.confirmLeave();
+          if (v === 'keep') return;
+          if (v === 'save') { if (!(await saveNow())) return; } else { edit.reload(); return; } // discard: the file is opened again as it was saved
+        }
+        if (editor && !editor.touched()) { editor.destroy(); editor = null; view.flow(false); }
+        sh.setEditing(false);
+      }
+    });
+    sh.saveNow = saveNow;
+    return sh;
+  }
   const fnote = fontNotice(host);
   // the notice folds away with the title bar on scroll (Decision 243)
   const stopChrome = chromeOnScroll(host, (h) => { if (fnote) fnote.classList.toggle('eo-folded', h); if (ctx.onChrome) ctx.onChrome(h); }, '.eo-scroll, .eo-grid');
-  return { destroy() { stopChrome(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
+  return { dirty: () => !!(editor && editor.dirty()), confirmLeave: () => shell.confirmLeave(), saveNow: () => shell.saveNow(), destroy() { stopChrome(); if (editor) editor.destroy(); if (shell) shell.destroy(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }

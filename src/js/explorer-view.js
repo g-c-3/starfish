@@ -320,11 +320,28 @@ export function openFileViewer(file, ctx) {
       body.appendChild(host);
       enterFull(() => host.classList.toggle('eo-menu-open'));
       host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
+      const dir = f.path.slice(0, f.path.lastIndexOf('/'));
+      const canEdit = kind === 'docx' && !readOnly && !isVault; // Decision 474: Save replaces the file, Save as copy is written beside it
       mounted = mountOffice(kind, bytes, host, {
+        toast,
+        edit: !canEdit ? null : {
+          save: async (out) => { await Filesystem.writeFile({ path: toUri(f.path), data: bytesToB64(out) }); changed = true; toast('Saved'); },
+          saveCopy: async (out) => {
+            const stem = f.name.replace(/\.docx$/i, ''); let name = `${stem} (copy).docx`; let path = `${dir}/${name}`;
+            for (let n = 2; n < 100; n++) { try { await Filesystem.stat({ path: toUri(path) }); } catch { break; } name = `${stem} (copy ${n}).docx`; path = `${dir}/${name}`; } // never over an existing file
+            await Filesystem.writeFile({ path: toUri(path), data: bytesToB64(out) }); changed = true; toast(`Saved as ${name}`);
+          },
+          reload: () => { if (!closed) show(current); }
+        },
         ui, setCount: (t) => { if (mine === token) countEl.textContent = t; },
         onChrome: (h) => { if (h) closeMenus(); setChrome(h); },
         openWith: () => { if (!closed) external(current, true); }
       });
+      if (canEdit) guard = async () => { // the leave check by the system Back
+        if (!mounted || !mounted.dirty()) return true;
+        const v = await mounted.confirmLeave();
+        return v === 'discard' ? true : v === 'save' ? mounted.saveNow() : false;
+      };
     } catch (err) {
       if (mine !== token) return;
       if (mounted) { mounted.destroy(); mounted = null; }
