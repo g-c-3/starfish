@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 234**
+
+Start: "Go", then "Continue". CI log not read (the unauthenticated API was rate limited). Phase 119 step 2.
+- Built: `src/js/docview-edit.js` (new), the editor view (Decision 474). `office-read.js` stamps each body paragraph with its index (`src`); `office-render.js` writes it as `data-pi`, mounts the shell for a docx when the host gives `edit`, loads the editor on the first Edit, and draws Reflow while it is open (`flow`); `explorer-view.js` supplies Save, Save as copy, reload and the Back guard; `office-shell.css` one rule for the paragraph being edited.
+- Tested in a sandbox (jsdom): text sync by prefix and suffix, Enter, Backspace join, save round trip through the engine. Syntax check of the four edited files. Not run through CI or a device; formats and the shell's place under the title bar are untested.
+- Size: about 9 KB of source added (Decision 453).
+- Decision 474. DP257 open.
+- Next start: the CI log, DP257 on a device, then Phase 119 step 3 (odt on the same operations) or the next incomplete item.
+
+---
+
 **Session 233**
 
 Start: "Your choice next", then "Continue". Every phase before 119 is built; 119 is next. Context filling: finishing this task, then docs.
