@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 235**
+
+Start: "Go", then "Continue". CI log not read (the unauthenticated API was rate limited). Phase 119 step 3.
+- Built: `src/js/odtedit.js` (new), the odt engine (Decision 475). `docedit.js` hands an odt to it and gains `next`; `docview-edit.js` joins by `eng.next`; `office-odf.js` stamps each paragraph with its index (`src`); `office-render.js` mounts the shell for an odt; `explorer-view.js` Save as copy keeps `.odt`.
+- Tested in a sandbox (jsdom), with a hand-built odt (heading, styled span, spaces, tab, line break, bookmark, link, list, table cell, empty paragraph): 43 engine checks (text and locks, reader text equal to engine text for every paragraph, replace in and across runs, insert at the edges and into an empty paragraph, spaces kept as `text:s`, format on and off with stacked formats, split and merge including list items, mimetype first, other parts byte for byte, saved file read by the reader and reopened) and 8 view checks (typing, Enter and Backspace across list items, saved text). Every edited file parsed with the bundler; `office-render.js` and `explorer-view.js` bundled with packages external: no error. Not run through CI or a device; no file made by another office program was available, so the style handling is tested on a hand-built file only.
+- Size: about 14.7 KB of source added (Decision 453).
+- Decision 475. DP258 open.
+- Next start: the CI log, DP257 and DP258 on a device, then Phase 119 step 4 (lists, tables and pictures in place) or the next incomplete item.
+
+---
+
 **Session 234**
 
 Start: "Go", then "Continue". CI log not read (the unauthenticated API was rate limited). Phase 119 step 2.

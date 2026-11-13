@@ -442,3 +442,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-13 | Session 232 | Decision 472 | Phase 113: EPUB reader (chapters, contents, text size, page colour) and rendered RTF; EPUB now opens in Arkly; DP256 added; not run through CI or a device |
 | 2026-11-13 | Session 233 | Decision 473 | Phase 119 split into five steps; step 1 built: the docx edit engine (no screen); not run through CI or a device |
 | 2026-11-13 | Session 234 | Decision 474 | Phase 119 step 2: the docx editor view, the shell mounted in the File explorer, Save, Save as copy and the leave check; DP257 added; not run through CI or a device |
+| 2026-11-14 | Session 235 | Decision 475 | Phase 119 step 3: the odt editor (same operations as the docx engine, new odt engine, paragraph index stamped by the odt reader, shell mounted for an odt, Save as copy keeps .odt); DP258 added; not run through CI or a device |
