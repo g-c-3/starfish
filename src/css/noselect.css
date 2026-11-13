@@ -1,0 +1,5 @@
+/* noselect.css — no text selection anywhere in the app except inside its editors (Decision 470). A long press selects nothing and shows no
+   copy menu. Selectable: text fields, the contenteditable surfaces, the code editor (also in its read-only view) and the PDF text layer
+   (the reading tools of Decision 153). !important so that older per-component rules cannot bring selection back. */
+html body, html body * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }
+html body :is(input, textarea, [contenteditable]:not([contenteditable="false"]), .cm-editor, .cm-editor *, .textLayer, .textLayer *) { -webkit-user-select: text !important; user-select: text !important; -webkit-touch-callout: default !important; }
