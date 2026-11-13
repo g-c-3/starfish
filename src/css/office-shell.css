@@ -30,6 +30,8 @@
 .eo-leave-t { margin: 4px 0 14px; font-size: 15px; }
 .eo-leave-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .eo-leave-row .eo-sh-btn { flex: 1; justify-content: center; }
+/* the paragraph being edited (Decision 474) */
+.eo-p[contenteditable="true"] { outline: none; caret-color: var(--brand); }
 @media (prefers-reduced-motion: no-preference) {
   .eo-fade:not(.hidden) { animation: mx-fade-in 0.3s var(--mx-settle) both; }
   .eo-fade.mx-after:not(.hidden) { animation-delay: var(--mx-gap); }
