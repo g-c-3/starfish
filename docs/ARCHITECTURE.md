@@ -1186,6 +1186,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.
 
+## EPUB reader and rendered RTF (Decision 472)
+
+`epubview.js` (`isEpub`, `parseEpub`, `chapterHtml`, `mountEpub`): the Document kind's dispatch in `mountOfficeFile` (Files and Trash viewers) and `showOffice` (explorer viewer) sends a zip with the EPUB `mimetype` to it before `mountOffice`; it returns `{ toggleMenu, destroy }`, `toggleMenu` opens the contents. `cleanHtml(text, { resolve, extraStyle })` in `textrender.js` takes the book's own files as `data:`. Pages fade with `tr-fade`. `rtfrender.js` (`renderRtf`) feeds the rendered view of `textrender.js`; `rtf` is in the render lists of both text viewers.
+
 ## Text selection (Decision 470)
 
 `noselect.css`: selection off for `html body, html body *`, on for text fields, `contenteditable`, `.cm-editor` and `.textLayer`, both with `!important`. A new editing surface that must select text is added to the exception list; nothing else sets `user-select`. The sandboxed HTML frame repeats the off rule in its own style (`textrender.js`).

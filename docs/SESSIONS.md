@@ -4,6 +4,19 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 232**
+
+Start: "Do next": Phase 113 (EPUB and rendered RTF). The CI of the Session 231 fix was not reported; the owner's last message was the "Do next".
+- Built: `src/js/epubview.js`, `src/css/epubview.css`, `src/js/rtfrender.js` (new); `textrender.js` (`cleanHtml` options, RTF in the rendered view), `filesview.js` and `explorer-view.js` (EPUB dispatch, `rtf` in the render list), `explorer.js` (`epub` in the Document kind) (Decision 472). Architecture: EPUB reader and rendered RTF section.
+- Behaviour change: an `.epub` now opens in Arkly (Files switch on, and in the explorer) instead of going straight to the phone's apps.
+- Tested in a sandbox with a built EPUB (mimetype first and stored; nav contents with nested entries; a percent-escaped path; a style sheet with an `@import` and a `url()` to a local picture and one to a remote address; a missing page; script, handler, remote picture and link in a page): 22 checks, all pass; 15 RTF checks (styles, code pages 1252 and 1251, `\u` with fallback, symbols, escaped braces, alignment, size, underline and strike, tables, picture, field, headers, a 500 KB file in under a second, 50 000 nested groups). Every edited file parsed with a bundler. Not run through CI or a device.
+- Not done: reading position, covers, fixed-layout books, in-page links; RTF fonts, colours, list numbers.
+- Size: about 21.5 KB of source added (Decision 453).
+- Decision 472. DP256 added.
+- Next start: the CI log, then Phase 114 or the next incomplete phase by number; or Phase 119 (text editor) with the shell mount.
+
+---
+
 **Session 231**
 
 Start: the owner sent the CI log of the last run and a screenshot of a long press selecting Settings text, and asked for a roadmap item.
