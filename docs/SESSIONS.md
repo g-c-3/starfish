@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 236**
+
+Start: "Do next". CI log not read. Phase 119 step 4, split in the roadmap into 4a to 4d; 4a built.
+- Built: table rows and columns in a docx (Decision 476). `docedit.js`: `cellOf`, `insertRow`, `deleteRow`, `insertColumn`, `deleteColumn`; `docview-edit.js`: the Table group (six tools) and the page changes that follow the engine.
+- Tested in a sandbox (jsdom), with a hand-built docx (two tables, a header row, a merged cell): 25 checks: counts and refusals (outside a table, merged cells), new rows and columns with empty cells, no copied header mark, table width and grid kept equal, delete with the caret target, the saved file read back by the reader and reopened, and on the page: each tool, typing into a new cell, a merged table left untouched, and the page's cells equal to the file's cell by cell after a run of changes. The earlier 43 engine and 8 view checks still pass. Every edited file parsed with the bundler; `office-render.js` and `explorer-view.js` bundled with packages external. Not run through CI or a device; no table made by another office program was available.
+- Size: about 9.5 KB of source added (Decision 453).
+- Decision 476. DP259 open.
+- Next start: the CI log, DP257 to DP259 on a device, then 4b (the same in an odt), or the next incomplete item.
+
+---
+
 **Session 235**
 
 Start: "Go", then "Continue". CI log not read (the unauthenticated API was rate limited). Phase 119 step 3.
