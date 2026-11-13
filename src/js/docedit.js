@@ -143,6 +143,73 @@ export function openDoc(bytes) {
   const next = (p) => { const s = p.nextElementSibling; return isW(s, 'p') ? s : null; }; // the paragraph that follows p, if it is the next sibling
   const remove = (p) => { if (kid(kid(p, 'pPr'), 'sectPr')) throw new EditError('A section ends here; the paragraph cannot be removed.'); p.remove(); };
 
+  // ---- table rows and columns (Decision 476): tables with merged cells, or with rows of different widths, are refused ----
+  const TABLE_ERR = 'This table cannot be changed here.';
+  const where = (p) => {
+    let tc = null; for (let n = p && p.parentNode; n; n = n.parentNode) if (isW(n, 'tc')) { tc = n; break; }
+    if (!tc || !isW(tc.parentNode, 'tr') || !isW(tc.parentNode.parentNode, 'tbl')) throw new EditError('Put the cursor in a table cell first.');
+    const tr = tc.parentNode; const tbl = tr.parentNode; const rows = kids(tbl, 'tr'); const cols = kids(tr, 'tc').length;
+    for (const r of rows) {
+      const trpr = kid(r, 'trPr');
+      if (kid(trpr, 'gridBefore') || kid(trpr, 'gridAfter') || kids(r, 'tc').length !== cols) throw new EditError(TABLE_ERR);
+      for (const c of r.children) {
+        if (isW(c, 'tc')) { const pr = kid(c, 'tcPr'); const gs = kid(pr, 'gridSpan'); if ((gs && Number(gs.getAttributeNS(W, 'val') || 1) > 1) || kid(pr, 'vMerge')) throw new EditError('This table has merged cells; rows and columns cannot be changed here.'); }
+        else if (!isW(c, 'trPr') && !isW(c, 'tblPrEx')) throw new EditError(TABLE_ERR);
+      }
+    }
+    return { tc, tr, tbl, rows, rows_n: rows.length, cols, ri: rows.indexOf(tr), ci: kids(tr, 'tc').indexOf(tc) };
+  };
+  const cellOf = (p) => { const w = where(p); return { ri: w.ri, ci: w.ci, rows: w.rows_n, cols: w.cols }; };
+  // a copy of a cell with only its first paragraph, emptied (its properties kept); returns that paragraph
+  const blank = (tc) => {
+    const blocks = [...tc.children].filter((c) => !isW(c, 'tcPr')); const first = blocks[0];
+    if (!isW(first, 'p')) throw new EditError(TABLE_ERR);
+    for (const b of blocks.slice(1)) tc.removeChild(b);
+    for (const c of [...first.children]) if (!isW(c, 'pPr')) first.removeChild(c);
+    const ppr = kid(first, 'pPr'); const sp = kid(ppr, 'sectPr'); if (sp) ppr.removeChild(sp);
+    return first;
+  };
+  const firstP = (tc) => (tc ? [...tc.children].find((c) => isW(c, 'p')) || null : null);
+  // table width in twentieths of a point follows the grid when it is fixed that way
+  const widen = (tbl, by) => { const tw = kid(kid(tbl, 'tblPr'), 'tblW'); if (tw && tw.getAttributeNS(W, 'type') === 'dxa' && by) tw.setAttributeNS(W, 'w:w', String(Math.max(0, Number(tw.getAttributeNS(W, 'w') || 0) + by))); };
+  const gridW = (g) => Number(g && g.getAttributeNS(W, 'w') || 0);
+  // a new row beside the paragraph's row; returns the new first paragraph of each cell
+  const insertRow = (p, after = true) => {
+    const { tr } = where(p); const nr = tr.cloneNode(true);
+    const trpr = kid(nr, 'trPr'); if (trpr) { for (const h of kids(trpr, 'tblHeader')) trpr.removeChild(h); if (!trpr.children.length) nr.removeChild(trpr); }
+    const out = kids(nr, 'tc').map(blank);
+    if (after) tr.after(nr); else tr.before(nr);
+    return out;
+  };
+  // removes the row; returns the paragraph to put the caret in (same column, the next row or else the previous)
+  const deleteRow = (p) => {
+    const w = where(p); if (w.rows_n < 2) throw new EditError('A table keeps at least one row.');
+    const near = w.rows[w.ri + 1] || w.rows[w.ri - 1]; const cells = kids(near, 'tc');
+    w.tr.remove(); return firstP(cells[Math.min(w.ci, cells.length - 1)]);
+  };
+  // a new column beside the paragraph's column; returns the new first paragraph of each row
+  const insertColumn = (p, after = true) => {
+    const w = where(p); const grid = kid(w.tbl, 'tblGrid'); const gc = grid ? kids(grid, 'gridCol') : [];
+    if (gc.length && gc.length !== w.cols) throw new EditError(TABLE_ERR);
+    const out = [];
+    for (const r of w.rows) { const tc = kids(r, 'tc')[w.ci]; const nc = tc.cloneNode(true); out.push(blank(nc)); if (after) tc.after(nc); else tc.before(nc); }
+    if (gc.length) { const g = gc[w.ci].cloneNode(true); if (after) gc[w.ci].after(g); else gc[w.ci].before(g); widen(w.tbl, gridW(g)); }
+    return out;
+  };
+  const deleteColumn = (p) => {
+    const w = where(p); if (w.cols < 2) throw new EditError('A table keeps at least one column.');
+    const grid = kid(w.tbl, 'tblGrid'); const gc = grid ? kids(grid, 'gridCol') : [];
+    if (gc.length && gc.length !== w.cols) throw new EditError(TABLE_ERR);
+    let focus = null;
+    for (const r of w.rows) {
+      const cells = kids(r, 'tc'); const tc = cells[w.ci];
+      if (r === w.tr) focus = firstP(cells[w.ci + 1] || cells[w.ci - 1]);
+      r.removeChild(tc);
+    }
+    if (gc.length) { widen(w.tbl, -gridW(gc[w.ci])); grid.removeChild(gc[w.ci]); }
+    return focus;
+  };
+
   const toBytes = () => {
     const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '');
@@ -150,5 +217,5 @@ export function openDoc(bytes) {
     for (const k of Object.keys(files)) out[k] = [k === MAIN ? new TextEncoder().encode(decl + xml) : files[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, runsOf, next, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, runsOf, next, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }

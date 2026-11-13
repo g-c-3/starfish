@@ -1,4 +1,4 @@
-// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
+// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474); table rows and columns, step 4a (Decision 476). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
 // become editable in place; each one is mapped to its paragraph in the engine (`docedit.js`) by the index the reader stamped on it.
 // Typing, deleting and IME input are left to the browser and then synced: the paragraph's text is compared with the engine's and the
 // changed span is applied with `replace`, so the original runs keep their properties. Enter, Backspace at the start and Delete at the
@@ -164,6 +164,73 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   };
   const fmt = (id, label, prop) => ({ id, label, icon: IC[prop], run: () => toggle(prop), on: () => isOn(prop) });
   const groups = [{ id: 'text', title: 'Text', tools: [fmt('b', 'Bold', 'b'), fmt('i', 'Italic', 'i'), fmt('u', 'Underline', 'u'), fmt('s', 'Strikethrough', 'strike')] }];
+
+
+  // ---- table rows and columns (Decision 476): the engine changes the file first, then the page follows ----
+  const cellInfo = () => {
+    const el = lastRange && elOf(lastRange.startContainer); const td = el && el.closest('td');
+    return td && paper.contains(td) && map.has(el) ? { el, td, tr: td.parentNode, table: td.closest('table') } : null;
+  };
+  const blankTd = (src) => { // a copy of a cell holding one empty paragraph
+    const td = src.cloneNode(true); const p = td.firstElementChild;
+    if (!p || !p.classList.contains('eo-p')) throw new Error('This table cannot be changed here.');
+    for (const c of [...td.children]) if (c !== p) td.removeChild(c);
+    for (const c of [...p.childNodes]) if (!isMark(c)) p.removeChild(c);
+    p.removeAttribute('data-pi'); p.removeAttribute('contenteditable'); p.appendChild(document.createElement('br'));
+    return { td, p };
+  };
+  const adopt = (p, node) => { map.set(p, node); if (editing) p.contentEditable = 'true'; };
+  const forget = (root) => { for (const e of root.querySelectorAll('.eo-p')) map.delete(e); };
+  const colgroup = (table) => [...table.children].find((x) => x.tagName === 'COLGROUP') || null;
+  const resize = (table, col, sign) => { const w = parseFloat(col && col.style.width); const t = parseFloat(table.style.width); if (w && t && table.style.width.endsWith('px')) table.style.width = `${Math.max(0, t + sign * w)}px`; };
+  const tableTool = (fn) => () => {
+    const c = cellInfo(); const node = c && map.get(c.el);
+    if (!c) { toast('Put the cursor in a table cell first.'); return; }
+    try {
+      const info = eng.cellOf(node);
+      if (c.table.rows.length !== info.rows || [...c.table.rows].some((r) => r.cells.length !== info.cols)) throw new Error('This table cannot be changed here.');
+      fn(c, node, info); onActivity();
+    } catch (e) { toast(e.message || 'This table cannot be changed here.'); }
+  };
+  const addRow = (after) => tableTool((c, node, info) => {
+    const tds = [...c.tr.cells].map(blankTd); const made = eng.insertRow(node, after);
+    const nr = c.tr.cloneNode(false);
+    tds.forEach((x, i) => { nr.appendChild(x.td); adopt(x.p, made[i]); });
+    if (after) c.tr.after(nr); else c.tr.before(nr);
+    dirty(); setCaret(tds[Math.min(info.ci, tds.length - 1)].p, 0);
+  });
+  const dropRow = tableTool((c, node, info) => {
+    const rows = [...c.table.rows]; const near = rows[info.ri + 1] || rows[info.ri - 1];
+    eng.deleteRow(node); forget(c.tr); c.tr.remove();
+    dirty(); const cell = near && near.cells[Math.min(info.ci, near.cells.length - 1)]; const p = cell && cell.querySelector('.eo-p'); if (p) setCaret(p, 0);
+  });
+  const addColumn = (after) => tableTool((c, node, info) => {
+    const rows = [...c.table.rows]; const blanks = rows.map((r) => blankTd(r.cells[info.ci])); const made = eng.insertColumn(node, after);
+    rows.forEach((r, i) => { const cell = r.cells[info.ci]; if (after) cell.after(blanks[i].td); else cell.before(blanks[i].td); adopt(blanks[i].p, made[i]); });
+    const cg = colgroup(c.table); const at = cg && cg.children[info.ci];
+    if (at) { const col = at.cloneNode(true); if (after) at.after(col); else at.before(col); resize(c.table, col, 1); }
+    dirty(); const mine = blanks[info.ri].p; setCaret(mine, 0);
+  });
+  const dropColumn = tableTool((c, node, info) => {
+    const rows = [...c.table.rows]; eng.deleteColumn(node);
+    const keep = c.tr.cells[info.ci + 1] || c.tr.cells[info.ci - 1];
+    for (const r of rows) { const cell = r.cells[info.ci]; forget(cell); cell.remove(); }
+    const cg = colgroup(c.table); const at = cg && cg.children[info.ci]; if (at) { resize(c.table, at, -1); at.remove(); }
+    dirty(); const p = keep && keep.querySelector('.eo-p'); if (p) setCaret(p, 0);
+  });
+  const tool = (id, label, icon, run) => ({ id, label, icon, run });
+  const TI = {
+    rowUp: '<rect x="4" y="11" width="16" height="9" rx="1"/><path d="M12 3v5M9.5 5.5h5"/>',
+    rowDown: '<rect x="4" y="4" width="16" height="9" rx="1"/><path d="M12 16v5M9.5 18.5h5"/>',
+    rowDel: '<rect x="4" y="5" width="16" height="9" rx="1"/><path d="M8 18l8 3M16 18l-8 3"/>',
+    colLeft: '<rect x="11" y="4" width="9" height="16" rx="1"/><path d="M3 12h5M5.5 9.5v5"/>',
+    colRight: '<rect x="4" y="4" width="9" height="16" rx="1"/><path d="M16 12h5M18.5 9.5v5"/>',
+    colDel: '<rect x="5" y="4" width="9" height="16" rx="1"/><path d="M18 8l3 8M21 8l-3 8"/>'
+  };
+  groups.push({ id: 'table', title: 'Table', tools: [
+    tool('rowUp', 'Row above', TI.rowUp, addRow(false)), tool('rowDown', 'Row below', TI.rowDown, addRow(true)), tool('rowDel', 'Delete row', TI.rowDel, dropRow),
+    tool('colLeft', 'Column left', TI.colLeft, addColumn(false)), tool('colRight', 'Column right', TI.colRight, addColumn(true)), tool('colDel', 'Delete column', TI.colDel, dropColumn)
+  ] });
 
   return {
     groups,
