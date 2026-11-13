@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 231**
+
+Start: the owner sent the CI log of the last run and a screenshot of a long press selecting Settings text, and asked for a roadmap item.
+- CI bug: cause: `explorer.js` already imported `openSheet` (line 13) and Session 230 added it a second time, so the build stopped with "Identifier openSheet has already been declared". Fix: the added import is removed. Why correct: the file's own import covers the new sheet. The earlier syntax check did not catch a duplicate import; every edited file is now parsed with a bundler (esbuild) before it is delivered, and all files edited since Session 225 were parsed that way: no other error.
+- Change: Decision 470: no text selection outside the editors. `src/css/noselect.css` (new), imported by `app.js`; the rendered HTML frame repeats it. Kept selectable: text fields, contenteditable, the code editor, the PDF text layer (the PDF tap code also reads a selection). Tell the owner if the PDF text layer should go too.
+- Roadmap: Decision 471: Edit enabled for read-only formats, saved as the editable version, the original untouched. Added to Phase 122 and to the checklist.
+- Tested: bundler parse of `app.js`, `explorer.js`, `textrender.js`; the cascade (the exception outranks the global rule on both specificity and `!important`) read by hand, not in a browser. Not run through CI or a device.
+- Decisions 470, 471. DP255 added.
+- Next start: the CI log (the next run), then Phase 113 (EPUB and rendered RTF).
+
+---
+
 **Session 230**
 
 Start: the owner confirmed Decision 468 on the device and asked whether the File explorer should also ask, since it opens a file with no extension straight in the text viewer.

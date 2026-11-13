@@ -1186,6 +1186,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.
 
+## Text selection (Decision 470)
+
+`noselect.css`: selection off for `html body, html body *`, on for text fields, `contenteditable`, `.cm-editor` and `.textLayer`, both with `!important`. A new editing surface that must select text is added to the exception list; nothing else sets `user-select`. The sandboxed HTML frame repeats the off rule in its own style (`textrender.js`).
+
 ## Byte view (Decision 467)
 
 `bytesview.js` (`mountBytes`, `guessType`, `hexLines`), loaded on demand, fills the body of an open viewer: info rows, the guess from the first bytes, a hex dump paged 4 KB at a time up to 256 KB. Kind name `bytes`: in `VIEW_KINDS` and `openWithKind` (explorer; a type with no viewer and a known type maps to it, an unknown type still asks text first), in `FILE_LIMIT` and `mountBytesFile` (Files and Trash viewers), as the Trash's Bytes chip. The explorer reads only the head (`showBytes`: range request, or the stream cut at the cap). It is never the default for a tap: a type with a phone app still opens there. A stored file with no extension or an unknown type asks first (`askOpenHow` in `app.js`, Decision 468): the phone's apps or any Arkly viewer; the File explorer asks the same for a file with no extension or an unknown type (`needsAsk`, `askUnknown` in `explorer.js`, Decision 469).
