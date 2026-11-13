@@ -1,0 +1,12 @@
+/* epubview.css — the EPUB reader (Decision 472). Page changes fade by the one recipe (tr-fade, textrender.css); nothing else enters or leaves. */
+.ep-stage { position: relative; flex: 1; min-height: 0; background: var(--bg); }
+.ep-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+.ep-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
+.ep-btn { width: auto; margin: 0; min-width: 42px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-2); color: var(--fg); font-size: 15px; line-height: 1; box-shadow: none; }
+.ep-btn:active { filter: brightness(0.92); }
+.ep-btn:disabled { opacity: 0.4; }
+.ep-pos { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+.ep-author { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.ep-toc { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.ep-toc-i { width: 100%; margin: 0; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--fg); font-size: 15px; text-align: left; box-shadow: none; }
+.ep-toc-i.on { background: var(--surface-2); color: var(--brand); font-weight: 600; }
