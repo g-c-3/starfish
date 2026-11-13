@@ -1,9 +1,10 @@
-// docedit.js — the docx editing engine, step 1 of Phase 119 (Decision 473). It changes the original document.xml in place and writes the zip
+// docedit.js — the docx editing engine, step 1 of Phase 119 (Decision 473); `openDoc` hands an odt to odtedit.js (Decision 475). It changes the original document.xml in place and writes the zip
 // back with every other part byte for byte, so styles, numbering, headers, pictures and anything not edited are kept as they were (Decision 453).
 // No screen yet: the editor view builds on these operations. Offsets count the characters of a paragraph's plain text (tab and line break
 // are one character each). A paragraph that holds anything but plain text runs (a picture, a field, a footnote mark, a drawing) is locked:
 // `editable(p)` is false and every operation refuses it.
 import { unzipSync, zipSync } from 'fflate';
+import { openOdt } from './odtedit.js';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MAIN = 'word/document.xml';
@@ -32,6 +33,7 @@ const SKIP_P = new Set(['pPr', 'bookmarkStart', 'bookmarkEnd', 'proofErr']);
 
 export function openDoc(bytes) {
   const files = unzipSync(bytes);
+  if (!files[MAIN] && files['content.xml']) return openOdt(files, EditError); // an OpenDocument text (Decision 475)
   if (!files[MAIN]) throw new EditError('This is not a valid file of this type.');
   const doc = new DOMParser().parseFromString(new TextDecoder('utf-8').decode(files[MAIN]), 'application/xml');
   if (doc.getElementsByTagName('parsererror').length) throw new EditError('This file could not be read for editing.');
@@ -138,6 +140,7 @@ export function openDoc(bytes) {
     }
     for (const e of runsOf(nx)) p.appendChild(e.r); nx.remove(); return true;
   };
+  const next = (p) => { const s = p.nextElementSibling; return isW(s, 'p') ? s : null; }; // the paragraph that follows p, if it is the next sibling
   const remove = (p) => { if (kid(kid(p, 'pPr'), 'sectPr')) throw new EditError('A section ends here; the paragraph cannot be removed.'); p.remove(); };
 
   const toBytes = () => {
@@ -147,5 +150,5 @@ export function openDoc(bytes) {
     for (const k of Object.keys(files)) out[k] = [k === MAIN ? new TextEncoder().encode(decl + xml) : files[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, runsOf, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, runsOf, next, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }

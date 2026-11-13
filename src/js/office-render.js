@@ -1226,7 +1226,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountDocx(model, holder, u, ui, tmp);
     tmp.tools = docTools(host, inner); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && !odf && hasEditor('docx') && bytes[0] === 0x50 && bytes[1] === 0x4B) shell = makeShell(inner);
+    if (edit && (!odf || odf === 'text') && hasEditor('docx') && bytes[0] === 0x50 && bytes[1] === 0x4B) shell = makeShell(inner);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {

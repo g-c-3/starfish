@@ -180,6 +180,8 @@ export function readOdt(bytes) {
   const body = kid(kid(content, 'body'), 'text');
   if (!body) throw new OfficeError('This is not a valid file of this type.');
   const T2 = performance.now();
+  // body paragraph -> index among all text:p and text:h of the body, the order the editor's engine uses (Decision 475)
+  const pIdx = new Map(); { let k = 0; for (const x of body.getElementsByTagName('*')) if ((x.localName === 'p' || x.localName === 'h') && x.namespaceURI === 'urn:oasis:names:tc:opendocument:xmlns:text:1.0') pIdx.set(x, k++); }
 
   const media = {};
   const fnOrder = []; const footnotes = [];
@@ -253,7 +255,7 @@ export function readOdt(bytes) {
       lst = { marker: list.marker, level: list.level, fmt: { font: base.font, size: base.size, b: base.b, i: base.i, color: base.color }, hang: list.hang };
       pr.l = list.l; pr.first = -list.hang;
     }
-    return { t: 'p', level, list: lst, pr, runs, sectEnd: undefined };
+    return { t: 'p', level, list: lst, pr, runs, sectEnd: undefined, src: pIdx.get(p) };
   }
 
   // marker, indent and hang of a list level (a numbered one counts per list and level)

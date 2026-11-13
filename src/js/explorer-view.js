@@ -327,8 +327,8 @@ export function openFileViewer(file, ctx) {
         edit: !canEdit ? null : {
           save: async (out) => { await Filesystem.writeFile({ path: toUri(f.path), data: bytesToB64(out) }); changed = true; toast('Saved'); },
           saveCopy: async (out) => {
-            const stem = f.name.replace(/\.docx$/i, ''); let name = `${stem} (copy).docx`; let path = `${dir}/${name}`;
-            for (let n = 2; n < 100; n++) { try { await Filesystem.stat({ path: toUri(path) }); } catch { break; } name = `${stem} (copy ${n}).docx`; path = `${dir}/${name}`; } // never over an existing file
+            const ext = /\.odt$/i.test(f.name) ? 'odt' : 'docx'; const stem = f.name.replace(/\.(docx|odt)$/i, ''); let name = `${stem} (copy).${ext}`; let path = `${dir}/${name}`;
+            for (let n = 2; n < 100; n++) { try { await Filesystem.stat({ path: toUri(path) }); } catch { break; } name = `${stem} (copy ${n}).${ext}`; path = `${dir}/${name}`; } // never over an existing file
             await Filesystem.writeFile({ path: toUri(path), data: bytesToB64(out) }); changed = true; toast(`Saved as ${name}`);
           },
           reload: () => { if (!closed) show(current); }

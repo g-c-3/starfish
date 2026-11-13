@@ -91,7 +91,7 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   // Backspace at the start and Delete at the end: the second paragraph joins the first (only when the engine holds them side by side)
   const join = (a, b) => {
     const na = map.get(a); const nb = map.get(b);
-    if (!na || !nb || na.nextElementSibling !== nb) return;
+    if (!na || !nb || eng.next(na) !== nb) return;
     let ok; try { ok = eng.mergeNext(na); } catch (e) { toast(e.message); return; }
     if (!ok) return;
     const at = domText(a).length;
