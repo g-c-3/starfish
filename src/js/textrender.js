@@ -142,7 +142,7 @@ export function cleanHtml(text) {
     if (!im.getAttribute('src') && !im.getAttribute('href')) { const s = doc.createElement('span'); s.textContent = `[image: ${im.getAttribute('alt') || 'picture'}]`; im.replaceWith(s); }
   }
   const head = doc.head;
-  const base = doc.createElement('style'); base.textContent = 'html{background:#fff;color:#111;color-scheme:light;font-family:sans-serif;line-height:1.45}img,svg,video{max-width:100%;height:auto}a{cursor:default}';
+  const base = doc.createElement('style'); base.textContent = 'html{background:#fff;color:#111;color-scheme:light;font-family:sans-serif;line-height:1.45}img,svg,video{max-width:100%;height:auto}a{cursor:default}*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}';
   const m1 = doc.createElement('meta'); m1.setAttribute('http-equiv', 'Content-Security-Policy'); m1.setAttribute('content', POLICY);
   const m2 = doc.createElement('meta'); m2.setAttribute('charset', 'utf-8');
   const m3 = doc.createElement('meta'); m3.setAttribute('name', 'viewport'); m3.setAttribute('content', 'width=device-width, initial-scale=1');

@@ -10,7 +10,6 @@ import * as manage from './explorer-manage.js';
 import { startOps, destProblem, resultText, findConflicts, canReplace } from './explorer-ops.js';
 import { isArchive, startExtract, openBrowse, listFolder, needsPassword, errorText, baseNameOf } from './explorer-archive.js';
 import { attachScrollThumb } from './scrollthumb.js';
-import { openSheet } from './sheet.js';
 import { attachPullToRefresh } from './pulltorefresh.js';
 import { FORMATS, LEVELS, startPack, packBaseName, packResultText } from './explorer-pack.js';
 import { trackJob } from './floatdock.js';
