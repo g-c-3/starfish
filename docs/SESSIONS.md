@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 233**
+
+Start: "Your choice next", then "Continue". Every phase before 119 is built; 119 is next. Context filling: finishing this task, then docs.
+- Built: `src/js/docedit.js` (new), step 1 of Phase 119 (Decision 473): the docx edit engine, no screen. Phase 119 is split in the roadmap into five steps.
+- Tested in a sandbox through the real reader: 27 checks: paragraphs and text, a drawing paragraph locked with a readable error, replace in one run and across runs, insert at start, end and into an empty paragraph, tab and line break, run splitting at the range edges, format on and off, `rPr` children kept in schema order, Enter and Backspace, section ends (a split moves it to the last paragraph; a merge brings it along; removal refused), the saved package holds the same parts, media, header and content types byte for byte, and `readDocx` reads the saved file with the edited text and the new italic. Bundler parse of the file. Not run through CI or a device; no screen uses it yet.
+- Size: about 9.4 KB of source added (Decision 453).
+- Decision 473. No device pass yet (nothing visible).
+- Next start: the CI log, then Phase 119 step 2: the editor view (contenteditable paragraphs on the rendered page mapped to `docedit.js` by index), the shell mount and the editor contract, Save and Save as copy, the leave check.
+
+---
+
 **Session 232**
 
 Start: "Do next": Phase 113 (EPUB and rendered RTF). The CI of the Session 231 fix was not reported; the owner's last message was the "Do next".

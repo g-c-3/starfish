@@ -440,3 +440,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-12 | Session 230 | Decision 469 | File explorer asks how to open a file with no extension or an unknown type; Decision 468 confirmed on the device; DP254 added; not run through CI or a device |
 | 2026-11-13 | Session 231 | Decisions 470, 471 | CI fixed (duplicate import in the explorer); no text selection outside the editors; roadmap: Edit on read-only formats saves the editable version; DP255 added; not run through CI or a device |
 | 2026-11-13 | Session 232 | Decision 472 | Phase 113: EPUB reader (chapters, contents, text size, page colour) and rendered RTF; EPUB now opens in Arkly; DP256 added; not run through CI or a device |
+| 2026-11-13 | Session 233 | Decision 473 | Phase 119 split into five steps; step 1 built: the docx edit engine (no screen); not run through CI or a device |

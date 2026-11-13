@@ -1186,6 +1186,10 @@ is documented in `android-notes/` since it requires editing the generated `andro
 
 **Not covered.** The explorer header's title and small icons change at once. Other editors and viewers still draw their body after they open. The first row of an empty folder, search results and the Gallery grid have no row arrival.
 
+## Docx edit engine (Decision 473)
+
+`docedit.js` (`openDoc` returns `paragraphs`, `editable`, `textOf`, `runsOf`, `replace`, `format`, `hasFormat`, `split`, `mergeNext`, `remove`, `toBytes`). Works on the parsed `word/document.xml`; paragraphs are all `w:p` in document order (table cells included). A paragraph with a non-text run is locked. Only `word/document.xml` is rewritten; media are stored, other parts deflated at level 6, nothing else changed. The editor view (step 2) maps the rendered paragraphs to this list by index.
+
 ## EPUB reader and rendered RTF (Decision 472)
 
 `epubview.js` (`isEpub`, `parseEpub`, `chapterHtml`, `mountEpub`): the Document kind's dispatch in `mountOfficeFile` (Files and Trash viewers) and `showOffice` (explorer viewer) sends a zip with the EPUB `mimetype` to it before `mountOffice`; it returns `{ toggleMenu, destroy }`, `toggleMenu` opens the contents. `cleanHtml(text, { resolve, extraStyle })` in `textrender.js` takes the book's own files as `data:`. Pages fade with `tr-fade`. `rtfrender.js` (`renderRtf`) feeds the rendered view of `textrender.js`; `rtf` is in the render lists of both text viewers.
