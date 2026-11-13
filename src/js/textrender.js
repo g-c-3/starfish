@@ -2,11 +2,13 @@
 // Markdown: parsed here and built with DOM calls, never innerHTML; raw HTML in it shows as text. HTML: cleaned, then shown in a sandboxed
 // frame with a content policy that allows nothing but inline style and data: images. Scripts never run; remote content never loads;
 // links do not open (the app makes no other network calls). Pictures that are not data: show as [image: description].
+import { renderRtf } from './rtfrender.js';
 import '../css/textrender.css';
 
 export const RENDER_MAX = 1024 * 1024; // characters; a larger file stays source only
 const LINE_MAX = 20000; // an inline run longer than this stays plain text
-export const canRender = (name) => /\.(md|markdown|mdown|html?|xhtml)$/i.test(name || '');
+export const canRender = (name) => /\.(md|markdown|mdown|html?|xhtml|rtf)$/i.test(name || '');
+const isRtf = (name) => /\.rtf$/i.test(name || '');
 const isHtml = (name) => /\.(html?|xhtml)$/i.test(name || '');
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 const txt = (s) => document.createTextNode(s);
@@ -125,9 +127,17 @@ const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'data', 'backgroun
 const POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; media-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
 const cssClean = (s) => s.replace(/@import[^;]*;?/gi, '').replace(/url\(\s*(?!['"]?data:)[^)]*\)/gi, 'none');
 
-// the text of an HTML file -> a complete, inert document
-export function cleanHtml(text) {
+// the text of an HTML file -> a complete, inert document. opts.resolve(ref, 'css' | 'img') -> style text or a data: address or null (a book's own
+// files, Decision 472); opts.extraStyle: style text added last.
+export function cleanHtml(text, opts = {}) {
   const doc = new DOMParser().parseFromString(text, 'text/html');
+  if (opts.resolve) {
+    for (const l of [...doc.querySelectorAll('link[rel~="stylesheet" i][href]')]) { const css = opts.resolve(l.getAttribute('href'), 'css'); if (css) { const s = doc.createElement('style'); s.textContent = css; l.replaceWith(s); } }
+    for (const im of doc.querySelectorAll('img[src], image')) {
+      const attr = im.localName === 'img' ? 'src' : (im.hasAttribute('href') ? 'href' : 'xlink:href');
+      const d = opts.resolve(im.getAttribute(attr) || '', 'img'); if (d) { im.setAttribute(attr, d); if (attr === 'xlink:href') im.setAttribute('href', d); } else im.removeAttribute(attr);
+    }
+  }
   doc.querySelectorAll(DROP).forEach((n) => n.remove());
   for (const n of doc.querySelectorAll('*')) {
     for (const a of [...n.attributes]) {
@@ -147,6 +157,7 @@ export function cleanHtml(text) {
   const m2 = doc.createElement('meta'); m2.setAttribute('charset', 'utf-8');
   const m3 = doc.createElement('meta'); m3.setAttribute('name', 'viewport'); m3.setAttribute('content', 'width=device-width, initial-scale=1');
   head.prepend(m1, m2, m3, base);
+  if (opts.extraStyle) { const x = doc.createElement('style'); x.textContent = opts.extraStyle; head.append(x); }
   return `<!doctype html>${doc.documentElement.outerHTML}`;
 }
 
@@ -166,7 +177,7 @@ export function mountRender(opts) {
       const f = document.createElement('iframe'); f.className = 'tr-frame'; f.setAttribute('sandbox', ''); f.setAttribute('referrerpolicy', 'no-referrer'); f.title = 'Rendered page';
       f.srcdoc = cleanHtml(getText()); p.appendChild(f);
     } else {
-      p.style.setProperty('--tr-size', `${size}px`); p.appendChild(renderMarkdown(getText()));
+      p.style.setProperty('--tr-size', `${size}px`); p.appendChild(isRtf(name) ? renderRtf(getText()) : renderMarkdown(getText()));
     }
     return p;
   };

@@ -22,7 +22,7 @@ const KIND_EXT = {
   pdf: ['pdf'],
   audio: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'amr', 'mid', 'midi'],
   video: ['mp4', 'webm', 'mkv', '3gp', 'mov', 'avi', 'm4v'],
-  docx: ['docx', 'odt', 'doc'], xlsx: ['xlsx', 'ods', 'xls'], pptx: ['pptx', 'odp', 'ppt'],
+  docx: ['docx', 'odt', 'doc', 'epub'], xlsx: ['xlsx', 'ods', 'xls'], pptx: ['pptx', 'odp', 'ppt'],
   archive: ['zip', 'gz', 'tar', '7z', 'rar', 'tgz', 'tbz', 'tbz2', 'txz', 'bz2', 'xz', 'cbz', 'cbr', 'jar'],
 };
 const MIME = {

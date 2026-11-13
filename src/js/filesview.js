@@ -46,7 +46,7 @@ export async function mountTextFile(body, bytes, name, ui, chrome = null) {
   const unpinch = attachTextPinch(host, ed);
   // Markdown and HTML also open rendered, behind a switch (Decision 466); the source tools are hidden while it shows
   let rnd = null;
-  if (/\.(md|markdown|mdown|html?|xhtml)$/i.test(name)) {
+  if (/\.(md|markdown|mdown|html?|xhtml|rtf)$/i.test(name)) {
     try {
       const { mountRender } = await import('./textrender.js');
       rnd = mountRender({ wrap, host, name, ui, getText: () => text, addTool: (icon, title, fn) => tool(icon, 'Rendered', title, () => fn()), onSwap: (on) => { for (const b of [fb, gb, w]) b.classList.toggle('hidden', on); } });
@@ -80,10 +80,14 @@ export function mountAudioFile(body, url, name, ui) {
 // docx, xlsx or pptx bytes -> the Office view. The toolbar sits behind a menu: toggleMenu() shows and hides it.
 // ctx: { ui, setCount(text), openWith() }. Throws an OfficeError (message fit to show) or any other error.
 export async function mountOfficeFile(body, kind, bytes, ctx) {
-  const { mountOffice } = await import('./office-render.js');
+  // an EPUB arrives under the Document kind and has its own reader (Decision 472)
+  const book = kind === 'docx' ? await import('./epubview.js') : null;
+  const epub = book && book.isEpub(bytes);
+  const { mountOffice } = epub ? { mountOffice: null } : await import('./office-render.js');
   body.replaceChildren();
   const host = el('div', 'eo-host');
   body.appendChild(host);
+  if (epub) { const r = book.mountEpub(host, bytes, { ui: ctx.ui, openWith: ctx.openWith }); return { toggleMenu: r.toggleMenu, destroy: r.destroy }; }
   host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
   const mounted = mountOffice(kind, bytes, host, { ui: ctx.ui, setCount: ctx.setCount, onChrome: () => {}, openWith: ctx.openWith });
   return { toggleMenu: () => host.classList.toggle('eo-menu-open'), destroy() { mounted.destroy(); } };

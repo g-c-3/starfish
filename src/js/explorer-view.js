@@ -162,7 +162,7 @@ export function openFileViewer(file, ctx) {
     stopPinch = attachTextPinch(host, ed);
     // Markdown and HTML also open rendered, behind a switch (Decision 466); the source tools are hidden while it shows
     let rnd = null;
-    if (/\.(md|markdown|mdown|html?|xhtml)$/i.test(f.name)) {
+    if (/\.(md|markdown|mdown|html?|xhtml|rtf)$/i.test(f.name)) {
       try {
         const { mountRender } = await import('./textrender.js');
         if (mine !== token || closed) { ed.destroy(); return; }
@@ -302,6 +302,17 @@ export function openFileViewer(file, ctx) {
       const res = await fetch(mediaSrc(toUri(f.path)));
       if (!res.ok) throw new Error('The file could not be read.');
       const bytes = new Uint8Array(await res.arrayBuffer());
+      // an EPUB arrives under the Document kind and has its own reader (Decision 472)
+      const book = kind === 'docx' ? await import('./epubview.js') : null;
+      if (book && book.isEpub(bytes)) {
+        if (mine !== token || closed) return;
+        body.replaceChildren();
+        const host = el('div', 'eo-host');
+        body.appendChild(host);
+        mounted = book.mountEpub(host, bytes, { ui, openWith: () => { if (!closed) external(current, true); } });
+        enterFull(() => mounted && mounted.toggleMenu());
+        return;
+      }
       const { mountOffice } = await import('./office-render.js');
       if (mine !== token || closed) return;
       body.replaceChildren();
