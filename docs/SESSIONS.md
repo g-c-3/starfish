@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 242**
+
+Start: "Go" (docs read; repo check clean: only `index.html` at the `src/` root). The CI log was not read. Phase 119 step 5 split into 5a and 5b.
+- Built (Decision 483): find and replace, and word count, in the docx and odt editors. `docview-edit.js`: the Review group (Find and replace, Word count), both sheets, highlight and selection fallback, redraw of changed paragraphs; `office-shell.css`: the find panel and the highlight colours. Engines unchanged.
+- Tested in a sandbox (jsdom), with a hand-built docx (runs with bold, a field paragraph, an empty paragraph) and a hand-built odt: 27 checks: counts with and without case and whole words, a query with pattern characters taken literally, a match across runs, next, previous and wrap, locked paragraphs skipped with the note, replace one and move on, replace all with the bold run kept, replace with nothing, the saved file, typing after a replace still syncing, both sheets closing on Done; the odt replace read back. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device; the highlight, the scroll, the keyboard and the bottom panel run only on a device.
+- Size: about 11.3 KB of source added (Decision 453).
+- Decision 483. DP265 open.
+- Next start: the CI log, DP257 to DP265 on a device, then Phase 119 step 5b (comments), or the next incomplete item.
+
+---
+
 **Session 241**
 
 Start: "Continue" (repo check, then step 4d for an odt). The CI log was not read. The repo check found two old files in `src/js` and five stray copies in `src/`; the owner fixed both and a fresh download of the repo matched every delivered file (an earlier mismatch was the raw-file cache, five minutes).

@@ -1279,3 +1279,7 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Pictures in the odt editor (Decision 482)
 
 `odtedit.js`: `picsOf(p)` (frames with a readable `draw:image`, owned by p), `addMedia` (file in `Pictures/`, manifest entry), `maxWidth` (page layout of `styles.xml`, or 5 cm in a table), `toPx`, `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter`. The view, the picture reader and the host are those of Decision 481; the Picture group appears because the engine has `insertPictureAfter`.
+
+## Find and replace, and word count in the Office editors (Decision 483)
+
+`docview-edit.js`, Review group: `matches` (a regular expression built from the escaped query, over `textOf` of each mapped paragraph; offsets are the engine's), `paint` (the `eo-find` and `eo-find-on` highlights, else a selection; `reveal` scrolls), `redrawParas` (the changed paragraphs drawn again through the host `redraw`, else set to their text), `openFind` and `openCount` (sheets from `sheet.js`). The find sheet carries `eo-find-ov` (bottom, no backdrop, the page under it stays tappable); both sheets are `.modal-overlay`, so they follow the one motion recipe. A tool pressed in the compact panel opens its sheet 300 ms later so two dialogs never overlap. The engines are unchanged.

@@ -1,4 +1,4 @@
-// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474); table rows and columns, step 4a (Decision 476); lists, step 4c (Decision 479); pictures, step 4d (Decision 481). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
+// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474); table rows and columns, step 4a (Decision 476); lists, step 4c (Decision 479); pictures, step 4d (Decision 481); find and replace and word count, step 5a (Decision 483). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
 // become editable in place; each one is mapped to its paragraph in the engine (`docedit.js`) by the index the reader stamped on it.
 // Typing, deleting and IME input are left to the browser and then synced: the paragraph's text is compared with the engine's and the
 // changed span is applied with `replace`, so the original runs keep their properties. Enter, Backspace at the start and Delete at the
@@ -6,6 +6,7 @@
 // Contract with the shell mount: mountEditor({ paper, bytes, toast, onActivity, onDirty, redraw, pickImage }) (redraw(files, wantedIndexes) -> Map of index -> freshly drawn paragraph, for list markers; pickImage() -> Promise of { bytes, mime, ext, w, h } or null) -> { groups, setEditable, dirty, touched,
 // markClean, bytes, count, destroy }.
 import { openDoc } from './docedit.js';
+import { openSheet } from './sheet.js';
 
 const CMD = { b: 'bold', i: 'italic', u: 'underline', strike: 'strikeThrough' };
 const isMark = (n) => n.nodeType === 1 && n.classList.contains('eo-mark');
@@ -70,7 +71,7 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   const eng = openDoc(bytes); // throws an office error for a file that is not a valid document
   const ps = eng.paragraphs();
   const map = new Map(); // paragraph element -> engine paragraph
-  let editing = false; let isDirty = false; let was = false; let lastRange = null;
+  let editing = false; let isDirty = false; let was = false; let lastRange = null; let gone = false;
 
   const used = new Set(); // an odt cell repeated in the file is drawn several times from one paragraph: only the first stays editable
   for (const el of paper.querySelectorAll('.eo-p[data-pi]')) {
@@ -335,17 +336,146 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   };
   if (eng.insertPictureAfter) groups.push({ id: 'picture', title: 'Picture', tools: [tool('picAdd', 'Insert picture', PI.add, insertPic), tool('picSwap', 'Replace picture', PI.swap, replacePic), tool('picDel', 'Delete picture', PI.del, deletePic)] });
 
+  // ---- review: find and replace, word count (Decision 483). Only paragraphs the engine holds as plain text are searched or changed ----
+  const FIND_MAX = 5000; const PAINT_MAX = 500;
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const finder = { q: '', r: '', cs: false, ww: false };
+  const WORD = '[\\p{L}\\p{N}_]';
+  const rxOf = () => (finder.q ? new RegExp(finder.ww ? `(?<!${WORD})${esc(finder.q)}(?!${WORD})` : esc(finder.q), finder.cs ? 'gu' : 'giu') : null);
+  const matches = () => {
+    const re = rxOf(); const out = []; if (!re) return out;
+    order().forEach((el, k) => {
+      let t; try { t = eng.textOf(map.get(el)); } catch { return; } if (t == null) return;
+      t = norm(t); re.lastIndex = 0;
+      for (let m = re.exec(t); m && out.length < FIND_MAX; m = re.exec(t)) { if (!m[0].length) { re.lastIndex++; continue; } out.push({ el, k, from: m.index, to: m.index + m[0].length }); }
+    });
+    return out;
+  };
+  const hl = typeof CSS !== 'undefined' && !!CSS.highlights && typeof Highlight !== 'undefined';
+  const rangeOf = (m) => { const a = locate(m.el, m.from); const z = locate(m.el, m.to); const r = document.createRange(); r.setStart(a.node, a.offset); r.setEnd(z.node, z.offset); return r; };
+  const clearHl = () => { if (hl) { CSS.highlights.delete('eo-find'); CSS.highlights.delete('eo-find-on'); } };
+  const scroller = (n) => { for (let e = n.nodeType === 1 ? n : n.parentElement; e; e = e.parentElement) { const o = getComputedStyle(e).overflowY; if ((o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight) return e; } return document.scrollingElement; };
+  // keep the match in the upper part of the view: the panel covers the lower part
+  const reveal = (r) => {
+    if (!r.getBoundingClientRect) return; const b = r.getBoundingClientRect(); const sc = scroller(r.startContainer); if (!sc || !(b.height || b.top)) return;
+    const page = sc === document.scrollingElement; const top = page ? 0 : sc.getBoundingClientRect().top; const h = page ? window.innerHeight : sc.clientHeight;
+    if (b.top < top + h * 0.08 || b.bottom > top + h * 0.5) sc.scrollTop += b.top - (top + h * 0.22);
+  };
+  const paint = (list, cur) => {
+    clearHl(); if (!list.length) return;
+    const cr = rangeOf(list[cur]); lastRange = cr.cloneRange();
+    if (hl) {
+      CSS.highlights.set('eo-find', new Highlight(...list.slice(0, PAINT_MAX).map(rangeOf)));
+      const on = new Highlight(cr); on.priority = 1; CSS.highlights.set('eo-find-on', on);
+    } else { const s = window.getSelection(); s.removeAllRanges(); s.addRange(cr); }
+    reveal(cr);
+  };
+  const caretKey = () => { const el = lastRange && elOf(lastRange.startContainer); return el ? { k: order().indexOf(el), off: offsetIn(el, lastRange.startContainer, lastRange.startOffset) } : null; };
+  const firstFrom = (list, key, inclusive) => { if (!key) return 0; const i = list.findIndex((m) => m.k > key.k || (m.k === key.k && (inclusive ? m.from >= key.off : m.from > key.off))); return i < 0 ? 0 : i; };
+  // the page follows the file: the changed paragraphs are drawn again from the file as it now stands, else set to its text
+  const redrawParas = (els) => {
+    const fresh = eng.paragraphs(); const idx = new Map(fresh.map((n, i) => [n, i])); const byIdx = new Map();
+    for (const e of els) { const i = idx.get(map.get(e)); if (i !== undefined) byIdx.set(i, e); }
+    let got = null; if (redraw && byIdx.size) { try { got = redraw(eng.snapshot(), new Set(byIdx.keys())); } catch { got = null; } }
+    for (const [i, e] of byIdx) {
+      const t = got && got.get(i); const want = norm(eng.textOf(map.get(e)));
+      const old = content(e); const mark = [...e.childNodes].find(isMark);
+      const keep = old.map((c) => c);
+      if (t) { for (const c of keep) c.remove(); for (const c of [...t.childNodes]) if (!isMark(c)) e.appendChild(c); }
+      if (!t || norm(domText(e)) !== want) {
+        for (const c of content(e)) c.remove();
+        want.split('\n').forEach((part, k) => { if (k) e.appendChild(document.createElement('br')); if (part) e.appendChild(document.createTextNode(part)); });
+      }
+      keepHeight(e); void mark;
+    }
+  };
+  const line = (cls, text) => { const n = document.createElement('div'); n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  const field = (ph) => { const i = document.createElement('input'); i.type = 'text'; i.className = 'eo-find-in'; i.placeholder = ph; i.setAttribute('autocomplete', 'off'); i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off'); i.spellcheck = false; return i; };
+  const sbtn = (text, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = `eo-sh-btn ${cls || ''}`.trim(); b.textContent = text; return b; };
+  const check = (text, on, set) => { const l = document.createElement('label'); l.className = 'eo-find-chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.checked = on; c.onchange = () => set(c.checked); l.append(c, document.createTextNode(text)); return l; };
+  let fsheet = null; let csheet = null;
+  const closeSheets = () => { for (const s of [fsheet, csheet]) if (s && !s.closed) s.close(); };
+  const openFind = () => {
+    if (gone || (fsheet && !fsheet.closed)) return;
+    if (csheet && !csheet.closed) csheet.close();
+    let list = []; let cur = 0;
+    fsheet = openSheet({
+      title: 'Find and replace',
+      build: (h) => {
+        const ov = h.closest('.modal-overlay'); if (ov) ov.classList.add('eo-find-ov');
+        const fi = field('Find'); const ri = field('Replace with'); fi.value = finder.q; ri.value = finder.r;
+        const st = line('eo-find-st'); const note = line('eo-find-note');
+        const skipped = new Set(); for (const e of paper.querySelectorAll('.eo-p')) if (!map.has(e) && domText(e).trim()) skipped.add(e);
+        if (skipped.size) note.textContent = 'Paragraphs with a picture, field or note mark, or that are read only, are skipped.';
+        const prev = sbtn('Previous'); const nxt = sbtn('Next'); const one = sbtn('Replace'); const all = sbtn('Replace all', 'eo-sh-primary');
+        const show = () => {
+          const n = list.length;
+          st.textContent = !finder.q ? '' : n ? `${cur + 1} of ${n >= FIND_MAX ? `${FIND_MAX}+` : n}` : 'No matches';
+          for (const b of [prev, nxt]) b.disabled = n < 2; one.disabled = !n; all.disabled = !n;
+          paint(list, cur);
+        };
+        const search = () => { list = matches(); cur = firstFrom(list, caretKey(), true); show(); };
+        fi.oninput = () => { finder.q = fi.value; search(); onActivity(); };
+        ri.oninput = () => { finder.r = ri.value; onActivity(); };
+        const step = (d) => { if (!list.length) return; cur = (cur + d + list.length) % list.length; show(); onActivity(); };
+        prev.onclick = () => step(-1); nxt.onclick = () => step(1);
+        one.onclick = () => {
+          if (!list.length) return; const m = list[cur];
+          try { eng.replace(map.get(m.el), m.from, m.to, finder.r); } catch (e) { toast(e.message); return; }
+          redrawParas([m.el]); dirty(); onActivity();
+          list = matches(); cur = firstFrom(list, { k: m.k, off: m.from + finder.r.length }, true); show();
+        };
+        all.onclick = () => {
+          const l = matches(); if (!l.length) return; const by = new Map(); for (const m of l) { if (!by.has(m.el)) by.set(m.el, []); by.get(m.el).push(m); }
+          let n = 0; const done = [];
+          for (const [el, ms] of by) { done.push(el); try { for (const m of ms.slice().reverse()) { eng.replace(map.get(el), m.from, m.to, finder.r); n++; } } catch (e) { toast(e.message); } }
+          redrawParas(done); if (n) { dirty(); onActivity(); }
+          list = matches(); cur = 0; show(); toast(`${n} replaced.`);
+        };
+        fi.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); } };
+        ri.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); one.onclick(); } };
+        const opts = line('eo-find-opts'); opts.append(check('Match case', finder.cs, (v) => { finder.cs = v; search(); }), check('Whole words', finder.ww, (v) => { finder.ww = v; search(); }));
+        const row = line('eo-find-row'); row.append(prev, nxt, one, all);
+        h.append(fi, ri, opts, st, row, note); search();
+      },
+      onClose: () => { clearHl(); }
+    });
+  };
+  const countOf = (t) => (t.match(/\S+/g) || []).length;
+  const openCount = () => {
+    if (gone || (csheet && !csheet.closed)) return;
+    if (fsheet && !fsheet.closed) fsheet.close();
+    const seen = new Set(); const texts = [];
+    for (const e of paper.querySelectorAll('.eo-p')) { const pi = e.dataset.pi; if (pi !== undefined) { if (seen.has(pi)) continue; seen.add(pi); } texts.push(norm(domText(e))); }
+    const all = texts.join('\n'); const sel = lastRange && !lastRange.collapsed && elOf(lastRange.startContainer) ? norm(lastRange.toString()) : '';
+    const rows = [['Words', countOf(all)], ['Characters', all.replace(/\n/g, '').length], ['Characters without spaces', all.replace(/\s/g, '').length], ['Paragraphs', texts.filter((t) => t.trim()).length]];
+    if (sel.trim()) rows.push(['Words selected', countOf(sel)]);
+    csheet = openSheet({
+      title: 'Word count',
+      build: (h) => { const g = line('sheet-grid'); for (const [k, v] of rows) { const c = line('sheet-card'); c.append(line('k', k), line('v big', String(v))); g.appendChild(c); } h.appendChild(g); }
+    });
+  };
+  // a tool pressed in the compact panel waits until the panel has left, so two dialogs never overlap
+  const later = (fn) => () => { if (document.querySelector('.eo-panel-ov:not(.hidden)')) setTimeout(() => { if (!gone && editing) fn(); }, 300); else fn(); };
+  const RI = {
+    find: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/>',
+    count: '<path d="M4 7h16M4 12h16M4 17h9"/><path d="M16 17h4"/>'
+  };
+  groups.push({ id: 'review', title: 'Review', tools: [tool('find', 'Find and replace', RI.find, later(openFind)), tool('count', 'Word count', RI.count, later(openCount))] });
+
+
   return {
     groups,
     get count() { return map.size; },
     setEditable(on) {
-      editing = on; if (!on) selectPic(null);
+      editing = on; if (!on) { selectPic(null); closeSheets(); }
       for (const el of map.keys()) { if (on) el.contentEditable = 'true'; else el.removeAttribute('contenteditable'); }
     },
     dirty: () => isDirty, touched: () => was,
     markClean() { isDirty = false; onDirty(); },
     bytes: () => eng.toBytes(),
     destroy() {
+      gone = true; closeSheets(); clearHl();
       paper.removeEventListener('beforeinput', onBefore); paper.removeEventListener('input', onInput);
       paper.removeEventListener('compositionend', onEnd); document.removeEventListener('selectionchange', onSel);
       paper.removeEventListener('click', onClick); for (const u of urls) URL.revokeObjectURL(u);
