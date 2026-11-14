@@ -11,8 +11,10 @@
 // versionCode to increase for the package manager to treat an install as an upgrade rather than
 // a conflict). versionName is derived from the same N (Decision 282), so a build installed on a
 // device can always be identified from Settings > Apps > Arkly without checking CI logs:
-//   major = 1 + floor(N / 10000), minor = floor(N / 1000) % 10, patch = N % 1000 as three digits
-//   N=674 -> 1.0.674, N=999 -> 1.0.999, N=1000 -> 1.1.000, N=9999 -> 1.9.999, N=10000 -> 2.0.000
+//   N written in base ten as <major>.<minor>.<patch>: minor and patch are one digit (0 to 9), major has no limit (Decision 478)
+//   major = floor(N / 100), minor = floor(N / 10) % 10, patch = N % 10
+//   N=9 -> 0.0.9, N=10 -> 0.1.0, N=99 -> 0.9.9, N=100 -> 1.0.0, N=999 -> 9.9.9, N=1000 -> 10.0.0
+//   Builds up to the change were named <1 + N div 10000>.<N div 1000 mod 10>.<N mod 1000, three digits> (Decision 282).
 // package.json's "version" is no longer read. update-check.js reads the same scale back.
 //
 // Not idempotent by design, unlike patch-manifest.js — it's meant to overwrite the version every
@@ -23,10 +25,7 @@ const path = require('path');
 const GRADLE_PATH = path.join(__dirname, '..', 'android', 'app', 'build.gradle');
 
 function versionNameFor(n) {
-  const major = 1 + Math.floor(n / 10000);
-  const minor = Math.floor(n / 1000) % 10;
-  const patch = String(n % 1000).padStart(3, '0');
-  return `${major}.${minor}.${patch}`;
+  return `${Math.floor(n / 100)}.${Math.floor(n / 10) % 10}.${n % 10}`;
 }
 if (require.main !== module) { module.exports = { versionNameFor }; return; }
 
