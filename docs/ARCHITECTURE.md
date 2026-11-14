@@ -1155,6 +1155,8 @@ is documented in `android-notes/` since it requires editing the generated `andro
 - Remember layout offsets, not screen rectangles, for anything that may be mid-slide.
 - Files and layers are not a full-width push: that read as a different animation from the categories.
 - Select files has its own Close; dialogs keep no room for a Back button.
+- A row that leaves inside a flow (the Office shell's Edit and Tools rows) must leave the layout at once (`position: absolute` under `mx-out`); left in the flow it holds its height while the new row arrives, and the page jumps when it goes (Decision 486).
+- A view that is rebuilt (the docx Page to Reflow change for editing) changes behind a fade of its scroller (`fadeSwap`, Decision 486), never at once.
 
 **Edge swipe back (Decision 401).** With button navigation (`ArklyNav.mode()` is `buttons`), a swipe from the left edge on an open layer calls `window.ArklyBack`, which is the system Back function in `app.js`. No finger-following drag: the layer leaves by the recipe. Gesture navigation: the system's edge, nothing added. The manifest carries `enableOnBackInvokedCallback`; `@capacitor/app` keeps its callback enabled, so there is no system preview.
 

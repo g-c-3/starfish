@@ -556,6 +556,22 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
   }
 }
 
+// The page changes between Page and Reflow behind a fade (the one recipe: opacity only): it leaves, the view is rebuilt while hidden and drawn
+// (two frames, so the sheets have filled), then it arrives. Resolves when the new view is in place (Decision 486).
+function fadeSwap(node, change) {
+  return new Promise((resolve) => {
+    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { change(); resolve(); return; }
+    node.classList.add('eo-swap-out');
+    setTimeout(() => {
+      change();
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+        node.classList.remove('eo-swap-out'); node.classList.add('eo-swap-in');
+        setTimeout(() => { node.classList.remove('eo-swap-in'); resolve(); }, 320);
+      }, 40)));
+    }, 180);
+  });
+}
+
 // ---- docx: Page view (the page as set in the file, scaled to the screen) or Reflow ----
 function borderStyle(e, key, side, spec) {
   const Side = { bt: 'Top', bb: 'Bottom', bl: 'Left', br: 'Right' }[key];
@@ -832,7 +848,7 @@ function mountDocx(model, host, u, ui, bars) {
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, ensureAll, timing, flow(on) { forceFlow = on; apply(); }, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
+  return { heads, ensureAll, timing, flow(on) { if (forceFlow === on) return Promise.resolve(); forceFlow = on; return fadeSwap(scroll, apply); }, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----
@@ -1255,7 +1271,7 @@ export function mountOffice(kind, bytes, host, ctx) {
         if (editor) { editor.setEditable(true); return; }
         try {
           const mod = await loadEditor('docx');
-          view.flow(true);
+          await view.flow(true);
           const redraw = (files, want) => { // list markers and indents of the wanted paragraphs, drawn from the file as it now stands (Decision 479)
             const m = odf === 'text' ? readOdt(null, files) : readDocx(null, files); const out = new Map();
             const walk = (bs) => { for (const b of bs) { if (b.t === 'table') { for (const r of b.rows) for (const c of r) walk(c.blocks || []); } else if (b.src !== undefined && want.has(b.src)) { const t = el('div'); docxBlocks([b], t, model.media, u, {}); out.set(b.src, t.firstElementChild); } } };
@@ -1272,7 +1288,7 @@ export function mountOffice(kind, bytes, host, ctx) {
           if (v === 'keep') return;
           if (v === 'save') { if (!(await saveNow())) return; } else { edit.reload(); return; } // discard: the file is opened again as it was saved
         }
-        if (editor && !editor.touched()) { editor.destroy(); editor = null; view.flow(false); }
+        if (editor && !editor.touched()) { editor.destroy(); editor = null; const back = view.flow(false); sh.setEditing(false); await back; return; } // the rows and the page change together
         sh.setEditing(false);
       }
     });

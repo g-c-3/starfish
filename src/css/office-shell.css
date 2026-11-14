@@ -24,7 +24,7 @@
 .modal-overlay.eo-panel-ov { align-items: flex-end; padding: 0; }
 /* the general dialog padding (cutout.css, `body.overlay-open`) would lift the panel off the bottom and in from the sides: only the notch insets stay */
 :root body .modal-overlay.eo-panel-ov, :root body.overlay-open .modal-overlay.eo-panel-ov, :root body .modal-overlay.eo-find-ov, :root body.overlay-open .modal-overlay.eo-find-ov { padding: 0 var(--cp-r, 0px) 0 var(--cp-l, 0px); }
-.eo-panel-ov .sheet-box { width: min(560px, 100vw); border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.eo-panel-ov .sheet-box { width: 100%; max-width: 560px; border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .eo-ph { margin: 14px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .eo-pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
 .eo-pgrid .eo-tool { background: var(--surface-2); }
@@ -36,7 +36,7 @@
 .eo-p[contenteditable="true"] { outline: none; caret-color: var(--brand); }
 /* find and replace, word count (Decision 483): the find panel sits at the bottom with no backdrop, so the page and its matches stay in view */
 .modal-overlay.eo-find-ov { align-items: flex-end; padding: 0; background: transparent; pointer-events: none; }
-.eo-find-ov .sheet-box { pointer-events: auto; width: min(560px, 100vw); border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18); }
+.eo-find-ov .sheet-box { pointer-events: auto; width: 100%; max-width: 560px; border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18); }
 .eo-find-in { display: block; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-2); color: var(--fg); font-size: 15px; }
 .eo-find-opts { display: flex; flex-wrap: wrap; gap: 14px; margin: 2px 0 6px; }
 .eo-find-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
@@ -51,5 +51,10 @@
   .eo-fade.mx-after:not(.hidden) { animation-delay: var(--mx-gap); }
   .eo-fade.mx-out.mx-out.hidden { display: block !important; pointer-events: none; animation: mx-fade-out 0.17s var(--mx-leave) both; }
   .eo-sh-view.mx-out.mx-out.hidden { display: flex !important; }
+  /* a row that is leaving leaves the layout at once, so the arriving row takes its place without pushing the page (Decision 486) */
+  .eo-sh-view.mx-out.mx-out.hidden, .eo-sh-edit.mx-out.mx-out.hidden { position: absolute; left: 0; right: 0; top: 0; z-index: 1; }
+  /* the page changes between Page and Reflow behind a fade: opacity only (Decision 486) */
+  .eo-swap-out { animation: mx-fade-out 0.17s var(--mx-leave) both; pointer-events: none; }
+  .eo-swap-in { animation: mx-fade-in 0.3s var(--mx-settle) both; }
   .eo-pane.mx-out.mx-out.hidden { display: flex !important; position: absolute; left: 0; right: 0; }
 }

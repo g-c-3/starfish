@@ -452,3 +452,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-15 | Session 242 | Decision 483 | Phase 119 step 5a: find and replace and word count in the docx and odt editors (Review group); step 5b (comments) next; DP265 added; not run through CI or a device |
 | 2026-11-15 | Session 243 | Decision 484 | Edit in the stored-file viewer (Home and Vault): the same editor as the File explorer, Save in place, Save as copy, leave check; DP266 added; not run through CI or a device |
 | 2026-11-15 | Session 244 | Decision 485 | Tools and Find panels reach the bottom edge (dialog padding overridden); DP266 item 10; not run through CI or a device |
+| 2026-11-15 | Session 245 | Decision 486 | Edit and Done without jumps (leaving row out of the layout, fade between Page and Reflow); panels span the width; DP267 added; not run through CI or a device |

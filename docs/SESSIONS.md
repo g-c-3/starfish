@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 245**
+
+Start: the owner sent a screen recording of Edit and Done (jerky) and screenshots showing the Tools panel still in from both sides. The CI log was not read.
+- Measured the recording frame by frame (about 60 fps, 96 frames): Edit shows three one-frame jumps (the page redrawn between Page and Reflow; the leaving Edit row holding its place under the arriving row, then vanishing; the text moving), Done shows the same and a blank page for about 0.17 s. Cause of the panel: `.modal-box` has `max-width: 420px`.
+- Fixed (Decision 486): `office-render.js` (`fadeSwap`, `flow` returns a promise, the editor mounts and Done restores after it), `office-shell.css` (the leaving row leaves the layout, the swap classes, the panel width).
+- Tested in a sandbox (jsdom): `fadeSwap` runs the change while hidden (at about 180 ms), resolves at about 580 ms, and is instant under reduced motion. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device; the motion and the widths are judged only on a device (DP267).
+- Decision 486. DP267 open.
+- Next start: the CI log, DP257 to DP267 on a device, then Phase 119 step 5b (comments), or the next incomplete item.
+
+---
+
 **Session 244**
 
 Start: the owner confirmed Edit works in both viewers and reported that the Tools panel looked cut off (screenshots, both viewers). The CI log was not read.
