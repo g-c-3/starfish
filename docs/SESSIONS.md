@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 241**
+
+Start: "Continue" (repo check, then step 4d for an odt). The CI log was not read. The repo check found two old files in `src/js` and five stray copies in `src/`; the owner fixed both and a fresh download of the repo matched every delivered file (an earlier mismatch was the raw-file cache, five minutes).
+- Built (Decision 482): pictures in the odt editor. `odtedit.js`: `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter` (`Pictures/` file and manifest entry added, size from the new picture, text width read from the page layout). The view, the picture reader and the host are those of Decision 481. Step 4 is complete.
+- Tested in a sandbox (jsdom), with a hand-built odt (frames with images, two in one paragraph, one with a missing file, a table cell, a manifest, a page layout): 23 checks: counts, removing one and the last (paragraph empty and editable), text kept, replace keeps the width and takes the new shape, file and manifest entry added with `mimetype` first, the reader reads the new picture, insert fits the text width and the cell width and a small picture stays small, unique frame names, the saved file reopens and reads; on the page: tap selects, replace, insert, delete of one and of the last, typing into the emptied paragraph. The earlier 43, 8, 25, 26, 27, 25, 28 and 30,019 checks still pass. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device.
+- Size: about 4.5 KB of source added (Decision 453).
+- Decision 482. DP264 open.
+- Next start: the CI log, DP257 to DP264 on a device, then Phase 119 step 5 (review tools), or the next incomplete item.
+
+---
+
 **Session 240**
 
 Start: "Do next". The CI log was not read. Phase 119 step 4d, the docx half.

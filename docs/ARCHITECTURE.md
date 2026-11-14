@@ -1275,3 +1275,7 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Pictures in the docx editor (Decision 481)
 
 `docedit.js`: `picsOf(p)` (inline drawings with an image, no chart, owned by p), `addMedia(img)` (file, relationship, content type), `sizeFor`, `maxWidth` (section text width or cell width), `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter` (builds the `wp:inline` drawing and imports it). `docview-edit.js`: `picMap` (paragraph element -> engine paragraph, only where the page and the engine count the same pictures), `selectPic` and `onClick` (selection, class `eo-pic-sel`), `picAt`, `insertPic`, `replacePic`, `deletePic`, `readPicture` and `pickFromPhone` (file input, size limit, redraw on a canvas), `pickImage` option. New picture URLs are blob URLs revoked in `destroy`. The Picture group is added only when the engine has `insertPictureAfter`.
+
+## Pictures in the odt editor (Decision 482)
+
+`odtedit.js`: `picsOf(p)` (frames with a readable `draw:image`, owned by p), `addMedia` (file in `Pictures/`, manifest entry), `maxWidth` (page layout of `styles.xml`, or 5 cm in a table), `toPx`, `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter`. The view, the picture reader and the host are those of Decision 481; the Picture group appears because the engine has `insertPictureAfter`.
