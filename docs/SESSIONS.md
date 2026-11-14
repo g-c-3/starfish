@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 244**
+
+Start: the owner confirmed Edit works in both viewers and reported that the Tools panel looked cut off (screenshots, both viewers). The CI log was not read.
+- Cause: the general dialog padding outranked the panel's own (Decision 485), so the panel floated in from the sides and above the bottom.
+- Fixed (Decision 485): `office-shell.css` only. Not run through CI or a device; the sandbox has no layout, so the result is seen only on a device (DP266 item 10).
+- Decision 485.
+- Next start: the CI log, DP257 to DP266 on a device, then Phase 119 step 5b (comments), or the next incomplete item.
+
+---
+
 **Session 243**
 
 Start: the owner reported that the viewer of a stored file had no Edit button, and asked for the same viewer and editor in Arkly and in the File explorer. The CI log was not read.

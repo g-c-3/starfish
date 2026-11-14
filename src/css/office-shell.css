@@ -22,6 +22,8 @@
 .eo-tool.on { background: var(--surface); border-color: var(--brand); color: var(--brand); }
 .eo-tool:disabled { opacity: 0.4; }
 .modal-overlay.eo-panel-ov { align-items: flex-end; padding: 0; }
+/* the general dialog padding (cutout.css, `body.overlay-open`) would lift the panel off the bottom and in from the sides: only the notch insets stay */
+:root body .modal-overlay.eo-panel-ov, :root body.overlay-open .modal-overlay.eo-panel-ov, :root body .modal-overlay.eo-find-ov, :root body.overlay-open .modal-overlay.eo-find-ov { padding: 0 var(--cp-r, 0px) 0 var(--cp-l, 0px); }
 .eo-panel-ov .sheet-box { width: min(560px, 100vw); border-radius: 28px 28px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .eo-ph { margin: 14px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .eo-pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
