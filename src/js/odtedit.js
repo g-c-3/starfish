@@ -1,4 +1,4 @@
-// odtedit.js — the odt editing engine, step 3 of Phase 119 (Decision 475). Same operations and offsets as docedit.js, on `content.xml`.
+// odtedit.js — the odt editing engine, step 3 of Phase 119 (Decision 475); table rows and columns (Decision 477), lists (Decision 480). Same operations and offsets as docedit.js, on `content.xml`.
 // A paragraph (`text:p`, `text:h`) is read as runs (bare text, or one `text:span` with a style name) and zero-width marks (bookmarks); only a
 // paragraph that is changed is rebuilt, every other node and every other part of the zip is kept as it was (Decision 453). A paragraph that holds
 // anything else (a link, a field, a note, a frame, a nested span) is locked: shown, never edited. Offsets count the characters of its plain text
@@ -292,11 +292,78 @@ export function openOdt(files, EditError) {
     const cells = cellsOf(w.row); return firstP(cells[Math.min(w.ci, cells.length - 1)]);
   };
 
+
+  // ---- lists (Decision 480): a level is a nested text:list; the list styles used here are added to the automatic styles when missing ----
+  const enc = (s) => new TextEncoder().encode(s);
+  const listStyles = new Map();
+  if (autoEl) for (const s of autoEl.children) if (is(s, 'list-style')) { const n = s.getAttributeNS(NS.style, 'name'); listStyles.set(n, s); taken.add(n); }
+  const ensureAuto = () => { if (!autoEl) { autoEl = doc.createElementNS(NS.office, 'office:automatic-styles'); root.insertBefore(autoEl, bodyEl); } return autoEl; };
+  const styleKind = (st) => { const f = st && st.firstElementChild; return f && f.localName === 'list-level-style-bullet' ? 'bullet' : f && f.localName === 'list-level-style-number' ? 'number' : null; };
+  const listKind = (L) => { for (let n = L; is(n, 'list');) { const nm = sname(n); if (nm) return styleKind(listStyles.get(nm)); const it = n.parentNode; n = is(it, 'list-item') ? it.parentNode : null; } return null; };
+  const LIST_NAME = { bullet: 'ArklyLB', number: 'ArklyLN' };
+  const listStyleFor = (kind) => {
+    const name = LIST_NAME[kind]; if (listStyles.has(name)) return name;
+    let x = `<text:list-style xmlns:text="${NS.text}" xmlns:style="${NS.style}" xmlns:fo="${NS.fo}" style:name="${name}">`;
+    for (let i = 1; i <= 10; i++) {
+      const at = `${(1.27 * i).toFixed(2)}cm`;
+      const pos = `<style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="${at}" fo:text-indent="-0.635cm" fo:margin-left="${at}"/></style:list-level-properties>`;
+      x += kind === 'bullet'
+        ? `<text:list-level-style-bullet text:level="${i}" text:bullet-char="${['\u2022', '\u25E6', '\u25AA'][(i - 1) % 3]}">${pos}</text:list-level-style-bullet>`
+        : `<text:list-level-style-number text:level="${i}" style:num-suffix="." style:num-format="${['1', 'a', 'i'][(i - 1) % 3]}">${pos}</text:list-level-style-number>`;
+    }
+    const node = doc.importNode(new DOMParser().parseFromString(`${x}</text:list-style>`, 'application/xml').documentElement, true);
+    ensureAuto().appendChild(node); listStyles.set(name, node); taken.add(name); return name;
+  };
+  const itemOf = (p) => (is(p.parentNode, 'list-item') && p.parentNode.firstElementChild === p ? p.parentNode : null);
+  const nestedIn = (item) => (is(item.lastElementChild, 'list') ? item.lastElementChild : null);
+  const depthOf = (L) => { let d = 0; for (let n = L; n; n = n.parentNode) if (is(n, 'list')) d++; return d; };
+  const NOT_FIRST = 'Move it to the first level first.';
+  // a paragraph that is alone in its item of a top-level list becomes a plain paragraph; the items below it stay a list that goes on counting
+  const plainOk = (p) => { const I = itemOf(p); return !!I && I.children.length === 1 && is(I.parentNode, 'list') && !is(I.parentNode.parentNode, 'list-item'); };
+  const lift = (p) => {
+    const I = p.parentNode; const L = I.parentNode; const sib = [...L.children]; const below = sib.slice(sib.indexOf(I) + 1);
+    if (below.length) { const L2 = L.cloneNode(false); if (listKind(L) === 'number') L2.setAttributeNS(NS.text, 'text:continue-numbering', 'true'); for (const b of below) L2.appendChild(b); L.after(L2); }
+    L.after(p); I.remove(); if (!L.children.length) L.remove();
+  };
+  // bullets, numbers or no list for the paragraphs; returns how many changed
+  const setList = (paras, kind) => {
+    if (kind !== 'bullet' && kind !== 'number' && kind !== 'none') throw new EditError('That list kind is not available.');
+    if (paras.some((p) => is(p.parentNode, 'list-header'))) throw new EditError('A list header cannot be changed here.');
+    const inItem = paras.filter((p) => is(p.parentNode, 'list-item'));
+    if (kind === 'none') { if (inItem.some((p) => !plainOk(p))) throw new EditError(NOT_FIRST); for (const p of inItem) lift(p); return inItem.length; }
+    if (inItem.some((p) => listKind(p.parentNode.parentNode) !== kind && !plainOk(p))) throw new EditError(NOT_FIRST);
+    const style = listStyleFor(kind); let n = 0;
+    for (const p of paras) {
+      if (is(p.parentNode, 'list-item')) { if (listKind(p.parentNode.parentNode) === kind) continue; lift(p); }
+      const prev = p.previousElementSibling; let L;
+      if (is(prev, 'list') && listKind(prev) === kind) L = prev; else { L = el('list'); L.setAttributeNS(NS.text, 'text:style-name', style); p.before(L); }
+      const item = el('list-item'); L.appendChild(item); item.appendChild(p); n++;
+    }
+    return n;
+  };
+  const deeper = (p) => {
+    const I = itemOf(p); const prev = I && I.previousElementSibling; if (!I || !is(I.parentNode, 'list') || !is(prev, 'list-item') || depthOf(I.parentNode) >= 8) return false;
+    let N = nestedIn(prev); if (!N) { N = el('list'); prev.appendChild(N); } N.appendChild(I); return true;
+  };
+  const shallower = (p) => { // the items after it stay one level deeper, as children of it
+    const I = itemOf(p); if (!I) return false; const N = I.parentNode; const P = N.parentNode;
+    if (!is(N, 'list') || !is(P, 'list-item') || !is(P.parentNode, 'list')) return false;
+    const all = [...N.children]; const follow = all.slice(all.indexOf(I) + 1);
+    if (follow.length) { let T = nestedIn(I); if (!T) { T = el('list'); I.appendChild(T); } for (const f of follow) T.appendChild(f); }
+    P.after(I); if (!N.children.length) N.remove(); return true;
+  };
+  // one level deeper (delta 1) or shallower (-1); returns how many changed (a run of items is moved last first when going shallower, so it moves together)
+  const shiftLevel = (paras, delta) => {
+    let n = 0; for (const p of delta > 0 ? paras : [...paras].reverse()) if (delta > 0 ? deeper(p) : shallower(p)) n++;
+    return n;
+  };
+  // every part of the file as it now stands (the reader can read this)
+  const snapshot = () => ({ ...files, [MAIN]: enc(`<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '')}`) });
+
   const toBytes = () => {
-    const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '');
-    const out = {};
-    for (const k of Object.keys(files)) out[k] = [k === MAIN ? new TextEncoder().encode(`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`) : files[k], { level: STORED.test(k) ? 0 : 6 }];
+    const all = snapshot(); const out = {};
+    for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, next, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, next, setList, shiftLevel, snapshot, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }

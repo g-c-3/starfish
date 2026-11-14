@@ -169,9 +169,9 @@ function numText(n, fmt) {
 }
 
 // ============================================================ odt
-export function readOdt(bytes) {
+export function readOdt(bytes, pre = null) { // `pre`: the parts of a file already unpacked (the editor's current state)
   const T0 = performance.now();
-  const files = unpack(bytes);
+  const files = pre || unpack(bytes);
   const content = xml(files, 'content.xml');
   const sRoot = xml(files, 'styles.xml');
   if (!content) throw new OfficeError('This is not a valid file of this type.');
@@ -341,12 +341,13 @@ export function readOdt(bytes) {
     return { t: 'table', rows, rowBrk: rows.map(() => false), borders: {}, grid: cols, pct: null, pad: { t: 3, l: 7, r: 7, b: 3 }, align: null };
   }
 
+  let lastCounters = [];
   function blocksOf(node, depth, list) {
     const out = [];
     for (const c of node.children) {
       const n = c.localName;
       if (n === 'p' || n === 'h') { if (count >= DOC_BLOCK_MAX) { truncated = true; break; } out.push(paragraph(c, list)); count++; }
-      else if (n === 'list' && depth < 8) listBlocks(c, { ls: null, counters: [] }, 0, out, 0);
+      else if (n === 'list' && depth < 8) { const counters = at(c, 'continue-numbering') === 'true' ? lastCounters : []; lastCounters = counters; listBlocks(c, { ls: null, counters }, 0, out, 0); } // a split numbered list goes on counting (Decision 480)
       else if (n === 'table' && depth < 4) out.push(table(c, depth));
       else if (n === 'section' || n === 'table-of-content' || n === 'index-body' || n === 'alphabetical-index' || n === 'user-index') out.push(...blocksOf(c, depth, list));
       else if (n === 'index-title') out.push(...blocksOf(c, depth, list));
