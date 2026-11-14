@@ -1,4 +1,4 @@
-// odtedit.js — the odt editing engine, step 3 of Phase 119 (Decision 475); table rows and columns (Decision 477), lists (Decision 480). Same operations and offsets as docedit.js, on `content.xml`.
+// odtedit.js — the odt editing engine, step 3 of Phase 119 (Decision 475); table rows and columns (Decision 477), lists (Decision 480), pictures (Decision 482). Same operations and offsets as docedit.js, on `content.xml`.
 // A paragraph (`text:p`, `text:h`) is read as runs (bare text, or one `text:span` with a style name) and zero-width marks (bookmarks); only a
 // paragraph that is changed is rebuilt, every other node and every other part of the zip is kept as it was (Decision 453). A paragraph that holds
 // anything else (a link, a field, a note, a frame, a nested span) is locked: shown, never edited. Offsets count the characters of its plain text
@@ -357,6 +357,58 @@ export function openOdt(files, EditError) {
     let n = 0; for (const p of delta > 0 ? paras : [...paras].reverse()) if (delta > 0 ? deeper(p) : shallower(p)) n++;
     return n;
   };
+
+  // ---- pictures (Decision 482): a picture is a draw:frame holding a draw:image the reader can show; its file goes in Pictures/ and the manifest ----
+  const DRAW = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0';
+  const SVG = 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0';
+  const XLINK = 'http://www.w3.org/1999/xlink';
+  const IMG_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
+  const dec = (b) => new TextDecoder('utf-8').decode(b);
+  const toPx = (v) => { const m = /^(-?[\d.]+)\s*(cm|mm|in|pt|px|pc)?$/.exec(String(v || '').trim()); if (!m) return null; const k = Number(m[1]); const u = m[2] || 'px'; return u === 'cm' ? k * 37.7953 : u === 'mm' ? k * 3.77953 : u === 'in' ? k * 96 : u === 'pt' ? k * 4 / 3 : u === 'pc' ? k * 16 : k; };
+  const ownerP = (n) => { for (let x = n.parentNode; x; x = x.parentNode) if (isPara(x)) return x; return null; };
+  const imageOf = (f) => [...f.children].find((c) => is(c, 'image', DRAW)) || null;
+  const hrefPath = (im) => (im.getAttributeNS(XLINK, 'href') || '').replace(/^\.\//, '');
+  const picsOf = (p) => [...p.getElementsByTagNameNS(DRAW, 'frame')].filter((f) => {
+    if (ownerP(f) !== p) return false; const im = imageOf(f); const path = im ? hrefPath(im) : '';
+    return !!path && IMG_EXT.has(path.slice(path.lastIndexOf('.') + 1).toLowerCase()) && !!files[path];
+  });
+  const pictureAt = (p, i) => { const f = picsOf(p)[i]; if (!f) throw new EditError('That picture is not there any more.'); return f; };
+  const addMedia = (img) => {
+    let k = 1; while (files[`Pictures/arkly${k}.${img.ext}`]) k++;
+    const path = `Pictures/arkly${k}.${img.ext}`; files[path] = img.bytes;
+    const mf = 'META-INF/manifest.xml';
+    if (files[mf]) files[mf] = enc(dec(files[mf]).replace(/<\/manifest:manifest>\s*$/, `<manifest:file-entry manifest:full-path="${path}" manifest:media-type="${img.mime}"/></manifest:manifest>`));
+    return path;
+  };
+  const cm = (px) => `${(px / 37.7953).toFixed(3)}cm`;
+  // widest a new picture may be: the page's text width (from the page layout), or 5 cm inside a table
+  const maxWidth = (p) => {
+    for (let n = p.parentNode; n; n = n.parentNode) if (tis(n, 'table-cell')) return 5 * 37.7953;
+    const s = files['styles.xml'] ? dec(files['styles.xml']) : ''; const g = (a) => { const m = new RegExp(`${a}="([^"]+)"`).exec(s); return m ? toPx(m[1]) : null; };
+    const w = g('fo:page-width'); const tw = w ? w - (g('fo:margin-left') || 0) - (g('fo:margin-right') || 0) : 0;
+    return tw > 200 ? tw : 16 * 37.7953;
+  };
+  const pictures = (p) => picsOf(p).length;
+  const removePicture = (p, i) => { const f = pictureAt(p, i); f.parentNode.removeChild(f); };
+  // the picture keeps its width; its height follows the new picture's shape; returns the size on the page
+  const replacePicture = (p, i, img) => {
+    const f = pictureAt(p, i); const path = addMedia(img);
+    imageOf(f).setAttributeNS(XLINK, 'xlink:href', path);
+    const wv = f.getAttributeNS(SVG, 'width') || ''; const m = /^(-?[\d.]+)\s*([a-z]*)$/.exec(wv.trim());
+    const w = m ? Number(m[1]) : img.w; const unit = m ? m[2] || 'px' : 'px';
+    const h = Math.max(0.001, w * img.h / img.w);
+    f.setAttributeNS(SVG, 'svg:height', `${h.toFixed(3)}${unit}`); if (!m) f.setAttributeNS(SVG, 'svg:width', `${w.toFixed(3)}${unit}`);
+    return { w: Math.round(toPx(`${w}${unit}`)), h: Math.round(toPx(`${h}${unit}`)) };
+  };
+  // a new paragraph after p that holds only the picture, anchored as a character; returns { node, w, h }
+  const insertPictureAfter = (p, img) => {
+    const path = addMedia(img); let w = Math.max(1, img.w); let h = Math.max(1, img.h); const cap = maxWidth(p); if (w > cap) { h = h * cap / w; w = cap; }
+    const names = new Set([...doc.getElementsByTagNameNS(DRAW, 'frame')].map((f) => f.getAttributeNS(DRAW, 'name'))); let k = 1; while (names.has(`Image${k}`)) k++;
+    const x = `<text:p xmlns:text="${NS.text}" xmlns:draw="${DRAW}" xmlns:svg="${SVG}" xmlns:xlink="${XLINK}"><draw:frame draw:name="Image${k}" text:anchor-type="as-char" svg:width="${cm(w)}" svg:height="${cm(h)}" draw:z-index="0"><draw:image xlink:href="${path}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame></text:p>`;
+    const np = doc.importNode(new DOMParser().parseFromString(x, 'application/xml').documentElement, true);
+    p.after(np); return { node: np, w: Math.round(w), h: Math.round(h) };
+  };
+
   // every part of the file as it now stands (the reader can read this)
   const snapshot = () => ({ ...files, [MAIN]: enc(`<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '')}`) });
 
@@ -365,5 +417,5 @@ export function openOdt(files, EditError) {
     for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, next, setList, shiftLevel, snapshot, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }
