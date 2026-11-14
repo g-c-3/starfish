@@ -7467,6 +7467,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     return newLabel;
   }
 
+  // Document editor output for a stored file (Decision 484). Save replaces the bytes of the same entry (a Home file: the new file is written
+  // first, then the entry points at it and the old file is removed; a Vault file: the Vault content replace). Save as copy is a new entry,
+  // "<label> (copy)", with the original's type and extension, tags and description.
+  async function replaceHomeBytes(id, bytes) {
+    const row = ((await db.query(`SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL`, [id])).values || [])[0];
+    if (!row || !row.file_path) throw new Error('The original is no longer there');
+    const w = await beginFile(); let stored;
+    try { await w.append(bytes); stored = await w.finish(); } catch (err) { await w.abort(); throw err; }
+    try { await db.run(`UPDATE entries SET file_path = ?, file_key = ?, updated_at = ? WHERE id = ?`, [stored.path, stored.fileKey, Date.now(), id]); }
+    catch (err) { await removeFile({ file_path: stored.path }).catch(() => {}); throw err; }
+    await removeFile(row).catch(() => {}); // nothing points at it now
+  }
+  async function saveOfficeFile(item, bytes, { replace, isVault }) {
+    if (isVault && !privateSessionKey) throw new Error('Vault locked');
+    if (replace) {
+      if (isVault) await editEntry(db, item.id, { fileData: bytesToBase64(bytes) }, { privateSessionKey });
+      else await replaceHomeBytes(item.id, bytes);
+      return item.label;
+    }
+    let label, tags = [], description = '';
+    if (isVault) { const e = (getVaultIndex() || []).find((x) => x.id === item.id) || item; label = e.label; tags = e.tags || []; description = e.description || ''; }
+    else {
+      const row = ((await db.query(`SELECT label, description FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+      if (!row) throw new Error('The original is no longer there');
+      label = row.label; description = row.description || '';
+      tags = ((await db.query(`SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE et.entry_id = ?`, [item.id])).values || []).map((r) => r.name);
+    }
+    const newLabel = `${label} (copy)`;
+    const args = { type: item.type, label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: item.extension };
+    if (isVault) await captureToVault(args); else await captureFile(item.type, args);
+    return newLabel;
+  }
+
   // Merge and Make a PDF output (Decision 168): always a new entry, no tags or description (the sources may differ).
   async function saveComposedPdf(bytes, label, isVault) {
     const args = { type: 'pdf', label, tags: [], description: '', fileData: bytesToBase64(bytes), extension: 'pdf' };
@@ -7723,11 +7756,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shut = () => { if (mounted) { try { mounted.destroy(); } catch { /* closing anyway */ } mounted = null; } if (url) { URL.revokeObjectURL(url); url = null; } };
     viewerScreen.classList.add('file-mode');
     if (kind === 'text') viewerScreen.classList.add('pdf-mode', 'text-mode'); // the slim see-through title bar of the PDF view (Decision 443)
+    const canEditDoc = kind === 'docx' && !viewOnly && /^(docx|odt)$/i.test(item.extension || ''); // the same editor as the File explorer (Decision 484)
+    let discarding = false; // true while Discard reopens the file as saved
+    const unsaved = () => !!(mounted && mounted.dirty && mounted.dirty());
     await openViewer({
       title: item.label || 'File', isVault, entry: item, viewOnly,
-      onEdit: async () => { await editEntryUI(await fresh(), isVault); },
+      onEdit: async () => { if (unsaved()) { toast('Save or discard your changes first.'); return; } await editEntryUI(await fresh(), isVault); },
       onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode', 'pdf-mode', 'text-mode'); },
-      render: async (body) => {
+      guard: canEditDoc ? async () => { // Back asks about unsaved changes
+        if (!unsaved()) return true;
+        const v = await mounted.confirmLeave();
+        return v === 'discard' ? true : v === 'save' ? mounted.saveNow() : false;
+      } : null,
+      render: async (body, { refresh } = {}) => {
+        if (unsaved() && !discarding) return; // a refresh must not drop unsaved changes
+        discarding = false;
         const mine = ++token;
         shut();
         viewerScreen.querySelectorAll('.vwr-menu').forEach((n) => n.remove());
@@ -7771,7 +7814,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             mounted = m; return;
           }
           const m = await mountOfficeFile(body, kind, bytes, {
-            ui, setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
+            ui, toast,
+            edit: !canEditDoc ? null : {
+              save: async (out) => { await saveOfficeFile(item, out, { replace: true, isVault }); toast('Saved'); },
+              saveCopy: async (out) => { const name = await saveOfficeFile(item, out, { replace: false, isVault }); toast(`Saved as ${name}`); },
+              reload: () => { if (mine === token && refresh) { discarding = true; refresh(); } }
+            },
+            setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
             openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault) // no phone app for a trashed file
           });
           if (mine !== token) { m.destroy(); return; }

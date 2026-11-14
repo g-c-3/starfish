@@ -78,7 +78,7 @@ export function mountAudioFile(body, url, name, ui) {
 }
 
 // docx, xlsx or pptx bytes -> the Office view. The toolbar sits behind a menu: toggleMenu() shows and hides it.
-// ctx: { ui, setCount(text), openWith() }. Throws an OfficeError (message fit to show) or any other error.
+// ctx: { ui, toast, edit ({ save, saveCopy, reload } for a docx or odt that can be edited), setCount(text), openWith() }. Throws an OfficeError (message fit to show) or any other error.
 export async function mountOfficeFile(body, kind, bytes, ctx) {
   // an EPUB arrives under the Document kind and has its own reader (Decision 472)
   const book = kind === 'docx' ? await import('./epubview.js') : null;
@@ -89,6 +89,7 @@ export async function mountOfficeFile(body, kind, bytes, ctx) {
   body.appendChild(host);
   if (epub) { const r = book.mountEpub(host, bytes, { ui: ctx.ui, openWith: ctx.openWith }); return { toggleMenu: r.toggleMenu, destroy: r.destroy }; }
   host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
-  const mounted = mountOffice(kind, bytes, host, { ui: ctx.ui, setCount: ctx.setCount, onChrome: () => {}, openWith: ctx.openWith });
-  return { toggleMenu: () => host.classList.toggle('eo-menu-open'), destroy() { mounted.destroy(); } };
+  const mounted = mountOffice(kind, bytes, host, { ui: ctx.ui, toast: ctx.toast, edit: ctx.edit || null, setCount: ctx.setCount, onChrome: () => {}, openWith: ctx.openWith });
+  // dirty, confirmLeave and saveNow are the editor's (Decision 484); with no editor they report no changes
+  return { toggleMenu: () => host.classList.toggle('eo-menu-open'), dirty: () => !!(mounted.dirty && mounted.dirty()), confirmLeave: () => mounted.confirmLeave(), saveNow: () => mounted.saveNow(), destroy() { mounted.destroy(); } };
 }

@@ -1283,3 +1283,8 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Find and replace, and word count in the Office editors (Decision 483)
 
 `docview-edit.js`, Review group: `matches` (a regular expression built from the escaped query, over `textOf` of each mapped paragraph; offsets are the engine's), `paint` (the `eo-find` and `eo-find-on` highlights, else a selection; `reveal` scrolls), `redrawParas` (the changed paragraphs drawn again through the host `redraw`, else set to their text), `openFind` and `openCount` (sheets from `sheet.js`). The find sheet carries `eo-find-ov` (bottom, no backdrop, the page under it stays tappable); both sheets are `.modal-overlay`, so they follow the one motion recipe. A tool pressed in the compact panel opens its sheet 300 ms later so two dialogs never overlap. The engines are unchanged.
+
+## The document editor in the stored-file viewer (Decision 484)
+
+`openFileInArklyNow` (`app.js`) mounts `mountOfficeFile` (`filesview.js`) with `edit: { save, saveCopy, reload }` for a stored docx or odt that is not in the Trash, the same contract as the File explorer (Decision 474). `saveOfficeFile(item, bytes, { replace, isVault })`: replace = `replaceHomeBytes` (new file through `beginFile`, entry updated, old file removed) or `editEntry` with `fileData` for a Vault entry; copy = `captureFile` or `captureToVault` with the original's tags and description. The `guard` of `openViewer` asks about unsaved changes on Back; `render` returns at once while changes are unsaved, unless Discard asked for the reload.
+

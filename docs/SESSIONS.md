@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 243**
+
+Start: the owner reported that the viewer of a stored file had no Edit button, and asked for the same viewer and editor in Arkly and in the File explorer. The CI log was not read.
+- Cause: only the File explorer's viewer passed `edit` to the Office view (Decision 474); the stored-file viewer (`filesview.js`) passed none, and no function replaced the bytes of a stored Home file.
+- Built (Decision 484): Edit in the stored-file viewer for a docx or odt, in Home and in the Vault. `app.js`: `replaceHomeBytes`, `saveOfficeFile`, the `edit` option, the Back guard, refresh and pencil protection while changes are unsaved; `filesview.js`: `edit` and `toast` passed on, `dirty`, `confirmLeave` and `saveNow` returned.
+- Tested in a sandbox with stubs of the storage calls: replace in Home (new file written, entry updated, old file removed), a failed update (new file removed, old kept), replace in the Vault (through `editEntry` with the file content), copy in Home and in the Vault (label, type, extension, tags), a locked Vault refusing. Bundle of `app.js` and `filesview.js` with packages external: no error. Not run through CI or a device; the viewer wiring, the leave check and the real storage run only on a device.
+- Size: about 3.9 KB of source added (Decision 453).
+- Decision 484. DP266 open.
+- Next start: the CI log, DP257 to DP266 on a device, then Phase 119 step 5b (comments), or the next incomplete item.
+
+---
+
 **Session 242**
 
 Start: "Go" (docs read; repo check clean: only `index.html` at the `src/` root). The CI log was not read. Phase 119 step 5 split into 5a and 5b.
