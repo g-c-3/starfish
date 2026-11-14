@@ -220,11 +220,83 @@ export function openOdt(files, EditError) {
   };
   const remove = (p) => drop(p);
 
+  // ---- table rows and columns (Decision 477): merged cells, repeated rows and rows of different widths are refused ----
+  const TNS = 'urn:oasis:names:tc:opendocument:xmlns:table:1.0';
+  const tis = (n, name) => is(n, name, TNS);
+  const TABLE_ERR = 'This table cannot be changed here.';
+  const rep = (n, a) => { const v = n.getAttributeNS(TNS, a); return v === null || v === '' ? 1 : Number(v); };
+  const gather = (tbl, one, groups) => { const out = []; const walk = (parent) => { for (const c of parent.children) { if (tis(c, one)) out.push(c); else if (groups.some((g) => tis(c, g))) walk(c); } }; walk(tbl); return out; };
+  const rowsOf = (tbl) => gather(tbl, 'table-row', ['table-rows', 'table-header-rows', 'table-row-group']);
+  const colsOf = (tbl) => gather(tbl, 'table-column', ['table-columns', 'table-header-columns', 'table-column-group']);
+  const cellsOf = (row) => [...row.children].filter((c) => tis(c, 'table-cell'));
+  const where = (p) => {
+    let cell = null; for (let n = p && p.parentNode; n; n = n.parentNode) if (tis(n, 'table-cell')) { cell = n; break; }
+    const row = cell && cell.parentNode; let tbl = row; while (tbl && !tis(tbl, 'table')) tbl = tbl.parentNode;
+    if (!cell || !tis(row, 'table-row') || !tbl) throw new EditError('Put the cursor in a table cell first.');
+    const rows = rowsOf(tbl); const cols = colsOf(tbl);
+    if (!rows.includes(row)) throw new EditError(TABLE_ERR);
+    let nCols = 0; for (const c of cols) { const k = rep(c, 'number-columns-repeated'); if (!(k >= 1 && k <= 200)) throw new EditError(TABLE_ERR); nCols += k; }
+    for (const r of rows) {
+      if (rep(r, 'number-rows-repeated') > 1) throw new EditError(TABLE_ERR);
+      let n = 0;
+      for (const c of r.children) {
+        if (tis(c, 'covered-table-cell') || rep(c, 'number-columns-spanned') > 1 || rep(c, 'number-rows-spanned') > 1) throw new EditError('This table has merged cells; rows and columns cannot be changed here.');
+        if (!tis(c, 'table-cell')) throw new EditError(TABLE_ERR);
+        const k = rep(c, 'number-columns-repeated'); if (!(k >= 1 && k <= 100)) throw new EditError(TABLE_ERR); n += k;
+      }
+      if (n !== nCols) throw new EditError(TABLE_ERR);
+    }
+    let ci = 0; for (const c of cellsOf(row)) { if (c === cell) break; ci += rep(c, 'number-columns-repeated'); }
+    return { cell, row, tbl, rows, nCols, ri: rows.indexOf(row), ci };
+  };
+  const cellOf = (p) => { const w = where(p); return { ri: w.ri, ci: w.ci, rows: w.rows.length, cols: w.nCols }; };
+  // a repeated cell or column becomes that many separate ones (the same table)
+  const spread = (nodes, attr) => { for (const n of nodes) { const k = rep(n, attr); if (k > 1) { n.removeAttributeNS(TNS, attr); for (let i = 1; i < k; i++) n.after(n.cloneNode(true)); } } };
+  const spreadRow = (row) => spread(cellsOf(row), 'number-columns-repeated');
+  // a copied cell cut to its first paragraph, emptied; stored values go; returns that paragraph
+  const blank = (cell) => {
+    const blocks = [...cell.children]; const first = blocks[0];
+    if (!isPara(first)) throw new EditError(TABLE_ERR);
+    for (const b of blocks.slice(1)) cell.removeChild(b);
+    while (first.firstChild) first.removeChild(first.firstChild);
+    for (const a of [...cell.attributes]) if ((a.namespaceURI === NS.office && /value|currency/.test(a.localName)) || (a.namespaceURI === TNS && a.localName === 'formula')) cell.removeAttributeNS(a.namespaceURI, a.localName);
+    return first;
+  };
+  const firstP = (cell) => (cell && isPara(cell.firstElementChild) ? cell.firstElementChild : null);
+  const cellAt = (row, idx) => { let k = 0; for (const c of cellsOf(row)) { k += rep(c, 'number-columns-repeated'); if (idx < k) return c; } return null; };
+  // a new row beside the paragraph's row (a header row stays in its group); returns the new first paragraph of each cell
+  const insertRow = (p, after = true) => {
+    const w = where(p); const nr = w.row.cloneNode(true); spreadRow(nr);
+    const out = cellsOf(nr).map(blank);
+    if (after) w.row.after(nr); else w.row.before(nr);
+    return out;
+  };
+  const deleteRow = (p) => {
+    const w = where(p); if (w.rows.length < 2) throw new EditError('A table keeps at least one row.');
+    const near = w.rows[w.ri + 1] || w.rows[w.ri - 1]; const group = w.row.parentNode;
+    w.row.remove(); if (group !== w.tbl && !group.children.length) group.remove();
+    return firstP(cellAt(near, Math.min(w.ci, w.nCols - 1)));
+  };
+  // a new column beside the paragraph's column; returns the new first paragraph of each row
+  const insertColumn = (p, after = true) => {
+    const w = where(p); spread(colsOf(w.tbl), 'number-columns-repeated'); for (const r of w.rows) spreadRow(r);
+    const col = colsOf(w.tbl)[w.ci]; const nc = col.cloneNode(true); if (after) col.after(nc); else col.before(nc);
+    const out = [];
+    for (const r of w.rows) { const cell = cellsOf(r)[w.ci]; const cl = cell.cloneNode(true); out.push(blank(cl)); if (after) cell.after(cl); else cell.before(cl); }
+    return out;
+  };
+  const deleteColumn = (p) => {
+    const w = where(p); if (w.nCols < 2) throw new EditError('A table keeps at least one column.');
+    spread(colsOf(w.tbl), 'number-columns-repeated'); for (const r of w.rows) spreadRow(r);
+    colsOf(w.tbl)[w.ci].remove(); for (const r of w.rows) cellsOf(r)[w.ci].remove();
+    const cells = cellsOf(w.row); return firstP(cells[Math.min(w.ci, cells.length - 1)]);
+  };
+
   const toBytes = () => {
     const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '');
     const out = {};
     for (const k of Object.keys(files)) out[k] = [k === MAIN ? new TextEncoder().encode(`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`) : files[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, next, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, next, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }

@@ -10,18 +10,21 @@ const REPO = 'g-c-3/starfish';
 const FETCH_TIMEOUT_MS = 5000;
 
 // build-android.yml tags every release "v<version>" and scripts/patch-version.js stamps the same <version>
-// onto the installed app (Decision 282). <version> is derived from the CI run number N:
-// "<1 + N div 10000>.<N div 1000 mod 10>.<N mod 1000, three digits>", so 674 is 1.0.674 and 10000 is 2.0.000.
-// The older form "<x.y.z>+<N>" (builds up to run 674) is still read. Both give back N, a strictly increasing
-// integer, so comparing it directly is exact and skips semver parsing — a higher N is a newer build, full stop.
+// onto the installed app. <version> is the CI run number N in base ten, "<N div 100>.<N div 10 mod 10>.<N mod 10>"
+// (Decision 478): 9 is 0.0.9, 10 is 0.1.0, 100 is 1.0.0, 1000 is 10.0.0. Two older forms are still read: the three-digit
+// patch "<1 + N div 10000>.<N div 1000 mod 10>.<N mod 1000>" (1.0.674, Decision 282) and "<x.y.z>+<N>" (builds up to run 674).
+// The patch has one digit in the new form and three in the old, so the forms never overlap. All give back N, a strictly
+// increasing integer, so comparing it directly is exact and skips semver parsing — a higher N is a newer build, full stop.
 function extractRunNumber(versionOrTag) {
   const text = versionOrTag || '';
   const old = /\+(\d+)$/.exec(text);
   if (old) return parseInt(old[1], 10);
-  const cur = /^v?(\d+)\.(\d)\.(\d{3})$/.exec(text);
-  if (!cur) return null;
-  const major = parseInt(cur[1], 10);
-  return major < 1 ? null : (major - 1) * 10000 + parseInt(cur[2], 10) * 1000 + parseInt(cur[3], 10);
+  const now = /^v?(\d+)\.(\d)\.(\d)$/.exec(text);
+  if (now) { const n = parseInt(now[1], 10) * 100 + parseInt(now[2], 10) * 10 + parseInt(now[3], 10); return n < 1 ? null : n; }
+  const mid = /^v?(\d+)\.(\d)\.(\d{3})$/.exec(text);
+  if (!mid) return null;
+  const major = parseInt(mid[1], 10);
+  return major < 1 ? null : (major - 1) * 10000 + parseInt(mid[2], 10) * 1000 + parseInt(mid[3], 10);
 }
 
 // Returns one of:

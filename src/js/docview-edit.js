@@ -49,11 +49,12 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   const map = new Map(); // paragraph element -> engine paragraph
   let editing = false; let isDirty = false; let was = false; let lastRange = null;
 
+  const used = new Set(); // an odt cell repeated in the file is drawn several times from one paragraph: only the first stays editable
   for (const el of paper.querySelectorAll('.eo-p[data-pi]')) {
     const node = ps[Number(el.dataset.pi)];
-    if (!node || !eng.editable(node)) continue;
+    if (!node || used.has(node) || !eng.editable(node)) continue;
     if (norm(domText(el)) !== norm(eng.textOf(node))) continue; // not what the engine holds: left read only
-    map.set(el, node);
+    map.set(el, node); used.add(node);
   }
   const order = () => [...paper.querySelectorAll('.eo-p')].filter((e) => map.has(e));
   const elOf = (n) => { for (let e = n && (n.nodeType === 1 ? n : n.parentNode); e && e !== paper; e = e.parentNode) if (map.has(e)) return e; return null; };
