@@ -192,12 +192,12 @@ unconditionally ships `versionCode 1` / `versionName "1.0"`. Every build looked 
 regardless of what actually shipped, with no way to tell builds apart.
 
 `scripts/patch-version.js`, run by CI right after `scripts/patch-manifest.js`, fixes this:
-`versionCode` is set to the GitHub Actions run number (`github.run_number` — a strictly increasing
-integer, no manual step, always available), and `versionName` is `<package.json version>+<run number>`,
-e.g. `0.1.0+42`. Check **Settings > Apps > Arkly > App info** on-device to see the installed build's
-exact version. Bump `package.json`'s `"version"` by hand for anything worth calling a real release; the
-run-number suffix always changes regardless, so every CI build is distinguishable even between
-deliberate version bumps.
+`versionCode` is set to the GitHub Actions run number N (`github.run_number` — a strictly increasing
+integer, no manual step, always available), and `versionName` is N written in base ten as
+`<major>.<minor>.<patch>`: minor and patch are one digit (0 to 9), major has no limit
+(`0.0.9` then `0.1.0`, `0.9.9` then `1.0.0`, `9.9.9` then `10.0.0`; Decision 478). The release tag is
+`v<versionName>`. Check **Settings > Apps > Arkly > App info** on-device to see the installed build's
+exact version. `package.json`'s `"version"` is not read.
 
 Unlike `patch-manifest.js`, this script is **not** idempotent by design — it's meant to overwrite the
 version every run, not skip once set (there's nothing to "already be set" correctly on a freshly
