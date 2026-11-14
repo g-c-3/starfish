@@ -1255,3 +1255,11 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Table tools in the docx editor view (Decision 476)
 
 `docview-edit.js`: the Table group (`groups`, id `table`). `cellInfo` takes the last selection inside a mapped paragraph and its `td`, `tr` and `table` (the innermost). `tableTool` wraps each tool: it asks the engine's `cellOf`, checks the page's row count and every row's cell count against it, and shows the engine's message on a refusal. Row: `blankTd` copies each cell of the row to one empty paragraph first (it throws before anything changes when a cell's first child is not a paragraph), then `insertRow`, then the new `tr` (a shallow copy of the old one) is placed. Column: the same per row, plus a copy of the matching `col` in the `colgroup` and the table's pixel width changed by that column's width. New paragraphs enter the page-to-engine map (`adopt`), removed ones leave it (`forget`); the page's `data-pi` is not renumbered (the map is the link). A merged cell makes the page's cell count differ from the engine's, so the tools refuse on both sides.
+
+## Odt table tools (Decision 477)
+
+`odtedit.js`: `where` finds the innermost `table:table-cell`, its row and table, validates every row (no covered or spanned cells, no repeated rows, equal widths counting `number-columns-repeated`) and gives the expanded column index; `spread` turns a repeated cell or column into separate ones before an insert or delete; `blank` cuts a copied cell to its first paragraph and drops its stored values. The view is the one of Decision 476; `used` in `mountEditor` keeps a paragraph drawn several times (a repeated cell) mapped to its first element only.
+
+## Version name (Decision 478)
+
+`scripts/patch-version.js` `versionNameFor(N)` = `<N div 100>.<N div 10 mod 10>.<N mod 10>`, written into `build.gradle` with `versionCode` N and into `APP_VERSION_NAME` for the release tag. `update-check.js` `extractRunNumber` maps a tag or the installed version back to N from this form, the three-digit-patch form and `x.y.z+N`.

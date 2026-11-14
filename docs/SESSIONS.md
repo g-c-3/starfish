@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 237**
+
+Start: "Continue" and "Do next". CI log not read (rate limited). Phase 119 step 4b, and an owner request on the version name.
+- Built (4b, Decision 477): table rows and columns in an odt. `odtedit.js` gains `cellOf`, `insertRow`, `deleteRow`, `insertColumn`, `deleteColumn` (repeated columns and cells counted and spread, stored values cleared in copies, header groups kept, refusals for merged cells, repeated rows, uneven rows); `docview-edit.js` maps a paragraph drawn several times (a repeated cell) to its first element only.
+- Built (Decision 478): the version name is N in base ten, minor and patch one digit each, major unlimited (0.0.9 then 0.1.0, 0.9.9 then 1.0.0, 9.9.9 then 10.0.0). `scripts/patch-version.js` and `src/js/update-check.js` changed; the old three-digit form and `x.y.z+N` are still read. `android-notes/native-setup.md` section 12 brought up to date.
+- Tested in a sandbox: 26 checks on an odt with a header group, repeated columns and cells, a merged table (engine and page, page cells equal to file cells); 30,019 checks on the version name (every N from 1 to 30,000 gives a unique one-digit-minor-and-patch name that maps back to N; update decisions across new, three-digit and `+N` tags; 0.0.9 to 0.1.0, 0.9.9 to 1.0.0, 9.9.9 to 10.0.0). The earlier 43, 8 and 25 checks still pass. Not run through CI or a device.
+- Size: about 5.7 KB of source added to the editor (Decision 453).
+- Decisions 477 and 478. DP260 open. First build with Decision 478 is installed by hand once (older apps cannot read the new tags); its name jumps (same N, new spelling).
+- Next start: the CI log, DP257 to DP260 on a device, then 4c (lists in both formats), or the next incomplete item.
+
+---
+
 **Session 236**
 
 Start: "Do next". CI log not read. Phase 119 step 4, split in the roadmap into 4a to 4d; 4a built.
