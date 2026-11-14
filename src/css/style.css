@@ -1232,6 +1232,7 @@ body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom,
 .eo-fn { margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--eo-line); font-size: .85em; }
 .eo-fnrow { display: flex; gap: 6px; }
 .eo-img { display: inline-block; max-width: 100%; height: auto; vertical-align: bottom; }
+.eo-img.eo-pic-sel { outline: 2px solid var(--eo-accent); outline-offset: 2px; }
 .eo-tablewrap { max-width: 100%; overflow-x: auto; margin: 6px 0; }
 .eo-table { border-collapse: collapse; font-size: 14px; }
 .eo-table td, .eo-table th { border: 1px solid var(--border-strong); padding: 5px 8px; vertical-align: top; }
