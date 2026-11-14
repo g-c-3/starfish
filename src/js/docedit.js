@@ -210,12 +210,151 @@ export function openDoc(bytes) {
     return focus;
   };
 
+
+  // ---- lists (Decision 479): a paragraph's own numPr; the numbering part is read, and extended when a list kind is missing ----
+  const NUMBERING = 'word/numbering.xml';
+  const dec = (b) => new TextDecoder('utf-8').decode(b);
+  const enc = (s) => new TextEncoder().encode(s);
+  const parseX = (s) => new DOMParser().parseFromString(s, 'application/xml');
+  let numDoc = null; let numDirty = false;
+  const numRead = () => { if (!numDoc && files[NUMBERING]) numDoc = parseX(dec(files[NUMBERING])); return numDoc ? numDoc.documentElement : null; };
+  const numWrite = () => { // a file without a numbering part gets an empty one, registered in the package
+    if (!numRead()) {
+      const ct = '[Content_Types].xml'; const rels = 'word/_rels/document.xml.rels';
+      if (!files[ct] || !files[rels]) throw new EditError('This file cannot take a list here.');
+      let c = dec(files[ct]); if (!c.includes('/word/numbering.xml')) c = c.replace('</Types>', '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>');
+      let r = dec(files[rels]); if (!/relationships\/numbering"/.test(r)) r = r.replace('</Relationships>', '<Relationship Id="rIdArklyNum" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>');
+      files[ct] = enc(c); files[rels] = enc(r);
+      numDoc = parseX(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="${W}"/>`);
+    }
+    numDirty = true; return numDoc.documentElement;
+  };
+  const wval = (n) => (n ? n.getAttributeNS(W, 'val') : null);
+  const absOf = (root, id) => kids(root, 'abstractNum').find((a) => a.getAttributeNS(W, 'abstractNumId') === id) || null;
+  const numNode = (root, id) => kids(root, 'num').find((n) => n.getAttributeNS(W, 'numId') === id) || null;
+  // the number format of a list level ('bullet', 'decimal', ...), or null
+  const fmtAt = (root, id, lv) => {
+    const n = root && numNode(root, id); const a = n && absOf(root, wval(kid(n, 'abstractNumId')));
+    const l = a && kids(a, 'lvl').find((x) => x.getAttributeNS(W, 'ilvl') === String(lv)); return l ? wval(kid(l, 'numFmt')) : null;
+  };
+  const makeAbstract = (root, kind) => {
+    const ids = kids(root, 'abstractNum').map((a) => Number(a.getAttributeNS(W, 'abstractNumId')) || 0); const id = ids.length ? Math.max(...ids) + 1 : 0;
+    let x = `<w:abstractNum xmlns:w="${W}" w:abstractNumId="${id}"><w:multiLevelType w:val="hybridMultilevel"/>`;
+    for (let i = 0; i < 9; i++) {
+      const fmt = kind === 'bullet' ? 'bullet' : ['decimal', 'lowerLetter', 'lowerRoman'][i % 3]; const text = kind === 'bullet' ? ['\u2022', '\u25E6', '\u25AA'][i % 3] : `%${i + 1}.`;
+      x += `<w:lvl w:ilvl="${i}"><w:start w:val="1"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${720 * (i + 1)}" w:hanging="360"/></w:pPr></w:lvl>`;
+    }
+    root.insertBefore(numDoc.importNode(parseX(`${x}</w:abstractNum>`).documentElement, true), kids(root, 'num')[0] || null); return String(id);
+  };
+  const makeNum = (root, abs, restart) => {
+    const ids = kids(root, 'num').map((n) => Number(n.getAttributeNS(W, 'numId')) || 0); const id = Math.max(0, ...ids) + 1;
+    const x = `<w:num xmlns:w="${W}" w:numId="${id}"><w:abstractNumId w:val="${abs}"/>${restart ? '<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride>' : ''}</w:num>`;
+    root.appendChild(numDoc.importNode(parseX(x).documentElement, true)); return String(id);
+  };
+  // a list id of this kind: a bullet list is shared, a numbered one starts again at 1
+  const listFor = (kind) => {
+    const root = numWrite(); const want = kind === 'bullet' ? 'bullet' : 'decimal';
+    for (const n of kids(root, 'num')) { const id = n.getAttributeNS(W, 'numId'); if (fmtAt(root, id, 0) === want) return kind === 'bullet' ? id : makeNum(root, wval(kid(n, 'abstractNumId')), true); }
+    return makeNum(root, makeAbstract(root, kind), kind !== 'bullet');
+  };
+  const own = (p) => { const np = kid(kid(p, 'pPr'), 'numPr'); return np ? { np, id: wval(kid(np, 'numId')), lv: Number(wval(kid(np, 'ilvl')) || 0) } : null; };
+  const inList = (o) => !!o && !!o.id && o.id !== '0';
+  const PPR_FIRST = ['pStyle', 'keepNext', 'keepLines', 'pageBreakBefore', 'framePr', 'widowControl'];
+  const setNum = (p, id, lv) => {
+    let ppr = kid(p, 'pPr'); if (!ppr) { ppr = doc.createElementNS(W, 'w:pPr'); p.insertBefore(ppr, p.firstChild); }
+    let np = kid(ppr, 'numPr');
+    if (!np) { np = doc.createElementNS(W, 'w:numPr'); ppr.insertBefore(np, [...ppr.children].find((c) => !PPR_FIRST.includes(c.localName)) || null); }
+    let il = kid(np, 'ilvl'); if (!il) { il = doc.createElementNS(W, 'w:ilvl'); np.insertBefore(il, np.firstChild); } il.setAttributeNS(W, 'w:val', String(lv));
+    let ni = kid(np, 'numId'); if (!ni) { ni = doc.createElementNS(W, 'w:numId'); np.appendChild(ni); } ni.setAttributeNS(W, 'w:val', String(id));
+    const ind = kid(ppr, 'ind'); if (ind) ppr.removeChild(ind); // the level's own indent applies
+  };
+  // bullets, numbers or no list for the paragraphs; returns how many changed
+  const setList = (paras, kind) => {
+    if (kind === 'none') {
+      let n = 0;
+      for (const p of paras) { const o = own(p); if (!inList(o)) continue; kid(o.np, 'numId').setAttributeNS(W, 'w:val', '0'); const ind = kid(kid(p, 'pPr'), 'ind'); if (ind) ind.parentNode.removeChild(ind); n++; }
+      return n;
+    }
+    if (kind !== 'bullet' && kind !== 'number') throw new EditError('That list kind is not available.');
+    const all = paragraphs(); const at = all.indexOf(paras[0]); const prev = at > 0 ? own(all[at - 1]) : null;
+    let id = null; let lv = 0;
+    if (inList(prev)) { const f = fmtAt(numRead(), prev.id, prev.lv); if (f && f !== 'none' && (f === 'bullet') === (kind === 'bullet')) { id = prev.id; lv = prev.lv; } } // goes on with the list above
+    if (!id) id = listFor(kind);
+    for (const p of paras) setNum(p, id, lv);
+    return paras.length;
+  };
+  // one level deeper (delta 1) or shallower (-1) for the paragraphs that are in a list; returns how many changed
+  const shiftLevel = (paras, delta) => {
+    let n = 0;
+    for (const p of paras) { const o = own(p); if (!inList(o)) continue; const lv = Math.max(0, Math.min(8, o.lv + delta)); if (lv === o.lv) continue; setNum(p, o.id, lv); n++; }
+    return n;
+  };
+
+  // ---- pictures (Decision 481): inline pictures only; a picture is one w:drawing, shown by the reader as one img ----
+  const NSX = { wp: 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', a: 'http://schemas.openxmlformats.org/drawingml/2006/main', pic: 'http://schemas.openxmlformats.org/drawingml/2006/picture', r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships' };
+  const EMU = 9525; // per pixel
+  const ownerP = (n) => { for (let x = n.parentNode; x; x = x.parentNode) if (isW(x, 'p')) return x; return null; };
+  const hasEl = (d, ns, name) => d.getElementsByTagNameNS(ns, name).length > 0;
+  const picsOf = (p) => [...p.getElementsByTagNameNS(W, 'drawing')].filter((d) => ownerP(d) === p && [...d.children].some((c) => c.namespaceURI === NSX.wp && c.localName === 'inline') && hasEl(d, NSX.a, 'blip') && !hasEl(d, 'http://schemas.openxmlformats.org/drawingml/2006/chart', 'chart'));
+  const pictureAt = (p, i) => { const d = picsOf(p)[i]; if (!d) throw new EditError('That picture is not there any more.'); return d; };
+  // the picture's file goes into word/media, with its relationship and content type
+  const addMedia = (img) => {
+    const ct = '[Content_Types].xml'; const rels = 'word/_rels/document.xml.rels';
+    if (!files[ct] || !files[rels]) throw new EditError('This file cannot take a picture here.');
+    let k = 1; while (files[`word/media/arkly${k}.${img.ext}`]) k++;
+    const path = `word/media/arkly${k}.${img.ext}`; files[path] = img.bytes;
+    let c = dec(files[ct]); if (!new RegExp(`Extension="${img.ext}"`, 'i').test(c)) c = c.replace(/<Types[^>]*>/, (m) => `${m}<Default Extension="${img.ext}" ContentType="${img.mime}"/>`);
+    let r = dec(files[rels]); let j = 1; while (r.includes(`Id="rIdArkly${j}"`)) j++;
+    const id = `rIdArkly${j}`; r = r.replace('</Relationships>', `<Relationship Id="${id}" Type="${NSX.r}/image" Target="media/arkly${k}.${img.ext}"/></Relationships>`);
+    files[ct] = enc(c); files[rels] = enc(r); return id;
+  };
+  const sizeFor = (img, maxEmu) => { let cx = Math.max(1, Math.round(img.w)) * EMU; let cy = Math.max(1, Math.round(img.h)) * EMU; if (cx > maxEmu) { cy = Math.round(cy * maxEmu / cx); cx = maxEmu; } return { cx, cy }; };
+  const pxOf = (cx, cy) => ({ w: Math.round(cx / EMU), h: Math.round(cy / EMU) });
+  // widest a new picture may be: the page's text width, or the cell's width inside a table
+  const maxWidth = (p) => {
+    let tc = null; for (let n = p.parentNode; n; n = n.parentNode) if (isW(n, 'tc')) { tc = n; break; }
+    if (tc) { const w = kid(kid(tc, 'tcPr'), 'tcW'); const v = w && w.getAttributeNS(W, 'type') === 'dxa' ? Number(w.getAttributeNS(W, 'w')) : 0; return (v > 600 ? v - 200 : 2880) * 635; }
+    const sp = [...doc.getElementsByTagNameNS(W, 'sectPr')].pop(); const sz = kid(sp, 'pgSz'); const mar = kid(sp, 'pgMar');
+    const tw = sz ? Number(sz.getAttributeNS(W, 'w')) - Number(mar ? mar.getAttributeNS(W, 'left') || 0 : 0) - Number(mar ? mar.getAttributeNS(W, 'right') || 0 : 0) : 0;
+    return (tw > 1440 ? tw : 8640) * 635;
+  };
+  const pictures = (p) => picsOf(p).length; // how many pictures the paragraph shows
+  const removePicture = (p, i) => {
+    const d = pictureAt(p, i); let n = d; while (n.parentNode && !isW(n.parentNode, 'r')) n = n.parentNode;
+    const run = n.parentNode; run.removeChild(n);
+    if (![...run.children].some((c) => !isW(c, 'rPr'))) run.parentNode.removeChild(run);
+  };
+  // the picture keeps its width; its height follows the new picture's shape; returns the size on the page
+  const replacePicture = (p, i, img) => {
+    const d = pictureAt(p, i); const id = addMedia(img);
+    const blip = d.getElementsByTagNameNS(NSX.a, 'blip')[0]; blip.setAttributeNS(NSX.r, 'r:embed', id);
+    const ex = d.getElementsByTagNameNS(NSX.wp, 'extent')[0]; const cx = Number(ex.getAttribute('cx')) || img.w * EMU; const cy = Math.max(1, Math.round(cx * img.h / img.w));
+    ex.setAttribute('cx', String(cx)); ex.setAttribute('cy', String(cy));
+    for (const e of d.getElementsByTagNameNS(NSX.a, 'ext')) { e.setAttribute('cx', String(cx)); e.setAttribute('cy', String(cy)); }
+    for (const s of [...d.getElementsByTagNameNS(NSX.a, 'srcRect')]) s.parentNode.removeChild(s);
+    return pxOf(cx, cy);
+  };
+  // a new paragraph after p that holds only the picture; returns { node, w, h }
+  const insertPictureAfter = (p, img) => {
+    const id = addMedia(img); const { cx, cy } = sizeFor(img, maxWidth(p));
+    const ids = [...doc.getElementsByTagNameNS(NSX.wp, 'docPr')].map((e) => Number(e.getAttribute('id')) || 0); const n = Math.max(0, ...ids) + 1;
+    const x = `<w:p xmlns:w="${W}" xmlns:wp="${NSX.wp}" xmlns:a="${NSX.a}" xmlns:pic="${NSX.pic}" xmlns:r="${NSX.r}"><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Picture ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="${NSX.pic}"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="Picture ${n}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    const np = doc.importNode(new DOMParser().parseFromString(x, 'application/xml').documentElement, true);
+    p.after(np); return { node: np, ...pxOf(cx, cy) };
+  };
+
+  // every part of the file as it now stands (the reader can read this)
+  const snapshot = () => {
+    const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, ''); const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const all = { ...files, [MAIN]: enc(decl + xml) };
+    if (numDirty) all[NUMBERING] = enc(decl + new XMLSerializer().serializeToString(numDoc).replace(/^<\?xml[^>]*\?>\s*/, ''));
+    return all;
+  };
+
   const toBytes = () => {
-    const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-    const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '');
-    const out = {};
-    for (const k of Object.keys(files)) out[k] = [k === MAIN ? new TextEncoder().encode(decl + xml) : files[k], { level: STORED.test(k) ? 0 : 6 }];
+    const all = snapshot(); const out = {};
+    for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, runsOf, next, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, runsOf, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }
