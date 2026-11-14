@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 240**
+
+Start: "Do next". The CI log was not read. Phase 119 step 4d, the docx half.
+- Built (Decision 481): pictures in the docx editor. `docedit.js`: `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter` (media file, relationship and content type added; size from the new picture, capped to the text or cell width); `docview-edit.js`: picture selection by tap, the Picture group, the phone's picture reader (file input, redrawn at most 2000 px when large or of another type), the `pickImage` option; `style.css`: the selection outline.
+- Tested in a sandbox (jsdom), with a hand-built docx (inline pictures, two in one paragraph, a floating one, two media files): 28 checks: counts agree with the reader, remove one of two, remove the last (paragraph becomes empty and editable), text kept, replace keeps width and takes the new shape, media, relationship and content type added once (jpg added), the reader reads the new picture, insert fits the text width and a small picture stays small, unique drawing ids, the saved file reopens; on the page: tap selects and clears, replace, insert (selected after), delete of one of two and of the last, an emptied paragraph taking typing, messages with no selection or caret. The earlier 43, 8, 25, 26, 27, 25 and 30,019 checks still pass. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device; the picture chooser and the canvas redraw run only on a device, no file made by another office program was available.
+- Size: about 11.3 KB of source added (Decision 453).
+- Decision 481. DP263 open. 4d is split: docx done, odt next.
+- Next start: the CI log, DP257 to DP263 on a device, then 4d for an odt (`draw:frame`, `Pictures/`, manifest), or the next incomplete item.
+
+---
+
 **Session 239**
 
 Start: "Do next". The CI log was not read. Phase 119 step 4c, the odt half.

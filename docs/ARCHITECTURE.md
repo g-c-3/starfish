@@ -1271,3 +1271,7 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Lists in the odt editor (Decision 480)
 
 `odtedit.js`: `listStyles` (the `text:list-style` elements of the content part), `listKind` (a list's kind from its style, walking up for a nested list), `listStyleFor` (adds `ArklyLB` or `ArklyLN`), `itemOf`, `nestedIn`, `depthOf`; `lift` (a paragraph out of a top-level list, the rest below it a continuing list), `deeper`, `shallower`; `setList`, `shiftLevel`, `snapshot`. The view and the host `redraw` are the ones of Decision 479 (`readOdt(null, files)`). `office-odf.js` `lastCounters` carries the numbering of the list before when a list has `text:continue-numbering`.
+
+## Pictures in the docx editor (Decision 481)
+
+`docedit.js`: `picsOf(p)` (inline drawings with an image, no chart, owned by p), `addMedia(img)` (file, relationship, content type), `sizeFor`, `maxWidth` (section text width or cell width), `pictures`, `removePicture`, `replacePicture`, `insertPictureAfter` (builds the `wp:inline` drawing and imports it). `docview-edit.js`: `picMap` (paragraph element -> engine paragraph, only where the page and the engine count the same pictures), `selectPic` and `onClick` (selection, class `eo-pic-sel`), `picAt`, `insertPic`, `replacePic`, `deletePic`, `readPicture` and `pickFromPhone` (file input, size limit, redraw on a canvas), `pickImage` option. New picture URLs are blob URLs revoked in `destroy`. The Picture group is added only when the engine has `insertPictureAfter`.
