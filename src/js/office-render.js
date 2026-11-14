@@ -1256,7 +1256,12 @@ export function mountOffice(kind, bytes, host, ctx) {
         try {
           const mod = await loadEditor('docx');
           view.flow(true);
-          editor = mod.mountEditor({ paper: host.querySelector('.eo-paper'), bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
+          const redraw = (files, want) => { // list markers and indents of the wanted paragraphs, drawn from the file as it now stands (Decision 479)
+            const m = odf === 'text' ? readOdt(null, files) : readDocx(null, files); const out = new Map();
+            const walk = (bs) => { for (const b of bs) { if (b.t === 'table') { for (const r of b.rows) for (const c of r) walk(c.blocks || []); } else if (b.src !== undefined && want.has(b.src)) { const t = el('div'); docxBlocks([b], t, model.media, u, {}); out.set(b.src, t.firstElementChild); } } };
+            walk(m.blocks); return out;
+          };
+          editor = mod.mountEditor({ paper: host.querySelector('.eo-paper'), bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync(), redraw });
           sh.setGroups(editor.groups); editor.setEditable(true);
           if (!editor.count) toast('Nothing in this file can be edited here.');
         } catch (e) { view.flow(false); editor = null; toast(e && e.office ? e.message : 'This file cannot be edited here.'); sh.setEditing(false); }

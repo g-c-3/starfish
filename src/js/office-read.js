@@ -139,9 +139,9 @@ function hasLrb(blocks) { // a saved page break (Decision 242) anywhere in these
   return false;
 }
 
-export function readDocx(bytes) {
+export function readDocx(bytes, pre = null) { // `pre`: the parts of a file already unpacked (the editor's current state)
   const T0 = performance.now(); // timings are shown in the Word Info line while load time is being tuned (Decision 248)
-  const files = unpack(bytes, 'word/', 'word/document.xml', ['docProps/app.xml']);
+  const files = pre || unpack(bytes, 'word/', 'word/document.xml', ['docProps/app.xml']);
   const T1 = performance.now();
   const main = 'word/document.xml';
   const root = xml(files, main);
