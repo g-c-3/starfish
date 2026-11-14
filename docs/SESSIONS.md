@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 238**
+
+Start: "Continue" (repo check, then step 4c). The CI log was not read. `scripts/patch-version.js` was found at the wrong path by the repo check and moved by the owner; verified in place.
+- Built (Decision 479): lists in the docx editor. `docedit.js`: `setList`, `shiftLevel`, `snapshot` (numbering definitions and the numbering part created when missing; `toBytes` now zips the snapshot); `docview-edit.js`: the List group, `selParas`, `refreshMarks`, the `redraw` option; `office-render.js`: the host's `redraw`; `office-read.js` and `office-odf.js`: the readers take an already unpacked file as a second argument.
+- Tested in a sandbox (jsdom), with hand-built docx files (one with no numbering part, one with bullet and decimal definitions): 27 checks: part and package entries created, `numPr` in schema order, bullets continue the list above, a new numbered list starts at 1, deeper and shallower with both ends clamped, nothing changes outside a list, list off, the snapshot read back by the reader (markers `•`, `1.`, `a)`), the saved file reads and reopens, and on the page: markers and indents change, the numbers below renumber, messages show. The earlier 43, 8, 25, 26 and 30,019 checks still pass. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device.
+- Size: about 10.4 KB of source added (Decision 453).
+- Decision 479. DP261 open. 4c is split: docx done, odt next.
+- Next start: the CI log, DP257 to DP261 on a device, then 4c for an odt (a level is a nested `text:list`), or the next incomplete item.
+
+---
+
 **Session 237**
 
 Start: "Continue" and "Do next". CI log not read (rate limited). Phase 119 step 4b, and an owner request on the version name.

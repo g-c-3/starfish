@@ -1263,3 +1263,7 @@ The archive job status carries `total` (uncompressed bytes of the chosen entries
 ## Version name (Decision 478)
 
 `scripts/patch-version.js` `versionNameFor(N)` = `<N div 100>.<N div 10 mod 10>.<N mod 10>`, written into `build.gradle` with `versionCode` N and into `APP_VERSION_NAME` for the release tag. `update-check.js` `extractRunNumber` maps a tag or the installed version back to N from this form, the three-digit-patch form and `x.y.z+N`.
+
+## Lists in the docx editor (Decision 479)
+
+`docedit.js`: `own(p)` reads the paragraph's `w:numPr`; `setNum` writes it in schema order (after `pStyle`, `keepNext`, `keepLines`, `pageBreakBefore`, `framePr`, `widowControl`) and drops `w:ind`; `listFor(kind)` finds or makes a list id (`numWrite` creates the numbering part and its package entries on first need; `makeAbstract` and `makeNum` add nine-level definitions); `fmtAt` reads a level's number format. `snapshot()` returns every part, the numbering part only when it was touched. `docview-edit.js`: `selParas` (paragraphs of the last selection), `refreshMarks` (asks the host's `redraw(files, wantedIndexes)` for freshly drawn paragraphs and copies the marker span, `marginLeft` and `textIndent`), `listTool`. `office-render.js` `redraw` reads the snapshot with `readDocx(null, files)` or `readOdt(null, files)` and draws each wanted block with `docxBlocks`. The List group is added only when the engine has `setList`.
