@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 239**
+
+Start: "Do next". The CI log was not read. Phase 119 step 4c, the odt half.
+- Built (Decision 480): lists in the odt editor. `odtedit.js`: `setList`, `shiftLevel`, `snapshot` (a level is a nested `text:list`; `ArklyLB` and `ArklyLN` list styles added when missing; lift out of a list with a continuing second list; deeper and shallower keep the sub-items' depth); `toBytes` zips the snapshot. `office-odf.js`: a numbered list with `text:continue-numbering` goes on counting. The List group, the page refresh and the host `redraw` are those of Decision 479.
+- Tested in a sandbox (jsdom), with hand-built odt files (one with a bullet list style and plain paragraphs, one with no automatic styles): 25 checks: numbers and bullets on plain paragraphs, joining the list above, converting between kinds, own list styles added, deeper and shallower across levels (a run together, followers keep their depth, the first item and plain paragraphs unchanged), the first-level refusal, list off in the middle of a numbered list with the rest still counting, a file with no automatic styles, the saved file read back (mimetype first), and on the page: markers and indents change, the numbers below renumber, messages show. The earlier 43, 8, 25, 26, 27 and 30,019 checks still pass. Bundle of `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device; no list made by another office program was available.
+- Size: about 6.2 KB of source added (Decision 453).
+- Decision 480. DP262 open. Step 4c is complete.
+- Next start: the CI log, DP257 to DP262 on a device, then 4d (pictures: delete, replace, insert, in both formats), or the next incomplete item.
+
+---
+
 **Session 238**
 
 Start: "Continue" (repo check, then step 4c). The CI log was not read. `scripts/patch-version.js` was found at the wrong path by the repo check and moved by the owner; verified in place.
