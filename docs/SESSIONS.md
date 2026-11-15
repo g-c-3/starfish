@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 250**
+
+Start: "Do next". CI for the Session 249 push (Decision 489) concluded success. Next item was Phase 120 step 3.
+- Built (Decision 490): rows, columns and sheets in an xlsx. `src/js/xlsxrefs.js` (new, pure reference rewriter), `src/js/xlsxedit.js` (insert and delete rows and columns, rename, add and delete sheets; every formula, name, merge and chart series follows; plain refusals), `src/js/xlsview-edit.js` (row and column number taps, groups Rows and columns and Sheets, confirm sheets for deletes), `src/js/office-render.js` (`setModel`, tabs rebuilt in place, `fadeSwap` over several nodes, `data-hcol`), `src/css/office-shell.css`.
+- Tested in a sandbox: reference rewriter 26 checks; engine 41 checks (rows, columns, rename, add and delete sheet, shared formulas, hidden sheet, defined names, chart series, merges, read back through the reader); refusals 7; through the shell 13 checks (tools, delete confirm, rename and its refusal, add, delete, Save and read back); the Session 249 checks (28) still pass. Bundle of the edited files: no error. Not run through CI or a device.
+- Size: about 25 KB of source added across the step (Decision 453).
+- Decision 490. DP270 open (DP269 still open).
+- Next start: the CI log, DP269 and DP270 on a device, then Phase 120 step 4 (formulas and formats).
+
+---
+
 **Session 249**
 
 Start: "Go". Last session (248) confirmed every device pass; next item is Phase 120 step 2. The CI log was not read.

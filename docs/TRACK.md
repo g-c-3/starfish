@@ -457,3 +457,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-15 | Session 247 | Decision 488 | Phase 120 step 1: the xlsx edit engine (no screen); steps 2 to 5 listed; not run through CI or a device |
 | 2026-11-15 | Session 248 | none | Device passes DP240 to DP268 confirmed on a device; Phases 111, 112, 113 and 119 checked complete; Phase 120 step 2 prepared |
 | 2026-11-15 | Session 249 | Decision 489 | Phase 120 step 2: the xlsx editor view (tap a cell, Set or Clear, Save, Save as copy, leave check) in the File explorer, Home and the Vault; DP269 added; not run through CI or a device |
+| 2026-11-15 | Session 250 | Decision 490 | Phase 120 step 3: rows, columns and sheets in an xlsx (insert, delete, rename; formulas, names, merges and chart series follow); DP270 added; not run through CI or a device |

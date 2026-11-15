@@ -71,3 +71,6 @@
 .eo-xzoom.eo-editing td[data-col] { cursor: pointer; }
 .eo-cell-in { display: block; width: 100%; box-sizing: border-box; min-height: 84px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--fg); font: inherit; resize: vertical; }
 .eo-cell-note { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.eo-xzoom.eo-editing th.eo-row, .eo-xzoom.eo-editing th.eo-col { cursor: pointer; }
+.eo-xzoom th.eo-sel { background: var(--brand); color: var(--brand-fg, #fff); }
+input.eo-cell-in { min-height: 0; }

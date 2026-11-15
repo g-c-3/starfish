@@ -559,14 +559,15 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
 // The page changes between Page and Reflow behind a fade (the one recipe: opacity only): it leaves, the view is rebuilt while hidden and drawn
 // (two frames, so the sheets have filled), then it arrives. Resolves when the new view is in place (Decision 486).
 function fadeSwap(node, change) {
+  const nodes = [].concat(node);
   return new Promise((resolve) => {
     if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { change(); resolve(); return; }
-    node.classList.add('eo-swap-out');
+    nodes.forEach((n) => n.classList.add('eo-swap-out'));
     setTimeout(() => {
       change();
       requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
-        node.classList.remove('eo-swap-out'); node.classList.add('eo-swap-in');
-        setTimeout(() => { node.classList.remove('eo-swap-in'); resolve(); }, 320);
+        nodes.forEach((n) => { n.classList.remove('eo-swap-out'); n.classList.add('eo-swap-in'); });
+        setTimeout(() => { nodes.forEach((n) => n.classList.remove('eo-swap-in')); resolve(); }, 320);
       }, 40)));
     }, 180);
   });
@@ -898,12 +899,17 @@ function mountXlsx(model, host, ui, bars, u) {
   const zoom = setupZoom(grid, zoomer, () => 1, ui);
   bars.extra = (bar) => bar.appendChild(zoomButtons(ui, zoom));
   let cur = 0; let afterShow = null; // the editor puts its changes back after a sheet is drawn (Decision 489)
-  const buttons = model.names.map((name, i) => {
-    const b = el('button', 'eo-tab', name); b.type = 'button';
-    b.onclick = () => { ui.onActivity(); show(i); };
-    tabs.appendChild(b);
-    return b;
-  });
+  let buttons = [];
+  const buildTabs = () => {
+    tabs.replaceChildren();
+    buttons = model.names.map((name, i) => {
+      const b = el('button', 'eo-tab', name); b.type = 'button';
+      b.onclick = () => { ui.onActivity(); show(i); };
+      tabs.appendChild(b);
+      return b;
+    });
+  };
+  buildTabs();
   function show(i) {
     cur = i;
     buttons.forEach((b, k) => b.classList.toggle('active', k === i));
@@ -949,7 +955,7 @@ function mountXlsx(model, host, ui, bars, u) {
     for (let c = 0; c < vcols; c++) { const col = el('col'); if (width(c) === 0) col.style.visibility = 'collapse'; else col.style.width = `${width(c)}px`; cg.appendChild(col); }
     t.appendChild(cg);
     const head = el('tr'); head.appendChild(el('th', 'eo-corner'));
-    for (let c = 0; c < vcols; c++) { const th = el('th', 'eo-col', colName(c)); if (c < s.freeze.cols && s.freeze.cols) { th.style.left = `${leftOf[c]}px`; th.style.zIndex = '4'; } head.appendChild(th); }
+    for (let c = 0; c < vcols; c++) { const th = el('th', 'eo-col', colName(c)); th.dataset.hcol = String(c); if (c < s.freeze.cols && s.freeze.cols) { th.style.left = `${leftOf[c]}px`; th.style.zIndex = '4'; } head.appendChild(th); }
     const thead = el('thead'); thead.appendChild(head); t.appendChild(thead);
     const tb = el('tbody');
     for (let r = 0; r < nrows; r++) {
@@ -1005,7 +1011,9 @@ function mountXlsx(model, host, ui, bars, u) {
     if (afterShow) afterShow(i);
   }
   show(0);
-  return { show, cur: () => cur, setAfterShow: (f) => { afterShow = f; } };
+  // the editor changed the structure: the workbook is read again from the changed file, the sheets and tabs are drawn anew behind a fade
+  const setModel = (m, i) => fadeSwap([grid, tabs], () => { Object.assign(model, m); buildTabs(); show(Math.max(0, Math.min(i, model.names.length - 1))); });
+  return { show, cur: () => cur, setAfterShow: (f) => { afterShow = f; }, setModel };
 }
 
 // ---- pptx: a slide on a canvas at the size set in the file, scaled to fit and centred; First, Previous, Play/Pause, Next, Last, swipe, zoom ----
@@ -1277,7 +1285,7 @@ export function mountOffice(kind, bytes, host, ctx) {
           const mod = await loadEditor(type);
           if (view.flow) await view.flow(true);
           if (type === 'xlsx') {
-            editor = mod.mountEditor({ zoomer: host.querySelector('.eo-xzoom'), host, model, sheet: () => view.cur(), onShown: view.setAfterShow, bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
+            editor = mod.mountEditor({ zoomer: host.querySelector('.eo-xzoom'), host, model, sheet: () => view.cur(), onShown: view.setAfterShow, setModel: view.setModel, bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
             sh.setGroups(editor.groups); editor.setEditable(true);
             if (!editor.count) toast('Nothing in this file can be edited here.');
             return;
