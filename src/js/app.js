@@ -7756,7 +7756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shut = () => { if (mounted) { try { mounted.destroy(); } catch { /* closing anyway */ } mounted = null; } if (url) { URL.revokeObjectURL(url); url = null; } };
     viewerScreen.classList.add('file-mode');
     if (kind === 'text') viewerScreen.classList.add('pdf-mode', 'text-mode'); // the slim see-through title bar of the PDF view (Decision 443)
-    const canEditDoc = !viewOnly && ((kind === 'docx' && /^(docx|odt)$/i.test(item.extension || '')) || (kind === 'xlsx' && /^xlsx$/i.test(item.extension || ''))); // the same editor as the File explorer (Decision 484)
+    const canEditDoc = !viewOnly && ((kind === 'docx' && /^(docx|odt)$/i.test(item.extension || '')) || (kind === 'xlsx' && /^(xlsx|ods)$/i.test(item.extension || ''))); // the same editor as the File explorer (Decision 484)
     let discarding = false; // true while Discard reopens the file as saved
     const unsaved = () => !!(mounted && mounted.dirty && mounted.dirty());
     await openViewer({

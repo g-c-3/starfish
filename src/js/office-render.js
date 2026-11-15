@@ -1261,7 +1261,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountXlsx(model, holder, ui, tmp, u);
     tmp.tools = xlTools(model, inner, host); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && !odf && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('xlsx')) shell = makeShell(inner, 'xlsx');
+    if (edit && (!odf || odf === 'spreadsheet') && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('xlsx')) shell = makeShell(inner, 'xlsx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };

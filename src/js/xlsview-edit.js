@@ -1,9 +1,11 @@
-// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 to 4b, Decisions 489 to 492). Registered in office-render.js, loaded on the first Edit.
+// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 to 5a, Decisions 489 to 493). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a cell opens a sheet to type its value; a tap on a row or column number selects it for the Tools. xlsxedit.js writes
 // the file; the grid shows what the file now holds. A change of rows, columns or sheets reads the changed file again and redraws behind a fade.
 import { openXlsx } from './xlsxedit.js';
+import { openOds } from './odsedit.js';
 import { openSheet } from './sheet.js';
 import { formatValue, colName, readXlsx } from './office-read.js';
+import { odfKind, readOds } from './office-odf.js';
 
 const IC_EDIT = '<path d="M4 20h4L19 9l-4-4L4 16z"/>';
 const IC_CLEAR = '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>';
@@ -21,7 +23,9 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 // onShown(fn): fn(index) runs after a sheet is drawn; onDirty(): the shell is told to refresh its buttons
 export function mountEditor({ zoomer, host, model: model0, sheet, onShown, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {} }) {
   let model = model0;
-  const eng = openXlsx(bytes); // throws an office error for a file that is not a valid workbook
+  const ods = odfKind(bytes) === 'spreadsheet'; // an ods has its own engine; it edits values only for now (Decision 493)
+  const read = (b) => (ods ? readOds(b) : readXlsx(b));
+  const eng = ods ? openOds(bytes) : openXlsx(bytes); // throws an office error for a file that is not a valid workbook
   let editing = false; let isDirty = false; let was = false; let sel = null; let dlg = null; let told = false;
   let tgt = { r: null, c: null }; // the row and column the Tools act on: a tapped cell gives both, a tapped number one
   const patches = new Map(); // sheet index -> Map('row,col' -> what the cell shows); the viewer redraws a sheet from the original file
@@ -53,6 +57,7 @@ export function mountEditor({ zoomer, host, model: model0, sheet, onShown, setMo
   // a change is written to the file, then drawn from the file
   const write = (td, input) => {
     const si = sheet(); const { r, c } = where(td); let list;
+    if (ods) return redraw(() => eng.setCell(si, r, c, input), () => si); // the file is read again: its styles are not mapped here
     try { list = eng.setCell(si, r, c, input); } catch (e) { toast(e && e.message ? e.message : 'This cell cannot be changed.'); return false; }
     for (const x of list) { // the cell and every formula that read it
       const w = shown(eng.cell(x.si, x.r, x.c));
@@ -116,7 +121,7 @@ export function mountEditor({ zoomer, host, model: model0, sheet, onShown, setMo
   const redraw = (fn, next) => {
     try { fn(); } catch (e) { toast(e && e.message ? e.message : 'That change could not be made.'); return false; }
     dirty(); patches.clear(); select(null);
-    try { model = readXlsx(eng.toBytes()); setModel(model, next()); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
+    try { model = read(eng.toBytes()); setModel(model, next()); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
     return true;
   };
   const ask = (title, text, ok, run, input) => {
@@ -170,7 +175,7 @@ export function mountEditor({ zoomer, host, model: model0, sheet, onShown, setMo
   const groups = [{ id: 'cell', title: 'Cell', tools: [
     { id: 'edit', label: 'Edit cell', icon: IC_EDIT, run: openEdit, disabled: () => !sel },
     { id: 'clear', label: 'Clear cell', icon: IC_CLEAR, run: clearCell, disabled: () => !sel }
-  ] }, { id: 'fmt', title: 'Format', tools: fmtTools }, { id: 'rc', title: 'Rows and columns', tools: rowTools }, { id: 'sheets', title: 'Sheets', tools: sheetTools }];
+  ] }, ...(eng.setFormat ? [{ id: 'fmt', title: 'Format', tools: fmtTools }] : []), ...(eng.insertRows ? [{ id: 'rc', title: 'Rows and columns', tools: rowTools }, { id: 'sheets', title: 'Sheets', tools: sheetTools }] : [])];
 
   return {
     groups,

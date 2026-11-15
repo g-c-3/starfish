@@ -1,2 +1,2 @@
 
-| 2026-11-16 | Session 252 | Decision 492 | Phase 120 step 4b: number formats of an xlsx cell (Format group, custom code, kept in the file's styles); DP272 added; not run through CI or a device |
+| 2026-11-16 | Session 253 | Decision 493 | Phase 120 step 5a: ods cell values (new engine, same editor view, Edit and Save as copy for .ods); DP273 added; not run through CI or a device |

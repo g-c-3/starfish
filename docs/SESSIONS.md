@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 253**
+
+Start: "Do next". CI for the Session 252 push (Decision 492) concluded success. Next item was Phase 120 step 5, built as 5a (ods cell values); 5b remains.
+- Built (Decision 493): `src/js/odsedit.js` (new, the ods edit engine), `src/js/xlsview-edit.js` (picks the engine by file type; an ods is read again after each change; the Format, Rows and columns and Sheets groups appear only where the engine has them), `src/js/office-render.js`, `src/js/explorer-view.js` and `src/js/app.js` (Edit and Save as copy for .ods).
+- Tested in a sandbox: ods engine 35 checks (read, write in repeated rows and cells, beyond the last row and column, spaces and tabs, two lines, percent kept, clear, merged cell and bad cell refused, formulas refuse edits, read back through the reader, parts and mimetype order kept); through the view with jsdom 5 checks; the Session 251 and 252 suites (62, 33, 21 and 5) still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 14 KB of source added (Decision 453).
+- Decision 493. DP273 open (DP269 to DP272 still open).
+- Next start: the CI log, DP269 to DP273 on a device, then Phase 120 step 5b (ods formulas, formats, rows, columns, sheets).
+
+---
+
 **Session 252**
 
 Start: "Do next". CI for the Session 251 push (Decision 491) concluded success. Next item was Phase 120 step 4b.
