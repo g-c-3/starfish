@@ -4,6 +4,16 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 248**
+
+Start: the owner confirmed every open device pass (DP240 to DP268) and asked for the next item. Docs only this session.
+- Roadmap: every open device pass is checked; items marked not run through CI or a device are now confirmed on a device, except Phase 120 step 1 (an engine with no screen). Phases 111, 112, 113 and 119 are checked complete; Phase 110 stays open only because the tool shell mounts for the spreadsheet and slide viewers when Phases 120 and 121 build their editors.
+- Read for Phase 120 step 2 (no code written): `mountXlsx` draws a table with `tr[data-r]` and `td[data-c]` (set only on cells with a value); `mountOffice` mounts the shell for a docx only; a cell-bar already shows the tapped cell. Notes for the build: every `td` needs its column index (a new `data-col`), the shell must also mount for an xlsx that is a zip and not an ods or xls, a cell edit patches the `td` text through `formatValue`, cells under a text that spills over empty neighbours and rows after the last used row have no `td` (shown as a limit), and the xlsx editor module is registered like `docview-edit.js` (`registerEditor`).
+- No decision made.
+- Next start: Phase 120 step 2, the editor view for an xlsx (`xlsview-edit.js`, `office-render.js`, `office-shell.css`), then step 3.
+
+---
+
 **Session 247**
 
 Start: "Do next". Phase 119 is built (device passes open), so the next incomplete item in order is Phase 120, the spreadsheet editor. The CI log was not read.
