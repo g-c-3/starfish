@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 251**
+
+Start: "Go", then "120 phase". CI for the Session 250 push (Decision 490) concluded success. Next item was Phase 120 step 4, built as 4a (formulas); 4b (formats) remains.
+- Built (Decision 491): `src/js/xlsxcalc.js` (new, pure calculator), `src/js/xlsxedit.js` (typed formulas written with their result; every formula recalculated after each change, row, column and sheet operation; `setCell` returns the changed cells; shared-formula text resolved), `src/js/xlsview-edit.js` (a formula is shown as typed, dependent cells redrawn).
+- Tested in a sandbox: calculator 62 checks; engine 33 checks (values flow through formulas, shared formulas, other and hidden sheets, text, boolean and error results, refusals, cycle refused and the cell left as it was, rows and rename followed, read back, files untouched when nothing depends); through the view with jsdom 5 checks. Bundle of the edited files: no error. Not run through CI or a device.
+- Size: about 22 KB of source added (Decision 453).
+- Decision 491. DP271 open (DP269, DP270 still open).
+- Next start: the CI log, DP269 to DP271 on a device, then Phase 120 step 4b (formats).
+
+---
+
 **Session 250**
 
 Start: "Do next". CI for the Session 249 push (Decision 489) concluded success. Next item was Phase 120 step 3.

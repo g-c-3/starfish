@@ -1,14 +1,16 @@
 // Spreadsheet edit engine, xlsx (Decision 488). Works on the sheet XML in place: a changed cell is written, every other byte of the
 // package is kept. No screen here; the editor view of Phase 120 maps grid cells to (sheet, row, column).
-// Text is written as an inline string (no shared string table to keep in step). A formula is never written or recalculated here:
-// a cell with a formula can be overwritten by a value, a shared or array formula start cannot, and the workbook is marked to
-// recalculate when another app opens it, because stored results of formulas that read a changed cell are then out of date.
+// Text is written as an inline string (no shared string table to keep in step). A formula typed in is read and calculated by xlsxcalc.js
+// (Decision 491); every formula of the workbook is then calculated again and the results stored beside it. A formula that uses a function
+// the calculator does not cover keeps its stored result. A shared or array formula start cannot be overwritten, and the workbook is
+// still marked to recalculate when another app opens it.
 // Rows, columns and sheets (Decision 490): inserted, deleted or renamed here, with every formula, merge and name that points at them
 // rewritten (xlsxrefs.js). A sheet with pictures, comments, tables, filters, validation, conditional formats, links or array formulas,
 // and a workbook with pivot tables or a reference over several sheets, is refused with a plain message instead of being half changed.
 import { unzipSync, zipSync } from 'fflate';
 import { SHEET_ROW_MAX, SHEET_COL_MAX, colName } from './office-read.js';
 import { mapRefs, mapRange, structFn, translateRefs, removeSheetRefs, renamePrefix, has3D } from './xlsxrefs.js';
+import { parse, run, CalcError } from './xlsxcalc.js';
 
 const S = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const XMLNS = 'http://www.w3.org/XML/1998/namespace';
@@ -91,9 +93,7 @@ export function openXlsx(bytes) {
   };
 
   // what a cell holds: the value to edit (the raw number, the text) and whether it is a formula
-  const cell = (si, r, c) => {
-    const { sd } = part(si); const { cell: el } = find(sd, r, c);
-    if (!el) return { kind: 'empty', raw: '', formula: null, style: 0 };
+  const describe = (el) => {
     const t = el.getAttribute('t'); const v = kid(el, 'v'); const f = kid(el, 'f'); const style = Number(el.getAttribute('s') || 0);
     let kind = 'empty'; let raw = '';
     if (t === 'inlineStr') { kind = 'text'; raw = [...(kid(el, 'is') || el).getElementsByTagNameNS(S, 't')].map((x) => x.textContent).join(''); }
@@ -106,6 +106,21 @@ export function openXlsx(bytes) {
       else { kind = 'number'; raw = x; }
     }
     return { kind, raw, formula: f ? f.textContent : null, style };
+  };
+  const sharedText = (sd, target) => { // the text of a shared formula for one of its cells, from the cell that holds it
+    const key = kid(target, 'f').getAttribute('si'); let m = null; let pos = null;
+    for (const row of rowsOf(sd)) for (const c of cellsOf(row.el)) {
+      if (c.el === target) pos = { r: row.no, c: c.no };
+      const f = kid(c.el, 'f'); if (f && f.getAttribute('t') === 'shared' && f.getAttribute('si') === key && f.textContent) m = { text: f.textContent, r: row.no, c: c.no };
+    }
+    return m && pos ? translateRefs(m.text, pos.r - m.r, pos.c - m.c) : '';
+  };
+  const cell = (si, r, c) => {
+    const { sd } = part(si); const { cell: el } = find(sd, r, c);
+    if (!el) return { kind: 'empty', raw: '', formula: null, style: 0 };
+    const d = describe(el); const f = kid(el, 'f');
+    if (f && !d.formula && f.getAttribute('t') === 'shared') d.formula = sharedText(sd, el);
+    return d;
   };
   // why a cell cannot be written, or null
   const locked = (si, r, c) => {
@@ -130,13 +145,95 @@ export function openXlsx(bytes) {
   const empty = (el) => { for (const ch of [...el.children]) if (isS(ch, 'v') || isS(ch, 'is') || isS(ch, 'f')) ch.remove(); el.removeAttribute('t'); };
   const mark = (si, hadFormula) => { dirty.add(si); if (hadFormula) chainDirty = true; };
 
-  // write what was typed: a number, TRUE or FALSE, or text (a leading ' keeps a number as text); empty clears the cell
+  // ---- formulas (Decision 491) ----
+  const parsed = new Map(); // formula text -> { tree, text }, or null when the calculator does not cover it
+  const parseF = (t) => { if (!parsed.has(t)) { let p = null; try { p = parse(t); } catch (e) { if (!(e instanceof CalcError)) throw e; } parsed.set(t, p); } return parsed.get(t); };
+  const valOf = (d) => (d.kind === 'number' ? (Number.isFinite(Number(d.raw)) ? Number(d.raw) : null) : d.kind === 'bool' ? d.raw === 'TRUE' : d.kind === 'error' ? { err: d.raw } : d.kind === 'text' ? d.raw : null);
+  const near = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a)) : a === b || (a && b && typeof a === 'object' && typeof b === 'object' && a.err === b.err));
+  const KEY = 16384;
+  const indexOf = (sd) => { // every cell of a sheet by position, and the shared formulas' holders
+    const map = new Map(); const masters = new Map();
+    for (const row of rowsOf(sd)) for (const c of cellsOf(row.el)) {
+      map.set(row.no * KEY + c.no, { el: c.el, r: row.no, c: c.no });
+      const f = kid(c.el, 'f'); if (f && f.getAttribute('t') === 'shared' && f.textContent) masters.set(f.getAttribute('si'), { text: f.textContent, r: row.no, c: c.no });
+    }
+    return { map, masters };
+  };
+  const formulaText = (ix, e) => { // null: not a formula the calculator handles (array, data table)
+    const f = kid(e.el, 'f'); if (!f) return null;
+    const t = f.getAttribute('t'); if (t === 'array' || t === 'dataTable') return null;
+    if (f.textContent) return f.textContent;
+    const m = t === 'shared' ? ix.masters.get(f.getAttribute('si')) : null;
+    return m ? translateRefs(m.text, e.r - m.r, e.c - m.c) : null;
+  };
+  // every formula of the shown sheets calculated again, in dependency order; nothing is written here
+  const compute = () => {
+    const names = sheets.map((x) => x.name); const idx = sheets.map((_, i) => indexOf(part(i).sd));
+    const hidden = new Map(); const memo = new Map(); const stack = []; const cyc = new Set();
+    const hiddenIx = (name) => { const e = allSheets().find((x) => x.si < 0 && same(x.name, name)); if (!e) return null; if (!hidden.has(e.path)) hidden.set(e.path, indexOf(kid(docOf(e).documentElement, 'sheetData'))); return hidden.get(e.path); };
+    const val = (si, r, c) => {
+      const e = idx[si].map.get(r * KEY + c); if (!e) return null;
+      const d = describe(e.el); const ft = formulaText(idx[si], e); const p = ft === null ? null : parseF(ft);
+      if (!p) return valOf(d);
+      const key = `${si}:${r}:${c}`; if (memo.has(key)) return memo.get(key);
+      if (stack.includes(key)) { for (const k of stack.slice(stack.indexOf(key))) cyc.add(k); return valOf(d); }
+      stack.push(key); let v;
+      try { v = run(p.tree, ctxFor(si)); } catch (err) { v = valOf(d); }
+      stack.pop(); memo.set(key, v); return v;
+    };
+    const ctxFor = (si) => ({
+      sheet: names[si],
+      has: (n) => allSheets().some((x) => same(x.name, n)),
+      cell: (n, r, c) => {
+        const k = names.findIndex((x) => same(x, n)); if (k >= 0) return val(k, r, c);
+        const hx = hiddenIx(n); const e = hx && hx.map.get(r * KEY + c); return e ? valOf(describe(e.el)) : null;
+      }
+    });
+    const changes = [];
+    for (let si = 0; si < sheets.length; si++) {
+      for (const e of idx[si].map.values()) {
+        const ft = formulaText(idx[si], e); if (ft === null || !parseF(ft)) continue;
+        const v = val(si, e.r, e.c); const d = describe(e.el);
+        if (!(d.kind !== 'empty' && near(v, valOf(d)))) changes.push({ si, r: e.r, c: e.c, el: e.el, v });
+      }
+    }
+    return { changes, cyc };
+  };
+  const putValue = (el, v) => {
+    const doc = el.ownerDocument; for (const ch of [...el.children]) if (isS(ch, 'v')) ch.remove(); el.removeAttribute('t');
+    const x = doc.createElementNS(S, 'v'); let t = null; let txt;
+    if (v !== null && typeof v === 'object') { t = 'e'; txt = v.err; } else if (typeof v === 'boolean') { t = 'b'; txt = v ? '1' : '0'; } else if (typeof v === 'string') { t = 'str'; txt = v; } else txt = String(v === null ? 0 : v);
+    if (t) el.setAttribute('t', t);
+    x.textContent = txt; if (t === 'str' && /^\s|\s$|\s\s|\n/.test(txt)) x.setAttributeNS(XMLNS, 'xml:space', 'preserve');
+    el.appendChild(x);
+  };
+  const apply = (plan) => { for (const ch of plan.changes) { putValue(ch.el, ch.v); dirty.add(ch.si); } return plan.changes.map(({ si, r, c }) => ({ si, r, c })); };
+  const settle = (si, r, c) => { // after a change: the formulas follow; the cells whose shown value changed, the changed cell too
+    const list = apply(compute());
+    if (!list.some((x) => x.si === si && x.r === r && x.c === c)) list.push({ si, r, c });
+    return list;
+  };
+  const walk = (n, fn) => { fn(n); if (n.l) walk(n.l, fn); if (n.r) walk(n.r, fn); if (n.x) walk(n.x, fn); if (n.pct) walk(n.pct, fn); if (n.args) for (const a of n.args) walk(a, fn); };
+  const setFormula = (si, r, c, src) => {
+    let p; try { p = parse(src); } catch (e) { if (e instanceof CalcError) throw new EditError(e.message); throw e; }
+    walk(p.tree, (n) => { if (n.ref && n.ref.sheet && !allSheets().some((x) => same(x.name, n.ref.sheet))) throw new EditError(`There is no sheet named ${n.ref.sheet}.`); });
+    const { sd } = part(si); const cur = find(sd, r, c).cell; const before = cur ? cur.cloneNode(true) : null; 
+    const el = place(si, r, c); empty(el);
+    const f = sd.ownerDocument.createElementNS(S, 'f'); f.textContent = p.text; el.appendChild(f);
+    const plan = compute();
+    if (plan.cyc.has(`${si}:${r}:${c}`)) { if (before) el.replaceWith(before); else el.remove(); throw new EditError('This formula refers to its own cell, directly or through other cells.'); }
+    mark(si, true);
+    return settle(si, r, c);
+  };
+
+  // write what was typed: a number, TRUE or FALSE, a formula (=…), or text (a leading ' keeps a number or a formula as text); empty clears the cell.
+  // Returns the cells whose value changed (the cell itself and the formulas that read it).
   const setCell = (si, r, c, input) => {
     const why = locked(si, r, c); if (why) throw new EditError(why);
     const text = String(input === null || input === undefined ? '' : input);
-    if (/^\s*=/.test(text) && text.trim().length > 1) throw new EditError('Formulas cannot be entered here yet.');
+    if (/^\s*=/.test(text) && text.trim().length > 1) return setFormula(si, r, c, text.trim().slice(1));
     const { sd } = part(si); const cur = find(sd, r, c).cell; const had = !!(cur && kid(cur, 'f'));
-    if (text === '') { if (!cur) return; empty(cur); if (!cur.getAttribute('s') && !cur.children.length) cur.remove(); mark(si, had); return; }
+    if (text === '') { if (!cur) return []; empty(cur); if (!cur.getAttribute('s') && !cur.children.length) cur.remove(); mark(si, had); return settle(si, r, c); }
     const el = place(si, r, c); const doc = sd.ownerDocument; empty(el);
     const mkv = (v) => { const x = doc.createElementNS(S, 'v'); x.textContent = v; el.appendChild(x); };
     const t = text.trim();
@@ -149,6 +246,7 @@ export function openXlsx(bytes) {
       is.appendChild(x); el.appendChild(is);
     }
     mark(si, had);
+    return settle(si, r, c);
   };
 
   const anyFormula = () => sheets.some((sh, i) => (cache.has(i) ? [...cache.get(i).doc.getElementsByTagNameNS(S, 'f')].length > 0 : /<(\w+:)?f[\s>/]/.test(dec(files[sh.path]))));
@@ -163,6 +261,7 @@ export function openXlsx(bytes) {
   };
 
   // ---- rows, columns and sheets (Decision 490) ----
+  const follow_ = () => { try { apply(compute()); } catch (e) { /* the change stands; stored results stay and the file is marked to recalculate */ } }; // formulas follow a structural change
   let wbChanged = false; let relChanged = false; const extra = new Map(); const extraDirty = new Set(); // hidden sheets are parsed only when a formula in them must follow
   const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
   const allSheets = () => {
@@ -256,7 +355,7 @@ export function openXlsx(bytes) {
     }
     follow(root, name, op);
     rewriteAll((t, own) => mapRefs(t, own, structFn(op)));
-    dirty.add(si); chainDirty = true;
+    dirty.add(si); chainDirty = true; follow_();
   };
 
   const goodName = (name, except) => {
@@ -274,7 +373,7 @@ export function openXlsx(bytes) {
     const e = shown(si); const nn = goodName(name, e); if (nn === e.name) return;
     no3D(); const old = e.name;
     rewriteAll((t) => renamePrefix(t, old, nn));
-    e.el.setAttribute('name', nn); sheets[si].name = nn; wbChanged = true;
+    e.el.setAttribute('name', nn); sheets[si].name = nn; wbChanged = true; follow_();
   };
   const addSheet = (name) => {
     if (!relDoc) throw new EditError('This workbook cannot get a new sheet here.');
@@ -311,7 +410,7 @@ export function openXlsx(bytes) {
     for (const q of keepDirty) if (q !== si) dirty.add(q > si ? q - 1 : q);
     sheets.splice(si, 1);
     const bv = kid(wbRoot, 'bookViews'); const wv = bv && kid(bv, 'workbookView'); if (wv) { wv.setAttribute('activeTab', '0'); wv.setAttribute('firstSheet', '0'); }
-    wbChanged = true; relChanged = true; chainDirty = true;
+    wbChanged = true; relChanged = true; chainDirty = true; follow_();
   };
   const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
   const ser = (d) => enc(decl + new XMLSerializer().serializeToString(d).replace(/^<\?xml[^>]*\?>\s*/, ''));

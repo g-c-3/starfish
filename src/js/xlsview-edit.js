@@ -1,4 +1,4 @@
-// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 and 3, Decisions 489, 490). Registered in office-render.js, loaded on the first Edit.
+// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 to 4a, Decisions 489, 490, 491). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a cell opens a sheet to type its value; a tap on a row or column number selects it for the Tools. xlsxedit.js writes
 // the file; the grid shows what the file now holds. A change of rows, columns or sheets reads the changed file again and redraws behind a fade.
 import { openXlsx } from './xlsxedit.js';
@@ -50,12 +50,15 @@ export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, byt
 
   // a change is written to the file, then drawn from the file
   const write = (td, input) => {
-    const si = sheet(); const { r, c } = where(td);
-    try { eng.setCell(si, r, c, input); } catch (e) { toast(e && e.message ? e.message : 'This cell cannot be changed.'); return false; }
+    const si = sheet(); const { r, c } = where(td); let list;
+    try { list = eng.setCell(si, r, c, input); } catch (e) { toast(e && e.message ? e.message : 'This cell cannot be changed.'); return false; }
+    for (const x of list) { // the cell and every formula that read it
+      const w = shown(eng.cell(x.si, x.r, x.c));
+      if (!patches.has(x.si)) patches.set(x.si, new Map());
+      patches.get(x.si).set(`${x.r},${x.c}`, w);
+      if (x.si === si) { const t2 = tdAt(x.r, x.c); if (t2) paint(t2, w); }
+    }
     const v = shown(eng.cell(si, r, c));
-    if (!patches.has(si)) patches.set(si, new Map());
-    patches.get(si).set(`${r},${c}`, v);
-    paint(td, v);
     const t = host.querySelector('.eo-cbtext'); const b = host.querySelector('.eo-cellbar');
     if (t && b && !b.hidden) t.textContent = v.text;
     dirty(); return true;
@@ -67,12 +70,12 @@ export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, byt
     const td = sel; const si = sheet(); const { r, c } = where(td);
     const why = eng.locked(si, r, c); if (why) { toast(why); return; }
     const cur = eng.cell(si, r, c);
-    // a text that would be read back as a number, TRUE or FALSE, or a formula keeps its leading apostrophe
-    const start = cur.kind === 'text' && (TYPED.test(cur.raw) || /^\s*=|^'/.test(cur.raw)) ? `'${cur.raw}` : cur.raw;
+    // a formula is shown as typed; a text that would be read back as a number, TRUE or FALSE, or a formula keeps its leading apostrophe
+    const start = cur.formula ? `=${cur.formula}` : cur.kind === 'text' && (TYPED.test(cur.raw) || /^\s*=|^'/.test(cur.raw)) ? `'${cur.raw}` : cur.raw;
     dlg = openSheet({
       title: `${colName(c)}${r + 1}`,
       build: (h, close) => {
-        if (cur.formula) h.appendChild(el('p', 'eo-cell-note', `This cell holds a formula (=${cur.formula}). A value typed here replaces it.`));
+        if (cur.formula === '') h.appendChild(el('p', 'eo-cell-note', 'This cell holds a formula. A value or a formula typed here replaces it.'));
         const ta = el('textarea', 'eo-cell-in'); ta.rows = 3; ta.value = start; ta.setAttribute('aria-label', 'Cell value'); ta.autocapitalize = 'off'; ta.spellcheck = false;
         const row = el('div', 'eo-leave-row');
         const mk = (text, cls, fn) => { const b = el('button', `eo-sh-btn ${cls}`.trim(), text); b.type = 'button'; b.onclick = () => { onActivity(); fn(); }; row.appendChild(b); };
