@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 247**
+
+Start: "Do next". Phase 119 is built (device passes open), so the next incomplete item in order is Phase 120, the spreadsheet editor. The CI log was not read.
+- Built (Decision 488): step 1, the xlsx edit engine `src/js/xlsxedit.js` (no screen): cell read, write of number, boolean and text, clear, locked cells, in-place save, calculation chain dropped when a formula is overwritten, recalculate-on-load flag. Phase 120 split into steps 1 to 5 in the roadmap.
+- Tested in a sandbox (jsdom): 36 checks with a hand-built package, written files read back through `readXlsx` and through the engine itself (hidden sheet skipped, rich shared string, inline string, boolean, formula overwritten, shared formula start refused, merge, new row and cell in order, escaping, other sheets and parts byte for byte unchanged, no calculation flag without formulas). Not run through CI or a device; the engine is not imported by any screen yet.
+- Size: about 11.5 KB of source added (Decision 453).
+- Decision 488.
+- Next start: the CI log, DP257 to DP268 on a device, then Phase 120 step 2 (the editor view for an xlsx).
+
+---
+
 **Session 246**
 
 Start: "Do next" after the owner confirmed Edit and Done are smooth and the panels span the width. The CI log was not read. Next item: Phase 119 step 5b.
