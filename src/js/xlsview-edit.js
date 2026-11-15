@@ -1,4 +1,4 @@
-// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 to 4a, Decisions 489, 490, 491). Registered in office-render.js, loaded on the first Edit.
+// xlsview-edit.js — the xlsx editor view (Phase 120 steps 2 to 4b, Decisions 489 to 492). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a cell opens a sheet to type its value; a tap on a row or column number selects it for the Tools. xlsxedit.js writes
 // the file; the grid shows what the file now holds. A change of rows, columns or sheets reads the changed file again and redraws behind a fade.
 import { openXlsx } from './xlsxedit.js';
@@ -11,6 +11,7 @@ const IC_ROW_IN = '<path d="M4 7h16v4H4zM4 15h16M12 3v2M11 4h2"/>';
 const IC_ROW_DEL = '<path d="M4 7h16v4H4zM4 15h16M9 18l6 4M15 18l-6 4"/>';
 const IC_COL_IN = '<path d="M7 4v16h4V4zM15 4v16M3 12h2M4 11v2"/>';
 const IC_COL_DEL = '<path d="M7 4v16h4V4zM15 4v16M18 9l4 6M22 9l-4 6"/>';
+const IC_FMT = '<path d="M5 5h14v14H5zM9 15l2-6 2 6M9.8 13h2.4M15 9v6"/>';
 const IC_SHEET = '<path d="M5 4h10l4 4v12H5zM14 4v5h5M9 14h6"/>';
 const TYPED = /^\s*([-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?|true|false)\s*$/i;
 
@@ -18,7 +19,8 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 
 // zoomer: the element that holds the sheet table; host: the viewer; model: the reader's workbook (xfs, is1904); sheet(): the sheet on view;
 // onShown(fn): fn(index) runs after a sheet is drawn; onDirty(): the shell is told to refresh its buttons
-export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {} }) {
+export function mountEditor({ zoomer, host, model: model0, sheet, onShown, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {} }) {
+  let model = model0;
   const eng = openXlsx(bytes); // throws an office error for a file that is not a valid workbook
   let editing = false; let isDirty = false; let was = false; let sel = null; let dlg = null; let told = false;
   let tgt = { r: null, c: null }; // the row and column the Tools act on: a tapped cell gives both, a tapped number one
@@ -114,7 +116,7 @@ export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, byt
   const redraw = (fn, next) => {
     try { fn(); } catch (e) { toast(e && e.message ? e.message : 'That change could not be made.'); return false; }
     dirty(); patches.clear(); select(null);
-    try { setModel(readXlsx(eng.toBytes()), next()); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
+    try { model = readXlsx(eng.toBytes()); setModel(model, next()); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
     return true;
   };
   const ask = (title, text, ok, run, input) => {
@@ -123,7 +125,7 @@ export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, byt
       title,
       build: (h, close) => {
         if (text) h.appendChild(el('p', 'eo-cell-note', text));
-        let field = null; if (input !== undefined) { field = el('input', 'eo-cell-in'); field.type = 'text'; field.value = input; field.maxLength = 31; field.setAttribute('aria-label', title); h.appendChild(field); }
+        let field = null; if (input !== undefined) { field = el('input', 'eo-cell-in'); field.type = 'text'; field.value = input; field.maxLength = 80; field.setAttribute('aria-label', title); h.appendChild(field); }
         const row = el('div', 'eo-leave-row');
         const mk = (label, cls, fn) => { const b = el('button', `eo-sh-btn ${cls}`.trim(), label); b.type = 'button'; b.onclick = () => { onActivity(); fn(); }; row.appendChild(b); };
         mk(ok, 'eo-sh-primary', () => { if (run(field ? field.value : null) !== false) close(); });
@@ -153,10 +155,22 @@ export function mountEditor({ zoomer, host, model, sheet, onShown, setModel, byt
     { id: 'shdel', label: 'Delete sheet', icon: IC_SHEET, run: () => ask(`Delete ${eng.names()[si()]}?`, 'The sheet and everything on it is removed. Formulas that read it show #REF!. Nothing is saved until Save.', 'Delete', () => { const k = si(); return redraw(() => eng.deleteSheet(k), () => Math.min(k, eng.names().length - 1)); }) }
   ];
 
+  // ---- number formats (Decision 492) ----
+  const PRESETS = [['General', 'General'], ['Number', '0.00'], ['Whole number', '0'], ['Thousands', '#,##0.00'], ['Percent', '0.00%'], ['Date', 'yyyy-mm-dd'], ['Time', 'hh:mm'], ['Text', '@']];
+  const needCell = () => { if (!sel) { toast('Tap a cell first.'); return false; } return true; };
+  const fmtTo = (code) => { if (!needCell()) return; const { r, c } = where(sel); const s = si(); redraw(() => eng.setFormat(s, r, c, code), () => s); };
+  const fmtTools = [
+    ...PRESETS.map(([label, code]) => ({ id: `fmt-${label}`, label, icon: IC_FMT, run: () => fmtTo(code), disabled: () => !sel })),
+    { id: 'fmt-custom', label: 'Custom format', icon: IC_FMT, disabled: () => !sel, run: () => {
+      if (!needCell()) return; const { r, c } = where(sel); const s = si(); const cur = eng.format(s, r, c);
+      ask('Custom format', 'A format code, such as 0.0 or dd/mm/yyyy. It changes how the number shows, not the number.', 'Apply', (v) => redraw(() => eng.setFormat(s, r, c, v), () => s), cur);
+    } }
+  ];
+
   const groups = [{ id: 'cell', title: 'Cell', tools: [
     { id: 'edit', label: 'Edit cell', icon: IC_EDIT, run: openEdit, disabled: () => !sel },
     { id: 'clear', label: 'Clear cell', icon: IC_CLEAR, run: clearCell, disabled: () => !sel }
-  ] }, { id: 'rc', title: 'Rows and columns', tools: rowTools }, { id: 'sheets', title: 'Sheets', tools: sheetTools }];
+  ] }, { id: 'fmt', title: 'Format', tools: fmtTools }, { id: 'rc', title: 'Rows and columns', tools: rowTools }, { id: 'sheets', title: 'Sheets', tools: sheetTools }];
 
   return {
     groups,

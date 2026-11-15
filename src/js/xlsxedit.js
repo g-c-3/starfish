@@ -3,7 +3,8 @@
 // Text is written as an inline string (no shared string table to keep in step). A formula typed in is read and calculated by xlsxcalc.js
 // (Decision 491); every formula of the workbook is then calculated again and the results stored beside it. A formula that uses a function
 // the calculator does not cover keeps its stored result. A shared or array formula start cannot be overwritten, and the workbook is
-// still marked to recalculate when another app opens it.
+// still marked to recalculate when another app opens it. A number format (Decision 492) is a format code kept in styles.xml: the cell's
+// style is copied with the new code, or an equal style is reused.
 // Rows, columns and sheets (Decision 490): inserted, deleted or renamed here, with every formula, merge and name that points at them
 // rewritten (xlsxrefs.js). A sheet with pictures, comments, tables, filters, validation, conditional formats, links or array formulas,
 // and a workbook with pivot tables or a reference over several sheets, is refused with a plain message instead of being half changed.
@@ -11,6 +12,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { SHEET_ROW_MAX, SHEET_COL_MAX, colName } from './office-read.js';
 import { mapRefs, mapRange, structFn, translateRefs, removeSheetRefs, renamePrefix, has3D } from './xlsxrefs.js';
 import { parse, run, CalcError } from './xlsxcalc.js';
+import { BUILTIN_FMT } from './office-read.js';
 
 const S = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const XMLNS = 'http://www.w3.org/XML/1998/namespace';
@@ -66,7 +68,7 @@ export function openXlsx(bytes) {
   }
   if (!sheets.length) throw new EditError('This workbook has no sheets to edit.');
 
-  const cache = new Map(); const dirty = new Set(); let chainDirty = false;
+  const cache = new Map(); const dirty = new Set(); let chainDirty = false; let stylesDoc = null; let stylesChanged = false;
   const part = (si) => {
     const sh = sheets[si]; if (!sh) throw new EditError('That sheet is not there any more.');
     if (!cache.has(si)) {
@@ -420,6 +422,7 @@ export function openXlsx(bytes) {
     for (const pth of extraDirty) all[pth] = ser(extra.get(pth));
     if ((dirty.size || extraDirty.size || wbChanged) && anyFormula()) { markCalc(); wbChanged = true; }
     if (wbChanged) all[WB] = ser(wbDoc);
+    if (stylesChanged) all['xl/styles.xml'] = ser(stylesDoc);
     if (relChanged) all[WB_RELS] = ser(relDoc);
     if (chainDirty) {
       delete all['xl/calcChain.xml'];
@@ -428,16 +431,61 @@ export function openXlsx(bytes) {
     }
     return all;
   };
+  // ---- number formats (Decision 492) ----
+  const styles = () => {
+    if (!stylesDoc) {
+      if (!files['xl/styles.xml']) throw new EditError('This workbook has no styles to change.');
+      const d = parseX(dec(files['xl/styles.xml'])); const root = d.documentElement;
+      if (d.getElementsByTagName('parsererror').length || !kid(root, 'cellXfs')) throw new EditError('The styles of this workbook could not be read for editing.');
+      stylesDoc = d;
+    }
+    return stylesDoc;
+  };
+  const codes = (d) => { const m = {}; for (const f of kids(kid(d.documentElement, 'numFmts'), 'numFmt')) m[f.getAttribute('numFmtId')] = f.getAttribute('formatCode') || ''; return m; };
+  const format = (si, r, c) => { // the format code of a cell
+    const { sd } = part(si); const { cell: el } = find(sd, r, c); const s = el ? Number(el.getAttribute('s') || 0) : 0;
+    if (!files['xl/styles.xml']) return 'General';
+    const d = styles(); const xf = kids(kid(d.documentElement, 'cellXfs'), 'xf')[s]; const id = xf ? xf.getAttribute('numFmtId') || '0' : '0';
+    const cu = codes(d); return cu[id] !== undefined ? cu[id] : BUILTIN_FMT[id] || 'General';
+  };
+  const setFormat = (si, r, c, code) => {
+    check(si, r, c);
+    const k = String(code === null || code === undefined ? '' : code).trim();
+    if (!k || k.length > 80 || /[\u0000-\u001f]/.test(k) || (k.match(/"/g) || []).length % 2) throw new EditError('That format code could not be used.');
+    const d = styles(); const root = d.documentElement; const doc = d; const xfs = kid(root, 'cellXfs');
+    const cu = codes(d); let id = null;
+    if (k.toLowerCase() === 'general') id = 0;
+    else { for (const [i, v] of Object.entries(BUILTIN_FMT)) if (v === k && cu[i] === undefined) { id = Number(i); break; } if (id === null) for (const [i, v] of Object.entries(cu)) if (v === k) { id = Number(i); break; } }
+    if (id === null) {
+      let box = kid(root, 'numFmts');
+      if (!box) { box = doc.createElementNS(S, 'numFmts'); root.insertBefore(box, root.firstElementChild); }
+      id = Math.max(163, ...Object.keys(cu).map(Number)) + 1;
+      const n = doc.createElementNS(S, 'numFmt'); n.setAttribute('numFmtId', String(id)); n.setAttribute('formatCode', k); box.appendChild(n); box.setAttribute('count', String(kids(box, 'numFmt').length));
+      stylesChanged = true;
+    }
+    const { sd } = part(si); const cur = find(sd, r, c).cell; const s0 = cur ? Number(cur.getAttribute('s') || 0) : 0;
+    const list = kids(xfs, 'xf'); const base = list[s0] || list[0];
+    const next = base ? base.cloneNode(true) : (() => { const x = doc.createElementNS(S, 'xf'); for (const [a, v] of [['numFmtId', '0'], ['fontId', '0'], ['fillId', '0'], ['borderId', '0'], ['xfId', '0']]) x.setAttribute(a, v); return x; })();
+    next.setAttribute('numFmtId', String(id)); if (id) next.setAttribute('applyNumberFormat', '1'); else next.removeAttribute('applyNumberFormat');
+    const sig = (x) => new XMLSerializer().serializeToString(x);
+    const want = sig(next); let at = list.findIndex((x) => sig(x) === want);
+    if (at < 0) { xfs.appendChild(next); at = list.length; xfs.setAttribute('count', String(at + 1)); stylesChanged = true; }
+    if (at === s0 && cur) return;
+    const el = place(si, r, c);
+    if (at) el.setAttribute('s', String(at)); else el.removeAttribute('s');
+    if (!el.children.length && !el.getAttribute('s')) el.remove();
+    dirty.add(si);
+  };
   const toBytes = () => {
     const all = snapshot(); const out = {};
     for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
   return {
-    names: () => sheets.map((x) => x.name), cell, locked, setCell, merges, snapshot, toBytes,
+    names: () => sheets.map((x) => x.name), cell, locked, setCell, merges, snapshot, toBytes, format, setFormat,
     insertRows: (si, at, n = 1) => moveAxis(si, 'r', at, n, false), deleteRows: (si, at, n = 1) => moveAxis(si, 'r', at, n, true),
     insertCols: (si, at, n = 1) => moveAxis(si, 'c', at, n, false), deleteCols: (si, at, n = 1) => moveAxis(si, 'c', at, n, true),
     renameSheet, addSheet, deleteSheet,
-    dirty: () => dirty.size > 0 || extraDirty.size > 0 || wbChanged || relChanged
+    dirty: () => dirty.size > 0 || extraDirty.size > 0 || wbChanged || relChanged || stylesChanged
   };
 }

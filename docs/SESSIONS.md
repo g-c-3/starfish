@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 252**
+
+Start: "Do next". CI for the Session 251 push (Decision 491) concluded success. Next item was Phase 120 step 4b.
+- Built (Decision 492): number formats in an xlsx. `src/js/xlsxedit.js` (`format`, `setFormat`: the format code goes into the styles part, the cell's style is copied with the new code or an equal style is reused), `src/js/xlsview-edit.js` (Format group: eight presets and Custom format; the view keeps the current model after each redraw), `src/js/office-read.js` (exports `BUILTIN_FMT`).
+- Tested in a sandbox: format engine 21 checks (read, built-in and custom codes, reuse, General back removes the style, merged cell and bad codes refused, empty cell, no styles part, read back through the reader); formulas engine 33 and calculator 62 still pass; through the view with jsdom 7 checks. Bundle of the edited files: no error. Not run through CI or a device.
+- Size: about 5 KB of source added (Decision 453).
+- Decision 492. DP272 open (DP269 to DP271 still open).
+- Next start: the CI log, DP269 to DP272 on a device, then Phase 120 step 5 (ods).
+
+---
+
 **Session 251**
 
 Start: "Go", then "120 phase". CI for the Session 250 push (Decision 490) concluded success. Next item was Phase 120 step 4, built as 4a (formulas); 4b (formats) remains.
