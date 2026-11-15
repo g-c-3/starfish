@@ -30,6 +30,7 @@ function parse(p) {
   const walk = (node, style, inSpan) => {
     for (const c of node.childNodes) {
       if (c.nodeType === 3) { add(style, c.data); continue; }
+      if (c.nodeType === 1 && c.namespaceURI === NS.office && (c.localName === 'annotation' || c.localName === 'annotation-end')) { out.push({ mark: c }); continue; } // comments stay where they are (Decision 487)
       if (c.nodeType !== 1 || c.namespaceURI !== NS.text) return false;
       const n = c.localName;
       if (n === 's') { const k = Number(c.getAttributeNS(NS.text, 'c') || 1); if (!(k >= 1 && k <= 10000)) return false; add(style, ' '.repeat(k)); }
@@ -409,6 +410,43 @@ export function openOdt(files, EditError) {
     p.after(np); return { node: np, w: Math.round(w), h: Math.round(h) };
   };
 
+  // ---- comments (Decision 487): an office:annotation at the start of the range, an annotation-end at its end ----
+  const DC = 'http://purl.org/dc/elements/1.1/';
+  const anns = () => [...body.getElementsByTagNameNS(NS.office, 'annotation')];
+  const annName = (a, k) => a.getAttributeNS(NS.office, 'name') || `#${k}`;
+  const annEnd = (name) => (name[0] === '#' ? null : [...body.getElementsByTagNameNS(NS.office, 'annotation-end')].find((e) => e.getAttributeNS(NS.office, 'name') === name) || null);
+  const ownerPara = (a) => { for (let x = a.parentNode; x; x = x.parentNode) if (isPara(x)) return x; return null; };
+  const dcText = (a, n) => { const e = [...a.children].find((c) => c.namespaceURI === DC && c.localName === n); return e ? e.textContent : ''; };
+  const comments = () => anns().map((a, k) => {
+    const p = ownerPara(a); if (!p) return null; const name = annName(a, k); const e = annEnd(name);
+    let from = 0; let to = 0; const it = parse(p);
+    if (it) { let pos = 0; to = null; for (const x of it) { if (x.mark === a) from = pos; else if (e && x.mark === e) to = pos; else if (x.run) pos += x.text.length; } if (to === null) to = e ? pos : from; }
+    return { id: name, p, author: dcText(a, 'creator'), date: dcText(a, 'date'), text: [...a.children].filter(isPara).map((x) => x.textContent).join('\n'), from, to };
+  }).filter(Boolean);
+  const putMark = (items, offset, node) => {
+    let pos = 0;
+    for (let k = 0; k < items.length; k++) { const it = items[k]; if (!it.run) continue; if (pos >= offset) { items.splice(k, 0, { mark: node }); return; } pos += it.text.length; }
+    items.push({ mark: node });
+  };
+  const addComment = (p, from, to, text, author) => {
+    lockCheck(p); [from, to] = clamp(p, from, to); const items = parse(p); const n = total(items);
+    text = String(text || '').trim(); if (!text) throw new EditError('Write the comment first.');
+    if (to <= from) { from = 0; to = n; } // no selection: the whole paragraph
+    const names = new Set(anns().map((a) => a.getAttributeNS(NS.office, 'name'))); let k = 1; while (names.has(`__Arkly_${k}`)) k++;
+    const name = `__Arkly_${k}`; const mo = (x) => doc.createElementNS(NS.office, `office:${x}`);
+    const a = mo('annotation'); a.setAttributeNS(NS.office, 'office:name', name);
+    const who = String(author || 'Me').trim() || 'Me';
+    const cr = doc.createElementNS(DC, 'dc:creator'); cr.textContent = who; const dt = doc.createElementNS(DC, 'dc:date'); dt.textContent = new Date().toISOString().replace(/\.\d+Z$/, '');
+    a.append(cr, dt); for (const line of text.split('\n')) { const q = el('p'); q.textContent = line; a.appendChild(q); }
+    cut(items, from); cut(items, to); putMark(items, from, a);
+    if (n) { const e = mo('annotation-end'); e.setAttributeNS(NS.office, 'office:name', name); putMark(items, to, e); }
+    build(p, items); return name;
+  };
+  const removeComment = (id) => {
+    const list = anns(); const a = list.find((x, k) => annName(x, k) === id); if (!a) throw new EditError('That comment is not there any more.');
+    const e = annEnd(id); if (e) e.remove(); a.remove();
+  };
+
   // every part of the file as it now stands (the reader can read this)
   const snapshot = () => ({ ...files, [MAIN]: enc(`<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, '')}`) });
 
@@ -417,5 +455,5 @@ export function openOdt(files, EditError) {
     for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, comments, addComment, removeComment, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }

@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 246**
+
+Start: "Do next" after the owner confirmed Edit and Done are smooth and the panels span the width. The CI log was not read. Next item: Phase 119 step 5b.
+- Built (Decision 487): comments in the docx and odt editors. Engines: `comments`, `addComment`, `removeComment` (`docedit.js`: `word/comments.xml`, range marks, reference run; `odtedit.js`: annotations as marks). View: Add comment and Comments tools, name kept on the phone, a bar on commented paragraphs, Show and Delete (`docview-edit.js`, `office-shell.css`). A docx paragraph with comments made in another app is now editable.
+- Tested in a sandbox (jsdom): 30 checks for both formats (add on a selection, saved XML, name remembered, list, replace around and inside the range, reload from the saved bytes, delete leaves no mark); a Word-made comment kept through text changes; the earlier find and replace tests unchanged (the group now holds four tools); bundle of `app.js`, `office-render.js` and `explorer-view.js` with packages external: no error. Not run through CI or a device; another app opening the saved comments is judged only there (DP268).
+- Size: about 14.5 KB of source added (Decision 453).
+- Decision 487. DP268 open. Phase 119 steps 1 to 5 are built; the phase stays open until its device passes (DP257 to DP268).
+- Next start: the CI log, DP257 to DP268 on a device, then the next incomplete roadmap item (Phase 122, .doc).
+
+---
+
 **Session 245**
 
 Start: the owner sent a screen recording of Edit and Done (jerky) and screenshots showing the Tools panel still in from both sides. The CI log was not read.

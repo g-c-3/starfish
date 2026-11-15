@@ -1,4 +1,4 @@
-// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474); table rows and columns, step 4a (Decision 476); lists, step 4c (Decision 479); pictures, step 4d (Decision 481); find and replace and word count, step 5a (Decision 483). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
+// docview-edit.js — the docx editor view, step 2 of Phase 119 (Decision 474); table rows and columns, step 4a (Decision 476); lists, step 4c (Decision 479); pictures, step 4d (Decision 481); find and replace and word count, step 5a (Decision 483); comments, step 5b (Decision 487). The rendered paragraphs (`.eo-p[data-pi]`, drawn in Reflow)
 // become editable in place; each one is mapped to its paragraph in the engine (`docedit.js`) by the index the reader stamped on it.
 // Typing, deleting and IME input are left to the browser and then synced: the paragraph's text is compared with the engine's and the
 // changed span is applied with `replace`, so the original runs keep their properties. Enter, Backspace at the start and Delete at the
@@ -393,11 +393,11 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   const field = (ph) => { const i = document.createElement('input'); i.type = 'text'; i.className = 'eo-find-in'; i.placeholder = ph; i.setAttribute('autocomplete', 'off'); i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off'); i.spellcheck = false; return i; };
   const sbtn = (text, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = `eo-sh-btn ${cls || ''}`.trim(); b.textContent = text; return b; };
   const check = (text, on, set) => { const l = document.createElement('label'); l.className = 'eo-find-chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.checked = on; c.onchange = () => set(c.checked); l.append(c, document.createTextNode(text)); return l; };
-  let fsheet = null; let csheet = null;
-  const closeSheets = () => { for (const s of [fsheet, csheet]) if (s && !s.closed) s.close(); };
+  let fsheet = null; let csheet = null; let msheet = null;
+  const closeSheets = () => { for (const s of [fsheet, csheet, msheet]) if (s && !s.closed) s.close(); };
   const openFind = () => {
     if (gone || (fsheet && !fsheet.closed)) return;
-    if (csheet && !csheet.closed) csheet.close();
+    closeMsheet(); if (csheet && !csheet.closed) csheet.close();
     let list = []; let cur = 0;
     fsheet = openSheet({
       title: 'Find and replace',
@@ -444,7 +444,7 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
   const countOf = (t) => (t.match(/\S+/g) || []).length;
   const openCount = () => {
     if (gone || (csheet && !csheet.closed)) return;
-    if (fsheet && !fsheet.closed) fsheet.close();
+    closeMsheet(); if (fsheet && !fsheet.closed) fsheet.close();
     const seen = new Set(); const texts = [];
     for (const e of paper.querySelectorAll('.eo-p')) { const pi = e.dataset.pi; if (pi !== undefined) { if (seen.has(pi)) continue; seen.add(pi); } texts.push(norm(domText(e))); }
     const all = texts.join('\n'); const sel = lastRange && !lastRange.collapsed && elOf(lastRange.startContainer) ? norm(lastRange.toString()) : '';
@@ -455,13 +455,85 @@ export function mountEditor({ paper, bytes, toast = () => {}, onActivity = () =>
       build: (h) => { const g = line('sheet-grid'); for (const [k, v] of rows) { const c = line('sheet-card'); c.append(line('k', k), line('v big', String(v))); g.appendChild(c); } h.appendChild(g); }
     });
   };
+
+  // ---- comments (Decision 487): add one on the selection (or the paragraph), list them, show one, delete one ----
+  const authorKey = 'arkly.commentAuthor';
+  const getAuthor = () => { try { return localStorage.getItem(authorKey) || ''; } catch { return ''; } };
+  const setAuthor = (v) => { try { localStorage.setItem(authorKey, v); } catch { /* no storage: the name is asked again */ } };
+  const owners = () => { const m = new Map(); for (const e of order()) m.set(map.get(e), e); return m; };
+  const markComments = () => {
+    let list = []; try { list = eng.comments(); } catch { list = []; }
+    const has = new Set(list.map((c) => c.p));
+    for (const e of order()) e.classList.toggle('eo-hascomment', has.has(map.get(e)));
+  };
+  const when = (iso) => { const d = new Date(iso); return iso && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : ''; };
+  const target = () => { // the paragraph and the offsets the comment goes on
+    if (!lastRange) return null; const el = elOf(lastRange.startContainer); if (!el || !map.has(el)) return null;
+    const a = offsetIn(el, lastRange.startContainer, lastRange.startOffset); const endEl = elOf(lastRange.endContainer);
+    const b = endEl === el ? offsetIn(el, lastRange.endContainer, lastRange.endOffset) : norm(domText(el)).length;
+    return { el, from: Math.min(a, b), to: Math.max(a, b) };
+  };
+  const excerpt = (t, n = 90) => (t.length > n ? `${t.slice(0, n)}…` : t);
+  const closeMsheet = () => { if (msheet && !msheet.closed) msheet.close(); };
+  const openAddComment = () => {
+    if (gone || (msheet && !msheet.closed)) return; closeSheets();
+    const t = target(); if (!t) { toast('Place the cursor in the text first.'); return; }
+    const node = map.get(t.el); const full = norm(eng.textOf(node)); const on = t.to > t.from ? full.slice(t.from, t.to) : full;
+    msheet = openSheet({
+      title: 'Add comment',
+      build: (h, close) => {
+        h.appendChild(line('eo-cm-on', on.trim() ? `On: “${excerpt(on.trim())}”` : 'On this paragraph'));
+        const who = field('Your name'); who.value = getAuthor();
+        const ta = document.createElement('textarea'); ta.className = 'eo-find-in eo-cm-text'; ta.rows = 4; ta.placeholder = 'Comment'; ta.setAttribute('autocapitalize', 'sentences');
+        const add = sbtn('Add comment', 'eo-sh-primary'); const cancel = sbtn('Cancel');
+        add.onclick = () => {
+          try { eng.addComment(node, t.from, t.to, ta.value, who.value); } catch (e) { toast(e.message); return; }
+          setAuthor(who.value.trim()); markComments(); dirty(); onActivity(); toast('Comment added.'); close();
+        };
+        cancel.onclick = () => close();
+        const row = line('eo-find-row'); row.append(cancel, add); h.append(who, ta, row);
+      }
+    });
+  };
+  const flash = (el, from, to) => { // the commented text is marked for a moment
+    if (!hl) return; try { const a = locate(el, from); const z = locate(el, Math.max(to, from)); const r = document.createRange(); r.setStart(a.node, a.offset); r.setEnd(z.node, z.offset); const on = new Highlight(r); CSS.highlights.set('eo-find-on', on); reveal(r); setTimeout(() => CSS.highlights.delete('eo-find-on'), 2200); } catch { /* the page has changed */ }
+  };
+  const openComments = () => {
+    if (gone || (msheet && !msheet.closed)) return; closeSheets();
+    msheet = openSheet({
+      title: 'Comments',
+      build: (h, close) => {
+        const body = line('eo-cm-list'); h.appendChild(body);
+        const draw = () => {
+          body.replaceChildren(); let list = []; try { list = eng.comments(); } catch { list = []; }
+          const own = owners();
+          if (!list.length) { body.appendChild(line('eo-cm-none', 'No comments in this file.')); return; }
+          for (const c of list) {
+            const card = line('eo-cm-card'); const el = own.get(c.p);
+            const full = el ? norm(eng.textOf(c.p) || '') : ''; const on = full.slice(c.from, c.to).trim();
+            card.append(line('eo-cm-who', [c.author || 'Unknown', when(c.date)].filter(Boolean).join(' · ')));
+            if (on) card.appendChild(line('eo-cm-on', `“${excerpt(on, 70)}”`));
+            card.appendChild(line('eo-cm-body', c.text));
+            const row = line('eo-find-row'); const del = sbtn('Delete');
+            if (el) { const show = sbtn('Show'); show.onclick = () => { close(); setTimeout(() => flash(el, c.from, c.to), 360); }; row.appendChild(show); }
+            del.onclick = () => { try { eng.removeComment(c.id); } catch (e) { toast(e.message); return; } markComments(); dirty(); onActivity(); draw(); };
+            row.appendChild(del); card.appendChild(row); body.appendChild(card);
+          }
+        };
+        draw();
+      }
+    });
+  };
   // a tool pressed in the compact panel waits until the panel has left, so two dialogs never overlap
   const later = (fn) => () => { if (document.querySelector('.eo-panel-ov:not(.hidden)')) setTimeout(() => { if (!gone && editing) fn(); }, 300); else fn(); };
   const RI = {
     find: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/>',
-    count: '<path d="M4 7h16M4 12h16M4 17h9"/><path d="M16 17h4"/>'
+    count: '<path d="M4 7h16M4 12h16M4 17h9"/><path d="M16 17h4"/>',
+    comment: '<path d="M5 5h14v10H10l-5 4z"/><path d="M12 8v4M10 10h4"/>',
+    comments: '<path d="M5 5h14v10H10l-5 4z"/><path d="M9 9h6M9 12h4"/>'
   };
-  groups.push({ id: 'review', title: 'Review', tools: [tool('find', 'Find and replace', RI.find, later(openFind)), tool('count', 'Word count', RI.count, later(openCount))] });
+  groups.push({ id: 'review', title: 'Review', tools: [tool('find', 'Find and replace', RI.find, later(openFind)), tool('count', 'Word count', RI.count, later(openCount)), tool('comment', 'Add comment', RI.comment, later(openAddComment)), tool('comments', 'Comments', RI.comments, later(openComments))] });
+  markComments();
 
 
   return {

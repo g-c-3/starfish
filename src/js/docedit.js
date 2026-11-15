@@ -29,7 +29,9 @@ function runText(r) {
   }
   return s;
 }
-const SKIP_P = new Set(['pPr', 'bookmarkStart', 'bookmarkEnd', 'proofErr']);
+const SKIP_P = new Set(['pPr', 'bookmarkStart', 'bookmarkEnd', 'proofErr', 'commentRangeStart', 'commentRangeEnd']);
+// the run that holds only a comment reference: no text, left where it is by every text change (Decision 487)
+const isRef = (c) => isW(c, 'r') && !!kid(c, 'commentReference') && [...c.children].every((k) => isW(k, 'rPr') || isW(k, 'commentReference'));
 
 export function openDoc(bytes) {
   const files = unzipSync(bytes);
@@ -46,6 +48,7 @@ export function openDoc(bytes) {
     const out = [];
     for (const c of p.children) {
       if (SKIP_P.has(c.localName) && c.namespaceURI === W) continue;
+      if (isRef(c)) continue;
       if (!isW(c, 'r')) return null;
       const t = runText(c); if (t === null) return null;
       out.push({ r: c, text: t });
@@ -343,10 +346,79 @@ export function openDoc(bytes) {
     p.after(np); return { node: np, ...pxOf(cx, cy) };
   };
 
+  // ---- comments (Decision 487): the text of each is in word/comments.xml; the body holds the range marks and one reference run ----
+  const COMMENTS = 'word/comments.xml';
+  let comDoc = null; let comDirty = false;
+  const comRead = () => { if (!comDoc && files[COMMENTS]) comDoc = parseX(dec(files[COMMENTS])); return comDoc ? comDoc.documentElement : null; };
+  const comWrite = () => { // a file without comments gets an empty part, registered in the package
+    if (!comRead()) {
+      const ct = '[Content_Types].xml'; const rels = 'word/_rels/document.xml.rels';
+      if (!files[ct] || !files[rels]) throw new EditError('This file cannot take a comment here.');
+      let c = dec(files[ct]); if (!c.includes('/word/comments.xml')) c = c.replace('</Types>', '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>');
+      let r = dec(files[rels]); if (!/relationships\/comments"/.test(r)) r = r.replace('</Relationships>', '<Relationship Id="rIdArklyCom" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/></Relationships>');
+      files[ct] = enc(c); files[rels] = enc(r);
+      comDoc = parseX(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="${W}"/>`);
+    }
+    comDirty = true; return comDoc.documentElement;
+  };
+  const cid = (n) => n.getAttributeNS(W, 'id');
+  const comNode = (id) => { const r = comRead(); return r ? kids(r, 'comment').find((c) => cid(c) === id) || null : null; };
+  const byId = (name, id) => [...body.getElementsByTagNameNS(W, name)].filter((n) => cid(n) === id);
+  // offsets of the range of a comment inside its paragraph, counted in the characters the text tools see
+  const rangeIn = (p, id) => {
+    let pos = 0; let from = null; let to = null;
+    for (const c of p.children) {
+      if (isW(c, 'commentRangeStart') && cid(c) === id) from = pos;
+      else if (isW(c, 'commentRangeEnd') && cid(c) === id) to = pos;
+      else if (isW(c, 'r') && !isRef(c)) { const t = runText(c); if (t !== null) pos += t.length; }
+    }
+    return { from: from === null ? 0 : from, to: to === null ? pos : to };
+  };
+  const comments = () => {
+    const out = [];
+    for (const ref of body.getElementsByTagNameNS(W, 'commentReference')) {
+      const id = cid(ref); const c = comNode(id); const p = ownerP(ref); if (!c || !p) continue;
+      const text = kids(c, 'p').map((q) => [...q.getElementsByTagNameNS(W, 't')].map((t) => t.textContent).join('')).join('\n');
+      out.push({ id, p, author: c.getAttributeNS(W, 'author') || '', date: c.getAttributeNS(W, 'date') || '', text, ...(editable(p) ? rangeIn(p, id) : { from: 0, to: 0 }) });
+    }
+    return out;
+  };
+  const addComment = (p, from, to, text, author) => {
+    lockCheck(p); const n = textOf(p).length; [from, to] = clamp(p, from, to);
+    if (to <= from) { from = 0; to = n; } // no selection: the whole paragraph
+    const root = comWrite(); text = String(text || '').trim(); if (!text) throw new EditError('Write the comment first.');
+    let id = 0; for (const c of kids(root, 'comment')) id = Math.max(id, Number(cid(c)) + 1 || 0); id = String(id);
+    boundary(p, from); const rs = boundary(p, to);
+    let pos = 0; let before = null; let after = null;
+    for (const e of rs) { const len = e.text.length; if (len && before === null && pos >= from) before = e.r; if (len && pos + len <= to) after = e.r; pos += len; }
+    const mkId = (name) => { const e = mk(doc, name); e.setAttributeNS(W, 'w:id', id); return e; };
+    const start = mkId('commentRangeStart'); const end = mkId('commentRangeEnd'); const ref = mk(doc, 'r'); ref.appendChild(mkId('commentReference'));
+    if (before && after && n) { before.before(start); after.after(end); } else { p.appendChild(start); p.appendChild(end); }
+    end.after(ref);
+    const who = String(author || 'Me').trim() || 'Me';
+    const c = mkC(root, id, who, text); root.appendChild(c); return id;
+  };
+  const mkC = (root, id, who, text) => {
+    const c = mk(doc, 'comment'); c.setAttributeNS(W, 'w:id', id); c.setAttributeNS(W, 'w:author', who);
+    c.setAttributeNS(W, 'w:date', new Date().toISOString().replace(/\.\d+Z$/, 'Z')); c.setAttributeNS(W, 'w:initials', who.split(/\s+/).map((x) => x[0] || '').join('').slice(0, 3).toUpperCase());
+    text.split('\n').forEach((line, k) => {
+      const q = mk(doc, 'p'); if (!k) { const r0 = mk(doc, 'r'); r0.appendChild(mk(doc, 'annotationRef')); q.appendChild(r0); }
+      const r = mk(doc, 'r'); const t = mk(doc, 't'); t.textContent = line; t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); r.appendChild(t); q.appendChild(r); c.appendChild(q);
+    });
+    return c;
+  };
+  const removeComment = (id) => {
+    const c = comNode(id); if (!c) throw new EditError('That comment is not there any more.');
+    for (const n of ['commentRangeStart', 'commentRangeEnd']) for (const x of byId(n, id)) x.remove();
+    for (const x of byId('commentReference', id)) { const r = x.parentNode; if (isRef(r)) r.remove(); else x.remove(); }
+    comDirty = true; c.remove();
+  };
+
   // every part of the file as it now stands (the reader can read this)
   const snapshot = () => {
     const xml = new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, ''); const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
     const all = { ...files, [MAIN]: enc(decl + xml) };
+    if (comDirty) all[COMMENTS] = enc(decl + new XMLSerializer().serializeToString(comDoc).replace(/^<\?xml[^>]*\?>\s*/, ''));
     if (numDirty) all[NUMBERING] = enc(decl + new XMLSerializer().serializeToString(numDoc).replace(/^<\?xml[^>]*\?>\s*/, ''));
     return all;
   };
@@ -356,5 +428,5 @@ export function openDoc(bytes) {
     for (const k of Object.keys(all)) out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { paragraphs, editable, textOf, runsOf, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
+  return { paragraphs, editable, textOf, runsOf, comments, addComment, removeComment, next, setList, shiftLevel, snapshot, pictures, removePicture, replacePicture, insertPictureAfter, cellOf, insertRow, deleteRow, insertColumn, deleteColumn, replace, format, hasFormat, split, mergeNext, remove, toBytes, doc };
 }
