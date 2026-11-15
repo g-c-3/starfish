@@ -723,6 +723,7 @@ function makeEnv(model, u) {
 const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 2500))]);
 
 registerEditor('docx', () => import('./docview-edit.js'));
+registerEditor('xlsx', () => import('./xlsview-edit.js'));
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
@@ -896,7 +897,7 @@ function mountXlsx(model, host, ui, bars, u) {
   });
   const zoom = setupZoom(grid, zoomer, () => 1, ui);
   bars.extra = (bar) => bar.appendChild(zoomButtons(ui, zoom));
-  let cur = 0;
+  let cur = 0; let afterShow = null; // the editor puts its changes back after a sheet is drawn (Decision 489)
   const buttons = model.names.map((name, i) => {
     const b = el('button', 'eo-tab', name); b.type = 'button';
     b.onclick = () => { ui.onActivity(); show(i); };
@@ -964,6 +965,7 @@ function mountXlsx(model, host, ui, bars, u) {
         const cell = row[c];
         const x = cell ? model.xfs[cell.s] || model.xfs[0] : null;
         const td = el('td', cell && cell.s ? `xs${cell.s}` : '');
+        td.dataset.col = String(c);
         if (cell && cell.v !== '') { td.textContent = cell.v; td.dataset.c = String(c); }
         if (cell && cell.k === 'n' && x.h === 'general') td.classList.add('eo-r'); else if (cell && cell.k === 'b' && x.h === 'general') td.classList.add('eo-ctr');
         const m = merge.get(`${r},${c}`);
@@ -1000,9 +1002,10 @@ function mountXlsx(model, host, ui, bars, u) {
       wrap.appendChild(ov);
     }
     wrap.appendChild(t); zoomer.appendChild(wrap);
+    if (afterShow) afterShow(i);
   }
   show(0);
-  return { show, cur: () => cur };
+  return { show, cur: () => cur, setAfterShow: (f) => { afterShow = f; } };
 }
 
 // ---- pptx: a slide on a canvas at the size set in the file, scaled to fit and centred; First, Previous, Play/Pause, Next, Last, swipe, zoom ----
@@ -1250,6 +1253,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountXlsx(model, holder, ui, tmp, u);
     tmp.tools = xlTools(model, inner, host); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
+    if (edit && !odf && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('xlsx')) shell = makeShell(inner, 'xlsx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };
@@ -1260,7 +1264,7 @@ export function mountOffice(kind, bytes, host, ctx) {
   }
   if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }
   // Edit: the editor loads on the first tap; the page is drawn in Reflow while it is open. Save replaces the file, Save as copy never does.
-  function makeShell(view) {
+  function makeShell(view, type = 'docx') {
     const failed = (e) => toast(`Could not save the file${e && e.message ? `: ${e.message}` : '.'}`);
     const saveNow = async () => { if (!editor) return false; try { await edit.save(editor.bytes()); editor.markClean(); return true; } catch (e) { failed(e); return false; } };
     const sh = createShell(host, {
@@ -1270,8 +1274,14 @@ export function mountOffice(kind, bytes, host, ctx) {
         if (!on) { if (editor) editor.setEditable(false); return; }
         if (editor) { editor.setEditable(true); return; }
         try {
-          const mod = await loadEditor('docx');
-          await view.flow(true);
+          const mod = await loadEditor(type);
+          if (view.flow) await view.flow(true);
+          if (type === 'xlsx') {
+            editor = mod.mountEditor({ zoomer: host.querySelector('.eo-xzoom'), host, model, sheet: () => view.cur(), onShown: view.setAfterShow, bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
+            sh.setGroups(editor.groups); editor.setEditable(true);
+            if (!editor.count) toast('Nothing in this file can be edited here.');
+            return;
+          }
           const redraw = (files, want) => { // list markers and indents of the wanted paragraphs, drawn from the file as it now stands (Decision 479)
             const m = odf === 'text' ? readOdt(null, files) : readDocx(null, files); const out = new Map();
             const walk = (bs) => { for (const b of bs) { if (b.t === 'table') { for (const r of b.rows) for (const c of r) walk(c.blocks || []); } else if (b.src !== undefined && want.has(b.src)) { const t = el('div'); docxBlocks([b], t, model.media, u, {}); out.set(b.src, t.firstElementChild); } } };
@@ -1280,7 +1290,7 @@ export function mountOffice(kind, bytes, host, ctx) {
           editor = mod.mountEditor({ paper: host.querySelector('.eo-paper'), bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync(), redraw });
           sh.setGroups(editor.groups); editor.setEditable(true);
           if (!editor.count) toast('Nothing in this file can be edited here.');
-        } catch (e) { view.flow(false); editor = null; toast(e && e.office ? e.message : 'This file cannot be edited here.'); sh.setEditing(false); }
+        } catch (e) { if (view.flow) view.flow(false); editor = null; toast(e && e.office ? e.message : 'This file cannot be edited here.'); sh.setEditing(false); }
       },
       onDone: async () => {
         if (editor && editor.dirty()) {
@@ -1288,7 +1298,7 @@ export function mountOffice(kind, bytes, host, ctx) {
           if (v === 'keep') return;
           if (v === 'save') { if (!(await saveNow())) return; } else { edit.reload(); return; } // discard: the file is opened again as it was saved
         }
-        if (editor && !editor.touched()) { editor.destroy(); editor = null; const back = view.flow(false); sh.setEditing(false); await back; return; } // the rows and the page change together
+        if (editor && !editor.touched()) { editor.destroy(); editor = null; const back = view.flow ? view.flow(false) : null; sh.setEditing(false); await back; return; } // the rows and the page change together
         sh.setEditing(false);
       }
     });

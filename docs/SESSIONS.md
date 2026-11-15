@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 249**
+
+Start: "Go". Last session (248) confirmed every device pass; next item is Phase 120 step 2. The CI log was not read.
+- Built (Decision 489): the xlsx editor view, `src/js/xlsview-edit.js` (new); `office-render.js` (a column on every cell, the redraw hook, the shell for an xlsx, `makeShell` by type), `office-read.js` (`is1904` on the model), `office-shell.css` (ribbon tab rules scoped, cell input), `explorer-view.js` and `app.js` (xlsx offered for Edit, copy name keeps `.xlsx`).
+- Tested in a sandbox (jsdom, through `mountOffice`): 28 checks (Edit mounts, every cell has a column, raw number in the sheet, number format kept on display, text-like number gets its apostrophe, formula note and a typed formula refused, text and clear, change kept across a sheet switch, Save writes bytes read back through the engine: changed cells, formula and other sheet untouched, clean after Save, Done with no changes leaves no prompt, Done with changes asks and Keep editing and Discard work). Bundle of the edited files with packages external: no error. Not run through CI or a device.
+- Size: about 6 KB of source added (Decision 453).
+- Decision 489. DP269 open.
+- Next start: the CI log, DP269 on a device, then Phase 120 step 3 (rows, columns and sheets: insert, delete, rename).
+
+---
+
 **Session 248**
 
 Start: the owner confirmed every open device pass (DP240 to DP268) and asked for the next item. Docs only this session.

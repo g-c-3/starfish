@@ -12,9 +12,9 @@
 .eo-ribbon, .eo-sh-tools { display: none; }
 .eo-shell.eo-wide .eo-ribbon { display: block; flex-basis: 100%; }
 .eo-shell.eo-compact .eo-sh-tools { display: inline-flex; }
-.eo-tabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.eo-tab { width: auto; margin: 0; padding: 7px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
-.eo-tab.on { color: var(--fg); border-bottom-color: var(--brand); font-weight: 600; }
+.eo-ribbon .eo-tabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.eo-ribbon .eo-tab { width: auto; margin: 0; padding: 7px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
+.eo-ribbon .eo-tab.on { color: var(--fg); border-bottom-color: var(--brand); font-weight: 600; }
 .eo-rbody { position: relative; padding: 8px 0 4px; }
 .eo-pane { display: flex; flex-wrap: wrap; gap: 6px; }
 .eo-tool { width: auto; margin: 0; min-width: 56px; padding: 6px 10px; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; border: 1px solid transparent; border-radius: 12px; background: transparent; color: var(--fg); font-size: 12px; box-shadow: none; }
@@ -67,3 +67,7 @@
   .eo-swap-in { animation: mx-fade-in 0.3s var(--mx-settle) both; }
   .eo-pane.mx-out.mx-out.hidden { display: flex !important; position: absolute; left: 0; right: 0; }
 }
+/* the xlsx editor (Decision 489) */
+.eo-xzoom.eo-editing td[data-col] { cursor: pointer; }
+.eo-cell-in { display: block; width: 100%; box-sizing: border-box; min-height: 84px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--fg); font: inherit; resize: vertical; }
+.eo-cell-note { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }

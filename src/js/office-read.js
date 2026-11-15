@@ -987,7 +987,7 @@ export function readXlsx(bytes) {
       objects, media, hasDrawing: other > 0
     };
   }
-  return { kind: 'xlsx', names: sheets.map((s) => s.name), load, xfs };
+  return { kind: 'xlsx', names: sheets.map((s) => s.name), load, xfs, is1904 };
 }
 
 // ---- pptx ----
