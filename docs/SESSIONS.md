@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 258**
+
+Start: "Continue" after the repair of Session 257. Next item was Phase 121 (slide editor), step 1.
+- Built (Decision 497): `src/js/pptxedit.js` (new, the pptx edit engine; no view yet).
+- Tested in a sandbox: engine 49 checks (shapes and groups, unchanged text writes nothing, a changed paragraph keeps its formatting, insert and delete paragraphs, empty text, special characters, notes read and made, no notes master refused, duplicate with its notes, a chart slide refused, move, delete with the picture and notes parts removed and the layouts kept, a slide another links to refused, add from a layout without date and number placeholders, sections kept or refused, round trip, other parts byte-equal); the existing reader reads a file after add, duplicate, move and delete. Parse of the file: no error. Not run through CI.
+- Size: about 17 KB of source added (Decision 453).
+- Decision 497. No device pass yet (no view).
+- Next start: the CI log, then Phase 121 step 2 (the editor view for a pptx).
+
+---
+
 **Session 257**
 
 Start: "All dp confirmed. Do next". DP269 to DP276 were confirmed on a device. CI for the Session 256 push (Decision 496) concluded success.
