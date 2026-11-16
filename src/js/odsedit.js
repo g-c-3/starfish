@@ -4,11 +4,14 @@
 // a formula in the ods syntax (`of:=SUM([.A1:.A3])`) is turned into the A1 text the calculator of xlsxcalc.js reads, and back; every formula is
 // calculated again after a change and its result stored beside it. A formula the calculator does not understand keeps its stored result.
 // Number formats (Decision 495) are ods number styles written into the automatic styles of content.xml (codes in odsfmt.js).
-// Rows, columns and sheets for ods are the next step.
+// Rows, columns and sheets (Decision 496): rows and cells are inserted or cut by their repeat counts, formulas follow through the A1 text and
+// xlsxrefs.js; a workbook with things that hold cell addresses this editor does not move (named ranges, validation, filters, pictures,
+// charts, array formulas, a merged cell that the change would cut) is refused with a message.
 import { unzipSync, zipSync } from 'fflate';
 import { SHEET_ROW_MAX, SHEET_COL_MAX, colName, formatValue } from './office-read.js';
 import { toOdf, fromOdf } from './odsfmt.js';
 import { parse, run, CalcError } from './xlsxcalc.js';
+import { mapRefs, structFn, removeSheetRefs, renamePrefix } from './xlsxrefs.js';
 
 const NS = {
   office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
@@ -44,11 +47,13 @@ const toA1 = (f) => { // null when anything is not understood
     const ch = s[i];
     if (ch === '"') { const j = strEnd(s, i); out += s.slice(i, j); i = j; continue; }
     if (ch === '[') {
+      if (s.startsWith('[.#REF!]', i)) { out += '#REF!'; i += 8; continue; }
       REF_ODS.lastIndex = i; const m = REF_ODS.exec(s); if (!m) return null;
       const p1 = m[1] ? `${quoteName(unquote(m[1]))}!` : ''; const p2 = m[3] ? unquote(m[3]) : null;
       if (p2 !== null && m[1] && unquote(m[1]) !== p2) return null; // a range over two sheets
       out += p1 + m[2] + (m[4] ? `:${m[4]}` : ''); i = REF_ODS.lastIndex; continue;
     }
+    if (ch === '#' && s.startsWith('#REF!', i)) { out += '#REF!'; i += 5; continue; }
     if (ch === "'" || ch === '#') return null;
     out += ch === ';' ? ',' : ch; i++;
   }
@@ -59,6 +64,7 @@ const fromA1 = (t) => {
   while (i < t.length) {
     const ch = t[i];
     if (ch === '"') { const j = strEnd(t, i); out += t.slice(i, j); i = j; continue; }
+    if (t.startsWith('#REF!', i)) { out += '[.#REF!]'; i += 5; continue; }
     if (!/[\w.$]/.test(out[out.length - 1] || ' ')) {
       REF_A1.lastIndex = i; const m = REF_A1.exec(t);
       if (m && m.index === i) { out += `[${m[1] ? `$${m[1]}` : ''}.${m[2]}${m[3] ? `:.${m[3]}` : ''}]`; i = REF_A1.lastIndex; continue; }
@@ -86,7 +92,7 @@ export function openOds(bytes) {
   if (!tables.length) throw new EditError('This workbook has no sheets to edit.');
   let dirty = false;
   const tbl = (si) => { const t = tables[si]; if (!t) throw new EditError('That sheet is not there any more.'); return t; };
-  const everyTable = kids(book, 'table'); // the hidden ones too: a formula may read them
+  let everyTable = kids(book, 'table'); // the hidden ones too: a formula may read them
 
   // rows in document order, whatever groups they sit in; columns declared
   const rowEls = (t) => { const out = []; const walk = (p) => { for (const c of p.children) { if (is(c, 'table-row')) out.push(c); else if (is(c, 'table-rows') || is(c, 'table-header-rows') || is(c, 'table-row-group')) walk(c); } }; walk(t); return out; };
@@ -414,6 +420,91 @@ export function openOds(bytes) {
     dirty = true;
   };
 
+  // ---- rows, columns and sheets (Decision 496) ----
+  const DRAW = 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0';
+  const blocker = () => { // why the structure cannot be changed, or null
+    const some = (ns, name, deep) => [...doc.getElementsByTagNameNS(ns, name)].some((e) => (deep ? true : e.children.length > 0));
+    const filled = (name) => some(NS.table, name, false); const embedded = Object.keys(files).some((k) => /^Object \d+\//.test(k));
+    const printed = [...doc.getElementsByTagNameNS(NS.table, 'table')].some((t) => t.hasAttributeNS(NS.table, 'print-ranges'));
+    const matrix = [...doc.getElementsByTagNameNS(NS.table, 'table-cell')].some((x) => x.hasAttributeNS(NS.table, 'number-matrix-columns-spanned'));
+    if (filled('named-expressions') || filled('database-ranges') || filled('data-pilot-tables') || filled('content-validations') || some(NS.table, 'filter', true) || [...doc.getElementsByTagNameNS(NS.calcext, 'conditional-formats')].length || [...doc.getElementsByTagName('*')].some((e) => e.namespaceURI === DRAW) || embedded || printed) return 'This workbook has named ranges, validation, filters, conditional formats, pictures or charts, which this editor does not move yet, so rows, columns and sheets cannot be changed here.';
+    if (matrix) return 'This workbook has array formulas, which this editor does not move yet, so rows, columns and sheets cannot be changed here.';
+    for (const t of everyTable) for (const x of t.getElementsByTagNameNS(NS.table, 'table-cell')) { const f = x.getAttributeNS(NS.table, 'formula'); if (f && toA1(f) === null) return 'A formula of this workbook is not one this editor can follow, so rows, columns and sheets cannot be changed here.'; }
+    return null;
+  };
+  const rewriteAll = (fn) => { // every formula, as A1 text, rewritten; the ods text is written only where the text changed
+    for (const t of everyTable) {
+      const own = t.getAttributeNS(NS.table, 'name');
+      for (const x of t.getElementsByTagNameNS(NS.table, 'table-cell')) {
+        const f = x.getAttributeNS(NS.table, 'formula'); if (!f) continue;
+        const a1 = toA1(f); const nt = fn(a1, own); if (nt !== a1) x.setAttributeNS(NS.table, 'table:formula', fromA1(nt));
+      }
+    }
+  };
+  const follow = () => { try { apply(compute()); } catch (e) { /* the change stands; stored results stay */ } };
+  const colEls = (t) => { const out = []; const walkc = (pp) => { for (const x of pp.children) { if (is(x, 'table-column')) out.push(x); else if (is(x, 'table-columns') || is(x, 'table-header-columns') || is(x, 'table-column-group')) walkc(x); } }; walkc(t); return out; };
+  const shrink = (els, name, at, n) => { let start = 0; for (const el of els) { const k = rep(el, name); const o = Math.min(start + k, at + n) - Math.max(start, at); if (o > 0) { if (o === k) el.remove(); else setRep(el, name, k - o); } start += k; } };
+  const total = (els, name) => els.reduce((a, el) => a + rep(el, name), 0);
+  const cutCheck = (si, axis, at, n, del) => {
+    for (const m of merges(si)) {
+      const lo = axis === 'r' ? m.r : m.c; const hi = lo + (axis === 'r' ? m.rs : m.cs) - 1; const e = at + n - 1;
+      if (del ? !(e < lo || at > hi) && !(at <= lo && e >= hi) : at > lo && at <= hi) throw new EditError('This change would cut a merged cell; the merged cell is not changed here.');
+    }
+  };
+  const moveAxis = (si, axis, at, n, del) => {
+    if (!(Number.isInteger(at) && Number.isInteger(n) && at >= 0 && n >= 1 && at < (axis === 'r' ? SHEET_ROW_MAX : SHEET_COL_MAX))) throw new EditError(axis === 'r' ? 'That row is not on the sheet.' : 'That column is not on the sheet.');
+    const why = blocker(); if (why) throw new EditError(why);
+    cutCheck(si, axis, at, n, del);
+    const t = tbl(si); const name = t.getAttributeNS(NS.table, 'name'); const op = { sheet: name, axis, at, n, del };
+    if (axis === 'r') {
+      const rows = rowEls(t);
+      if (del) shrink(rows, 'number-rows-repeated', at, n);
+      else if (at < total(rows, 'number-rows-repeated')) { const el = rowAt(t, at, true); const fresh = newRow(); setRep(fresh, 'number-rows-repeated', n); el.parentNode.insertBefore(fresh, el); }
+    } else {
+      for (const row of rowEls(t)) {
+        const cells = [...row.children].filter(cellOf);
+        if (del) shrink(cells, 'number-columns-repeated', at, n);
+        else if (at < total(cells, 'number-columns-repeated')) { const el = cellAt(row, at, true); const fresh = newCell(); setRep(fresh, 'number-columns-repeated', n); row.insertBefore(fresh, el); }
+      }
+      const cols = colEls(t);
+      if (del) shrink(cols, 'number-columns-repeated', at, n);
+      else if (at < total(cols, 'number-columns-repeated')) {
+        let start = 0; for (const el of cols) { const k = rep(el, 'number-columns-repeated'); if (at < start + k) { const own = split(el, 'number-columns-repeated', at - start, k); const fresh = own.cloneNode(true); setRep(fresh, 'number-columns-repeated', n); own.parentNode.insertBefore(fresh, own); break; } start += k; }
+      }
+    }
+    rewriteAll((x, own) => mapRefs(x, own, structFn(op)));
+    dirty = true; follow();
+  };
+  const goodName = (name, except) => {
+    const nm = String(name === null || name === undefined ? '' : name).trim();
+    if (!nm) throw new EditError('A sheet needs a name.');
+    if (nm.length > 31) throw new EditError('A sheet name can have at most 31 characters.');
+    if (/[:\\/?*[\]]/.test(nm)) throw new EditError('A sheet name cannot contain : \\ / ? * [ ]');
+    if (/^'|'$/.test(nm)) throw new EditError('A sheet name cannot start or end with an apostrophe.');
+    if (everyTable.some((x) => x !== except && String(x.getAttributeNS(NS.table, 'name')).toLowerCase() === nm.toLowerCase())) throw new EditError('Another sheet already has that name.');
+    return nm;
+  };
+  const renameSheet = (si, name) => {
+    const t = tbl(si); const nn = goodName(name, t); const old = t.getAttributeNS(NS.table, 'name'); if (nn === old) return;
+    const why = blocker(); if (why) throw new EditError(why);
+    rewriteAll((x) => renamePrefix(x, old, nn));
+    t.setAttributeNS(NS.table, 'table:name', nn); dirty = true; follow();
+  };
+  const addSheet = (name) => {
+    const nn = goodName(name, null);
+    const t = doc.createElementNS(NS.table, 'table:table'); t.setAttributeNS(NS.table, 'table:name', nn);
+    t.appendChild(doc.createElementNS(NS.table, 'table:table-column')); t.appendChild(newRow());
+    const last = everyTable[everyTable.length - 1]; last.parentNode.insertBefore(t, last.nextSibling);
+    everyTable = kids(book, 'table'); tables.push(t); dirty = true; return tables.length - 1;
+  };
+  const deleteSheet = (si) => {
+    const t = tbl(si); if (tables.length < 2) throw new EditError('A workbook needs at least one sheet.');
+    const why = blocker(); if (why) throw new EditError(why);
+    const gone = t.getAttributeNS(NS.table, 'name');
+    rewriteAll((x) => removeSheetRefs(x, gone));
+    t.remove(); tables.splice(si, 1); everyTable = kids(book, 'table'); dirty = true; follow();
+  };
+
   const ser = () => enc('<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, ''));
   const snapshot = () => { const all = { ...files }; if (dirty) all['content.xml'] = ser(); return all; };
   const toBytes = () => {
@@ -422,5 +513,8 @@ export function openOds(bytes) {
     for (const k of Object.keys(all)) if (k !== 'mimetype') out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'ods', names: () => tables.map((t, k) => t.getAttributeNS(NS.table, 'name') || `Sheet ${k + 1}`), cell, locked, setCell, merges, snapshot, toBytes, format, setFormat, dirty: () => dirty };
+  return { kind: 'ods', names: () => tables.map((t, k) => t.getAttributeNS(NS.table, 'name') || `Sheet ${k + 1}`), cell, locked, setCell, merges, snapshot, toBytes, format, setFormat, dirty: () => dirty,
+    insertRows: (si, at, n = 1) => moveAxis(si, 'r', at, n, false), deleteRows: (si, at, n = 1) => moveAxis(si, 'r', at, n, true),
+    insertCols: (si, at, n = 1) => moveAxis(si, 'c', at, n, false), deleteCols: (si, at, n = 1) => moveAxis(si, 'c', at, n, true),
+    renameSheet, addSheet, deleteSheet };
 }

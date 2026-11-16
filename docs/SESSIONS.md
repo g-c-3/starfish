@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 256**
+
+Start: "Do next". CI for the Session 255 push (Decision 495) concluded success. Next item was Phase 120 step 5b3 (ods rows, columns and sheets), the last step of Phase 120 for xlsx and ods.
+- Built (Decision 496): `src/js/odsedit.js` (insert and delete rows and columns by their repeat counts, the declared columns follow, formulas rewritten through the A1 text and `xlsxrefs.js`, rename, add and delete a sheet, `#REF!` read and written in the ods syntax, refusals for what the editor does not move). The view needed no change: the Rows and columns and Sheets groups show for an engine that has them.
+- Tested in a sandbox: structure 40 checks (insert and delete inside repeated rows, columns, formulas on both sheets following, #REF!, declared columns, rename with a quoted name, add, delete, last sheet kept, merged cells cut or moved or removed, named ranges, pictures and unreadable formulas refused, refused changes leave the file clean, read back); through the view with jsdom 8 checks; ods engine 53, formats 24, converter 29, xlsx formulas 33, formats 21, calculator 64 and the xlsx view 6 still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 8 KB of source added (Decision 453).
+- Decision 496. DP276 open (DP269 to DP275 still open). Phase 120 is complete for xlsx and ods.
+- Next start: the CI log, DP269 to DP276 on a device, then the next roadmap item (xls follows Phase 122).
+
+---
+
 **Session 255**
 
 Start: "Do next". CI for the Session 254 push (Decision 494) concluded success. Next item was Phase 120 step 5b2 (ods number formats).
