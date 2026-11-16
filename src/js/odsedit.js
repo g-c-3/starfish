@@ -3,16 +3,20 @@
 // Repeated rows and cells (`number-rows-repeated`, `number-columns-repeated`) are split only where a cell is written. Formulas (Decision 494):
 // a formula in the ods syntax (`of:=SUM([.A1:.A3])`) is turned into the A1 text the calculator of xlsxcalc.js reads, and back; every formula is
 // calculated again after a change and its result stored beside it. A formula the calculator does not understand keeps its stored result.
-// Formats, rows, columns and sheets for ods are the next step.
+// Number formats (Decision 495) are ods number styles written into the automatic styles of content.xml (codes in odsfmt.js).
+// Rows, columns and sheets for ods are the next step.
 import { unzipSync, zipSync } from 'fflate';
-import { SHEET_ROW_MAX, SHEET_COL_MAX, colName } from './office-read.js';
+import { SHEET_ROW_MAX, SHEET_COL_MAX, colName, formatValue } from './office-read.js';
+import { toOdf, fromOdf } from './odsfmt.js';
 import { parse, run, CalcError } from './xlsxcalc.js';
 
 const NS = {
   office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
   table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
   text: 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
-  calcext: 'urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0'
+  calcext: 'urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0',
+  style: 'urn:oasis:names:tc:opendocument:xmlns:style:1.0',
+  number: 'urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0'
 };
 const STORED = /^mimetype$|\.(png|jpe?g|gif|webp|zip|mp[34]|docx|xlsx|pptx|odt|ods|odp)$/i;
 const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
@@ -188,6 +192,39 @@ export function openOds(bytes) {
     el.setAttributeNS(NS.office, 'office:value-type', t);
     if (root.hasAttribute('xmlns:calcext')) el.setAttributeNS(NS.calcext, 'calcext:value-type', t);
   };
+  // ---- number formats (Decision 495) ----
+  let stylesDoc = null;
+  const stylesRoot = () => { if (stylesDoc === null) { stylesDoc = files['styles.xml'] ? parseX(dec(files['styles.xml'])) : false; } return stylesDoc && !stylesDoc.getElementsByTagName('parsererror').length ? stylesDoc.documentElement : null; };
+  const autoBox = () => { let a = kids(root, 'automatic-styles', NS.office)[0]; if (!a) { a = doc.createElementNS(NS.office, 'office:automatic-styles'); root.insertBefore(a, body); } return a; };
+  const pools = () => [autoBox(), ...[stylesRoot()].filter(Boolean).flatMap((r) => [kids(r, 'automatic-styles', NS.office)[0], kids(r, 'styles', NS.office)[0]].filter(Boolean))];
+  const named = (tag, ns, name) => { for (const pl of pools()) for (const e of kids(pl, tag, ns)) if (e.getAttributeNS(NS.style, 'name') === name) return e; return null; };
+  const styleNamed = (name) => (name ? named('style', NS.style, name) : null);
+  const dataStyleName = (st) => { for (let k = 0; st && k < 6; k++) { const d = st.getAttributeNS(NS.style, 'data-style-name'); if (d) return d; st = styleNamed(st.getAttributeNS(NS.style, 'parent-style-name')); } return ''; };
+  const colDefault = (t, c) => { let n = 0; let out = ''; const walk = (pp) => { for (const x of pp.children) { if (is(x, 'table-column')) { const k = rep(x, 'number-columns-repeated'); if (!out && c >= n && c < n + k) out = x.getAttributeNS(NS.table, 'default-cell-style-name') || ''; n += k; } else if (is(x, 'table-columns') || is(x, 'table-header-columns') || is(x, 'table-column-group')) walk(x); } }; walk(t); return out; };
+  const dataEl = (name) => { for (const tag of ['number-style', 'percentage-style', 'date-style', 'time-style', 'text-style']) { const e = named(tag, NS.number, name); if (e) return e; } return null; };
+  const codeOfStyle = (styleName) => {
+    const dn = dataStyleName(styleNamed(styleName)); if (!dn) return 'General';
+    const e = dataEl(dn); if (!e) return '';
+    const parts = [];
+    for (const x of e.children) {
+      if (x.namespaceURI !== NS.number) continue; const nm = x.localName; const a = (k) => x.getAttributeNS(NS.number, k);
+      if (nm === 'text') parts.push({ n: 'text', t: x.textContent });
+      else if (nm === 'number') parts.push({ n: 'number', dec: Number(a('decimal-places') || 0), min: Number(a('min-integer-digits') || 1), group: a('grouping') === 'true' });
+      else if (nm === 'year') parts.push({ n: 'year', long: a('style') === 'long' });
+      else if (nm === 'month') parts.push({ n: 'month', long: a('style') === 'long', text: a('textual') === 'true' });
+      else if (nm === 'day') parts.push({ n: 'day', long: a('style') === 'long' });
+      else if (nm === 'day-of-week') parts.push({ n: 'day-of-week', long: a('style') === 'long' });
+      else if (nm === 'hours') parts.push({ n: 'hours', long: a('style') === 'long' });
+      else if (nm === 'minutes') parts.push({ n: 'minutes', long: a('style') === 'long' });
+      else if (nm === 'seconds') parts.push({ n: 'seconds', long: a('style') === 'long' });
+      else if (nm === 'am-pm') parts.push({ n: 'am-pm' });
+      else if (nm === 'text-content') parts.push({ n: 'text-content' });
+      else parts.push({ n: nm });
+    }
+    return fromOdf(e.localName, parts) ?? '';
+  };
+  const styleOfCell = (el, t, c) => el.getAttributeNS(NS.table, 'style-name') || colDefault(t, c);
+  const shownNumber = (el, t, c, v) => { const code = codeOfStyle(styleOfCell(el, t, c)); const s = code && code !== 'General' && code !== '@' ? formatValue(v, code, false) : ''; return s === '' || s === undefined ? String(v) : String(s); };
   const addP = (el, line) => { // one paragraph; spaces that would collapse, and tabs, are written as the file expects
     const p = doc.createElementNS(NS.text, 'text:p');
     const parts = line.split(/(\t| +)/);
@@ -262,17 +299,17 @@ export function openOds(bytes) {
     });
     return { changes, cyc, names };
   };
-  const putValue = (el, v) => { // a result stored beside its formula
+  const putValue = (el, v, tb, c) => { // a result stored beside its formula
     const was = vt(el); const kept = (was === 'percentage' || was === 'currency') && typeof v === 'number';
     wipe(el, kept, true);
     if (v !== null && typeof v === 'object') { setType(el, 'string'); if (root.hasAttribute('xmlns:calcext')) el.setAttributeNS(NS.calcext, 'calcext:value-type', 'error'); addP(el, v.err); }
     else if (typeof v === 'boolean') { setType(el, 'boolean'); el.setAttributeNS(NS.office, 'office:boolean-value', v ? 'true' : 'false'); addP(el, v ? 'TRUE' : 'FALSE'); }
     else if (typeof v === 'string') { setType(el, 'string'); for (const line of v.split('\n')) addP(el, line); }
-    else { const x = String(v === null ? 0 : v); setType(el, kept ? was : 'float'); el.setAttributeNS(NS.office, 'office:value', x); addP(el, x); }
+    else { const x = String(v === null ? 0 : v); setType(el, kept ? was : 'float'); el.setAttributeNS(NS.office, 'office:value', x); addP(el, shownNumber(el, tb, c, Number(x))); }
   };
   const apply = (plan) => { // returns the cells changed, by sheet shown
     const out = [];
-    for (const ch of plan.changes) { putValue(ch.el, ch.v); dirty = true; const si = tables.indexOf(everyTable[ch.ti]); if (si >= 0) out.push({ si, r: ch.r, c: ch.c }); }
+    for (const ch of plan.changes) { putValue(ch.el, ch.v, everyTable[ch.ti], ch.c); dirty = true; const si = tables.indexOf(everyTable[ch.ti]); if (si >= 0) out.push({ si, r: ch.r, c: ch.c }); }
     return out;
   };
   const settle = (si, r, c) => { const list = apply(compute()); if (!list.some((x) => x.si === si && x.r === r && x.c === c)) list.push({ si, r, c }); return list; };
@@ -306,7 +343,7 @@ export function openOds(bytes) {
     const keep = (was === 'percentage' || was === 'currency') && text[0] !== "'" && NUMBER.test(trimmed);
     wipe(el, keep, false);
     if (text[0] !== "'" && NUMBER.test(trimmed) && Number.isFinite(Number(trimmed))) {
-      const v = String(Number(trimmed)); setType(el, keep ? was : 'float'); el.setAttributeNS(NS.office, 'office:value', v); addP(el, v);
+      const v = String(Number(trimmed)); setType(el, keep ? was : 'float'); el.setAttributeNS(NS.office, 'office:value', v); addP(el, shownNumber(el, t, c, Number(v)));
     } else if (text[0] !== "'" && /^(true|false)$/i.test(trimmed)) {
       const b = /^true$/i.test(trimmed); setType(el, 'boolean'); el.setAttributeNS(NS.office, 'office:boolean-value', b ? 'true' : 'false'); addP(el, b ? 'TRUE' : 'FALSE');
     } else {
@@ -314,6 +351,67 @@ export function openOds(bytes) {
       setType(el, 'string'); for (const line of s.split('\n')) addP(el, line);
     }
     dirty = true; return settle(si, r, c);
+  };
+
+  const format = (si, r, c) => { // the format code of a cell: General, a code, or '' when the style is one this editor does not read
+    const t = tbl(si); const row = rowAt(t, r, false); const el = row && cellAt(row, c, false);
+    return codeOfStyle(el ? styleOfCell(el, t, c) : colDefault(t, c));
+  };
+  const freeName = (base) => { const used = new Set(); for (const pl of pools()) for (const e of pl.children) used.add(e.getAttributeNS(NS.style, 'name')); let k = 1; while (used.has(`${base}${k}`)) k++; return `${base}${k}`; };
+  const made = new Map(); // code -> data style name, styles made in this session
+  const dataStyleFor = (code, spec) => {
+    if (made.has(code)) return made.get(code);
+    const name = freeName('NArkly'); const e = doc.createElementNS(NS.number, `number:${spec.tag}`);
+    e.setAttributeNS(NS.style, 'style:name', name);
+    if (spec.tag === 'date-style' || spec.tag === 'time-style') e.setAttributeNS(NS.number, 'number:automatic-order', 'false');
+    for (const p of spec.parts) {
+      const mk = (n) => doc.createElementNS(NS.number, `number:${n}`);
+      if (p.n === 'text') { const x = mk('text'); x.textContent = p.t; e.appendChild(x); }
+      else if (p.n === 'number') { const x = mk('number'); x.setAttributeNS(NS.number, 'number:decimal-places', String(p.dec)); x.setAttributeNS(NS.number, 'number:min-integer-digits', String(p.min)); if (p.group) x.setAttributeNS(NS.number, 'number:grouping', 'true'); e.appendChild(x); }
+      else {
+        const x = mk(p.n); if (p.long !== undefined) x.setAttributeNS(NS.number, 'number:style', p.long ? 'long' : 'short');
+        if (p.n === 'month') x.setAttributeNS(NS.number, 'number:textual', p.text ? 'true' : 'false');
+        e.appendChild(x);
+      }
+    }
+    autoBox().appendChild(e); made.set(code, name); return name;
+  };
+  const cellStyles = new Map(); // base style + data style -> the cell style made for it
+  const styleFor = (base, dataName) => {
+    const key = `${base}|${dataName}`; if (cellStyles.has(key)) return cellStyles.get(key);
+    const src = base ? styleNamed(base) : null; const name = freeName('ceArkly'); let st;
+    if (src && src.parentNode === autoBox()) st = src.cloneNode(true); // an automatic style keeps what it holds
+    else { st = doc.createElementNS(NS.style, 'style:style'); st.setAttributeNS(NS.style, 'style:family', 'table-cell'); if (base) st.setAttributeNS(NS.style, 'style:parent-style-name', base); }
+    st.setAttributeNS(NS.style, 'style:name', name);
+    if (dataName) st.setAttributeNS(NS.style, 'style:data-style-name', dataName); else st.removeAttributeNS(NS.style, 'data-style-name');
+    autoBox().appendChild(st); cellStyles.set(key, name); return name;
+  };
+  const setFormat = (si, r, c, code) => {
+    check(si, r, c);
+    const k = String(code === null || code === undefined ? '' : code).trim();
+    if (!k || k.length > 80) throw new EditError('That format code could not be used.');
+    const general = k.toLowerCase() === 'general'; const spec = general ? null : toOdf(k);
+    const t = tbl(si); ensureCols(t, c);
+    if (format(si, r, c) === (general ? 'General' : k)) return;
+    const row = rowAt(t, r, true); const el = cellAt(row, c, true);
+    if (is(el, 'covered-table-cell')) throw new EditError('This cell is covered by an array formula or a merged cell.');
+    const base = styleOfCell(el, t, c);
+    if (general && dataStyleName(styleNamed(base)) && !(styleNamed(base) && styleNamed(base).parentNode === autoBox())) throw new EditError('The format of this cell comes from a named style and cannot be reset to General here.');
+    el.setAttributeNS(NS.table, 'table:style-name', styleFor(base, spec ? dataStyleFor(k, spec) : ''));
+    // the shown text follows: a number is formatted, a date or time cell becomes a number when the format is not one
+    const ty = vt(el); const isDate = spec && (spec.tag === 'date-style' || spec.tag === 'time-style');
+    let n = null;
+    if (ty === 'float' || ty === 'percentage' || ty === 'currency') n = Number(el.getAttributeNS(NS.office, 'value'));
+    else if (ty === 'date' || ty === 'time') n = serial(el.getAttributeNS(NS.office, 'date-value'), el.getAttributeNS(NS.office, 'time-value'));
+    if (n !== null && Number.isFinite(n)) {
+      if ((ty === 'date' || ty === 'time') && !isDate) { for (const a of ['date-value', 'time-value']) el.removeAttributeNS(NS.office, a); setType(el, 'float'); el.setAttributeNS(NS.office, 'office:value', String(n)); }
+      if (spec && spec.tag === 'percentage-style' && ty === 'float') setType(el, 'percentage');
+      else if (ty === 'percentage' && !(spec && spec.tag === 'percentage-style')) setType(el, 'float');
+      for (const p of kids(el, 'p', NS.text)) p.remove();
+      const shown = general || k === '@' ? '' : formatValue(n, k, false);
+      addP(el, shown === '' || shown === undefined ? String(n) : String(shown));
+    }
+    dirty = true;
   };
 
   const ser = () => enc('<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(doc).replace(/^<\?xml[^>]*\?>\s*/, ''));
@@ -324,5 +422,5 @@ export function openOds(bytes) {
     for (const k of Object.keys(all)) if (k !== 'mimetype') out[k] = [all[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'ods', names: () => tables.map((t, k) => t.getAttributeNS(NS.table, 'name') || `Sheet ${k + 1}`), cell, locked, setCell, merges, snapshot, toBytes, dirty: () => dirty };
+  return { kind: 'ods', names: () => tables.map((t, k) => t.getAttributeNS(NS.table, 'name') || `Sheet ${k + 1}`), cell, locked, setCell, merges, snapshot, toBytes, format, setFormat, dirty: () => dirty };
 }

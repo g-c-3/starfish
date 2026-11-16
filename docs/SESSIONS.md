@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 255**
+
+Start: "Do next". CI for the Session 254 push (Decision 494) concluded success. Next item was Phase 120 step 5b2 (ods number formats).
+- Built (Decision 495): `src/js/odsfmt.js` (new: format code and ods number style both ways), `src/js/odsedit.js` (`format`, `setFormat`: number styles and cell styles written into the automatic styles, an automatic cell style cloned so it keeps what it held, the shown text and the value kind follow the format, typed numbers and formula results are shown formatted).
+- Tested in a sandbox: converter 29 checks; ods formats 24 checks plus 4 (reading existing styles, number, percent, date and time, date cell to number, custom code, empty cell, text format, reuse of styles, bold kept, refusals, reopen); through the view with jsdom 6 checks; ods engine 53, xlsx formulas 33, formats 21, calculator 64 and the xlsx view 6 still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 15 KB of source added (Decision 453).
+- Decision 495. DP275 open (DP269 to DP274 still open).
+- Next start: the CI log, DP269 to DP275 on a device, then Phase 120 step 5b3 (ods rows, columns and sheets).
+
+---
+
 **Session 254**
 
 Start: "Do next". CI for the Session 253 push (Decision 493) concluded success. Next item was Phase 120 step 5b, built in parts; 5b1 (ods formulas) is done, ods formats (5b2) and rows, columns and sheets (5b3) remain.
