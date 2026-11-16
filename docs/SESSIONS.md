@@ -4,6 +4,15 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 257**
+
+Start: "All dp confirmed. Do next". DP269 to DP276 were confirmed on a device. CI for the Session 256 push (Decision 496) concluded success.
+- Phase 120 ticked: xlsx and ods are complete; xls follows Phase 122.
+- Repair: the batches of Sessions 252 to 256 had replaced `DECISIONS.md` and `TRACK.md` with only their new entry (the file was emptied before it was read). Both were rebuilt from the last complete copy (Session 251) plus each batch's entry: Decisions 492 to 496 and TRACK rows 252 to 256 are back, nothing earlier changed. Checked against a fresh download.
+- Next start: Phase 121 (slide editor: pptx and odp).
+
+---
+
 **Session 256**
 
 Start: "Do next". CI for the Session 255 push (Decision 495) concluded success. Next item was Phase 120 step 5b3 (ods rows, columns and sheets), the last step of Phase 120 for xlsx and ods.

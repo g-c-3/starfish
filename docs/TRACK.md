@@ -464,3 +464,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-16 | Session 254 | Decision 494 | Phase 120 step 5b1: ods formulas (ods syntax read and written, typed formulas, recalculation after each change); DP274 added; not run through CI or a device |
 | 2026-11-16 | Session 255 | Decision 495 | Phase 120 step 5b2: ods number formats (format code and ods number style both ways, Format group for an ods); DP275 added; not run through CI or a device |
 | 2026-11-16 | Session 256 | Decision 496 | Phase 120 step 5b3: ods rows, columns and sheets (insert, delete, rename, add; formulas follow); Phase 120 complete for xlsx and ods; DP276 added; not run through CI or a device |
+| 2026-11-16 | Session 257 | — | DP269 to DP276 confirmed on a device; Phase 120 complete for xlsx and ods; DECISIONS.md and TRACK.md rebuilt after Sessions 252 to 256 (entries 492 to 496 and rows 252 to 256 restored) |
