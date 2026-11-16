@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 259**
+
+Start: "Do next". CI for the Session 258 push (Decision 497) concluded success. Next item was Phase 121 step 2 (the editor view for a pptx).
+- Built (Decision 498): `src/js/pptview-edit.js` (new, the editor view), `src/js/office-render.js` (the viewer takes a new model through `setModel`, draws the shape id on a text shape, offers Edit for a pptx and mounts the editor, find reads the live model), `src/js/office-read.js` (a text shape of a slide carries its id), `src/js/explorer-view.js` and `src/js/app.js` (Edit and Save as copy for .pptx), `src/css/office-shell.css` (outline of a tappable shape, the pick list).
+- Tested in a sandbox: editor view with jsdom 20 checks (the shape id from the reader, no dialog while not editing, tap opens the text, the viewer shows the change, the shape list, notes, add from a layout, duplicate, move, delete with its confirm, a chart slide refused with a message, bytes, clean after save); the whole viewer with jsdom (`mountOffice` for a pptx: Edit offered, tap opens the text, Set shows the change, Save hands over the edited file); engine 49, and the earlier suites still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 9 KB of source added (Decision 453).
+- Decision 498. DP277 open.
+- Next start: the CI log, DP277 on a device, then Phase 121 step 3 (odp on the same operations).
+
+---
+
 **Session 258**
 
 Start: "Continue" after the repair of Session 257. Next item was Phase 121 (slide editor), step 1.

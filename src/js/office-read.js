@@ -1277,6 +1277,7 @@ export function readPptx(bytes) {
         const prst = at(gn, 'prst') || (n === 'cxnSp' ? 'line' : 'rect');
         const gd = kid(kid(gn, 'avLst'), 'gd'); const am = gd && /val (-?\d+)/.exec(at(gd, 'fmla') || ''); const adj = am ? Number(am[1]) : 0;
         const item = { t: 'shape', ...place(g, xf), geom: prst, adj: adj || null, fill, line };
+        if (n === 'sp' && level === 'slide') { const cn = kid(kid(c, 'nvSpPr'), 'cNvPr'); if (cn && at(cn, 'id')) item.sid = at(cn, 'id'); } // the editor finds the shape by it (Decision 498)
         const tx = kid(c, 'txBody');
         if (tx && n === 'sp') {
           const lst = (nd) => kid(kid(nd, 'txBody'), 'lstStyle');

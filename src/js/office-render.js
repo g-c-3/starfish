@@ -725,6 +725,7 @@ const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? 
 
 registerEditor('docx', () => import('./docview-edit.js'));
 registerEditor('xlsx', () => import('./xlsview-edit.js'));
+registerEditor('pptx', () => import('./pptview-edit.js'));
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
@@ -1060,7 +1061,7 @@ function paragraphs(body, parent, u, scale) {
   }
 }
 function slideItem(it, media, u, ink) {
-  const n = el('div', 'eo-it'); const st = n.style;
+  const n = el('div', 'eo-it'); const st = n.style; if (it.sid) n.dataset.sid = it.sid;
   st.left = `${it.x}px`; st.top = `${it.y}px`; st.width = `${it.w}px`; st.height = `${it.h}px`;
   const tf = [it.rot ? `rotate(${it.rot}deg)` : '', it.fh ? 'scaleX(-1)' : '', it.fv ? 'scaleY(-1)' : ''].filter(Boolean).join(' '); if (tf) st.transform = tf;
   if (it.t === 'pic') {
@@ -1220,7 +1221,9 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   show(0);
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
-  return { stage, go, cur: () => index, destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
+  // the editor gives a new model: the slide count and the slides are read from it (Decision 498)
+  const setModel = (m, i) => { model = m; show(Math.max(0, Math.min(i, m.count - 1))); };
+  return { stage, go, cur: () => index, setModel, destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -1236,7 +1239,7 @@ export function mountOffice(kind, bytes, host, ctx) {
   let inner = {};
   // an OpenDocument file arrives under the same kind as its Word, Excel or PowerPoint counterpart (Decision 452)
   const odf = odfKind(bytes);
-  const model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : isDoc(bytes) ? readDoc(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : isXls(bytes) ? readXls(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : isPpt(bytes) ? readPpt(bytes) : readPptx(bytes)) : null;
+  let model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : isDoc(bytes) ? readDoc(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : isXls(bytes) ? readXls(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : isPpt(bytes) ? readPpt(bytes) : readPptx(bytes)) : null;
   if (!model) throw new OfficeError('This type is not supported here.');
   if (kind === 'docx' && model.embedded.length && typeof FontFace !== 'undefined') {
     for (const f of model.embedded) {
@@ -1266,8 +1269,9 @@ export function mountOffice(kind, bytes, host, ctx) {
   } else {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
-    tmp.tools = pptTools(model, inner); tmp.tools.open = ctx.openWith;
+    tmp.tools = pptTools({ get count() { return model.count; }, load: (i) => model.load(i) }, inner); tmp.tools.open = ctx.openWith; // read through `model`: the editor replaces it
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
+    if (edit && !odf && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('pptx')) shell = makeShell(inner, 'pptx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }
@@ -1288,6 +1292,11 @@ export function mountOffice(kind, bytes, host, ctx) {
             editor = mod.mountEditor({ zoomer: host.querySelector('.eo-xzoom'), host, model, sheet: () => view.cur(), onShown: view.setAfterShow, setModel: view.setModel, bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
             sh.setGroups(editor.groups); editor.setEditable(true);
             if (!editor.count) toast('Nothing in this file can be edited here.');
+            return;
+          }
+          if (type === 'pptx') {
+            editor = mod.mountEditor({ stage: inner.stage, host, model, cur: () => inner.cur(), setModel: (m, i) => { model = m; inner.setModel(m, i); }, bytes, toast, onActivity: ui.onActivity, onDirty: () => sh.sync() });
+            sh.setGroups(editor.groups); editor.setEditable(true);
             return;
           }
           const redraw = (files, want) => { // list markers and indents of the wanted paragraphs, drawn from the file as it now stands (Decision 479)

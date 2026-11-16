@@ -74,3 +74,7 @@
 .eo-xzoom.eo-editing th.eo-row, .eo-xzoom.eo-editing th.eo-col { cursor: pointer; }
 .eo-xzoom th.eo-sel { background: var(--brand); color: var(--brand-fg, #fff); }
 input.eo-cell-in { min-height: 0; }
+/* the pptx editor (Decision 498) */
+.eo-pedit [data-sid] { outline: 1px dashed var(--border-strong); outline-offset: -1px; cursor: pointer; }
+.eo-pick { display: flex; flex-direction: column; gap: 8px; }
+.eo-pick .eo-sh-btn { justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
