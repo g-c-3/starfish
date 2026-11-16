@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 254**
+
+Start: "Do next". CI for the Session 253 push (Decision 493) concluded success. Next item was Phase 120 step 5b, built in parts; 5b1 (ods formulas) is done, ods formats (5b2) and rows, columns and sheets (5b3) remain.
+- Built (Decision 494): `src/js/odsedit.js` (the ods formula syntax turned into A1 text and back, typed formulas, every formula calculated again after a change, array formulas and covered cells refused, the Decision 493 refusal of workbooks with formulas removed), `src/js/xlsxcalc.js` (TRUE() and FALSE()).
+- Tested in a sandbox: ods engine 53 checks (syntax both ways, strings holding `;` and `,`, other and quoted sheets, results flow, unsupported function and whole column refused, cycles refused, formula overwritten and cleared, stored syntax checked, read back through the reader, array formula refused); through the view with jsdom 5 checks; calculator 64, xlsx formulas 33, formats 21 and the xlsx view 5 still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 10 KB of source added (Decision 453).
+- Decision 494. DP274 open (DP269 to DP273 still open).
+- Next start: the CI log, DP269 to DP274 on a device, then Phase 120 step 5b2 (ods formats).
+
+---
+
 **Session 253**
 
 Start: "Do next". CI for the Session 252 push (Decision 492) concluded success. Next item was Phase 120 step 5, built as 5a (ods cell values); 5b remains.

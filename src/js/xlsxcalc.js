@@ -207,6 +207,8 @@ const FN = {
   OR: (a, ev) => logic(a, ev, true),
   NOT: (a, ev) => { const t = truth(arg(a, ev, 0)); return isErr(t) ? t : !t; },
   ISNUMBER: (a, ev) => typeof arg(a, ev, 0) === 'number',
+  TRUE: () => true,
+  FALSE: () => false,
   CONCAT: (a, ev) => { const x = cells(a, ev); const e = x.find(isErr); return e || x.map(str).join(''); },
   LEN: (a, ev) => text1(a, ev, (s) => s.length),
   UPPER: (a, ev) => text1(a, ev, (s) => s.toUpperCase()),
