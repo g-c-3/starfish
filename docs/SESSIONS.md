@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 266**
+
+Start: "You decide what needs to be decided and do what needs to be done next". CI for the Session 265 push (Decision 504, run 1051) concluded success. DP283 still open. Phase 110 has nothing left of its own (its remaining items are Phases 123 to 125); Phase 122 was unblocked by the three editors, so it was chosen. Split: step 1 the converters, step 2 the Edit button and the copy beside the original.
+- Built (Decision 505): `src/js/office-convert.js` (new), `src/js/office-xls.js` (raw number per cell, `is1904`), `src/js/office-ppt.js` (`role` on title and body boxes).
+- Tested in a sandbox with real files made by an office suite (.doc, .xls, .ppt), jsdom 20: 24 checks (doc paragraphs, tabs and special characters back through `readDocx`, editable; xls sheet names, text, number, percent, date, formula value, merge, bold and fill, border, freeze, column width, editable; ppt slide count, title, body, editable text, notes, second slide, one layout), and the three outputs opened and printed by the office suite itself with the same text. The 22, 13, 17, 14, 6 and 22 checks of Sessions 262 to 265 still pass. Not run through CI or a device.
+- Size: about 22 KB of source added (Decision 453), not in the app bundle until imported.
+- Decision 505. DP284 open (DP283 still open).
+- Found, not changed: the .ppt reader does not find the notes of an office-suite .ppt; an .xls from a Python library with a formula cell loses that cell in the reader.
+- Next start: the CI log, DP283 and DP284 on a device, then Phase 122 step 2 (Edit on .doc, .xls and .ppt: notice, copy beside the original, open in the editor). Read the Edit offer code in `app.js` and the three editors' mount first.
+
+---
+
 **Session 265**
 
 Start: "Do next", after "Dp clear": DP281 and DP282 confirmed on a device. CI for the Session 264 push (Decision 503, run 1050) concluded success. Next item was Phase 121 step 4c3 (move and resize by touch). Motion section of ARCHITECTURE.md read first.

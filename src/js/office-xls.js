@@ -150,12 +150,12 @@ export function readXls(bytes) {
     const rows = []; const colW = {}; const rowH = {}; const merges = [];
     let ncols = 0; let truncated = false; let cellCount = 0; let hasDrawing = false; let grid = true; let freeze = { rows: 0, cols: 0 }; let pane = null; let freezeOn = false;
     let depth = 0; let pendingFormula = null;
-    const put = (r, c, text, xf, kind) => {
+    const put = (r, c, text, xf, kind, raw) => {
       if (r >= SHEET_ROW_MAX || cellCount > 100000) { truncated = true; return; }
       if (c >= SHEET_COL_MAX) { truncated = true; return; }
       const x = xfs[xf] || xfs[0];
       if (text === '' && !xf) return;
-      (rows[r] = rows[r] || [])[c] = { v: text, s: xf < xfs.length ? xf : 0, k: kind }; cellCount++;
+      (rows[r] = rows[r] || [])[c] = { v: text, s: xf < xfs.length ? xf : 0, k: kind, ...(raw === undefined ? {} : { n: raw }) }; cellCount++; // n: the number as stored (Decision 505)
       if (text !== '' || x.fill || x.border) if (c + 1 > ncols) ncols = c + 1;
     };
     const num = (v, xf) => formatValue(String(v), (xfs[xf] || xfs[0]).code, is1904);
@@ -165,9 +165,9 @@ export function readXls(bytes) {
       if (depth !== 1) continue; // a chart or other nested stream
       const row = r.len >= 2 ? u16(r.o) : 0; const c0 = r.len >= 4 ? u16(r.o + 2) : 0; const xf = r.len >= 6 ? u16(r.o + 4) : 0;
       switch (r.id) {
-        case 0x203: put(row, c0, num(f64(r.o + 6), xf), xf, 'n'); break;
-        case 0x27e: put(row, c0, num(rkValue(u32(r.o + 6)), xf), xf, 'n'); break;
-        case 0xbd: { const last = u16(r.o + r.len - 2); for (let c = c0, p = r.o + 4; c <= last && p + 6 <= r.o + r.len - 2; c++, p += 6) put(row, c, num(rkValue(u32(p + 2)), u16(p)), u16(p), 'n'); break; }
+        case 0x203: put(row, c0, num(f64(r.o + 6), xf), xf, 'n', f64(r.o + 6)); break;
+        case 0x27e: put(row, c0, num(rkValue(u32(r.o + 6)), xf), xf, 'n', rkValue(u32(r.o + 6))); break;
+        case 0xbd: { const last = u16(r.o + r.len - 2); for (let c = c0, p = r.o + 4; c <= last && p + 6 <= r.o + r.len - 2; c++, p += 6) put(row, c, num(rkValue(u32(p + 2)), u16(p)), u16(p), 'n', rkValue(u32(p + 2))); break; }
         case 0xfd: put(row, c0, sst[u32(r.o + 6)] ?? '', xf, 's'); break;
         case 0x204: put(row, c0, ustr(r.data, 6, 2).text, xf, 's'); break;
         case 0x205: put(row, c0, wb[r.o + 7] ? ERRORS[wb[r.o + 6]] || '#ERR' : wb[r.o + 6] ? 'TRUE' : 'FALSE', xf, 'b'); break;
@@ -179,7 +179,7 @@ export function readXls(bytes) {
             if (ty === 0) pendingFormula = { row, c: c0, xf };
             else if (ty === 1) put(row, c0, wb[r.o + 8] ? 'TRUE' : 'FALSE', xf, 'b');
             else if (ty === 2) put(row, c0, ERRORS[wb[r.o + 8]] || '#ERR', xf, 'b');
-          } else put(row, c0, num(f64(r.o + 6), xf), xf, 'n');
+          } else put(row, c0, num(f64(r.o + 6), xf), xf, 'n', f64(r.o + 6));
           break;
         }
         case 0x207: if (pendingFormula) { put(pendingFormula.row, pendingFormula.c, ustr(r.data, 0, 2).text, pendingFormula.xf, 's'); pendingFormula = null; } break;
@@ -196,5 +196,5 @@ export function readXls(bytes) {
     for (let k = 0; k < rows.length; k++) rows[k] = Array.from(rows[k] || []);
     return { rows, ncols, truncated, colW, defCol: 64, rowH, defRow: 20, merges, freeze, grid, objects: [], media: {}, hasDrawing };
   }
-  return { kind: 'xlsx', names: visible.map((s) => s.name), load, xfs };
+  return { kind: 'xlsx', names: visible.map((s) => s.name), load, xfs, is1904 };
 }

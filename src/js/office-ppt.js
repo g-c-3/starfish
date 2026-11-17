@@ -137,8 +137,8 @@ export function readPpt(bytes) {
     if (title) {
       const lines = clean(title.text); const chars = lines.join(' ').length;
       const pt = chars > 90 ? 24 : chars > 50 ? 30 : 38;
-      items.push(box(Math.round(W * 0.06), Math.round(H * 0.05), Math.round(W * 0.88), Math.round(H * 0.2), 'ctr',
-        lines.map((l) => para(l, Math.round(pt * PX_PT), title.type === 6 ? 'center' : 'left', false))));
+      items.push({ role: 'title', ...box(Math.round(W * 0.06), Math.round(H * 0.05), Math.round(W * 0.88), Math.round(H * 0.2), 'ctr',
+        lines.map((l) => para(l, Math.round(pt * PX_PT), title.type === 6 ? 'center' : 'left', false))) });
     }
     const rest = texts.filter((t, k) => k !== ti);
     const blocks = rest.map((t) => ({ t, lines: clean(t.text) })).filter((b) => b.lines.length);
@@ -148,7 +148,7 @@ export function readPpt(bytes) {
       const paras = [];
       for (const b of blocks) for (const l of b.lines) paras.push(para(l, Math.round(pt * PX_PT), b.t.type === 6 ? 'center' : 'left', [1, 5, 7, 8].includes(b.t.type)));
       const y = title ? Math.round(H * 0.28) : Math.round(H * 0.06);
-      items.push(box(Math.round(W * 0.06), y, Math.round(W * 0.88), Math.round(H - y - H * 0.06), 't', paras));
+      items.push({ role: 'body', ...box(Math.round(W * 0.06), y, Math.round(W * 0.88), Math.round(H - y - H * 0.06), 't', paras) });
     }
     return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items, media: {}, notes: notesOf.get(s.slideId) || '' };
   }
