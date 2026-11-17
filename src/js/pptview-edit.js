@@ -55,9 +55,31 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
       h.appendChild(ta);
       buttons(h, [
         ['Set', 'eo-sh-primary', () => { if (ta.value === sh.text || redraw(() => eng.setText(si, id, ta.value), () => si)) close(); }],
+        ['Position and size', '', () => { close(); editBox(si, id, sh.name); }],
         ['Cancel', '', () => close()]
       ]);
       setTimeout(() => { if (ta.isConnected) ta.focus(); }, 80);
+    });
+  };
+  // numbers in slide pixels (96 per inch); the slide is model.size wide and high where the file says
+  const editBox = (si, id, name) => {
+    let b; try { b = eng.box(si, id); } catch (e) { toast(e.message); return; }
+    if (!b) { toast('This shape has no place of its own to change.'); return; }
+    sheet(name ? `${name}: place` : 'Place and size', (h, close) => {
+      if (model.size) h.appendChild(el('p', 'eo-cell-note', `Slide: ${Math.round(model.size.w)} × ${Math.round(model.size.h)} px.`));
+      const fields = {};
+      for (const [k, label] of [['x', 'Left'], ['y', 'Top'], ['w', 'Width'], ['h', 'Height']]) {
+        const lb = el('label', 'eo-cell-note', label); const inp = el('input', 'eo-cell-in'); inp.type = 'number'; inp.inputMode = 'decimal'; inp.step = '1'; inp.value = String(Math.round(b[k])); inp.setAttribute('aria-label', label);
+        lb.appendChild(inp); h.appendChild(lb); fields[k] = inp;
+      }
+      buttons(h, [
+        ['Set', 'eo-sh-primary', () => {
+          const nb = {}; for (const k of ['x', 'y', 'w', 'h']) { const n = Number(fields[k].value); nb[k] = n === Math.round(b[k]) ? b[k] : n; } // a field left alone keeps the exact value
+          if (['x', 'y', 'w', 'h'].every((k) => nb[k] === Math.round(b[k]))) { close(); return; }
+          if (redraw(() => eng.setBox(si, id, nb), () => si)) close();
+        }],
+        ['Cancel', '', () => close()]
+      ]);
     });
   };
   const listShapes = () => {

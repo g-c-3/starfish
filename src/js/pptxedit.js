@@ -105,6 +105,33 @@ export function openPptx(bytes) {
     touch(slide(si).path);
   };
 
+  // ---- position and size (Decision 500): px at 96 per inch; a placeholder without its own frame takes the one of its layout, then its master ----
+  const xfrmOf = (sp) => kid(kid(sp, NS.p, 'spPr'), NS.a, 'xfrm');
+  const readX = (x) => { const o = kid(x, NS.a, 'off'); const e = kid(x, NS.a, 'ext'); if (!o || !e) return null; const v = [o.getAttribute('x'), o.getAttribute('y'), e.getAttribute('cx'), e.getAttribute('cy')].map(Number); return v.every(Number.isFinite) ? { x: v[0] / 9525, y: v[1] / 9525, w: v[2] / 9525, h: v[3] / 9525 } : null; };
+  const inherited = (path, sp) => {
+    const ph = phOf(sp); if (!ph) return null; const idx = ph.getAttribute('idx'); const ty = ph.getAttribute('type');
+    const chain = []; const lay = relsOf(path).find((r) => r.type === RT('slideLayout')); if (lay && lay.path) { chain.push(lay.path); const ms = relsOf(lay.path).find((r) => r.type === RT('slideMaster')); if (ms && ms.path) chain.push(ms.path); }
+    for (const p of chain) {
+      const d = part(p); if (!d) continue;
+      for (const o of all(d, NS.p, 'sp')) { const q = phOf(o); if (!q) continue; if ((idx && q.getAttribute('idx') === idx) || (!idx && (q.getAttribute('type') || 'body') === (ty || 'body'))) { const b = xfrmOf(o) && readX(xfrmOf(o)); if (b) return b; } }
+    }
+    return null;
+  };
+  const box = (si, id) => { const { sp } = find(si, id); const x = xfrmOf(sp); return (x && readX(x)) || inherited(slide(si).path, sp); };
+  const setBox = (si, id, b) => {
+    const { sp } = find(si, id); const v = [b.x, b.y, b.w, b.h].map((n) => Math.round(Number(n) * 9525));
+    if (!v.every(Number.isFinite) || v[2] <= 0 || v[3] <= 0) throw new EditError('Width and height must be more than zero.');
+    if (sp.parentNode && sp.parentNode.localName === 'grpSp') throw new EditError('This shape is in a group; its place cannot be changed here.');
+    const cur = box(si, id); if (cur && [cur.x, cur.y, cur.w, cur.h].map((n) => Math.round(n * 9525)).every((n, i) => n === v[i]) && xfrmOf(sp)) return;
+    const doc = sp.ownerDocument; let pr = kid(sp, NS.p, 'spPr');
+    if (!pr) { pr = doc.createElementNS(NS.p, 'p:spPr'); sp.insertBefore(pr, kid(sp, NS.p, 'nvSpPr').nextSibling); }
+    let x = kid(pr, NS.a, 'xfrm'); if (!x) { x = doc.createElementNS(NS.a, 'a:xfrm'); pr.insertBefore(x, pr.firstChild); }
+    let o = kid(x, NS.a, 'off'); if (!o) { o = doc.createElementNS(NS.a, 'a:off'); x.insertBefore(o, x.firstChild); }
+    let e = kid(x, NS.a, 'ext'); if (!e) { e = doc.createElementNS(NS.a, 'a:ext'); x.insertBefore(e, o.nextSibling); }
+    o.setAttribute('x', String(v[0])); o.setAttribute('y', String(v[1])); e.setAttribute('cx', String(v[2])); e.setAttribute('cy', String(v[3]));
+    touch(slide(si).path);
+  };
+
   const titleOf = (path) => { const sp = shapesOf(part(path)).find((x) => /^(title|ctrTitle)$/.test((phOf(x) && phOf(x).getAttribute('type')) || '')); return sp ? textOf(sp).replace(/\n/g, ' ') : ''; };
   const slides = () => list().map((s, i) => ({ index: i, id: s.id, part: s.path, title: titleOf(s.path) }));
 
@@ -214,5 +241,5 @@ export function openPptx(bytes) {
     for (const k of Object.keys(snap)) if (k !== first) out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'pptx', slides, shapes, setText, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'pptx', slides, shapes, setText, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

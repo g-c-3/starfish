@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 261**
+
+Start: "Continue here anyway", after the Session 260 push. CI for it (Decision 499) concluded success. Next item was Phase 121 step 4; split into 4a position and size, 4b table text, 4c add a text box or a picture.
+- Built (Decision 500): `src/js/pptxedit.js` and `src/js/odpedit.js` (`box`, `setBox`), `src/js/pptview-edit.js` (Position and size sheet from the text sheet of a shape).
+- Tested in a sandbox: 10 checks with jsdom 20 on a minimal pptx and the odp file (own frame, frame inherited from the layout, same numbers write nothing, own frame set, placeholder set with the layout untouched, zero width refused, odp read in centimetres, set, same numbers clean); the odp engine 42 and the editor view 7 still pass. Parse of every edited file: no error. Not run through CI or a device.
+- Size: about 5 KB of source added (Decision 453).
+- Decision 500. DP279 open (DP277 and DP278 still open).
+- Next start: the CI log, DP277 to DP279 on a device, then step 4b (table text).
+
+---
+
 **Session 260**
 
 Start: "Go". CI for the Session 259 push (Decision 498) concluded success. Next item was Phase 121 step 3 (odp on the same operations).

@@ -160,6 +160,24 @@ export function openOdp(bytes) {
   };
   const setText = (si, id, text) => { if (writeBox(findShape(si, id).box, text)) touch('content.xml'); };
 
+  // ---- position and size (Decision 500): px at 96 per inch; a rotated or moved-by-transform shape is refused ----
+  const UNIT = { cm: 96 / 2.54, mm: 96 / 25.4, in: 96, pt: 96 / 72, px: 1 };
+  const len = (v) => { const m = /^\s*(-?[\d.]+)\s*(cm|mm|in|pt|px)?\s*$/i.exec(v || ''); return m ? Number(m[1]) * UNIT[(m[2] || 'px').toLowerCase()] : null; };
+  const box = (si, id) => {
+    const el = findShape(si, id).el; const v = ['x', 'y', 'width', 'height'].map((k) => len(el.getAttributeNS(NS.svg, k)));
+    return v.every((n) => n !== null) ? { x: v[0], y: v[1], w: v[2], h: v[3] } : null;
+  };
+  const setBox = (si, id, b) => {
+    const el = findShape(si, id).el; const v = [b.x, b.y, b.w, b.h].map(Number);
+    if (!v.every(Number.isFinite) || v[2] <= 0 || v[3] <= 0) throw new EditError('Width and height must be more than zero.');
+    if (el.hasAttributeNS(NS.draw, 'transform')) throw new EditError('This shape is rotated, and its place cannot be changed here.');
+    if (!box(si, id)) throw new EditError('The place of this shape comes from the master and cannot be changed here.');
+    const cm = (n) => `${(Math.round(n / UNIT.cm * 1000) / 1000)}cm`;
+    let wrote = false;
+    ['x', 'y', 'width', 'height'].forEach((k, i) => { const cur = len(el.getAttributeNS(NS.svg, k)); if (cur === null || Math.abs(cur - v[i]) > 0.05) { el.setAttributeNS(NS.svg, `svg:${k}`, cm(v[i])); wrote = true; } });
+    if (wrote) touch('content.xml');
+  };
+
   // ---- notes ----
   const notesBox = (pg) => {
     const nt = kid(pg, NS.pres, 'notes');
@@ -268,5 +286,5 @@ export function openOdp(bytes) {
     for (const k of Object.keys(snap)) if (k !== 'mimetype') out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'odp', slides: () => pages().length, shapes, setText, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'odp', slides: () => pages().length, shapes, setText, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }
