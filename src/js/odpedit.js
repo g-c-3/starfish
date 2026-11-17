@@ -263,6 +263,22 @@ export function openOdp(bytes) {
     return shapesOf(pg).find((x) => x.el === fr).id;
   };
 
+  // ---- add a picture (Decision 503): img = { bytes, ext, mime, w, h }; stored in Pictures/ and listed in the manifest; fitted into 60% of the slide, centred ----
+  const addPicture = (si, img) => {
+    if (!img || !img.bytes || !img.bytes.length || !/^(png|jpe?g|gif)$/i.test(img.ext || '') || !(img.w > 0 && img.h > 0)) throw new EditError('That picture cannot be added.');
+    const pg = page(si); const d = pg.ownerDocument; const S = slideSize(pg); const ext = img.ext.toLowerCase();
+    let n = 1; while (files[`Pictures/image${n}.${ext}`] || Object.keys(files).some((k) => k.toLowerCase().startsWith(`pictures/image${n}.`))) n += 1;
+    const path = `Pictures/image${n}.${ext}`; const mime = img.mime || (ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg');
+    const man = part('META-INF/manifest.xml'); if (!man) throw new EditError('This file has no manifest to list the picture in.');
+    const bw = S.w * 0.6; const bh = S.h * 0.6; const r = img.w / img.h; const w = bw / r <= bh ? bw : bh * r; const h = bw / r <= bh ? bw / r : bh;
+    const cm = (v) => `${Math.round(v / UNIT.cm * 1000) / 1000}cm`;
+    const fr = d.createElementNS(NS.draw, 'draw:frame'); fr.setAttributeNS(NS.draw, 'draw:layer', 'layout');
+    fr.setAttributeNS(NS.svg, 'svg:width', cm(w)); fr.setAttributeNS(NS.svg, 'svg:height', cm(h)); fr.setAttributeNS(NS.svg, 'svg:x', cm((S.w - w) / 2)); fr.setAttributeNS(NS.svg, 'svg:y', cm((S.h - h) / 2));
+    const im = d.createElementNS(NS.draw, 'draw:image'); im.setAttributeNS(NS.xlink, 'xlink:href', path); im.setAttributeNS(NS.xlink, 'xlink:type', 'simple'); im.setAttributeNS(NS.xlink, 'xlink:show', 'embed'); im.setAttributeNS(NS.xlink, 'xlink:actuate', 'onLoad'); fr.appendChild(im);
+    const fe = man.createElementNS(NS.manifest, 'manifest:file-entry'); fe.setAttributeNS(NS.manifest, 'manifest:full-path', path); fe.setAttributeNS(NS.manifest, 'manifest:media-type', mime); man.documentElement.appendChild(fe);
+    files[path] = img.bytes; pg.insertBefore(fr, kid(pg, NS.pres, 'notes') || null); touch('content.xml'); touch('META-INF/manifest.xml');
+  };
+
   // ---- slides ----
   const masters = () => {
     const sr = part('styles.xml'); if (!sr) return [];
@@ -343,5 +359,5 @@ export function openOdp(bytes) {
     for (const k of Object.keys(snap)) if (k !== 'mimetype') out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'odp', slides: () => pages().length, shapes, setText, addTextBox, tables, setCell, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'odp', slides: () => pages().length, shapes, setText, addTextBox, addPicture, tables, setCell, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

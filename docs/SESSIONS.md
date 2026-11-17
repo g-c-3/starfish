@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 264**
+
+Start: "Do next". CI for the Session 263 push (Decision 502, run 1049) concluded success. Next item was Phase 121 step 4c2 (add a picture).
+- Built (Decision 503): `src/js/pptxedit.js` and `src/js/odpedit.js` (`addPicture`), `src/js/pptview-edit.js` (Tools > Text > Add picture), `src/js/docview-edit.js` (`pickFromPhone` exported, nothing else changed).
+- Tested in a sandbox: 17 checks with jsdom 20 (pptx: id, media stored, content type default, relationship, size fitted and centred for a wide and a tall picture, rId matches, second picture named and one Default kept, other format refused; odp: file, `mimetype` first, manifest entry, frame size and place before the notes, second name, other format refused); the 13 and 22 checks of Sessions 263 and 262 still pass. Parse of the four edited files: no error. The picker and the editor view were parsed, not run; the reader was not run on the added pictures. Not run through CI or a device.
+- Size: about 5 KB of source added (Decision 453).
+- Decision 503. DP282 open (DP281 still open).
+- Next start: the CI log, DP281 and DP282 on a device, then step 4c3 (drag and resize by touch).
+
+---
+
 **Session 263**
 
 Start: "Do next", after "Dp all clear": DP277 to DP280 confirmed on a device. CI for the Session 262 push (Decision 501, run 1048) concluded success. Next item was Phase 121 step 4c; split into 4c1 add a text box, 4c2 add a picture, 4c3 drag and resize by touch.
@@ -161,7 +172,7 @@ Start: "Do next". CI for the Session 249 push (Decision 489) concluded success. 
 Start: "Go". Last session (248) confirmed every device pass; next item is Phase 120 step 2. The CI log was not read.
 - Built (Decision 489): the xlsx editor view, `src/js/xlsview-edit.js` (new); `office-render.js` (a column on every cell, the redraw hook, the shell for an xlsx, `makeShell` by type), `office-read.js` (`is1904` on the model), `office-shell.css` (ribbon tab rules scoped, cell input), `explorer-view.js` and `app.js` (xlsx offered for Edit, copy name keeps `.xlsx`).
 - Tested in a sandbox (jsdom, through `mountOffice`): 28 checks (Edit mounts, every cell has a column, raw number in the sheet, number format kept on display, text-like number gets its apostrophe, formula note and a typed formula refused, text and clear, change kept across a sheet switch, Save writes bytes read back through the engine: changed cells, formula and other sheet untouched, clean after Save, Done with no changes leaves no prompt, Done with changes asks and Keep editing and Discard work). Bundle of the edited files with packages external: no error. Not run through CI or a device.
-- Size: about 6 KB of source added (Decision 453).
+- Size: about 5 KB of source added (Decision 453).
 - Decision 489. DP269 open.
 - Next start: the CI log, DP269 on a device, then Phase 120 step 3 (rows, columns and sheets: insert, delete, rename).
 

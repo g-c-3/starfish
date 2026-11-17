@@ -54,7 +54,7 @@ async function readPicture(file) {
   if (bmp.close) bmp.close();
   return { bytes, mime, ext: mime === 'image/jpeg' ? 'jpg' : mime === 'image/gif' ? 'gif' : 'png', w, h };
 }
-const pickFromPhone = () => new Promise((resolve, reject) => {
+export const pickFromPhone = () => new Promise((resolve, reject) => {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = () => { const f = inp.files && inp.files[0]; if (!f) resolve(null); else readPicture(f).then(resolve, reject); };
   inp.click();

@@ -1,7 +1,7 @@
 // Slide edit engine, pptx (Decision 497, Phase 121 step 1). Works on the parts of the zip in place: a changed part is written, every other part
 // is kept as it was. Text of a shape, notes, and slides (add, duplicate, move, delete). No view here; the editor view comes next.
 // A slide that holds a chart, a drawing of a diagram, an embedded object or comments is not duplicated (those parts cannot be shared);
-// slides are not reordered where the file has sections. Table cells: text of a cell (Decision 501). A text box can be added (Decision 502).
+// slides are not reordered where the file has sections. Table cells: text of a cell (Decision 501). A text box (Decision 502) and a picture (Decision 503) can be added.
 import { unzipSync, zipSync } from 'fflate';
 
 const NS = {
@@ -172,6 +172,21 @@ export function openPptx(bytes) {
     writeBody(kid(sp, NS.p, 'txBody'), root, text); touch(sl.path); return String(nid);
   };
 
+  // ---- add a picture (Decision 503): img = { bytes, ext, mime, w, h } (the view reads it from the phone); fitted into 60% of the slide, centred ----
+  const fit = (W, H, w, h) => { const bw = W * 0.6; const bh = H * 0.6; const r = w / h; const cw = bw / r <= bh ? bw : bh * r; const ch = bw / r <= bh ? bw / r : bh; return { w: Math.round(cw), h: Math.round(ch), x: Math.round((W - cw) / 2), y: Math.round((H - ch) / 2) }; };
+  const addPicture = (si, img) => {
+    if (!img || !img.bytes || !img.bytes.length || !/^(png|jpe?g|gif)$/i.test(img.ext || '') || !(img.w > 0 && img.h > 0)) throw new EditError('That picture cannot be added.');
+    const sl = slide(si); const root = part(sl.path); const tree = kid(kid(root.documentElement, NS.p, 'cSld'), NS.p, 'spTree'); if (!tree) throw new EditError('This slide cannot take a picture.');
+    const ext = img.ext.toLowerCase(); const sz = kid(pres.documentElement, NS.p, 'sldSz'); const W = Number(sz && sz.getAttribute('cx')) || 9144000; const H = Number(sz && sz.getAttribute('cy')) || 6858000;
+    const mp = `ppt/media/image${nextNum(/^ppt\/media\/image(\d+)\.[a-z0-9]+$/i)}.${ext}`; files[mp] = img.bytes;
+    const ct = ctDoc(); if (!kids(ct.documentElement, NS.ct, 'Default').some((e) => (e.getAttribute('Extension') || '').toLowerCase() === ext)) { const e = ct.createElementNS(NS.ct, 'Default'); e.setAttribute('Extension', ext); e.setAttribute('ContentType', img.mime || (ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg')); ct.documentElement.insertBefore(e, ct.documentElement.firstChild); touch('[Content_Types].xml'); }
+    const rid = addRel(sl.path, RT('image'), relative(sl.path, mp));
+    let nid = 1; for (const c of all(root, NS.p, 'cNvPr')) nid = Math.max(nid, Number(c.getAttribute('id')) || 0); nid += 1;
+    const b = fit(W, H, img.w, img.h);
+    const frag = parseX(`<p:pic xmlns:p="${NS.p}" xmlns:a="${NS.a}" xmlns:r="${NS.r}"><p:nvPicPr><p:cNvPr id="${nid}" name="Picture ${nid}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${b.x}" y="${b.y}"/><a:ext cx="${b.w}" cy="${b.h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`).documentElement;
+    tree.insertBefore(root.importNode(frag, true), kid(tree, NS.p, 'extLst')); touch(sl.path); return String(nid);
+  };
+
   const titleOf = (path) => { const sp = shapesOf(part(path)).find((x) => /^(title|ctrTitle)$/.test((phOf(x) && phOf(x).getAttribute('type')) || '')); return sp ? textOf(sp).replace(/\n/g, ' ') : ''; };
   const slides = () => list().map((s, i) => ({ index: i, id: s.id, part: s.path, title: titleOf(s.path) }));
 
@@ -281,5 +296,5 @@ export function openPptx(bytes) {
     for (const k of Object.keys(snap)) if (k !== first) out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'pptx', slides, shapes, setText, addTextBox, tables, setCell, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'pptx', slides, shapes, setText, addTextBox, addPicture, tables, setCell, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

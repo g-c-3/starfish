@@ -1,10 +1,11 @@
 // pptview-edit.js — the pptx and odp editor view (Phase 121 steps 2 and 3, Decisions 498 and 499). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a text shape of the slide opens a sheet to change its text; the Tools list the shapes (an empty placeholder too),
-// edit the notes, change the text of a table cell (Decision 501), add a text box (Decision 502), and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
+// edit the notes, change the text of a table cell (Decision 501), add a text box (Decision 502), add a picture from the phone (Decision 503), and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
 // file again and draws the slide.
 import { openPptx } from './pptxedit.js';
 import { openOdp } from './odpedit.js';
 import { openSheet } from './sheet.js';
+import { pickFromPhone } from './docview-edit.js';
 import { readPptx } from './office-read.js';
 import { readOdp, odfKind } from './office-odf.js';
 
@@ -12,6 +13,7 @@ const IC_TEXT = '<path d="M5 6h14M12 6v13M9 19h6"/>';
 const IC_LIST = '<path d="M5 7h2M10 7h9M5 12h2M10 12h9M5 17h2M10 17h9"/>';
 const IC_TABLE = '<path d="M4 5h16v14H4zM4 10h16M4 15h16M10 5v14M15 5v14"/>';
 const IC_BOX = '<path d="M4 6h16v12H4zM9 11h6M12 11v4"/>';
+const IC_PIC = '<path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01"/>';
 const IC_NOTE = '<path d="M6 4h9l3 3v13H6zM9 11h6M9 15h6"/>';
 const IC_ADD = '<path d="M5 5h14v14H5zM12 9v6M9 12h6"/>';
 const IC_COPY = '<path d="M8 8h11v11H8zM5 16V5h11"/>';
@@ -24,7 +26,8 @@ const snippet = (t) => { const s = String(t).replace(/\s+/g, ' ').trim(); return
 
 // stage: the element that holds the drawn slide; model: the reader's presentation; cur(): the slide on view;
 // setModel(model, index): the viewer draws the new model at a slide; onDirty(): the shell is told to refresh its buttons
-export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {} }) {
+export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {}, pickImage = null }) {
+  const pick = pickImage || pickFromPhone;
   let model = model0;
   const odp = odfKind(bytes) === 'presentation';
   const eng = odp ? openOdp(bytes) : openPptx(bytes); // throws an office error for a file that is not a valid presentation
@@ -143,6 +146,13 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
       setTimeout(() => { if (ta.isConnected) ta.focus(); }, 80);
     });
   };
+  const addPic = async () => {
+    if (!editing) return;
+    const si = cur(); let img;
+    try { img = await pick(); } catch (e) { toast(e && e.message ? e.message : 'That picture could not be read.'); return; }
+    if (!img || !editing) return;
+    redraw(() => eng.addPicture(si, img), () => si);
+  };
   const editNotes = () => {
     if (!editing) return;
     const si = cur(); let start; try { start = eng.notes(si); } catch (e) { toast(e.message); return; }
@@ -192,6 +202,7 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
     { id: 'text', title: 'Text', tools: [
       { id: 'shapes', label: 'Edit text', icon: IC_LIST, run: listShapes },
       { id: 'box', label: 'Add text box', icon: IC_BOX, run: addBox },
+      { id: 'pic', label: 'Add picture', icon: IC_PIC, run: addPic },
       { id: 'table', label: 'Table cell', icon: IC_TABLE, run: listTables },
       { id: 'notes', label: 'Notes', icon: IC_NOTE, run: editNotes }
     ] },
