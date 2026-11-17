@@ -78,3 +78,16 @@ input.eo-cell-in { min-height: 0; }
 .eo-pedit [data-sid] { outline: 1px dashed var(--border-strong); outline-offset: -1px; cursor: pointer; }
 .eo-pick { display: flex; flex-direction: column; gap: 8px; }
 .eo-pick .eo-sh-btn { justify-content: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+/* move and resize by touch (Decision 504): the frame comes and goes with the recipe's fade (existing keyframes, no new ones) */
+.eo-pedit.eo-parr [data-sid] { outline-style: solid; outline-color: var(--brand); }
+.eo-sel { position: absolute; box-sizing: border-box; border: calc(2px / var(--eo-k, 1)) solid var(--brand); z-index: 5; touch-action: none; cursor: move; }
+.eo-sel .eo-h { position: absolute; width: var(--eo-hs, 28px); height: var(--eo-hs, 28px); touch-action: none; }
+.eo-sel .eo-h::after { content: ''; position: absolute; inset: 30%; border-radius: 50%; background: var(--brand); border: calc(1.5px / var(--eo-k, 1)) solid var(--surface); }
+.eo-h[data-h="nw"] { left: 0; top: 0; transform: translate(-50%, -50%); }
+.eo-h[data-h="ne"] { left: 100%; top: 0; transform: translate(-50%, -50%); }
+.eo-h[data-h="sw"] { left: 0; top: 100%; transform: translate(-50%, -50%); }
+.eo-h[data-h="se"] { left: 100%; top: 100%; transform: translate(-50%, -50%); }
+@media (prefers-reduced-motion: no-preference) {
+  .eo-sel.eo-sel-in { --mx-dx: 0px; animation: mx-in-r 0.3s var(--mx-settle) both; }
+  .eo-sel.eo-sel-out { --mx-dx: 0px; animation: mx-out-l 0.17s var(--mx-leave) both; pointer-events: none; }
+}

@@ -198,12 +198,19 @@ export function openOdp(bytes) {
   // ---- position and size (Decision 500): px at 96 per inch; a rotated or moved-by-transform shape is refused ----
   const UNIT = { cm: 96 / 2.54, mm: 96 / 25.4, in: 96, pt: 96 / 72, px: 1 };
   const len = (v) => { const m = /^\s*(-?[\d.]+)\s*(cm|mm|in|pt|px)?\s*$/i.exec(v || ''); return m ? Number(m[1]) * UNIT[(m[2] || 'px').toLowerCase()] : null; };
+  // a picture is its frame with an image, found as i1, i2 in the reader's order (Decision 504)
+  const findPlace = (si, id) => {
+    if (!/^i\d+$/.test(String(id))) return findShape(si, id);
+    let n = 0; let hit = null;
+    const walk = (parent, depth) => { for (const c of parent.children) { if (hit || c.namespaceURI !== NS.draw) continue; if (c.localName === 'g' && depth < 6) walk(c, depth + 1); else if (c.localName === 'frame' && kid(c, NS.draw, 'image')) { n += 1; if (`i${n}` === String(id)) hit = c; } } };
+    walk(page(si), 0); if (!hit) throw new EditError('That shape is not on the slide.'); return { el: hit };
+  };
   const box = (si, id) => {
-    const el = findShape(si, id).el; const v = ['x', 'y', 'width', 'height'].map((k) => len(el.getAttributeNS(NS.svg, k)));
+    const el = findPlace(si, id).el; const v = ['x', 'y', 'width', 'height'].map((k) => len(el.getAttributeNS(NS.svg, k)));
     return v.every((n) => n !== null) ? { x: v[0], y: v[1], w: v[2], h: v[3] } : null;
   };
   const setBox = (si, id, b) => {
-    const el = findShape(si, id).el; const v = [b.x, b.y, b.w, b.h].map(Number);
+    const el = findPlace(si, id).el; const v = [b.x, b.y, b.w, b.h].map(Number);
     if (!v.every(Number.isFinite) || v[2] <= 0 || v[3] <= 0) throw new EditError('Width and height must be more than zero.');
     if (el.hasAttributeNS(NS.draw, 'transform')) throw new EditError('This shape is rotated, and its place cannot be changed here.');
     if (!box(si, id)) throw new EditError('The place of this shape comes from the master and cannot be changed here.');

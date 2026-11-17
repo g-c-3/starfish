@@ -644,6 +644,7 @@ export function readOdp(bytes) {
       return { t: 'table', ...b, rot: 0, cols, rows };
     };
     let ord = 0; // the editor finds a text shape by its place in this order (Decision 499)
+    let iord = 0; // and a picture by its place among the frames that hold an image, as i1, i2 (Decision 504)
     const walk = (parent, depth) => {
       for (const e of parent.children) {
         const n = e.localName;
@@ -657,10 +658,11 @@ export function readOdp(bytes) {
           const im = kid(e, 'image'); const tb = kid(e, 'text-box'); const tbl = kid(e, 'table');
           const img = im && image(files, at(im, 'href'));
           const sid = tb ? String(++ord) : undefined;
+          const isid = im ? `i${++iord}` : undefined;
           const cls = at(e, 'class');
           const g = resolve(st, 'presentation', at(e, 'style-name')).gfx;
           const gg = Object.keys(g).length ? g : gfxOf(e);
-          if (img) { media[img.path] = { bytes: img.bytes, mime: img.mime }; items.push({ t: 'pic', ...b, rot: b.rot || 0, path: img.path, line: lineOf(gg), crop: null }); }
+          if (img) { media[img.path] = { bytes: img.bytes, mime: img.mime }; items.push({ t: 'pic', ...b, rot: b.rot || 0, path: img.path, line: lineOf(gg), crop: null, sid: isid }); }
           else if (tb) {
             const text = textBody(parasOf(tb, cls, 0, []), cls === 'title' ? { 'textarea-vertical-align': 'middle' } : gg);
             if (text) items.push({ t: 'shape', ...b, rot: b.rot || 0, geom: 'rect', adj: null, fill: bgOf(gg), line: lineOf(gg), text, sid });

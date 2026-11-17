@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 265**
+
+Start: "Do next", after "Dp clear": DP281 and DP282 confirmed on a device. CI for the Session 264 push (Decision 503, run 1050) concluded success. Next item was Phase 121 step 4c3 (move and resize by touch). Motion section of ARCHITECTURE.md read first.
+- Built (Decision 504): `src/js/pptview-edit.js` (Move and resize mode, frame with corner handles, pointer drag), `src/css/office-shell.css` (frame, handles, fade with the existing keyframes), `src/js/pptxedit.js` and `src/js/odpedit.js` (`box` and `setBox` reach pictures), `src/js/office-read.js` and `src/js/office-odf.js` (`sid` on picture items). A tap on a picture outside the mode opens Position and size.
+- Tested in a sandbox: 22 checks of the view logic on a simulated page at half scale (select, frame place and handle size, tap writes nothing, drag follows and writes once on release, frame re-selected after redraw, corner resizes with the opposite corner kept, picture proportions kept, text shape free, 8 px minimum, exit class then hidden, mode off, edit off); 14 engine checks (picture box and move in both engines, unknown id, round trip); 6 checks of the real readers against the engines (pptx picture id, odp `i1` and `i2`, same place); the 17, 13 and 22 checks of Sessions 264 to 262 still pass. Parse of all edited files: no error. Not run through CI or a device; real touch, pinch zoom and the fade not seen.
+- Size: about 8 KB of source added (Decision 453).
+- Decision 504. DP283 open. Phase 121 built.
+- Next start: the CI log, DP283 on a device, then Phase 110 (the tool shell is mounted with the first editor; check what is left) or Phase 122, as the owner chooses.
+
+---
+
 **Session 264**
 
 Start: "Do next". CI for the Session 263 push (Decision 502, run 1049) concluded success. Next item was Phase 121 step 4c2 (add a picture).

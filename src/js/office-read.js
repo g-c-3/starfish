@@ -1233,7 +1233,7 @@ export function readPptx(bytes) {
           const spPr = kid(c, 'spPr'); const g = xfrmOf(spPr); if (!g) continue;
           const path = photo(rl, rat(kid(kid(c, 'blipFill'), 'blip'), 'embed')); if (!path) continue;
           const sr = kid(kid(c, 'blipFill'), 'srcRect');
-          items.push({ t: 'pic', ...place(g, xf), path, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null, line: lineOf(kid(spPr, 'ln')) || null });
+          const pit = { t: 'pic', ...place(g, xf), path, crop: sr ? { l: Number(at(sr, 'l') || 0) / 1000, t: Number(at(sr, 't') || 0) / 1000, r: Number(at(sr, 'r') || 0) / 1000, b: Number(at(sr, 'b') || 0) / 1000 } : null, line: lineOf(kid(spPr, 'ln')) || null }; const pcn = kid(kid(c, 'nvPicPr'), 'cNvPr'); if (level === 'slide' && pcn && at(pcn, 'id')) pit.sid = at(pcn, 'id'); items.push(pit); // the editor moves it by this id (Decision 504)
           continue;
         }
         if (n === 'graphicFrame') {

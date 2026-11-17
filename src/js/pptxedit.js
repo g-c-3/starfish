@@ -145,14 +145,22 @@ export function openPptx(bytes) {
     }
     return null;
   };
-  const box = (si, id) => { const { sp } = find(si, id); const x = xfrmOf(sp); return (x && readX(x)) || inherited(slide(si).path, sp); };
+  // a picture is found by the id of its drawing (Decision 504); its place is read and written like a shape's
+  const findPlace = (si, id) => {
+    const root = part(slide(si).path); const sp = shapesOf(root).find((x) => (cNv(x) ? cNv(x).getAttribute('id') : '') === String(id));
+    if (sp) return { sp, root };
+    const walk = (n) => { for (const c of n.children) { if (c.namespaceURI !== NS.p) continue; if (c.localName === 'pic' && String((kid(kid(c, NS.p, 'nvPicPr'), NS.p, 'cNvPr') || { getAttribute: () => '' }).getAttribute('id')) === String(id)) return c; if (c.localName === 'grpSp') { const r = walk(c); if (r) return r; } } return null; };
+    const pic = walk(kid(kid(root.documentElement, NS.p, 'cSld'), NS.p, 'spTree')); if (!pic) throw new EditError('That shape is not on the slide.');
+    return { sp: pic, root };
+  };
+  const box = (si, id) => { const { sp } = findPlace(si, id); const x = xfrmOf(sp); return (x && readX(x)) || inherited(slide(si).path, sp); };
   const setBox = (si, id, b) => {
-    const { sp } = find(si, id); const v = [b.x, b.y, b.w, b.h].map((n) => Math.round(Number(n) * 9525));
+    const { sp } = findPlace(si, id); const v = [b.x, b.y, b.w, b.h].map((n) => Math.round(Number(n) * 9525));
     if (!v.every(Number.isFinite) || v[2] <= 0 || v[3] <= 0) throw new EditError('Width and height must be more than zero.');
     if (sp.parentNode && sp.parentNode.localName === 'grpSp') throw new EditError('This shape is in a group; its place cannot be changed here.');
     const cur = box(si, id); if (cur && [cur.x, cur.y, cur.w, cur.h].map((n) => Math.round(n * 9525)).every((n, i) => n === v[i]) && xfrmOf(sp)) return;
     const doc = sp.ownerDocument; let pr = kid(sp, NS.p, 'spPr');
-    if (!pr) { pr = doc.createElementNS(NS.p, 'p:spPr'); sp.insertBefore(pr, kid(sp, NS.p, 'nvSpPr').nextSibling); }
+    if (!pr) { pr = doc.createElementNS(NS.p, 'p:spPr'); sp.insertBefore(pr, (kid(sp, NS.p, 'nvSpPr') || kid(sp, NS.p, 'nvPicPr')).nextSibling); }
     let x = kid(pr, NS.a, 'xfrm'); if (!x) { x = doc.createElementNS(NS.a, 'a:xfrm'); pr.insertBefore(x, pr.firstChild); }
     let o = kid(x, NS.a, 'off'); if (!o) { o = doc.createElementNS(NS.a, 'a:off'); x.insertBefore(o, x.firstChild); }
     let e = kid(x, NS.a, 'ext'); if (!e) { e = doc.createElementNS(NS.a, 'a:ext'); x.insertBefore(e, o.nextSibling); }

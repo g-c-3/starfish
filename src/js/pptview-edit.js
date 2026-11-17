@@ -1,6 +1,6 @@
 // pptview-edit.js — the pptx and odp editor view (Phase 121 steps 2 and 3, Decisions 498 and 499). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a text shape of the slide opens a sheet to change its text; the Tools list the shapes (an empty placeholder too),
-// edit the notes, change the text of a table cell (Decision 501), add a text box (Decision 502), add a picture from the phone (Decision 503), and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
+// edit the notes, change the text of a table cell (Decision 501), add a text box (Decision 502), add a picture from the phone (Decision 503), move and resize a shape or picture by touch (Decision 504), and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
 // file again and draws the slide.
 import { openPptx } from './pptxedit.js';
 import { openOdp } from './odpedit.js';
@@ -14,6 +14,7 @@ const IC_LIST = '<path d="M5 7h2M10 7h9M5 12h2M10 12h9M5 17h2M10 17h9"/>';
 const IC_TABLE = '<path d="M4 5h16v14H4zM4 10h16M4 15h16M10 5v14M15 5v14"/>';
 const IC_BOX = '<path d="M4 6h16v12H4zM9 11h6M12 11v4"/>';
 const IC_PIC = '<path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01"/>';
+const IC_MOVE = '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>';
 const IC_NOTE = '<path d="M6 4h9l3 3v13H6zM9 11h6M9 15h6"/>';
 const IC_ADD = '<path d="M5 5h14v14H5zM12 9v6M9 12h6"/>';
 const IC_COPY = '<path d="M8 8h11v11H8zM5 16V5h11"/>';
@@ -191,10 +192,85 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
     });
   };
 
+  const isText = (si, id) => { try { return eng.shapes(si).some((x) => x.id === String(id)); } catch { return false; } };
+
+  // ---- move and resize by touch (Decision 504): a frame with four corner handles over the shape; the change is written on release ----
+  const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const frame = el('div', 'eo-sel hidden'); for (const h of ['nw', 'ne', 'sw', 'se']) { const d = el('div', 'eo-h'); d.dataset.h = h; frame.appendChild(d); }
+  let arrange = false; let selId = null; let drag = null; let hideT = 0;
+  const scaleOf = (n) => { const w = n.offsetWidth; return w ? n.getBoundingClientRect().width / w || 1 : 1; };
+  const placeFrame = (b) => { const st = frame.style; st.left = `${b.x}px`; st.top = `${b.y}px`; st.width = `${b.w}px`; st.height = `${b.h}px`; };
+  const showFrame = (par, k, fresh) => {
+    clearTimeout(hideT); par.appendChild(frame); frame.style.setProperty('--eo-k', String(k)); frame.style.setProperty('--eo-hs', `${28 / k}px`);
+    frame.classList.remove('hidden', 'eo-sel-out');
+    if (fresh) { frame.classList.remove('eo-sel-in'); void frame.offsetWidth; frame.classList.add('eo-sel-in'); }
+  };
+  const hideFrame = () => {
+    selId = null; if (frame.classList.contains('hidden')) return;
+    frame.classList.remove('eo-sel-in'); frame.classList.add('eo-sel-out'); clearTimeout(hideT);
+    hideT = setTimeout(() => { frame.classList.add('hidden'); frame.classList.remove('eo-sel-out'); }, reduceMotion() ? 0 : 180);
+  };
+  const select = (n) => {
+    if (/rotate/.test(n.style.transform || '')) { toast('This shape is rotated; use Position and size.'); return; }
+    const par = n.parentNode; const st = n.style;
+    const fresh = !frame.isConnected || frame.classList.contains('hidden') || frame.classList.contains('eo-sel-out');
+    placeFrame({ x: parseFloat(st.left) || 0, y: parseFloat(st.top) || 0, w: parseFloat(st.width) || 0, h: parseFloat(st.height) || 0 });
+    frame.style.transform = st.transform || ''; selId = n.dataset.sid; showFrame(par, scaleOf(par), fresh);
+  };
+  const reselect = (id) => { const n = stage.querySelector(`[data-sid="${id}"]`); if (n) select(n); else hideFrame(); };
+  const toggleArrange = () => {
+    if (!editing) return;
+    arrange = !arrange; stage.classList.toggle('eo-parr', arrange);
+    if (arrange) toast('Tap a shape, then drag it or a corner.'); else hideFrame();
+    onDirty();
+  };
+  const nbOf = (d, dx, dy) => {
+    const { x, y, w, h } = d.o; const m = 8;
+    if (d.h === 'move') return { x: x + dx, y: y + dy, w, h };
+    let nx = x; let ny = y; let nw = w; let nh = h;
+    if (d.h.includes('e')) nw = Math.max(m, w + dx);
+    if (d.h.includes('w')) { nw = Math.max(m, w - dx); nx = x + w - nw; }
+    if (d.h.includes('s')) nh = Math.max(m, h + dy);
+    if (d.h.includes('n')) { nh = Math.max(m, h - dy); ny = y + h - nh; }
+    if (d.pic) { // a picture keeps its proportions: the larger change leads
+      const sw = nw / w; const sh = nh / h; const k = Math.abs(sw - 1) >= Math.abs(sh - 1) ? sw : sh;
+      nw = Math.max(m, w * k); nh = Math.max(m, nw * h / w);
+      if (d.h.includes('w')) nx = x + w - nw; if (d.h.includes('n')) ny = y + h - nh;
+    }
+    return { x: nx, y: ny, w: nw, h: nh };
+  };
+  const r1 = (v) => Math.round(v * 10) / 10;
+  frame.addEventListener('pointerdown', (e) => {
+    if (!editing || !arrange || !selId || drag) return;
+    const si = cur(); let o; try { o = eng.box(si, selId); } catch (er) { toast(er.message); return; }
+    if (!o) { toast('This shape has no place of its own to change.'); return; }
+    e.preventDefault(); try { frame.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    onActivity(); drag = { id: selId, si, o, h: (e.target.dataset && e.target.dataset.h) || 'move', k: scaleOf(frame.parentNode), x0: e.clientX, y0: e.clientY, moved: false, pic: !isText(si, selId) };
+  });
+  frame.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const sx = e.clientX - drag.x0; const sy = e.clientY - drag.y0;
+    if (!drag.moved && Math.hypot(sx, sy) < 4) return;
+    drag.moved = true; drag.nb = nbOf(drag, sx / drag.k, sy / drag.k); placeFrame(drag.nb);
+  });
+  const endDrag = (commit) => {
+    const d = drag; drag = null; if (!d) return;
+    if (!commit || !d.moved || !d.nb) { if (d.moved) placeFrame(d.o); return; }
+    const nb = { x: r1(d.nb.x), y: r1(d.nb.y), w: r1(d.nb.w), h: r1(d.nb.h) };
+    const ok = redraw(() => eng.setBox(d.si, d.id, nb), () => d.si);
+    if (ok) reselect(d.id); else placeFrame(d.o);
+  };
+  frame.addEventListener('pointerup', () => endDrag(true));
+  frame.addEventListener('pointercancel', () => endDrag(false));
+
   const onClick = (e) => {
     if (!editing || (dlg && !dlg.closed)) return;
-    const n = e.target.closest ? e.target.closest('[data-sid]') : null; if (!n || !stage.contains(n)) return;
-    onActivity(); editText(cur(), n.dataset.sid);
+    if (e.target.closest && e.target.closest('.eo-sel')) return;
+    const n = e.target.closest ? e.target.closest('[data-sid]') : null;
+    if (!n || !stage.contains(n)) { if (arrange) hideFrame(); return; }
+    onActivity();
+    if (arrange) { select(n); return; }
+    const si = cur(); if (isText(si, n.dataset.sid)) editText(si, n.dataset.sid); else editBox(si, n.dataset.sid, ''); // a picture: its place
   };
   stage.addEventListener('click', onClick);
 
@@ -203,6 +279,7 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
       { id: 'shapes', label: 'Edit text', icon: IC_LIST, run: listShapes },
       { id: 'box', label: 'Add text box', icon: IC_BOX, run: addBox },
       { id: 'pic', label: 'Add picture', icon: IC_PIC, run: addPic },
+      { id: 'arrange', label: 'Move and resize', icon: IC_MOVE, run: toggleArrange, on: () => arrange },
       { id: 'table', label: 'Table cell', icon: IC_TABLE, run: listTables },
       { id: 'notes', label: 'Notes', icon: IC_NOTE, run: editNotes }
     ] },
@@ -221,11 +298,11 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
     get count() { return model.count; },
     setEditable(on) {
       editing = on; stage.classList.toggle('eo-pedit', on);
-      if (!on) closeDlg(); else if (!told) { told = true; toast('Tap a text to change it.'); }
+      if (!on) { closeDlg(); arrange = false; stage.classList.remove('eo-parr'); hideFrame(); } else if (!told) { told = true; toast('Tap a text to change it.'); }
     },
     dirty: () => isDirty, touched: () => was,
     markClean() { isDirty = false; onDirty(); },
     bytes: () => eng.toBytes(),
-    destroy() { stage.removeEventListener('click', onClick); closeDlg(); stage.classList.remove('eo-pedit'); }
+    destroy() { stage.removeEventListener('click', onClick); clearTimeout(hideT); closeDlg(); stage.classList.remove('eo-pedit', 'eo-parr'); frame.remove(); }
   };
 }

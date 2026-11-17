@@ -472,3 +472,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-17 | Session 262 | Decision 501 | Phase 121 step 4b: text of a table cell (pptx and odp; Tools > Text > Table cell); DP280 added; not run through CI or a device |
 | 2026-11-17 | Session 263 | Decision 502 | DP277 to DP280 confirmed on a device; Phase 121 step 4c1: add a text box (pptx and odp; Tools > Text > Add text box); DP281 added; not run through CI or a device |
 | 2026-11-17 | Session 264 | Decision 503 | Phase 121 step 4c2: add a picture (pptx and odp; Tools > Text > Add picture); DP282 added; not run through CI or a device |
+| 2026-11-17 | Session 265 | Decision 504 | DP281 and DP282 confirmed on a device; Phase 121 step 4c3: move and resize by touch (pptx and odp; Tools > Text > Move and resize); pictures get ids; DP283 added; Phase 121 built; not run through CI or a device |
