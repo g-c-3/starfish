@@ -321,13 +321,13 @@ export function openFileViewer(file, ctx) {
       enterFull(() => host.classList.toggle('eo-menu-open'));
       host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
       const dir = f.path.slice(0, f.path.lastIndexOf('/'));
-      const canEdit = (kind === 'docx' || (kind === 'xlsx' && /\.(xlsx|ods)$/i.test(f.name)) || (kind === 'pptx' && /\.pptx$/i.test(f.name))) && !readOnly && !isVault; // Decision 474: Save replaces the file, Save as copy is written beside it
+      const canEdit = (kind === 'docx' || (kind === 'xlsx' && /\.(xlsx|ods)$/i.test(f.name)) || (kind === 'pptx' && /\.(pptx|odp)$/i.test(f.name))) && !readOnly && !isVault; // Decision 474: Save replaces the file, Save as copy is written beside it
       mounted = mountOffice(kind, bytes, host, {
         toast,
         edit: !canEdit ? null : {
           save: async (out) => { await Filesystem.writeFile({ path: toUri(f.path), data: bytesToB64(out) }); changed = true; toast('Saved'); },
           saveCopy: async (out) => {
-            const ext = /\.odt$/i.test(f.name) ? 'odt' : /\.xlsx$/i.test(f.name) ? 'xlsx' : /\.ods$/i.test(f.name) ? 'ods' : /\.pptx$/i.test(f.name) ? 'pptx' : 'docx'; const stem = f.name.replace(/\.(docx|odt|xlsx|ods|pptx)$/i, ''); let name = `${stem} (copy).${ext}`; let path = `${dir}/${name}`;
+            const ext = /\.odt$/i.test(f.name) ? 'odt' : /\.xlsx$/i.test(f.name) ? 'xlsx' : /\.ods$/i.test(f.name) ? 'ods' : /\.pptx$/i.test(f.name) ? 'pptx' : /\.odp$/i.test(f.name) ? 'odp' : 'docx'; const stem = f.name.replace(/\.(docx|odt|xlsx|ods|pptx|odp)$/i, ''); let name = `${stem} (copy).${ext}`; let path = `${dir}/${name}`;
             for (let n = 2; n < 100; n++) { try { await Filesystem.stat({ path: toUri(path) }); } catch { break; } name = `${stem} (copy ${n}).${ext}`; path = `${dir}/${name}`; } // never over an existing file
             await Filesystem.writeFile({ path: toUri(path), data: bytesToB64(out) }); changed = true; toast(`Saved as ${name}`);
           },

@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 260**
+
+Start: "Go". CI for the Session 259 push (Decision 498) concluded success. Next item was Phase 121 step 3 (odp on the same operations).
+- Built (Decision 499): `src/js/odpedit.js` (new, the odp edit engine), `src/js/office-odf.js` (a text shape of an odp slide carries its id), `src/js/pptview-edit.js` (engine and reader chosen by the file's kind), `src/js/office-render.js`, `src/js/explorer-view.js` and `src/js/app.js` (Edit and Save as copy for .odp).
+- Tested in a sandbox: engine 42 checks with jsdom 20 (ids and text of shapes, nothing written for the same text, a middle paragraph of a list changed with the nested items kept, lines added, removed and emptied, spaces and tabs, notes read, set and made, add from a master with and without a donor slide, unique page names, duplicate with notes and without ids, chart slide refused and the file left clean, move, delete with the picture and manifest entry of only that slide removed, last slide refused, page count, other parts byte-equal, `mimetype` first and stored); the viewer's reader draws the edited slide and its shape ids equal the engine's; the editor view with jsdom 7 checks (duplicate, move, refusal shown, text list, bytes). Parse of every edited file: no error. The whole bundle was not built (plugin packages not installed in the sandbox). Not run through CI or a device.
+- Size: about 18 KB of source added (Decision 453).
+- Decision 499. DP277 and DP278 open.
+- Next start: the CI log, DP277 and DP278 on a device, then Phase 121 step 4 (shapes).
+
+---
+
 **Session 259**
 
 Start: "Do next". CI for the Session 258 push (Decision 497) concluded success. Next item was Phase 121 step 2 (the editor view for a pptx).

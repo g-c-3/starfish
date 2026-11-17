@@ -467,3 +467,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-16 | Session 257 | — | DP269 to DP276 confirmed on a device; Phase 120 complete for xlsx and ods; DECISIONS.md and TRACK.md rebuilt after Sessions 252 to 256 (entries 492 to 496 and rows 252 to 256 restored) |
 | 2026-11-16 | Session 258 | Decision 497 | Phase 121 step 1: the pptx edit engine (text, notes, slides: add, duplicate, move, delete); no view yet; not run through CI |
 | 2026-11-16 | Session 259 | Decision 498 | Phase 121 step 2: the pptx editor view (text, notes, add, duplicate, move, delete slides; Save and Save as copy); DP277 added; not run through CI or a device |
+| 2026-11-17 | Session 260 | Decision 499 | Phase 121 step 3: the odp editor (same text, notes and slide operations on `content.xml`; Edit for .odp in the File explorer, Home and the Vault); DP278 added; not run through CI or a device |

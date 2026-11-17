@@ -1271,7 +1271,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
     tmp.tools = pptTools({ get count() { return model.count; }, load: (i) => model.load(i) }, inner); tmp.tools.open = ctx.openWith; // read through `model`: the editor replaces it
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && !odf && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('pptx')) shell = makeShell(inner, 'pptx');
+    if (edit && (!odf || odf === 'presentation') && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('pptx')) shell = makeShell(inner, 'pptx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }

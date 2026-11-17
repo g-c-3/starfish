@@ -1,10 +1,12 @@
-// pptview-edit.js — the pptx editor view (Phase 121 step 2, Decision 498). Registered in office-render.js, loaded on the first Edit.
+// pptview-edit.js — the pptx and odp editor view (Phase 121 steps 2 and 3, Decisions 498 and 499). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a text shape of the slide opens a sheet to change its text; the Tools list the shapes (an empty placeholder too),
 // edit the notes, and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
 // file again and draws the slide.
 import { openPptx } from './pptxedit.js';
+import { openOdp } from './odpedit.js';
 import { openSheet } from './sheet.js';
 import { readPptx } from './office-read.js';
+import { readOdp, odfKind } from './office-odf.js';
 
 const IC_TEXT = '<path d="M5 6h14M12 6v13M9 19h6"/>';
 const IC_LIST = '<path d="M5 7h2M10 7h9M5 12h2M10 12h9M5 17h2M10 17h9"/>';
@@ -22,7 +24,9 @@ const snippet = (t) => { const s = String(t).replace(/\s+/g, ' ').trim(); return
 // setModel(model, index): the viewer draws the new model at a slide; onDirty(): the shell is told to refresh its buttons
 export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, toast = () => {}, onActivity = () => {}, onDirty = () => {} }) {
   let model = model0;
-  const eng = openPptx(bytes); // throws an office error for a file that is not a valid presentation
+  const odp = odfKind(bytes) === 'presentation';
+  const eng = odp ? openOdp(bytes) : openPptx(bytes); // throws an office error for a file that is not a valid presentation
+  const read = odp ? readOdp : readPptx;
   let editing = false; let isDirty = false; let was = false; let dlg = null; let told = false;
   const dirty = () => { isDirty = true; was = true; onDirty(); };
 
@@ -31,7 +35,7 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
     let out;
     try { out = fn(); } catch (e) { toast(e && e.message ? e.message : 'That change could not be made.'); return false; }
     dirty();
-    try { model = readPptx(eng.toBytes()); setModel(model, next(out)); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
+    try { model = read(eng.toBytes()); setModel(model, next(out)); } catch (e) { toast('The change was made but cannot be shown; Save or Discard.'); }
     return true;
   };
 
@@ -81,7 +85,7 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
   };
   const addSlide = () => {
     if (!editing) return;
-    const names = eng.layouts(); if (!names.length) { toast('This presentation has no layouts to add a slide from.'); return; }
+    const names = eng.layouts(); if (!names.length) { toast(odp ? 'This presentation has no master pages to add a slide from.' : 'This presentation has no layouts to add a slide from.'); return; }
     const si = cur();
     sheet('Add a slide', (h, close) => {
       h.appendChild(el('p', 'eo-cell-note', 'The new slide goes after this one.'));

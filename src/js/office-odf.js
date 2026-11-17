@@ -643,6 +643,7 @@ export function readOdp(bytes) {
       if (!cols.length || !rows.length) return null;
       return { t: 'table', ...b, rot: 0, cols, rows };
     };
+    let ord = 0; // the editor finds a text shape by its place in this order (Decision 499)
     const walk = (parent, depth) => {
       for (const e of parent.children) {
         const n = e.localName;
@@ -655,16 +656,18 @@ export function readOdp(bytes) {
         if (n === 'frame') {
           const im = kid(e, 'image'); const tb = kid(e, 'text-box'); const tbl = kid(e, 'table');
           const img = im && image(files, at(im, 'href'));
+          const sid = tb ? String(++ord) : undefined;
           const cls = at(e, 'class');
           const g = resolve(st, 'presentation', at(e, 'style-name')).gfx;
           const gg = Object.keys(g).length ? g : gfxOf(e);
           if (img) { media[img.path] = { bytes: img.bytes, mime: img.mime }; items.push({ t: 'pic', ...b, rot: b.rot || 0, path: img.path, line: lineOf(gg), crop: null }); }
           else if (tb) {
             const text = textBody(parasOf(tb, cls, 0, []), cls === 'title' ? { 'textarea-vertical-align': 'middle' } : gg);
-            if (text) items.push({ t: 'shape', ...b, rot: b.rot || 0, geom: 'rect', adj: null, fill: bgOf(gg), line: lineOf(gg), text });
+            if (text) items.push({ t: 'shape', ...b, rot: b.rot || 0, geom: 'rect', adj: null, fill: bgOf(gg), line: lineOf(gg), text, sid });
           } else if (tbl) { const t = tableOf(tbl, b); if (t) items.push(t); }
           else if (kid(e, 'object') || kid(e, 'object-ole') || kid(e, 'plugin')) items.push({ t: 'note', ...b, rot: 0, text: 'Chart or embedded object not shown' });
         } else if (n === 'custom-shape' || n === 'rect' || n === 'ellipse' || n === 'circle' || n === 'regular-polygon') {
+          const sid = String(++ord);
           const g = gfxOf(e);
           const text = textBody(parasOf(e, null, 0, []), { 'textarea-vertical-align': 'middle' });
           if (text) text.paras.forEach((p) => { p.algn = p.algn === 'left' ? 'center' : p.algn; });
@@ -672,7 +675,7 @@ export function readOdp(bytes) {
           let adj = null;
           const cr = px(at(e, 'corner-radius'));
           if (n === 'rect' && cr && Math.min(b.w, b.h) > 0) { geom = 'roundRect'; adj = Math.min(50000, cr / Math.min(b.w, b.h) * 100000); }
-          items.push({ t: 'shape', ...b, rot: b.rot || 0, geom, adj, fill: g.fill === 'none' ? null : bgOf(g), line: lineOf(g), text });
+          items.push({ t: 'shape', ...b, rot: b.rot || 0, geom, adj, fill: g.fill === 'none' ? null : bgOf(g), line: lineOf(g), text, sid });
         } else if (n === 'line' || n === 'connector') {
           const g = gfxOf(e);
           const x1 = px(at(e, n === 'line' ? 'x1' : 'start-x')); const y1 = px(at(e, n === 'line' ? 'y1' : 'start-y'));
