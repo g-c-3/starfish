@@ -1,6 +1,6 @@
 // pptview-edit.js — the pptx and odp editor view (Phase 121 steps 2 and 3, Decisions 498 and 499). Registered in office-render.js, loaded on the first Edit.
 // While editing, a tap on a text shape of the slide opens a sheet to change its text; the Tools list the shapes (an empty placeholder too),
-// edit the notes, and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
+// edit the notes, change the text of a table cell (Decision 501), and add, duplicate, move and delete slides. pptxedit.js writes the file; after each change the viewer reads the changed
 // file again and draws the slide.
 import { openPptx } from './pptxedit.js';
 import { openOdp } from './odpedit.js';
@@ -10,6 +10,7 @@ import { readOdp, odfKind } from './office-odf.js';
 
 const IC_TEXT = '<path d="M5 6h14M12 6v13M9 19h6"/>';
 const IC_LIST = '<path d="M5 7h2M10 7h9M5 12h2M10 12h9M5 17h2M10 17h9"/>';
+const IC_TABLE = '<path d="M4 5h16v14H4zM4 10h16M4 15h16M10 5v14M15 5v14"/>';
 const IC_NOTE = '<path d="M6 4h9l3 3v13H6zM9 11h6M9 15h6"/>';
 const IC_ADD = '<path d="M5 5h14v14H5zM12 9v6M9 12h6"/>';
 const IC_COPY = '<path d="M8 8h11v11H8zM5 16V5h11"/>';
@@ -92,6 +93,42 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
       h.appendChild(col);
     });
   };
+  // a table cell: pick the table, then the cell (a grid of buttons), then change its text
+  const editCell = (si, tid, tname, r, c, start) => {
+    sheet(`${tname || 'Table'}: row ${r + 1}, column ${c + 1}`, (h, close) => {
+      const ta = el('textarea', 'eo-cell-in'); ta.rows = 4; ta.value = start; ta.setAttribute('aria-label', 'Text of the cell'); ta.spellcheck = true;
+      h.appendChild(ta);
+      buttons(h, [
+        ['Set', 'eo-sh-primary', () => { if (ta.value === start || redraw(() => eng.setCell(si, tid, r, c, ta.value), () => si)) close(); }],
+        ['Cancel', '', () => close()]
+      ]);
+      setTimeout(() => { if (ta.isConnected) ta.focus(); }, 80);
+    });
+  };
+  const pickCell = (si, t) => {
+    sheet(t.name || 'Table', (h, close) => {
+      h.appendChild(el('p', 'eo-cell-note', 'Tap a cell to change its text.'));
+      const wrap = el('div', 'eo-pick');
+      t.rows.forEach((row, r) => row.forEach((cell, c) => {
+        if (cell.covered) return;
+        const b = el('button', 'eo-sh-btn', `R${r + 1} C${c + 1}: ${snippet(cell.text)}`); b.type = 'button';
+        b.onclick = () => { onActivity(); close(); editCell(si, t.id, t.name, r, c, cell.text); };
+        wrap.appendChild(b);
+      }));
+      h.appendChild(wrap);
+    });
+  };
+  const listTables = () => {
+    if (!editing) return;
+    const si = cur(); let list; try { list = eng.tables(si); } catch (e) { toast(e.message); return; }
+    if (!list.length) { toast('This slide has no table.'); return; }
+    if (list.length === 1) { pickCell(si, list[0]); return; }
+    sheet('Tables on this slide', (h, close) => {
+      const col = el('div', 'eo-pick');
+      list.forEach((t, i) => { const b = el('button', 'eo-sh-btn', `${t.name || `Table ${i + 1}`}: ${t.rows.length} rows`); b.type = 'button'; b.onclick = () => { onActivity(); close(); pickCell(si, t); }; col.appendChild(b); });
+      h.appendChild(col);
+    });
+  };
   const editNotes = () => {
     if (!editing) return;
     const si = cur(); let start; try { start = eng.notes(si); } catch (e) { toast(e.message); return; }
@@ -140,6 +177,7 @@ export function mountEditor({ stage, host, model: model0, cur, setModel, bytes, 
   const groups = [
     { id: 'text', title: 'Text', tools: [
       { id: 'shapes', label: 'Edit text', icon: IC_LIST, run: listShapes },
+      { id: 'table', label: 'Table cell', icon: IC_TABLE, run: listTables },
       { id: 'notes', label: 'Notes', icon: IC_NOTE, run: editNotes }
     ] },
     { id: 'slides', title: 'Slides', tools: [

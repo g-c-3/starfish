@@ -469,3 +469,4 @@ numbers only, never dates — this file is the sole date reference. Append-only;
 | 2026-11-16 | Session 259 | Decision 498 | Phase 121 step 2: the pptx editor view (text, notes, add, duplicate, move, delete slides; Save and Save as copy); DP277 added; not run through CI or a device |
 | 2026-11-17 | Session 260 | Decision 499 | Phase 121 step 3: the odp editor (same text, notes and slide operations on `content.xml`; Edit for .odp in the File explorer, Home and the Vault); DP278 added; not run through CI or a device |
 | 2026-11-17 | Session 261 | Decision 500 | Phase 121 step 4a: position and size of a shape (pptx and odp, numbers in a sheet); DP279 added; not run through CI or a device |
+| 2026-11-17 | Session 262 | Decision 501 | Phase 121 step 4b: text of a table cell (pptx and odp; Tools > Text > Table cell); DP280 added; not run through CI or a device |

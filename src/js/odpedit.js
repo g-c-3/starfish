@@ -3,6 +3,7 @@
 // A text shape is a frame with a text box, or a drawn shape (custom shape, rectangle, ellipse, circle, polygon); groups are opened
 // to the depth the reader opens them. Its id is its place in that order on the slide, counted from 1; office-odf.js counts the same way.
 // Notes are the paragraphs of the notes frame of the slide's notes page. A layout is a master page.
+// A table is a frame with a table; its id is its place among the table frames of the slide, counted from 1 (Decision 501).
 // A slide that holds a chart or an embedded object, or an animation, is not duplicated; a slide another slide links to is not deleted.
 import { unzipSync, zipSync } from 'fflate';
 
@@ -17,7 +18,8 @@ const NS = {
   xml: 'http://www.w3.org/XML/1998/namespace',
   manifest: 'urn:oasis:names:tc:opendocument:xmlns:manifest:1.0',
   meta: 'urn:oasis:names:tc:opendocument:xmlns:meta:1.0',
-  anim: 'urn:oasis:names:tc:opendocument:xmlns:animation:1.0'
+  anim: 'urn:oasis:names:tc:opendocument:xmlns:animation:1.0',
+  table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0'
 };
 const MIME = 'application/vnd.oasis.opendocument.presentation';
 const STORED = /^mimetype$|\.(png|jpe?g|gif|webp|zip|mp[34]|mov|wmv|docx|xlsx|pptx|odt|ods|odp)$/i;
@@ -160,6 +162,38 @@ export function openOdp(bytes) {
   };
   const setText = (si, id, text) => { if (writeBox(findShape(si, id).box, text)) touch('content.xml'); };
 
+  // ---- table cells (Decision 501): rows as the reader counts them (every table-row below the table), cells with repeats opened (at most 64) ----
+  const tableFrames = (pg) => {
+    const out = []; let n = 0;
+    const walk = (parent, depth) => { for (const c of parent.children) { if (c.namespaceURI !== NS.draw) continue; if (c.localName === 'g' && depth < 6) walk(c, depth + 1); else if (c.localName === 'frame') { const t = kid(c, NS.table, 'table'); if (t) { n += 1; out.push({ id: String(n), el: c, tbl: t }); } } } };
+    walk(pg, 0); return out;
+  };
+  const rowEls = (tbl, out = []) => { for (const c of tbl.children) { if (is(c, NS.table, 'table-row')) out.push(c); rowEls(c, out); } return out; };
+  const cellRefs = (tr) => { // [{ el, covered, rep }] in order, the reader's 64-cell limit applied
+    const out = []; let k = 0;
+    for (const c of tr.children) { const cov = is(c, NS.table, 'covered-table-cell'); if (!cov && !is(c, NS.table, 'table-cell')) continue; if (k >= 64) break; const rep = Math.min(Number(c.getAttributeNS(NS.table, 'number-columns-repeated') || 1) || 1, 64 - k); out.push({ el: c, covered: cov, rep, start: k }); k += rep; }
+    return out;
+  };
+  const cellParas = (c) => { const out = []; for (const q of c.children) { if (isPara(q) || is(q, NS.text, 'list')) parasOf({ children: [q] }, out); } return out; };
+  const tables = (si) => tableFrames(page(si)).map((t) => ({
+    id: t.id, name: t.el.getAttributeNS(NS.draw, 'name') || '',
+    rows: rowEls(t.tbl).slice(0, 200).map((tr) => cellRefs(tr).flatMap((r) => Array.from({ length: r.rep }, () => ({ text: cellParas(r.el).map((p) => plain(p)).join('\n'), covered: r.covered }))))
+  }));
+  const setCell = (si, id, row, col, text) => {
+    const t = tableFrames(page(si)).find((x) => x.id === String(id)); if (!t) throw new EditError('That table is not on the slide.');
+    const tr = rowEls(t.tbl)[row]; const ref = tr && cellRefs(tr).find((r) => col >= r.start && col < r.start + r.rep); if (!ref) throw new EditError('That cell is not in the table.');
+    if (ref.covered) throw new EditError('This cell is covered by a merged cell; change the merged cell instead.');
+    const cur = cellParas(ref.el).map((p) => plain(p)).join('\n'); if (cur === clean(text).replace(/\r\n?/g, '\n')) return;
+    let cell = ref.el;
+    if (ref.rep > 1 && Number(ref.el.getAttributeNS(NS.table, 'number-columns-repeated')) > ref.rep) throw new EditError('This row repeats a cell too many times to change one of them here.');
+    if (ref.rep > 1) { // a repeated cell is opened into single cells so one of them can change
+      const src = ref.el; const parent = src.parentNode;
+      for (let k = 0; k < ref.rep; k++) { const c2 = src.cloneNode(true); c2.removeAttributeNS(NS.table, 'number-columns-repeated'); dropIds(c2); parent.insertBefore(c2, src); if (k === col - ref.start) cell = c2; }
+      src.remove();
+    }
+    if (writeBox(cell, text)) touch('content.xml');
+  };
+
   // ---- position and size (Decision 500): px at 96 per inch; a rotated or moved-by-transform shape is refused ----
   const UNIT = { cm: 96 / 2.54, mm: 96 / 25.4, in: 96, pt: 96 / 72, px: 1 };
   const len = (v) => { const m = /^\s*(-?[\d.]+)\s*(cm|mm|in|pt|px)?\s*$/i.exec(v || ''); return m ? Number(m[1]) * UNIT[(m[2] || 'px').toLowerCase()] : null; };
@@ -286,5 +320,5 @@ export function openOdp(bytes) {
     for (const k of Object.keys(snap)) if (k !== 'mimetype') out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'odp', slides: () => pages().length, shapes, setText, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'odp', slides: () => pages().length, shapes, setText, tables, setCell, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

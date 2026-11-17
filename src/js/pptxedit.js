@@ -1,7 +1,7 @@
 // Slide edit engine, pptx (Decision 497, Phase 121 step 1). Works on the parts of the zip in place: a changed part is written, every other part
 // is kept as it was. Text of a shape, notes, and slides (add, duplicate, move, delete). No view here; the editor view comes next.
 // A slide that holds a chart, a drawing of a diagram, an embedded object or comments is not duplicated (those parts cannot be shared);
-// slides are not reordered where the file has sections.
+// slides are not reordered where the file has sections. Table cells: text of a cell (Decision 501).
 import { unzipSync, zipSync } from 'fflate';
 
 const NS = {
@@ -86,13 +86,12 @@ export function openPptx(bytes) {
     if (line === '') { if (ep || rp) { const e = doc.createElementNS(NS.a, 'a:endParaRPr'); const s = ep || rp; for (const a of s.attributes) e.setAttribute(a.name, a.value); for (const c of s.children) e.appendChild(c.cloneNode(true)); p.appendChild(e); } else p.appendChild(doc.createElementNS(NS.a, 'a:endParaRPr')); return p; }
     const r = doc.createElementNS(NS.a, 'a:r'); r.appendChild(mkRPr()); const t = doc.createElementNS(NS.a, 'a:t'); t.textContent = line; r.appendChild(t); p.appendChild(r); return p;
   };
-  const setText = (si, id, input) => {
-    const { sp, root } = find(si, id); const body = kid(sp, NS.p, 'txBody'); const doc = root;
+  const writeBody = (body, doc, input) => { // returns true when the body changed
     const lines = clean(input === null || input === undefined ? '' : input).replace(/\r\n?/g, '\n').split('\n');
     const old = kids(body, NS.a, 'p').map((el) => ({ el, lines: paraText(el).split('\n') })); const flat = []; old.forEach((o, pi) => o.lines.forEach((l) => flat.push({ pi, l })));
     let pre = 0; while (pre < flat.length && pre < lines.length && flat[pre].l === lines[pre]) pre++;
     let suf = 0; while (suf < flat.length - pre && suf < lines.length - pre && flat[flat.length - 1 - suf].l === lines[lines.length - 1 - suf]) suf++;
-    if (pre === flat.length && lines.length === flat.length) return; // nothing changed
+    if (pre === flat.length && lines.length === flat.length) return false; // nothing changed
     const keepHead = new Set(); const keepTail = new Set();
     old.forEach((o, pi) => { const idx = flat.map((f, k) => (f.pi === pi ? k : -1)).filter((k) => k >= 0); if (idx.every((k) => k < pre)) keepHead.add(pi); else if (idx.every((k) => k >= flat.length - suf)) keepTail.add(pi); });
     const mid = lines.slice(pre, lines.length - suf); const dropped = old.filter((o, pi) => !keepHead.has(pi) && !keepTail.has(pi));
@@ -102,7 +101,36 @@ export function openPptx(bytes) {
     for (const o of old) o.el.remove();
     if (!out.length) out.push(mkP(doc, tpl, ''));
     for (const e of out) body.appendChild(e);
-    touch(slide(si).path);
+    return true;
+  };
+  const setText = (si, id, input) => {
+    const { sp, root } = find(si, id);
+    if (writeBody(kid(sp, NS.p, 'txBody'), root, input)) touch(slide(si).path);
+  };
+
+  // ---- table cells (Decision 501): a table is a graphic frame with an a:tbl; a cell is found by its row and column ----
+  const framesOf = (root) => { // table frames in order, groups opened
+    const out = []; const walk = (n) => { for (const c of n.children) { if (c.namespaceURI !== NS.p) continue; if (c.localName === 'graphicFrame' && all(c, NS.a, 'tbl').length) out.push(c); else if (c.localName === 'grpSp') walk(c); } }; walk(kid(kid(root.documentElement, NS.p, 'cSld'), NS.p, 'spTree')); return out;
+  };
+  const frameId = (f) => { const c = kid(kid(f, NS.p, 'nvGraphicFramePr'), NS.p, 'cNvPr'); return c ? c.getAttribute('id') : ''; };
+  const rowsOf = (f) => kids(all(f, NS.a, 'tbl')[0], NS.a, 'tr');
+  const cellText = (tc) => { const b = kid(tc, NS.a, 'txBody'); return b ? kids(b, NS.a, 'p').map(paraText).join('\n') : ''; };
+  const isCovered = (tc) => tc.getAttribute('hMerge') === '1' || tc.getAttribute('vMerge') === '1';
+  const tables = (si) => framesOf(part(slide(si).path)).map((f) => {
+    const c = kid(kid(f, NS.p, 'nvGraphicFramePr'), NS.p, 'cNvPr');
+    return { id: frameId(f), name: c ? c.getAttribute('name') || '' : '', rows: rowsOf(f).map((tr) => kids(tr, NS.a, 'tc').map((tc) => ({ text: cellText(tc), covered: isCovered(tc) }))) };
+  });
+  const setCell = (si, id, row, col, input) => {
+    const root = part(slide(si).path); const f = framesOf(root).find((x) => frameId(x) === String(id)); if (!f) throw new EditError('That table is not on the slide.');
+    const tr = rowsOf(f)[row]; const tc = tr && kids(tr, NS.a, 'tc')[col]; if (!tc) throw new EditError('That cell is not in the table.');
+    if (isCovered(tc)) throw new EditError('This cell is covered by a merged cell; change the merged cell instead.');
+    let body = kid(tc, NS.a, 'txBody');
+    if (!body) {
+      if (clean(input === null || input === undefined ? '' : input) === '') return;
+      body = root.createElementNS(NS.a, 'a:txBody'); body.appendChild(root.createElementNS(NS.a, 'a:bodyPr')); body.appendChild(root.createElementNS(NS.a, 'a:lstStyle')); body.appendChild(root.createElementNS(NS.a, 'a:p'));
+      const pr = kid(tc, NS.a, 'tcPr'); tc.insertBefore(body, pr || null);
+    }
+    if (writeBody(body, root, input)) touch(slide(si).path);
   };
 
   // ---- position and size (Decision 500): px at 96 per inch; a placeholder without its own frame takes the one of its layout, then its master ----
@@ -241,5 +269,5 @@ export function openPptx(bytes) {
     for (const k of Object.keys(snap)) if (k !== first) out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'pptx', slides, shapes, setText, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'pptx', slides, shapes, setText, tables, setCell, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

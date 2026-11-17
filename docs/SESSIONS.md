@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 262**
+
+Start: "Go". CI for the Session 261 push (Decision 500, run 1047) concluded success. Next item was Phase 121 step 4b (table cell text).
+- Built (Decision 501): `src/js/pptxedit.js` (`tables`, `setCell`; `setText` and the cell share `writeBody`), `src/js/odpedit.js` (`tables`, `setCell`), `src/js/pptview-edit.js` (Tools > Text > Table cell, a cell sheet).
+- Tested in a sandbox: 22 checks with jsdom 20 (table and cell read, merged-away cell flagged, same text writes nothing, two lines written, formatting kept, merged cell, unknown table and cell refused, cell without a text body, cleared, round trip; odp repeated cells opened and split, empty cell filled, covered cell refused, round trip, `mimetype` first). Parse of the three edited files: no error. The editor view was parsed, not run. Not run through CI or a device.
+- Size: about 8 KB of source added (Decision 453).
+- Decision 501. DP280 open (DP277 to DP279 still open).
+- Next start: the CI log, DP277 to DP280 on a device, then step 4c (add a text box or a picture; dragging and resizing by touch).
+
+---
+
 **Session 261**
 
 Start: "Continue here anyway", after the Session 260 push. CI for it (Decision 499) concluded success. Next item was Phase 121 step 4; split into 4a position and size, 4b table text, 4c add a text box or a picture.
