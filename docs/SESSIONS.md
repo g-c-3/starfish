@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 263**
+
+Start: "Do next", after "Dp all clear": DP277 to DP280 confirmed on a device. CI for the Session 262 push (Decision 501, run 1048) concluded success. Next item was Phase 121 step 4c; split into 4c1 add a text box, 4c2 add a picture, 4c3 drag and resize by touch.
+- Built (Decision 502): `src/js/pptxedit.js` and `src/js/odpedit.js` (`addTextBox`), `src/js/pptview-edit.js` (Tools > Text > Add text box).
+- Tested in a sandbox: 13 checks with jsdom 20 (pptx: next id, listed, centred at 60%, blank refused, round trip, next id again, edited after; odp: id, listed, size from the page layout, before the notes, blank refused, round trip); the 22 table checks of Session 262 still pass. Parse of the three edited files: no error. The editor view was parsed, not run. Not run through CI or a device.
+- Size: about 4 KB of source added (Decision 453).
+- Decision 502. DP281 open.
+- Next start: the CI log, DP281 on a device, then step 4c2 (add a picture).
+
+---
+
 **Session 262**
 
 Start: "Go". CI for the Session 261 push (Decision 500, run 1047) concluded success. Next item was Phase 121 step 4b (table cell text).

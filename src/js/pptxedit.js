@@ -1,7 +1,7 @@
 // Slide edit engine, pptx (Decision 497, Phase 121 step 1). Works on the parts of the zip in place: a changed part is written, every other part
 // is kept as it was. Text of a shape, notes, and slides (add, duplicate, move, delete). No view here; the editor view comes next.
 // A slide that holds a chart, a drawing of a diagram, an embedded object or comments is not duplicated (those parts cannot be shared);
-// slides are not reordered where the file has sections. Table cells: text of a cell (Decision 501).
+// slides are not reordered where the file has sections. Table cells: text of a cell (Decision 501). A text box can be added (Decision 502).
 import { unzipSync, zipSync } from 'fflate';
 
 const NS = {
@@ -160,6 +160,18 @@ export function openPptx(bytes) {
     touch(slide(si).path);
   };
 
+  // ---- add a text box (Decision 502): a text shape with no fill and no line, centred, 60% of the slide wide ----
+  const addTextBox = (si, input) => {
+    const text = clean(input === null || input === undefined ? '' : input); if (text.trim() === '') throw new EditError('Type some text for the text box.');
+    const sl = slide(si); const root = part(sl.path); const tree = kid(kid(root.documentElement, NS.p, 'cSld'), NS.p, 'spTree'); if (!tree) throw new EditError('This slide cannot take a text box.');
+    const sz = kid(pres.documentElement, NS.p, 'sldSz'); const W = Number(sz && sz.getAttribute('cx')) || 9144000; const H = Number(sz && sz.getAttribute('cy')) || 6858000;
+    let nid = 1; for (const c of all(root, NS.p, 'cNvPr')) nid = Math.max(nid, Number(c.getAttribute('id')) || 0); nid += 1;
+    const w = Math.round(W * 0.6); const h = 584200; const x = Math.round((W - w) / 2); const y = Math.round((H - h) / 2);
+    const frag = parseX(`<p:sp xmlns:p="${NS.p}" xmlns:a="${NS.a}"><p:nvSpPr><p:cNvPr id="${nid}" name="TextBox ${nid}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`).documentElement;
+    const sp = root.importNode(frag, true); const ext = kid(tree, NS.p, 'extLst'); tree.insertBefore(sp, ext);
+    writeBody(kid(sp, NS.p, 'txBody'), root, text); touch(sl.path); return String(nid);
+  };
+
   const titleOf = (path) => { const sp = shapesOf(part(path)).find((x) => /^(title|ctrTitle)$/.test((phOf(x) && phOf(x).getAttribute('type')) || '')); return sp ? textOf(sp).replace(/\n/g, ' ') : ''; };
   const slides = () => list().map((s, i) => ({ index: i, id: s.id, part: s.path, title: titleOf(s.path) }));
 
@@ -269,5 +281,5 @@ export function openPptx(bytes) {
     for (const k of Object.keys(snap)) if (k !== first) out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'pptx', slides, shapes, setText, tables, setCell, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'pptx', slides, shapes, setText, addTextBox, tables, setCell, box, setBox, notes, setNotes, layouts: () => layouts().map((l) => l.name), addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }

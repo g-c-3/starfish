@@ -19,7 +19,8 @@ const NS = {
   manifest: 'urn:oasis:names:tc:opendocument:xmlns:manifest:1.0',
   meta: 'urn:oasis:names:tc:opendocument:xmlns:meta:1.0',
   anim: 'urn:oasis:names:tc:opendocument:xmlns:animation:1.0',
-  table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0'
+  table: 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
+  fo: 'urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0'
 };
 const MIME = 'application/vnd.oasis.opendocument.presentation';
 const STORED = /^mimetype$|\.(png|jpe?g|gif|webp|zip|mp[34]|mov|wmv|docx|xlsx|pptx|odt|ods|odp)$/i;
@@ -240,6 +241,28 @@ export function openOdp(bytes) {
     if (writeBox(box, text) || created) touch('content.xml');
   };
 
+  // ---- add a text box (Decision 502): a frame with a text box, centred, 60% of the slide wide; the slide size comes from the page layout of its master ----
+  const slideSize = (pg) => {
+    const sr = part('styles.xml'); let w = 28 * UNIT.cm; let h = 15.75 * UNIT.cm;
+    if (sr) {
+      const mp = kids(kid(sr.documentElement, NS.office, 'master-styles'), NS.style, 'master-page').find((m) => m.getAttributeNS(NS.style, 'name') === pg.getAttributeNS(NS.draw, 'master-page-name')) || kids(kid(sr.documentElement, NS.office, 'master-styles'), NS.style, 'master-page')[0];
+      const pl = mp && kids(kid(sr.documentElement, NS.office, 'automatic-styles'), NS.style, 'page-layout').find((l) => l.getAttributeNS(NS.style, 'name') === mp.getAttributeNS(NS.style, 'page-layout-name'));
+      const pp = pl && kid(pl, NS.style, 'page-layout-properties'); const pw = pp && len(pp.getAttributeNS(NS.fo, 'page-width')); const ph = pp && len(pp.getAttributeNS(NS.fo, 'page-height'));
+      if (pw && ph) { w = pw; h = ph; }
+    }
+    return { w, h };
+  };
+  const addTextBox = (si, text) => {
+    const input = clean(text === null || text === undefined ? '' : text); if (input.trim() === '') throw new EditError('Type some text for the text box.');
+    const pg = page(si); const d = pg.ownerDocument; const S = slideSize(pg); const cm = (n) => `${Math.round(n / UNIT.cm * 1000) / 1000}cm`;
+    const bw = S.w * 0.6; const bh = 1.6 * UNIT.cm;
+    const fr = d.createElementNS(NS.draw, 'draw:frame'); fr.setAttributeNS(NS.draw, 'draw:layer', 'layout');
+    fr.setAttributeNS(NS.svg, 'svg:width', cm(bw)); fr.setAttributeNS(NS.svg, 'svg:height', cm(bh)); fr.setAttributeNS(NS.svg, 'svg:x', cm((S.w - bw) / 2)); fr.setAttributeNS(NS.svg, 'svg:y', cm((S.h - bh) / 2));
+    const tb = d.createElementNS(NS.draw, 'draw:text-box'); fr.appendChild(tb); writeBox(tb, input);
+    pg.insertBefore(fr, kid(pg, NS.pres, 'notes') || null); touch('content.xml');
+    return shapesOf(pg).find((x) => x.el === fr).id;
+  };
+
   // ---- slides ----
   const masters = () => {
     const sr = part('styles.xml'); if (!sr) return [];
@@ -320,5 +343,5 @@ export function openOdp(bytes) {
     for (const k of Object.keys(snap)) if (k !== 'mimetype') out[k] = [snap[k], { level: STORED.test(k) ? 0 : 6 }];
     return zipSync(out);
   };
-  return { kind: 'odp', slides: () => pages().length, shapes, setText, tables, setCell, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
+  return { kind: 'odp', slides: () => pages().length, shapes, setText, addTextBox, tables, setCell, box, setBox, notes, setNotes, layouts, addSlide, duplicateSlide, moveSlide, deleteSlide, snapshot, toBytes, dirty: () => changed.size > 0 };
 }
