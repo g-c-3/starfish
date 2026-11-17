@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 267**
+
+Start: "Dp pass do next". DP283 and DP284 confirmed on a device. CI for the Session 266 push (Decision 505, run 1052) concluded success. Next item was Phase 122 step 2 (Edit on .doc, .xls and .ppt).
+- Built (Decision 506): `src/js/office-render.js` (an old file gets the tool shell; Edit asks, converts, hands the copy to the app; `startEdit`), `src/js/filesview.js` (passes `startEdit`), `src/js/app.js` (`saveConvertedCopy`, `entryMeta`; the copy is a new entry, the old viewer closes, the copy opens in the editor), `src/js/explorer-view.js` (the copy is written beside the original and shown in place).
+- Tested in a sandbox: 25 checks of the real viewer and shell in a simulated page with real .doc, .xls and .ppt files (Edit button, one question with the right title and text, warnings in it, a valid zip handed to the app, a refusal writes nothing, no option no button) and 3 checks that modern files keep their normal Edit; the converter checks (24) and the earlier suites still pass. `app.js` and `explorer-view.js` parsed, not run (the file system and the database are not in the sandbox). Not run through CI or a device.
+- Size: about 5 KB of source added; the converters (about 22 KB) now load on the first Edit of an old file (Decision 453).
+- Decision 506. DP285 open.
+- Next start: the CI log, DP285 on a device, then Phase 123 (doc full layout) unless the pass finds something. Read ARCHITECTURE.md's Motion section first if the new viewer adds a page or layer.
+
+---
+
 **Session 266**
 
 Start: "You decide what needs to be decided and do what needs to be done next". CI for the Session 265 push (Decision 504, run 1051) concluded success. DP283 still open. Phase 110 has nothing left of its own (its remaining items are Phases 123 to 125); Phase 122 was unblocked by the three editors, so it was chosen. Split: step 1 the converters, step 2 the Edit button and the copy beside the original.

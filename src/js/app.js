@@ -7486,18 +7486,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       else await replaceHomeBytes(item.id, bytes);
       return item.label;
     }
-    let label, tags = [], description = '';
-    if (isVault) { const e = (getVaultIndex() || []).find((x) => x.id === item.id) || item; label = e.label; tags = e.tags || []; description = e.description || ''; }
-    else {
-      const row = ((await db.query(`SELECT label, description FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
-      if (!row) throw new Error('The original is no longer there');
-      label = row.label; description = row.description || '';
-      tags = ((await db.query(`SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE et.entry_id = ?`, [item.id])).values || []).map((r) => r.name);
-    }
+    const { label, tags, description } = await entryMeta(item, isVault);
     const newLabel = `${label} (copy)`;
     const args = { type: item.type, label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: item.extension };
     if (isVault) await captureToVault(args); else await captureFile(item.type, args);
     return newLabel;
+  }
+  async function entryMeta(item, isVault) { // label, tags and description of the entry as stored now
+    if (isVault) { const e = (getVaultIndex() || []).find((x) => x.id === item.id) || item; return { label: e.label, tags: e.tags || [], description: e.description || '' }; }
+    const row = ((await db.query(`SELECT label, description FROM entries WHERE id = ? AND deleted_at IS NULL`, [item.id])).values || [])[0];
+    if (!row) throw new Error('The original is no longer there');
+    const tags = ((await db.query(`SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE et.entry_id = ?`, [item.id])).values || []).map((r) => r.name);
+    return { label: row.label, tags, description: row.description || '' };
+  }
+  // An old binary file made editable (Decision 506): a new entry, same label (a number after it when that label with the new ending is taken), same tags and description; the original is never touched.
+  async function saveConvertedCopy(item, bytes, ext, isVault) {
+    if (isVault && !privateSessionKey) throw new Error('Vault locked');
+    const { label, tags, description } = await entryMeta(item, isVault);
+    const taken = async (l) => isVault
+      ? (getVaultIndex() || []).some((e) => e.label === l && e.extension === ext)
+      : ((await db.query(`SELECT 1 FROM entries WHERE label = ? AND extension = ? AND deleted_at IS NULL LIMIT 1`, [l, ext])).values || []).length > 0;
+    let newLabel = label; for (let n = 2; await taken(newLabel) && n < 1000; n++) newLabel = `${label} ${n}`;
+    const args = { type: item.type, label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: ext };
+    const id = isVault ? await captureToVault(args) : await captureFile(item.type, args);
+    const made = isVault ? ((getVaultIndex() || []).find((e) => e.id === id) || { id, type: item.type, label: newLabel, extension: ext })
+      : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
+    return { label: newLabel, item: made };
   }
 
   // Merge and Make a PDF output (Decision 168): always a new entry, no tags or description (the sources may differ).
@@ -7735,7 +7749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     return true;
   }
-  async function openFileInArklyNow(item, isVault, { viewOnly = false, forceKind = null } = {}) {
+  async function openFileInArklyNow(item, isVault, { viewOnly = false, forceKind = null, startEdit = false } = {}) {
     const kind = forceKind || arklyKind(item.extension); // forceKind: the person chose how to read a file (Decision 440)
     if (!kind) return false;
     if (kind === 'archive') return openArchivePeek(item, isVault, viewOnly);
@@ -7757,6 +7771,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     viewerScreen.classList.add('file-mode');
     if (kind === 'text') viewerScreen.classList.add('pdf-mode', 'text-mode'); // the slim see-through title bar of the PDF view (Decision 443)
     const canEditDoc = !viewOnly && ((kind === 'docx' && /^(docx|odt)$/i.test(item.extension || '')) || (kind === 'xlsx' && /^(xlsx|ods)$/i.test(item.extension || '')) || (kind === 'pptx' && /^(pptx|odp)$/i.test(item.extension || ''))); // the same editor as the File explorer (Decision 484)
+    const NEW_EXT = { doc: 'docx', xls: 'xlsx', ppt: 'pptx' }; // an old binary file: Edit makes a copy in the new format (Decisions 471 and 506)
+    const convertExt = !viewOnly && !forceKind ? NEW_EXT[String(item.extension || '').toLowerCase()] || null : null;
     let discarding = false; // true while Discard reopens the file as saved
     const unsaved = () => !!(mounted && mounted.dirty && mounted.dirty());
     await openViewer({
@@ -7768,7 +7784,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const v = await mounted.confirmLeave();
         return v === 'discard' ? true : v === 'save' ? mounted.saveNow() : false;
       } : null,
-      render: async (body, { refresh } = {}) => {
+      render: async (body, { refresh, close } = {}) => {
         if (unsaved() && !discarding) return; // a refresh must not drop unsaved changes
         discarding = false;
         const mine = ++token;
@@ -7814,8 +7830,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             mounted = m; return;
           }
           const m = await mountOfficeFile(body, kind, bytes, {
-            ui, toast,
-            edit: !canEditDoc ? null : {
+            ui, toast, startEdit,
+            edit: convertExt && !canEditDoc ? {
+              convert: {
+                ext: convertExt,
+                save: async (out) => { // the copy is a new entry with the same label, tags and description; the old viewer closes and the copy opens in the editor
+                  const made = await saveConvertedCopy(item, out, convertExt, isVault);
+                  toast(`Saved as ${made.label}.${convertExt}`);
+                  if (close) close();
+                  await openFileInArkly(made.item, isVault, { startEdit: true });
+                }
+              }
+            } : !canEditDoc ? null : {
               save: async (out) => { await saveOfficeFile(item, out, { replace: true, isVault }); toast('Saved'); },
               saveCopy: async (out) => { const name = await saveOfficeFile(item, out, { replace: false, isVault }); toast(`Saved as ${name}`); },
               reload: () => { if (mine === token && refresh) { discarding = true; refresh(); } }

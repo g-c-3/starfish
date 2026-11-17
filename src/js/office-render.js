@@ -1239,6 +1239,7 @@ export function mountOffice(kind, bytes, host, ctx) {
   let inner = {};
   // an OpenDocument file arrives under the same kind as its Word, Excel or PowerPoint counterpart (Decision 452)
   const odf = odfKind(bytes);
+  const old = !!(edit && edit.convert && bytes[0] === 0xd0 && bytes[1] === 0xcf); // an old binary file: Edit makes an editable copy first (Decision 506)
   let model = kind === 'docx' ? (odf === 'text' ? readOdt(bytes) : isDoc(bytes) ? readDoc(bytes) : readDocx(bytes)) : kind === 'xlsx' ? (odf === 'spreadsheet' ? readOds(bytes) : isXls(bytes) ? readXls(bytes) : readXlsx(bytes)) : kind === 'pptx' ? (odf === 'presentation' ? readOdp(bytes) : isPpt(bytes) ? readPpt(bytes) : readPptx(bytes)) : null;
   if (!model) throw new OfficeError('This type is not supported here.');
   if (kind === 'docx' && model.embedded.length && typeof FontFace !== 'undefined') {
@@ -1256,7 +1257,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountDocx(model, holder, u, ui, tmp);
     tmp.tools = docTools(host, inner); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && (!odf || odf === 'text') && hasEditor('docx') && bytes[0] === 0x50 && bytes[1] === 0x4B) shell = makeShell(inner);
+    if (edit && hasEditor('docx') && (old || ((!odf || odf === 'text') && bytes[0] === 0x50 && bytes[1] === 0x4B))) shell = makeShell(inner);
     if (tmp.viewSync) loadPrefs().then(tmp.viewSync);
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else if (kind === 'xlsx') {
@@ -1264,25 +1265,38 @@ export function mountOffice(kind, bytes, host, ctx) {
     inner = mountXlsx(model, holder, ui, tmp, u);
     tmp.tools = xlTools(model, inner, host); tmp.tools.open = ctx.openWith;
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && (!odf || odf === 'spreadsheet') && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('xlsx')) shell = makeShell(inner, 'xlsx');
+    if (edit && hasEditor('xlsx') && (old || ((!odf || odf === 'spreadsheet') && bytes[0] === 0x50 && bytes[1] === 0x4B))) shell = makeShell(inner, 'xlsx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   } else {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
     tmp.tools = pptTools({ get count() { return model.count; }, load: (i) => model.load(i) }, inner); tmp.tools.open = ctx.openWith; // read through `model`: the editor replaces it
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
-    if (edit && (!odf || odf === 'presentation') && bytes[0] === 0x50 && bytes[1] === 0x4B && hasEditor('pptx')) shell = makeShell(inner, 'pptx');
+    if (edit && hasEditor('pptx') && (old || ((!odf || odf === 'presentation') && bytes[0] === 0x50 && bytes[1] === 0x4B))) shell = makeShell(inner, 'pptx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
   }
   if (kind === 'pptx' && model.notice) { const sc = host.querySelector('.eo-pscroll'); if (sc) sc.insertBefore(el('div', 'ev-banner', model.notice), sc.firstChild); }
   // Edit: the editor loads on the first tap; the page is drawn in Reflow while it is open. Save replaces the file, Save as copy never does.
   function makeShell(view, type = 'docx') {
+    // an old file: the copy is made in the new format, the person is told what it holds, the app writes it and opens it (Decisions 471 and 506)
+    const NAME = { docx: 'Word', xlsx: 'Excel', pptx: 'PowerPoint' };
+    const convertCopy = async () => {
+      try {
+        const mod = await import('./office-convert.js');
+        const r = type === 'xlsx' ? mod.xlsToXlsx(model) : type === 'pptx' ? mod.pptToPptx(model) : mod.docToDocx(model);
+        const text = `This is an older ${NAME[type]} file and cannot be changed as it is. Arkly will save a copy as .${edit.convert.ext} and open it for editing; your changes go to the copy and the original stays as it is. ${r.warnings.join(' ')}`;
+        if (!ui.askYesNo) throw new Error('This file cannot be edited here.');
+        if (await ui.askYesNo({ title: `Edit as .${edit.convert.ext}?`, text, yes: 'Make the copy', no: 'Cancel' })) await edit.convert.save(r.bytes);
+      } catch (e) { toast(e && e.message ? e.message : 'The copy could not be made.'); }
+      sh.setEditing(false);
+    };
     const failed = (e) => toast(`Could not save the file${e && e.message ? `: ${e.message}` : '.'}`);
     const saveNow = async () => { if (!editor) return false; try { await edit.save(editor.bytes()); editor.markClean(); return true; } catch (e) { failed(e); return false; } };
     const sh = createShell(host, {
       groups: [], onActivity: ui.onActivity, save: saveNow,
       saveCopy: async () => { if (editor) { try { await edit.saveCopy(editor.bytes()); } catch (e) { failed(e); } } },
       onEdit: async (on) => {
+        if (on && old) { await convertCopy(); return; }
         if (!on) { if (editor) editor.setEditable(false); return; }
         if (editor) { editor.setEditable(true); return; }
         try {
@@ -1322,6 +1336,7 @@ export function mountOffice(kind, bytes, host, ctx) {
     sh.saveNow = saveNow;
     return sh;
   }
+  if (ctx.startEdit && shell && !old) shell.setEditing(true); // a copy just made: it opens in the editor (Decision 506)
   const fnote = fontNotice(host);
   // the notice folds away with the title bar on scroll (Decision 243)
   const stopChrome = chromeOnScroll(host, (h) => { if (fnote) fnote.classList.toggle('eo-folded', h); if (ctx.onChrome) ctx.onChrome(h); }, '.eo-scroll, .eo-grid');

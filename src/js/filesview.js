@@ -89,7 +89,7 @@ export async function mountOfficeFile(body, kind, bytes, ctx) {
   body.appendChild(host);
   if (epub) { const r = book.mountEpub(host, bytes, { ui: ctx.ui, openWith: ctx.openWith }); return { toggleMenu: r.toggleMenu, destroy: r.destroy }; }
   host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
-  const mounted = mountOffice(kind, bytes, host, { ui: ctx.ui, toast: ctx.toast, edit: ctx.edit || null, setCount: ctx.setCount, onChrome: () => {}, openWith: ctx.openWith });
+  const mounted = mountOffice(kind, bytes, host, { ui: ctx.ui, toast: ctx.toast, edit: ctx.edit || null, startEdit: !!ctx.startEdit, setCount: ctx.setCount, onChrome: () => {}, openWith: ctx.openWith });
   // dirty, confirmLeave and saveNow are the editor's (Decision 484); with no editor they report no changes
   return { toggleMenu: () => host.classList.toggle('eo-menu-open'), dirty: () => !!(mounted.dirty && mounted.dirty()), confirmLeave: () => mounted.confirmLeave(), saveNow: () => mounted.saveNow(), destroy() { mounted.destroy(); } };
 }

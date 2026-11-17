@@ -39,6 +39,7 @@ export function openFileViewer(file, ctx) {
   const root = $('explorer-viewer'), body = $('ev-body'), titleEl = $('ev-title'), countEl = $('ev-count');
   const saveBtn = $('ev-save-btn'), openBtn = $('ev-open-btn');
   let current = file, token = 0, closed = false, changed = false;
+  let editNext = false; // a copy just made in the new format opens in the editor (Decision 506)
   let guard = async () => true; // resolves false when Back must not leave yet
   let cleanup = () => {};
   let textFull = false; let textBtns = []; let stopPinch = () => {};
@@ -322,9 +323,23 @@ export function openFileViewer(file, ctx) {
       host.addEventListener('pointerdown', (e) => { if (host.classList.contains('eo-menu-open') && !e.target.closest('.eo-bar')) host.classList.remove('eo-menu-open'); });
       const dir = f.path.slice(0, f.path.lastIndexOf('/'));
       const canEdit = (kind === 'docx' || (kind === 'xlsx' && /\.(xlsx|ods)$/i.test(f.name)) || (kind === 'pptx' && /\.(pptx|odp)$/i.test(f.name))) && !readOnly && !isVault; // Decision 474: Save replaces the file, Save as copy is written beside it
+      const NEW_EXT = { doc: 'docx', xls: 'xlsx', ppt: 'pptx' }; // an old binary file: Edit makes a copy beside it in the new format (Decisions 471 and 506)
+      const convertExt = !readOnly && !isVault ? NEW_EXT[((f.name.match(/\.([^.]+)$/) || [])[1] || '').toLowerCase()] || null : null;
+      const startEdit = editNext; editNext = false;
+      const convert = !convertExt ? null : {
+        ext: convertExt,
+        save: async (out) => { // same name, new ending, a number when taken; never over an existing file
+          const stem = f.name.replace(/\.[^.]+$/, ''); let name = `${stem}.${convertExt}`; let path = `${dir}/${name}`;
+          for (let n = 2; n < 100; n++) { try { await Filesystem.stat({ path: toUri(path) }); } catch { break; } name = `${stem} (${n}).${convertExt}`; path = `${dir}/${name}`; }
+          await Filesystem.writeFile({ path: toUri(path), data: bytesToB64(out) }); changed = true; toast(`Saved as ${name}`);
+          if (closed) return;
+          reset(); current = { ...f, name, path, size: out.length, officeKind: kind }; titleEl.textContent = name; editNext = true; showOffice(current, kind, token);
+        }
+      };
       mounted = mountOffice(kind, bytes, host, {
-        toast,
-        edit: !canEdit ? null : {
+        toast, startEdit,
+        edit: !canEdit && !convert ? null : {
+          ...(convert ? { convert } : {}),
           save: async (out) => { await Filesystem.writeFile({ path: toUri(f.path), data: bytesToB64(out) }); changed = true; toast('Saved'); },
           saveCopy: async (out) => {
             const ext = /\.odt$/i.test(f.name) ? 'odt' : /\.xlsx$/i.test(f.name) ? 'xlsx' : /\.ods$/i.test(f.name) ? 'ods' : /\.pptx$/i.test(f.name) ? 'pptx' : /\.odp$/i.test(f.name) ? 'odp' : 'docx'; const stem = f.name.replace(/\.(docx|odt|xlsx|ods|pptx|odp)$/i, ''); let name = `${stem} (copy).${ext}`; let path = `${dir}/${name}`;
@@ -392,7 +407,7 @@ export function openFileViewer(file, ctx) {
     reset();
     current = f;
     titleEl.textContent = f.name;
-    const kind = f === file ? ctx.kind : 'image'; // only images are stepped through
+    const kind = f === file ? ctx.kind : f.officeKind || 'image'; // only images are stepped through; a copy made from an old file keeps its own kind (Decision 506)
     const mine = token;
     if (kind === 'text') showText(f, mine);
     else if (kind === 'image') showImage(f);
