@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 274**
+
+Start: "All dp passed, do next". DP291 passed on a device. CI for the Session 273 push (Decision 512, runs 1059 and 584) concluded success. Next was Phase 123 step 6 (headers, footers, page set-up).
+- Built (Decision 513): `src/js/office-doc.js` (text of the header story, one assembly routine for body and stories, sections, page set-up, headers and footers, page-number fields, odd and even setting), `src/js/office-convert.js` (the .docx copy writes sections, header and footer parts, page fields, settings).
+- Tested in a sandbox with real .doc files made by an office suite (three sections with portrait and landscape, margins, first-page and own headers, footer with page and page count; even and odd headers with a continuous section): the sections, headers and footers of the reader; the copy read back through the docx reader (equal sections, texts, section marks, odd and even setting); the copy printed by the office suite; the list, picture and floating picture tests of Sessions 271 to 273 again with unchanged results. Both edited files parse with the bundler. The viewer drawing the sheets from a .doc, columns, and the checks of earlier sessions were not run. Not run through CI or a device.
+- Size: about 7 KB of source added to the reader and 3.5 KB to the converter (Decision 453).
+- Decision 513. DP292 open.
+- Next start: the CI log, DP292 on a device (closes Phase 123), then Phase 124.
+
+---
+
 **Session 273**
 
 Start: "All dp passed, do next". DP288, DP289 and DP290 passed on a device. CI for the Session 272 push (Decision 511, runs 1058 and 583) concluded success. Next was Phase 123 step 5b (floating pictures).

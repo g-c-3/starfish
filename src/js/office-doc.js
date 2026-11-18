@@ -3,7 +3,7 @@
 // as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
 // subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
 // Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. Lists (Decision 510) come from
-// the list definitions and list overrides of the Table stream, inline pictures (Decision 511) from the Data stream, floating pictures (Decision 512) from the shape table. No headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// the list definitions and list overrides of the Table stream, inline pictures (Decision 511) from the Data stream, floating pictures (Decision 512) from the shape table, sections, headers and footers (Decision 513) from the section and header tables. No columns yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
 import { OfficeError, DOC_BLOCK_MAX, formatNum } from './office-read.js';
@@ -114,7 +114,8 @@ export function readDoc(bytes) {
   const table = ole.stream(flags & 0x0200 ? '1Table' : '0Table');
   if (!table) throw new OfficeError('This file is protected or damaged.');
 
-  const ccpText = u32(0x4c);
+  const ccpText = u32(0x4c); const ccpFtn = u32(0x50); const ccpHdd = u32(0x54);
+  const ccpAll = ccpText + (ccpFtn < 0x1000000 ? ccpFtn : 0) + (ccpHdd < 0x1000000 ? ccpHdd : 0);
   const fcClx = u32(0x1a2); const lcbClx = u32(0x1a6);
   if (!lcbClx || fcClx + lcbClx > table.length) throw new OfficeError('This file is protected or damaged.');
 
@@ -131,10 +132,10 @@ export function readDoc(bytes) {
   const pieces = []; // { cp, len, fc, uni }: where each stretch of text lies in the file
   const parts = [];
   let got = 0;
-  for (let i = 0; i < n && got < ccpText; i++) {
+  for (let i = 0; i < n && got < ccpAll; i++) {
     const cpS = tdv.getUint32(plc + i * 4, true); const cpE = tdv.getUint32(plc + (i + 1) * 4, true);
     const fcRaw = tdv.getUint32(plc + (n + 1) * 4 + i * 8 + 2, true);
-    const len = Math.min(cpE - cpS, ccpText - got);
+    const len = Math.min(cpE - cpS, ccpAll - got);
     if (!(len > 0)) continue;
     let s = '';
     if (fcRaw & 0x40000000) {
@@ -431,18 +432,26 @@ export function readDoc(bytes) {
     }
   } catch { /* paragraphs are shown without their formatting */ }
 
+  const FLD_CH = { PAGE: '\ue001', NUMPAGES: '\ue002', SECTIONPAGES: '\ue003' }; const FLD_KIND = { '\ue001': 'page', '\ue002': 'numpages', '\ue003': 'sectionpages' };
   // fields keep the shown result and drop the instruction (0x13 begin, 0x14 separator, 0x15 end)
   const ch = []; const pi = []; const qa = []; const ri = []; const stack = [];
   for (let k = 0; k < raw.length; k++) {
     const c = raw[k];
-    if (c === '\x13') { stack.push({ shown: false }); continue; }
-    if (c === '\x14') { if (stack.length) stack[stack.length - 1].shown = true; continue; }
+    if (c === '\x13') { stack.push({ shown: false, ins: '', drop: false }); continue; }
+    if (c === '\x14') {
+      const t = stack[stack.length - 1];
+      if (t) { // PAGE, NUMPAGES and SECTIONPAGES stay fields: one placeholder character stands for the shown result
+        t.shown = true; const f = FLD_CH[(t.ins.trim().split(/\s+/)[0] || '').toUpperCase()];
+        if (f) { ch.push(f); pi.push(chpAt[k]); qa.push(papAt[k]); ri.push(k); t.drop = true; }
+      }
+      continue;
+    }
     if (c === '\x15') { stack.pop(); continue; }
-    if (stack.length && !stack[stack.length - 1].shown) continue;
+    if (stack.length) { const t = stack[stack.length - 1]; if (!t.shown) { t.ins += c; continue; } if (t.drop) continue; }
     ch.push(c); pi.push(chpAt[k]); qa.push(papAt[k]); ri.push(k);
   }
   // 0x07 ends a table cell, and twice in a row ends a table row: cells become tab stops, rows become lines
-  const oc = []; const op = []; const oq = []; const ofl = new Map();
+  const oc = []; const op = []; const oq = []; const ofl = new Map(); const ocr = []; // ocr: the text position of each kept character
   for (let k = 0; k < ch.length; k++) {
     const c = ch[k]; const n0 = oc.length;
     if (c === '\x07') oc.push('\x07'); // a cell or row mark: told apart below by the paragraph's own formatting
@@ -450,11 +459,11 @@ export function readDoc(bytes) {
     else if (c === '\x01' && props[pi[k]] && props[pi[k]].spec && props[pi[k]].pic !== undefined && !props[pi[k]].ole && !props[pi[k]].fdata) oc.push('\x01'); // a picture mark
     else if (c === '\x01' || c === '\x02' || c === '\x05' || c === '\x08' || c === '\x1f') continue;
     else if (c === '\x1e') oc.push('-'); else if (c === '\x0b') oc.push('\n'); else oc.push(c);
-    if (oc.length > n0) { op.push(pi[k]); oq.push(qa[k]); }
+    if (oc.length > n0) { op.push(pi[k]); oq.push(qa[k]); ocr.push(ri[k]); }
   }
 
   let truncated = false;
-  const blocks = [];
+  let blocks = [];
   const base = { font: 'Calibri', size: 15 };
   let runs = []; let cur = null; let curP = -2; let curQ = -1;
   const effective = new Map(); // the run properties of a paragraph style and a run, made once
@@ -524,9 +533,19 @@ export function readDoc(bytes) {
     if (op[k] !== curP || !cur) { const pp = curQ >= 0 ? pprops[curQ] : null; cur = { ...base, ...runProps(pp ? pp.istd : 0, op[k]), text: '' }; runs.push(cur); curP = op[k]; }
     cur.text += c;
   };
-  for (let k = 0; k < oc.length; k++) {
-    if (blocks.length + rows.length >= DOC_BLOCK_MAX) { truncated = true; break; }
+  const ocAt = (cp) => { let a = 0; let b = ocr.length; while (a < b) { const m = (a + b) >> 1; if (ocr[m] < cp) a = m + 1; else b = m; } return a; }; // the first kept character at or after a text position
+  const secAt = new Map(); // text position of a section break -> the section it ends (set below)
+  const assemble = (lo, hi) => { // the blocks of one story (the body, or one header or footer)
+    blocks = []; runs = []; cur = null; curP = -2; curQ = -1; rows = []; rowDefs = []; cells = []; cellBlocks = [];
+    let trunc = false;
+    for (let k = lo; k < hi; k++) {
+    if (blocks.length + rows.length >= DOC_BLOCK_MAX) { trunc = true; break; }
     const c = oc[k];
+    if (c === '\x0c' && secAt.has(ocr[k])) { // a section break ends its paragraph
+      endPara(oq[k]); const lb = blocks[blocks.length - 1]; if (lb && lb.t === 'p') lb.sectEnd = secAt.get(ocr[k]);
+      continue;
+    }
+    if (FLD_KIND[c]) { curQ = oq[k]; const pp = curQ >= 0 ? pprops[curQ] : null; runs.push({ ...base, ...runProps(pp ? pp.istd : 0, op[k]), text: '1', field: FLD_KIND[c] }); cur = null; curP = -2; continue; }
     if (c === '\r') { endPara(oq[k]); continue; }
     if (c === '\x08') { runs.push({ float: ofl.get(k) }); curQ = oq[k]; cur = null; curP = -2; continue; }
     if (c === '\x01') { // a picture: its own run in the line
@@ -543,15 +562,72 @@ export function readDoc(bytes) {
       continue;
     }
     addChar(c, k);
+    }
+    if (!trunc && hi > lo && oc[hi - 1] !== '\r' && oc[hi - 1] !== '\x07') endPara(curQ);
+    flushTable();
+    return { blocks, truncated: trunc };
+  };
+  // sections (PlcfSed in the Table stream, the properties in the WordDocument stream): page size and margins in twips, the break type,
+  // title page, page numbering; the section break mark is the last character of each section
+  const defPage = { w: 816, h: 1056, t: 96, r: 120, b: 96, l: 120, hd: 48, ft: 48 };
+  const secs = [];
+  try {
+    const fcE = u32(0xca); const lcbE = u32(0xce); const nS = Math.floor((lcbE - 4) / 16);
+    if (lcbE >= 20 && fcE + lcbE <= table.length) {
+      for (let i = 0; i < nS && i < 500; i++) {
+        const cpEnd = tdv.getUint32(fcE + (i + 1) * 4, true); const fcSepx = tdv.getUint32(fcE + (nS + 1) * 4 + i * 12 + 2, true);
+        const sp = { w: 12240, h: 15840, l: 1800, r: 1800, t: 1440, b: 1440, hd: 720, ft: 720, title: false, bkc: 2, nfc: 0, start: null, restart: false };
+        if (fcSepx !== 0xffffffff && fcSepx + 2 <= wd.length) {
+          const cb = wd[fcSepx] | (wd[fcSepx + 1] << 8);
+          eachSprm(wd, fcSepx + 2, Math.min(wd.length, fcSepx + 2 + cb), (op, d) => {
+            const v16 = wd[d] | (wd[d + 1] << 8); const s16v = v16 > 32767 ? v16 - 65536 : v16;
+            switch (op) {
+              case 0xb01f: sp.w = v16; break; case 0xb020: sp.h = v16; break;
+              case 0xb021: sp.l = v16; break; case 0xb022: sp.r = v16; break;
+              case 0x9023: sp.t = Math.abs(s16v); break; case 0x9024: sp.b = Math.abs(s16v); break;
+              case 0xb017: sp.hd = v16; break; case 0xb018: sp.ft = v16; break;
+              case 0x300a: sp.title = wd[d] === 1; break; case 0x3009: sp.bkc = wd[d]; break;
+              case 0x300e: sp.nfc = wd[d]; break; case 0x3011: sp.restart = wd[d] === 1; break; case 0x501c: sp.start = v16; break;
+              default: break;
+            }
+          });
+        }
+        secs.push({ cpEnd, sp });
+      }
+    }
+  } catch { secs.length = 0; }
+  const pgOfSec = (sp) => (sp.w >= 1440 && sp.h >= 1440 ? { w: sp.w / 15, h: sp.h / 15, t: sp.t / 15, r: sp.r / 15, b: sp.b / 15, l: sp.l / 15, hd: sp.hd / 15, ft: sp.ft / 15 } : { ...defPage });
+  secs.forEach((x, i) => { if (i < secs.length - 1) secAt.set(x.cpEnd - 1, i); });
+  const body = assemble(0, ocAt(ccpText));
+  truncated = body.truncated;
+  // headers and footers (PlcfHdd): six stories for the separators, then six per section: even header, header, even footer, footer, first header, first footer
+  const hddCps = []; const hddStart = ccpText + (ccpFtn < 0x1000000 ? ccpFtn : 0);
+  try { const fcH = u32(0xf2); const lcbH = u32(0xf6); if (lcbH >= 8 && fcH + lcbH <= table.length) for (let k = 0; k < lcbH / 4; k++) hddCps.push(tdv.getUint32(fcH + k * 4, true)); } catch { hddCps.length = 0; }
+  const NSEC = secs.length || 1;
+  const story = (sec, j) => { // undefined: the story is empty, so the section takes the previous one's
+    const i = 6 + sec * 6 + j; if (i + 1 >= hddCps.length) return undefined;
+    const a = hddCps[i]; const b = hddCps[i + 1]; if (!(b > a)) return undefined;
+    return assemble(ocAt(hddStart + a), ocAt(hddStart + b)).blocks;
+  };
+  let prevHdr = {}; let prevFtr = {};
+  const sections = [];
+  for (let i = 0; i < NSEC; i++) {
+    const sp = secs.length ? secs[i].sp : null; const hdr = {}; const ftr = {};
+    const pick = (prev, cur, kind) => (cur !== undefined ? cur : prev[kind]);
+    hdr.even = pick(prevHdr, story(i, 0), 'even'); hdr.default = pick(prevHdr, story(i, 1), 'default'); ftr.even = pick(prevFtr, story(i, 2), 'even'); ftr.default = pick(prevFtr, story(i, 3), 'default');
+    hdr.first = pick(prevHdr, story(i, 4), 'first'); ftr.first = pick(prevFtr, story(i, 5), 'first');
+    prevHdr = hdr; prevFtr = ftr;
+    sections.push({
+      page: sp ? pgOfSec(sp) : { ...defPage }, type: sp ? ['continuous', 'nextPage', 'nextPage', 'evenPage', 'oddPage'][sp.bkc] || 'nextPage' : 'nextPage', titlePg: sp ? sp.title : false,
+      pgStart: sp && sp.restart ? (sp.start === null ? 1 : sp.start) : null, pgFmt: sp ? ['decimal', 'upperRoman', 'lowerRoman', 'upperLetter', 'lowerLetter'][sp.nfc] || null : null, hdr, ftr
+    });
   }
-  if (!truncated && oc.length && oc[oc.length - 1] !== '\r' && oc[oc.length - 1] !== '\x07') endPara(curQ);
-  flushTable();
-  const page = { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96, hd: 48, ft: 48 };
-  const none = { default: undefined, first: undefined, even: undefined };
+  let evenOdd = false;
+  try { const fcP = u32(0x192); const lcbP = u32(0x196); if (lcbP >= 2 && fcP + lcbP <= table.length) evenOdd = (table[fcP] & 1) === 1; } catch { /* odd and even pages share one header */ }
+  const lastSec = sections[sections.length - 1];
   return {
-    kind: 'docx', blocks, numDefs: lists ? lists.used() : {}, media, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
-    sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
-    evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text, character and paragraph formatting, tables, lists and JPEG, PNG and bitmap pictures only: other pictures, headers, footers and page layout of this old Word file are not shown.'
+    kind: 'docx', blocks: body.blocks, numDefs: lists ? lists.used() : {}, media, truncated, page: lastSec.page, header: lastSec.hdr.default || [], footer: lastSec.ftr.default || [], footnotes: [], embedded: [],
+    sections, evenOdd, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
+    notice: 'Text, character and paragraph formatting, tables, lists, JPEG, PNG and bitmap pictures, headers, footers and page set-up only: columns, other pictures and drawn shapes of this old Word file are not shown.'
   };
 }

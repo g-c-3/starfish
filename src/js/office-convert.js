@@ -17,6 +17,7 @@ const PML = 'application/vnd.openxmlformats-officedocument.presentationml';
 // ---- doc -> docx: lists (numbering.xml), paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting, and tables (cells, spans, merges, borders, shading) (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
 export function docToDocx(model) {
   const warnings = [];
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   const rpr = (r) => { // the character formatting of a run, in the order the schema wants
     const x = [];
     if (r.font && r.font !== 'Calibri') x.push(`<w:rFonts w:ascii="${esc(r.font)}" w:hAnsi="${esc(r.font)}" w:cs="${esc(r.font)}"/>`);
@@ -48,13 +49,16 @@ export function docToDocx(model) {
   };
   const bdr = (tag, b) => (b ? (b.none ? `<w:${tag} w:val="nil"/>` : `<w:${tag} w:val="${b.style === 'solid' ? 'single' : b.style}" w:sz="${Math.max(2, Math.min(96, Math.round((b.w / (4 / 3)) * 8)))}" w:space="0" w:color="${b.color || 'auto'}"/>`) : '');
   const pics = new Map(); // inline pictures: the model's media path -> the package's rId and file name
+  let noPic = false; // header and footer parts carry no pictures (their relationships are not written)
   const picRun = (r) => {
+    if (noPic) return '';
     const m = (model.media || {})[r.img]; if (!m || !(r.w > 0) || !(r.h > 0)) return '';
     if (!pics.has(r.img)) pics.set(r.img, { id: `rIdP${pics.size + 1}`, name: `image${pics.size + 1}.${r.img.slice(r.img.lastIndexOf('.') + 1)}`, bytes: m.bytes });
     const cx = Math.round(r.w * 9525); const cy = Math.round(r.h * 9525); const n = pics.size + 100;
     return `<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Picture ${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Picture"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${pics.get(r.img).id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
   };
   const floatRun = (f) => { // an anchored picture: position from its box, text wrap as read
+    if (noPic) return '';
     const it = f.item; const m = (model.media || {})[it.path]; if (!m) return '';
     if (!pics.has(it.path)) pics.set(it.path, { id: `rIdP${pics.size + 1}`, name: `image${pics.size + 1}.${it.path.slice(it.path.lastIndexOf('.') + 1)}`, bytes: m.bytes });
     const e = (px) => Math.round(px * 9525); const cx = e(it.w); const cy = e(it.h); const n = pics.size + 100; const d = f.dist || {};
@@ -63,8 +67,9 @@ export function docToDocx(model) {
     return `<w:r><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="${e(d.t || 0)}" distB="${e(d.b || 0)}" distL="${e(d.l || 0)}" distR="${e(d.r || 0)}" simplePos="0" relativeHeight="${251658240 + n}" behindDoc="${f.behind ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="${f.h.rel}"><wp:posOffset>${e(f.h.off)}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="${f.v.rel}"><wp:posOffset>${e(f.v.off)}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/>${wrap}<wp:docPr id="${n}" name="Picture ${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Picture"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${pics.get(it.path).id}"/>${src}<a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`;
   };
   const para = (b) => {
-    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : r.img ? picRun(r) : r.float ? floatRun(r.float) : run(r.text || '', r))).join('');
-    const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) }, b.list);
+    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : r.img ? picRun(r) : r.float ? floatRun(r.float) : r.field ? `<w:fldSimple w:instr=" ${{ page: 'PAGE', numpages: 'NUMPAGES', sectionpages: 'SECTIONPAGES' }[r.field] || 'PAGE'} ">${run(r.text || '', r)}</w:fldSimple>` : run(r.text || '', r))).join('');
+    let pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) }, b.list);
+    if (b.sectEnd !== undefined && !noPic && secs[b.sectEnd]) { const sx = sectXml(secs[b.sectEnd]); pPr = pPr ? pPr.replace('</w:pPr>', `${sx}</w:pPr>`) : `<w:pPr>${sx}</w:pPr>`; } // the section ends with this paragraph
     return inner || pPr ? `<w:p>${pPr}${inner}</w:p>` : '<w:p/>';
   };
   const table = (b) => {
@@ -78,28 +83,50 @@ export function docToDocx(model) {
     }).join('')}</w:tr>`).join('');
     return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${tbl ? `<w:tblBorders>${tbl}</w:tblBorders>` : ''}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
   };
+  // sections: page set-up, break type, title page, numbering and the header and footer parts (one part per distinct story)
+  const secs = model.sections && model.sections.length ? model.sections : [{ page: model.page || { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96 }, type: 'nextPage', titlePg: false, hdr: {}, ftr: {} }];
+  const hfParts = new Map(); const RNS = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const hfRef = (blocks, tag) => {
+    if (!blocks) return null;
+    const key = `${tag}`; let m = hfParts.get(blocks); if (m && m.tag !== tag) m = null;
+    if (!m) {
+      const n = hfParts.size + 1; noPic = true;
+      const body = blocks.filter((x) => x.t === 'p' || x.t === 'table').map((x) => (x.t === 'table' ? table(x) : para({ ...x, sectEnd: undefined }))).join('') || '<w:p/>';
+      noPic = false;
+      m = { tag, id: `rIdH${n}`, name: `${tag === 'hdr' ? 'header' : 'footer'}${n}.xml`, xml: `${XML}<w:${tag} ${W}>${body}</w:${tag}>` }; hfParts.set(blocks, m); void key;
+    }
+    return m.id;
+  };
+  const tw2 = (px) => Math.round(px * 15);
+  const sectXml = (sc) => {
+    const q = sc.page; const refs = [['hdr', 'header', sc.hdr || {}], ['ftr', 'footer', sc.ftr || {}]].map(([tag, nm, o]) => ['default', 'first', 'even'].map((t) => { const id = hfRef(o[t], tag); return id ? `<w:${nm}Reference w:type="${t}" r:id="${id}"/>` : ''; }).join('')).join('');
+    const pn = sc.pgStart !== null && sc.pgStart !== undefined || sc.pgFmt ? `<w:pgNumType${sc.pgFmt ? ` w:fmt="${sc.pgFmt}"` : ''}${sc.pgStart !== null && sc.pgStart !== undefined ? ` w:start="${sc.pgStart}"` : ''}/>` : '';
+    return `<w:sectPr ${RNS}>${refs}${sc.type && sc.type !== 'nextPage' ? `<w:type w:val="${sc.type}"/>` : ''}<w:pgSz w:w="${tw2(q.w)}" w:h="${tw2(q.h)}"${q.w > q.h ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${tw2(q.t)}" w:right="${tw2(q.r)}" w:bottom="${tw2(q.b)}" w:left="${tw2(q.l)}" w:header="${tw2(q.hd === undefined ? 48 : q.hd)}" w:footer="${tw2(q.ft === undefined ? 48 : q.ft)}" w:gutter="0"/>${pn}${sc.titlePg ? '<w:titlePg/>' : ''}</w:sectPr>`;
+  };
   const flow = (model.blocks || []).filter((b) => b.t === 'p' || b.t === 'table');
   const paras = flow.map((b, i) => (b.t === 'table' ? `${table(b)}${!flow[i + 1] || flow[i + 1].t === 'table' ? '<w:p/>' : ''}` : para(b))); // a table is followed by a paragraph, as Word needs
   if (!paras.length) paras.push('<w:p/>');
-  const pg = model.page || { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96 }; const tw = (px) => Math.round(px * 15);
-  const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
-  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const tw = (px) => Math.round(px * 15);
+  const sect = sectXml(secs[secs.length - 1]);
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Other pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character, paragraph and list formatting, its tables and its JPEG, PNG and bitmap pictures, inline and floating.');
+  warnings.push('Columns, other pictures and drawn shapes of the old file are not carried; the copy holds its text with its character, paragraph and list formatting, its tables, its JPEG, PNG and bitmap pictures, its sections, page set-up, headers and footers (without pictures).');
   const defs = model.numDefs || {}; const nums = Object.keys(defs).filter((id) => paras.some((x) => x.includes(`<w:numId w:val="${id}"/>`)));
   const numbering = nums.length ? `${XML}<w:numbering ${W}>${nums.map((id) => `<w:abstractNum w:abstractNumId="${id}"><w:multiLevelType w:val="hybridMultilevel"/>${defs[id].map((lv, k) => { // one abstract list per list override, 9 levels
     if (!lv) return '';
     const ind = lv.l !== undefined ? `<w:pPr><w:ind w:left="${tw(lv.l)}"${lv.first < 0 ? ` w:hanging="${tw(-lv.first)}"` : lv.first > 0 ? ` w:firstLine="${tw(lv.first)}"` : ''}/></w:pPr>` : '';
     return `<w:lvl w:ilvl="${k}"><w:start w:val="${lv.start}"/><w:numFmt w:val="${lv.fmt}"/><w:lvlText w:val="${esc(lv.text)}"/><w:lvlJc w:val="left"/>${ind}</w:lvl>`;
   }).join('')}</w:abstractNum>`).join('')}${nums.map((id) => `<w:num w:numId="${id}"><w:abstractNumId w:val="${id}"/></w:num>`).join('')}</w:numbering>` : null;
+  const parts = [...hfParts.values()]; const settings = model.evenOdd ? `${XML}<w:settings ${W}><w:evenAndOddHeaders/></w:settings>` : null;
   const bytes = zip({
-    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml'], ...[...new Set([...pics.values()].map((x) => x.name.slice(x.name.lastIndexOf('.') + 1)))].map((e) => [e, { jpg: 'image/jpeg', png: 'image/png', bmp: 'image/bmp' }[e]])], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`], ...(numbering ? [['/word/numbering.xml', `${WML}.numbering+xml`]] : [])]),
+    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml'], ...[...new Set([...pics.values()].map((x) => x.name.slice(x.name.lastIndexOf('.') + 1)))].map((e) => [e, { jpg: 'image/jpeg', png: 'image/png', bmp: 'image/bmp' }[e]])], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`], ...(numbering ? [['/word/numbering.xml', `${WML}.numbering+xml`]] : []), ...(settings ? [['/word/settings.xml', `${WML}.settings+xml`]] : []), ...parts.map((x) => [`/word/${x.name}`, `${WML}.${x.tag === 'hdr' ? 'header' : 'footer'}+xml`])]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'word/document.xml']]),
     'word/document.xml': `${XML}<w:document ${W}><w:body>${paras.join('')}${sect}</w:body></w:document>`,
     'word/styles.xml': `${XML}<w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`,
     ...(numbering ? { 'word/numbering.xml': numbering } : {}),
+    ...(settings ? { 'word/settings.xml': settings } : {}),
+    ...Object.fromEntries(parts.map((x) => [`word/${x.name}`, x.xml])),
     ...Object.fromEntries([...pics.values()].map((x) => [`word/media/${x.name}`, x.bytes])),
-    'word/_rels/document.xml.rels': rels([['rId1', 'styles', 'styles.xml'], ...(numbering ? [['rId2', 'numbering', 'numbering.xml']] : []), ...[...pics.values()].map((x) => [x.id, 'image', `media/${x.name}`])])
+    'word/_rels/document.xml.rels': rels([['rId1', 'styles', 'styles.xml'], ...(numbering ? [['rId2', 'numbering', 'numbering.xml']] : []), ...(settings ? [['rId3', 'settings', 'settings.xml']] : []), ...parts.map((x) => [x.id, x.tag === 'hdr' ? 'header' : 'footer', x.name]), ...[...pics.values()].map((x) => [x.id, 'image', `media/${x.name}`])])
   });
   return { bytes, warnings };
 }
