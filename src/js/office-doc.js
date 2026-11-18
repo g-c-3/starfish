@@ -2,7 +2,8 @@
 // WordDocument stream, the style sheet, the paragraph formatting (PAPX) and the character formatting runs (CHPX), and returns the body
 // as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
 // subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
-// No tables, lists, pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. No lists, pictures, headers or
+// footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
 import { OfficeError, DOC_BLOCK_MAX } from './office-read.js';
@@ -18,17 +19,40 @@ const SPRA = [1, 1, 2, 4, 2, 2, -1, 3]; // operand size of a property modifier b
 function eachSprm(b, o, end, fn) {
   while (o + 2 <= end) {
     const op = b[o] | (b[o + 1] << 8); let d = o + 2; let len = SPRA[op >> 13];
-    if (len === -1) { if (d >= end) return; len = b[d]; d += 1; }
-    if (d + len > end) return;
-    fn(op, d); o = d + len;
+    if (op === 0xd608) { if (d + 2 > end) return; len = (b[d] | (b[d + 1] << 8)) - 1; d += 2; } // the table definition has a two-byte length
+    else if (len === -1) { if (d >= end) return; len = b[d]; d += 1; }
+    if (len < 0 || d + len > end) return;
+    fn(op, d, len); o = d + len;
   }
 }
 const flag = (v) => (v === 0 ? false : v === 1 ? true : undefined); // 0x80 and 0x81 depend on the style, which is not read yet
 const s16 = (b, d) => ((b[d] | (b[d + 1] << 8)) << 16) >> 16;
 const u16b = (b, d) => b[d] | (b[d + 1] << 8);
+// a border of a table: line width in eighths of a point, kind, colour (null: automatic)
+function brcSpec(dpt, type, color) {
+  if (!type || type === 255 || !dpt) return undefined;
+  const style = type === 3 ? 'double' : type === 6 ? 'dotted' : type === 7 || type === 8 || type === 9 || type === 22 ? 'dashed' : 'solid';
+  return { w: Math.max(1, Math.round((dpt / 8) * PX_PT)), style, color: color || null };
+}
+const rgbHex = (b, d) => (b[d + 3] === 0xff ? null : [b[d], b[d + 1], b[d + 2]].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase());
+const brc80 = (b, d) => brcSpec(b[d], b[d + 1], ICO[b[d + 2]] || null);
+const brc97 = (b, d) => brcSpec(b[d + 4], b[d + 5], rgbHex(b, d));
 // one paragraph property modifier applied to a paragraph property object (twips become pixels, one pixel is 15 twips)
-function applyPap(pr, op, d, b) {
+function applyPap(pr, op, d, b, len = 0) {
   switch (op) {
+    case 0x2416: pr.inTable = b[d] === 1; break;
+    case 0x2417: pr.ttp = b[d] === 1; break;
+    case 0xd608: { // the cells of a row: n columns, n + 1 boundaries, then a 20-byte description of each cell (merge flags, vertical alignment, four borders)
+      const n = b[d]; if (!n || 1 + (n + 1) * 2 > len) break;
+      const centers = []; for (let i = 0; i <= n; i++) centers.push(s16(b, d + 1 + i * 2));
+      const t0 = d + 1 + (n + 1) * 2; const tcs = [];
+      for (let i = 0; i < n && t0 + (i + 1) * 20 <= d + len; i++) { const q = t0 + i * 20; tcs.push({ grf: u16b(b, q), borders: { t: brc80(b, q + 4), l: brc80(b, q + 8), b: brc80(b, q + 12), r: brc80(b, q + 16) } }); }
+      pr.tdef = { n, centers, tcs }; break;
+    }
+    case 0xd605: pr.tb = { t: brc80(b, d), l: brc80(b, d + 4), b: brc80(b, d + 8), r: brc80(b, d + 12), h: brc80(b, d + 16), v: brc80(b, d + 20) }; break;
+    case 0xd613: pr.tb = { t: brc97(b, d), l: brc97(b, d + 8), b: brc97(b, d + 16), r: brc97(b, d + 24), h: brc97(b, d + 32), v: brc97(b, d + 40) }; break;
+    case 0xd612: { const out = []; for (let q = d; q + 10 <= d + len; q += 10) { const pat = u16b(b, q + 8); const c = pat === 1 ? rgbHex(b, q) : rgbHex(b, q + 4); out.push(pat === 0 || pat === 1 || c ? c : null); } pr.tshd = out; break; }
+    case 0xd609: { const out = []; for (let q = d; q + 2 <= d + len; q += 2) { const w = u16b(b, q); const ipat = w >> 10; out.push(ICO[ipat === 1 ? w & 31 : (w >> 5) & 31] || null); } if (!pr.tshd) pr.tshd = out; break; }
     case 0x2461: case 0x2403: pr.align = ['left', 'center', 'right', 'justify'][b[d]] || (b[d] === 4 ? 'justify' : undefined); break;
     case 0x845e: case 0x840f: pr.l = s16(b, d) / 15; break;
     case 0x8460: case 0x8411: pr.first = s16(b, d) / 15; break;
@@ -186,7 +210,7 @@ export function readDoc(bytes) {
           if ((up - st) & 1) up++;
           if (up + 2 > st + cb) break;
           const cbU = tdv.getUint16(up, true); const dd = up + 2; const en = Math.min(dd + cbU, st + cb);
-          if (stk === 1 && k === 0) eachSprm(table, dd + 2, en, (op, d) => applyPap(pap, op, d, table));
+          if (stk === 1 && k === 0) eachSprm(table, dd + 2, en, (op, d, ln) => applyPap(pap, op, d, table, ln));
           else if ((stk === 1 && k === 1) || (stk === 2 && k === 0)) eachSprm(table, dd, en, (op, d) => applyChp(chp, op, d, table, fonts));
           up = dd + cbU;
         }
@@ -220,7 +244,7 @@ export function readDoc(bytes) {
           if (bo) {
             const px = off + bo * 2; let cb = wd[px]; let a; let size;
             if (cb === 0) { size = wd[px + 1] * 2; a = px + 2; } else { size = cb * 2 - 1; a = px + 1; }
-            if (size >= 2 && a + size <= off + 512) { istd = wd[a] | (wd[a + 1] << 8); eachSprm(wd, a + 2, a + size, (op, d) => applyPap(dp, op, d, wd)); }
+            if (size >= 2 && a + size <= off + 512) { istd = wd[a] | (wd[a + 1] << 8); eachSprm(wd, a + 2, a + size, (op, d, ln) => applyPap(dp, op, d, wd, ln)); }
           }
           const key = `${istd}|${JSON.stringify(dp)}`;
           let id = ppIx.get(key); if (id === undefined) { id = pprops.length; pprops.push({ istd, dp }); ppIx.set(key, id); }
@@ -249,7 +273,7 @@ export function readDoc(bytes) {
   const oc = []; const op = []; const oq = [];
   for (let k = 0; k < ch.length; k++) {
     const c = ch[k]; const n0 = oc.length;
-    if (c === '\x07') { if (ch[k + 1] === '\x07') { oc.push('\r'); k++; } else oc.push('\t'); }
+    if (c === '\x07') oc.push('\x07'); // a cell or row mark: told apart below by the paragraph's own formatting
     else if (c === '\x01' || c === '\x02' || c === '\x05' || c === '\x08' || c === '\x1f') continue;
     else if (c === '\x1e') oc.push('-'); else if (c === '\x0b') oc.push('\n'); else oc.push(c);
     if (oc.length > n0) { op.push(pi[k]); oq.push(qa[k]); }
@@ -266,23 +290,77 @@ export function readDoc(bytes) {
     v = { ...styleOf(istd).chp, ...(cs ? styleOf(cs).chp : {}), ...direct }; effective.set(key, v); return v;
   };
   const paraPr = (q) => { const pp = q >= 0 ? pprops[q] : null; const st = styleOf(pp ? pp.istd : 0).pap; return { ...st, ...(pp ? pp.dp : {}) }; };
-  const endPara = (q) => { const pr = paraPr(q); blocks.push({ t: 'p', level: pr.outline || 0, list: null, pr, runs, sectEnd: undefined }); runs = []; cur = null; curP = -2; };
-  for (let k = 0; k < oc.length; k++) {
-    if (blocks.length >= DOC_BLOCK_MAX) { truncated = true; break; }
-    const c = oc[k];
-    if (c === '\r') { endPara(oq[k]); continue; }
+  const TABLE_KEYS = ['inTable', 'ttp', 'tdef', 'tb', 'tshd'];
+  const cleanPr = (pr) => { const o = { ...pr }; for (const k of TABLE_KEYS) delete o[k]; return o; };
+  // tables: a cell ends with a mark in a paragraph that is "in a table", a row with a mark in a paragraph that ends a row and says how the row is built
+  let rows = []; let rowDefs = []; let cells = []; let cellBlocks = [];
+  const emptyP = () => ({ t: 'p', level: 0, list: null, pr: {}, runs: [], sectEnd: undefined });
+  const buildRow = (def) => {
+    const row = []; let ci = 0;
+    if (def.tdef && def.tdef.tcs.length) {
+      const td = def.tdef;
+      for (let i = 0; i < td.tcs.length; i++) {
+        const g = td.tcs[i].grf;
+        if ((g & 0x0002) && row.length) { row[row.length - 1].x1 = td.centers[i + 1]; continue; } // joined to the cell before it
+        const src = cells[ci++] || { blocks: [emptyP()] };
+        const va = (g >> 7) & 3;
+        row.push({ span: 1, col: row.length, x0: td.centers[i], x1: td.centers[i + 1], vm: g & 0x40 ? 'restart' : g & 0x20 ? 'cont' : null, bg: (def.tshd && def.tshd[i]) || null, borders: td.tcs[i].borders, valign: va === 1 ? 'center' : va === 2 ? 'bottom' : undefined, width: undefined, blocks: src.blocks });
+      }
+    } else cells.forEach((c, i) => row.push({ span: 1, col: i, vm: null, bg: null, borders: undefined, valign: undefined, width: undefined, blocks: c.blocks }));
+    return row;
+  };
+  const flushTable = () => {
+    if (!rows.length) return;
+    // one grid for the whole table from every cell boundary; a cell spans the grid columns between its own boundaries
+    const xs = []; for (const r of rows) for (const c of r) if (c.x0 !== undefined) xs.push(c.x0, c.x1);
+    xs.sort((a, b) => a - b); const bounds = []; for (const x of xs) if (!bounds.length || x - bounds[bounds.length - 1] > 30) bounds.push(x);
+    const at = (x) => { let b = 0; for (let i = 0; i < bounds.length; i++) if (Math.abs(bounds[i] - x) < Math.abs(bounds[b] - x)) b = i; return b; };
+    for (const r of rows) for (const c of r) if (c.x0 !== undefined) { c.col = at(c.x0); c.span = Math.max(1, at(c.x1) - c.col); }
+    for (let ri = 0; ri < rows.length; ri++) for (const cell of rows[ri]) {
+      if (cell.vm !== 'restart') continue;
+      let n = 1;
+      for (let k = ri + 1; k < rows.length; k++) { const nx = rows[k].find((x) => x.col === cell.col); if (nx && nx.vm === 'cont') { nx.skip = true; n++; } else break; }
+      cell.rowSpan = n;
+    }
+    const grid = bounds.length > 1 ? bounds.slice(1).map((x, i) => Math.max(0, (x - bounds[i]) / 15)) : [];
+    const tb = (rowDefs.find((d) => d.tb) || {}).tb || {};
+    blocks.push({ t: 'table', rows, rowBrk: rows.map(() => false), borders: { t: tb.t, l: tb.l, b: tb.b, r: tb.r, h: tb.h, v: tb.v }, grid, pct: null, pad: { t: 0, l: 7.2, r: 7.2, b: 0 }, align: undefined });
+    rows = []; rowDefs = [];
+  };
+  const endPara = (q) => {
+    const pr0 = paraPr(q); const pr = cleanPr(pr0);
+    const blk = { t: 'p', level: pr.outline || 0, list: null, pr, runs, sectEnd: undefined };
+    if (pr0.inTable) cellBlocks.push(blk); else { flushTable(); blocks.push(blk); }
+    runs = []; cur = null; curP = -2;
+  };
+  const addChar = (c, k) => {
     curQ = oq[k];
-    if (c === '\n') { runs.push({ br: true }); cur = null; curP = -2; continue; }
+    if (c === '\n') { runs.push({ br: true }); cur = null; curP = -2; return; }
     if (op[k] !== curP || !cur) { const pp = curQ >= 0 ? pprops[curQ] : null; cur = { ...base, ...runProps(pp ? pp.istd : 0, op[k]), text: '' }; runs.push(cur); curP = op[k]; }
     cur.text += c;
+  };
+  for (let k = 0; k < oc.length; k++) {
+    if (blocks.length + rows.length >= DOC_BLOCK_MAX) { truncated = true; break; }
+    const c = oc[k];
+    if (c === '\r') { endPara(oq[k]); continue; }
+    if (c === '\x07') {
+      const pr0 = paraPr(oq[k]);
+      if (pr0.ttp) { rows.push(buildRow(pr0)); rowDefs.push(pr0); cells = []; cellBlocks = []; runs = []; cur = null; curP = -2; }
+      else if (pr0.inTable) { endPara(oq[k]); cells.push({ blocks: cellBlocks.length ? cellBlocks : [emptyP()] }); cellBlocks = []; }
+      else if (oc[k + 1] === '\x07') { endPara(oq[k]); k++; } // a file whose table marks cannot be told apart: a row is a line, a cell a tab stop
+      else addChar('\t', k);
+      continue;
+    }
+    addChar(c, k);
   }
-  if (!truncated && oc.length && oc[oc.length - 1] !== '\r') endPara(curQ);
+  if (!truncated && oc.length && oc[oc.length - 1] !== '\r' && oc[oc.length - 1] !== '\x07') endPara(curQ);
+  flushTable();
   const page = { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96, hd: 48, ft: 48 };
   const none = { default: undefined, first: undefined, even: undefined };
   return {
     kind: 'docx', blocks, media: {}, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
     sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
     evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text, character and paragraph formatting only: tables, lists, pictures, headers, footers and page layout of this old Word file are not shown.'
+    notice: 'Text, character and paragraph formatting and tables only: lists, pictures, headers, footers and page layout of this old Word file are not shown.'
   };
 }

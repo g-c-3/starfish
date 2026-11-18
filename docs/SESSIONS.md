@@ -4,6 +4,18 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 270**
+
+Start: "All dp passed. Do next". DP286 and DP287 confirmed on a device. CI for the Session 269 push (Decision 508, run 1055) concluded success. Next was Phase 123 step 3 (tables).
+- Built (Decision 509): `src/js/office-doc.js` (cell and row marks, table definition, borders, shading, one grid, spans, vertical merges, the table block), `src/js/office-convert.js` (the .docx copy writes tables).
+- Tested in a sandbox with a real .doc made by an office suite (merged header, cell merged down, shaded cell, borders, two paragraphs in a cell): 18 checks of the reader and the copy; the copy printed by the office suite (text, 8 border lines, shading); 6 checks of the viewer; the 29, 21, 24, 28, 22, 13, 17, 14 and 6 checks of earlier sessions pass. The first read showed a merge by cell boundary rather than by flag; the grid was rebuilt from every boundary and the test passed. A dead block left in the converter was removed. Not run through CI or a device.
+- Size: about 6 KB of source added to the reader, 1.8 KB to the converter (Decision 453).
+- Decision 509. DP288 open.
+- Next start (a new conversation, trigger "Go"): the CI log, DP288 on a device, then Phase 123 step 4 (lists and numbering: the list tables of the Table stream, the numbering of each list paragraph, bullets and number formats, levels; the viewer's list model first). Then step 5 (pictures), step 6 (headers, footers, page set-up), then Phases 124 and 125.
+- Test files for the next session can be rebuilt with an office suite in the sandbox (a .docx from a script, converted to .doc); no sample file is kept in the repo.
+
+---
+
 **Session 269**
 
 Start: "Next" (DP286 not yet reported). CI for the Session 268 push (Decision 507, run 1054) concluded success. Next was Phase 123 step 2 (styles and paragraph formatting). Context was filling; the step was finished as one unit.

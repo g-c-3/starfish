@@ -14,7 +14,7 @@ const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const SML = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
 const PML = 'application/vnd.openxmlformats-officedocument.presentationml';
 
-// ---- doc -> docx: paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
+// ---- doc -> docx: paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting, and tables (cells, spans, merges, borders, shading) (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
 export function docToDocx(model) {
   const warnings = [];
   const rpr = (r) => { // the character formatting of a run, in the order the schema wants
@@ -45,17 +45,31 @@ export function docToDocx(model) {
     if (q.outline) x.push(`<w:outlineLvl w:val="${q.outline - 1}"/>`);
     return x.length ? `<w:pPr>${x.join('')}</w:pPr>` : '';
   };
-  const paras = (model.blocks || []).filter((b) => b.t === 'p').map((b) => {
+  const bdr = (tag, b) => (b ? (b.none ? `<w:${tag} w:val="nil"/>` : `<w:${tag} w:val="${b.style === 'solid' ? 'single' : b.style}" w:sz="${Math.max(2, Math.min(96, Math.round((b.w / (4 / 3)) * 8)))}" w:space="0" w:color="${b.color || 'auto'}"/>`) : '');
+  const para = (b) => {
     const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : run(r.text || '', r))).join('');
     const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) });
     return inner || pPr ? `<w:p>${pPr}${inner}</w:p>` : '<w:p/>';
-  });
+  };
+  const table = (b) => {
+    const side = (o) => ['t', 'l', 'b', 'r', 'h', 'v'].map((k) => bdr({ t: 'top', l: 'left', b: 'bottom', r: 'right', h: 'insideH', v: 'insideV' }[k], (o || {})[k])).join('');
+    const tbl = side(b.borders); const grid = (b.grid || []).map((g) => `<w:gridCol w:w="${Math.round(g * 15)}"/>`).join('');
+    const rows = b.rows.map((row) => `<w:tr>${row.map((c) => {
+      const tcb = c.borders ? ['t', 'l', 'b', 'r'].map((k) => bdr({ t: 'top', l: 'left', b: 'bottom', r: 'right' }[k], c.borders[k])).join('') : '';
+      const pr = `${c.span > 1 ? `<w:gridSpan w:val="${c.span}"/>` : ''}${c.vm ? (c.vm === 'restart' ? '<w:vMerge w:val="restart"/>' : '<w:vMerge/>') : ''}${tcb ? `<w:tcBorders>${tcb}</w:tcBorders>` : ''}${c.bg ? `<w:shd w:val="clear" w:color="auto" w:fill="${c.bg}"/>` : ''}${c.valign ? `<w:vAlign w:val="${c.valign}"/>` : ''}`;
+      const body = (c.blocks || []).map((x) => (x.t === 'p' ? para(x) : '')).join('') || '<w:p/>';
+      return `<w:tc>${pr ? `<w:tcPr>${pr}</w:tcPr>` : ''}${body}</w:tc>`;
+    }).join('')}</w:tr>`).join('');
+    return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${tbl ? `<w:tblBorders>${tbl}</w:tblBorders>` : ''}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${rows}</w:tbl>`;
+  };
+  const flow = (model.blocks || []).filter((b) => b.t === 'p' || b.t === 'table');
+  const paras = flow.map((b, i) => (b.t === 'table' ? `${table(b)}${!flow[i + 1] || flow[i + 1].t === 'table' ? '<w:p/>' : ''}` : para(b))); // a table is followed by a paragraph, as Word needs
   if (!paras.length) paras.push('<w:p/>');
   const pg = model.page || { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96 }; const tw = (px) => Math.round(px * 15);
   const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Tables, lists, pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character and paragraph formatting.');
+  warnings.push('Lists, pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character and paragraph formatting.');
   const bytes = zip({
     '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`]]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'word/document.xml']]),
