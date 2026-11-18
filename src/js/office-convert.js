@@ -14,7 +14,7 @@ const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const SML = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
 const PML = 'application/vnd.openxmlformats-officedocument.presentationml';
 
-// ---- doc -> docx: paragraphs of runs with their character formatting (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
+// ---- doc -> docx: paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
 export function docToDocx(model) {
   const warnings = [];
   const rpr = (r) => { // the character formatting of a run, in the order the schema wants
@@ -29,16 +29,33 @@ export function docToDocx(model) {
     return x.length ? `<w:rPr>${x.join('')}</w:rPr>` : '';
   };
   const run = (text, r) => { const pr = rpr(r); return text.split('\t').map((part, i) => `${i ? `<w:r>${pr}<w:tab/></w:r>` : ''}${part ? `<w:r>${pr}<w:t xml:space="preserve">${esc(part)}</w:t></w:r>` : ''}`).join(''); };
+  const ppr = (q) => { // paragraph formatting in the order the schema wants: spacing, indents, alignment, outline level
+    const x = []; const tw = (px) => Math.round(px * 15);
+    if (q.sb !== undefined || q.sa !== undefined || q.line) {
+      let a = ''; if (q.sb !== undefined) a += ` w:before="${tw(q.sb)}"`; if (q.sa !== undefined) a += ` w:after="${tw(q.sa)}"`;
+      if (q.line) a += q.line.mult ? ` w:line="${Math.round(q.line.mult * 240)}" w:lineRule="auto"` : ` w:line="${tw(q.line.px)}" w:lineRule="${q.line.atLeast ? 'atLeast' : 'exact'}"`;
+      x.push(`<w:spacing${a}/>`);
+    }
+    if (q.l !== undefined || q.r !== undefined || q.first !== undefined) {
+      let a = ''; if (q.l !== undefined) a += ` w:left="${tw(q.l)}"`; if (q.r !== undefined) a += ` w:right="${tw(q.r)}"`;
+      if (q.first < 0) a += ` w:hanging="${tw(-q.first)}"`; else if (q.first > 0) a += ` w:firstLine="${tw(q.first)}"`;
+      x.push(`<w:ind${a}/>`);
+    }
+    if (q.align) x.push(`<w:jc w:val="${q.align === 'justify' ? 'both' : q.align}"/>`);
+    if (q.outline) x.push(`<w:outlineLvl w:val="${q.outline - 1}"/>`);
+    return x.length ? `<w:pPr>${x.join('')}</w:pPr>` : '';
+  };
   const paras = (model.blocks || []).filter((b) => b.t === 'p').map((b) => {
     const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : run(r.text || '', r))).join('');
-    return inner ? `<w:p>${inner}</w:p>` : '<w:p/>';
+    const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) });
+    return inner || pPr ? `<w:p>${pPr}${inner}</w:p>` : '<w:p/>';
   });
   if (!paras.length) paras.push('<w:p/>');
   const pg = model.page || { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96 }; const tw = (px) => Math.round(px * 15);
   const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Styles, paragraph layout, tables, pictures, headers and footers of the old file are not carried; the copy holds its text with its character formatting.');
+  warnings.push('Tables, lists, pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character and paragraph formatting.');
   const bytes = zip({
     '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`]]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'word/document.xml']]),

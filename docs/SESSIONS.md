@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 269**
+
+Start: "Next" (DP286 not yet reported). CI for the Session 268 push (Decision 507, run 1054) concluded success. Next was Phase 123 step 2 (styles and paragraph formatting). Context was filling; the step was finished as one unit.
+- Built (Decision 508): `src/js/office-doc.js` (style sheet, PAPX paragraph runs, resolved styles, paragraph properties, heading level in `level`), `src/js/office-convert.js` (the .docx copy writes paragraph properties).
+- Tested in a sandbox with a real .doc made by an office suite (Times New Roman 12 normal style, two heading styles, centred, right, indented and spaced, justified at 1.5, exact line height): 21 checks of the reader and the copy, the copy printed by the office suite at the right left edge, size and font; 5 checks of the viewer drawing it; the 29, 24, 28, 22, 13, 17, 14 and 6 checks of earlier sessions still pass. Two test expectations were updated (the copy's notice text; the heading level is in `level`). Not run through CI or a device.
+- Size: about 6 KB of source added (Decision 453).
+- Decision 508. DP286 and DP287 open.
+- Next start: the CI log, DP286 and DP287 on a device, then Phase 123 step 3 (tables: the table row and cell modifiers, cell ends, widths, borders, shading, merged cells). Read the viewer's table model (`docxTable`) first.
+
+---
+
 **Session 268**
 
 Start: "So dp pass do next". DP285 confirmed on a device; Phase 122 is complete. CI for the Session 267 push (Decision 506, run 1053) concluded success. Next was Phase 123 (doc full layout), split into six steps; step 1 is character formatting.

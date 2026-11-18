@@ -1,7 +1,8 @@
 // office-doc.js — view-only reader for doc, the Word 97 to 2003 format (Decisions 451, 456, 507). Reads the piece table of the
-// WordDocument stream and the character formatting runs (CHPX), and returns the body as the same Word model as readDocx: text with
-// bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript. No styles, paragraph layout, tables,
-// pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// WordDocument stream, the style sheet, the paragraph formatting (PAPX) and the character formatting runs (CHPX), and returns the body
+// as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
+// subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
+// No tables, lists, pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
 import { OfficeError, DOC_BLOCK_MAX } from './office-read.js';
@@ -23,6 +24,22 @@ function eachSprm(b, o, end, fn) {
   }
 }
 const flag = (v) => (v === 0 ? false : v === 1 ? true : undefined); // 0x80 and 0x81 depend on the style, which is not read yet
+const s16 = (b, d) => ((b[d] | (b[d + 1] << 8)) << 16) >> 16;
+const u16b = (b, d) => b[d] | (b[d + 1] << 8);
+// one paragraph property modifier applied to a paragraph property object (twips become pixels, one pixel is 15 twips)
+function applyPap(pr, op, d, b) {
+  switch (op) {
+    case 0x2461: case 0x2403: pr.align = ['left', 'center', 'right', 'justify'][b[d]] || (b[d] === 4 ? 'justify' : undefined); break;
+    case 0x845e: case 0x840f: pr.l = s16(b, d) / 15; break;
+    case 0x8460: case 0x8411: pr.first = s16(b, d) / 15; break;
+    case 0x845d: case 0x840e: pr.r = s16(b, d) / 15; break;
+    case 0xa413: pr.sb = u16b(b, d) / 15; break;
+    case 0xa414: pr.sa = u16b(b, d) / 15; break;
+    case 0x6412: { const dya = s16(b, d); if (u16b(b, d + 2) === 1) { if (dya > 0) pr.line = { mult: dya / 240 }; } else if (dya > 0) pr.line = { px: dya / 15, atLeast: true }; else if (dya < 0) pr.line = { px: -dya / 15, atLeast: false }; break; }
+    case 0x2640: if (b[d] < 9) pr.outline = b[d] + 1; break;
+    default: break;
+  }
+}
 // one character property modifier applied to a property object
 function applyChp(pr, op, d, b, fonts) {
   switch (op) {
@@ -38,6 +55,7 @@ function applyChp(pr, op, d, b, fonts) {
     case 0x6870: if (b[d + 3] === 0xff) delete pr.color; else pr.color = [b[d], b[d + 1], b[d + 2]].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); break;
     case 0x2a48: pr.sup = b[d] === 1; pr.sub = b[d] === 2; break;
     case 0x2a0c: { const c = ICO[b[d]]; if (c) pr.bg = c; else delete pr.bg; break; }
+    case 0x4a30: pr.cs = b[d] | (b[d + 1] << 8); break; // a character style, resolved with the style sheet
     default: break;
   }
 }
@@ -149,45 +167,122 @@ export function readDoc(bytes) {
     }
   } catch { /* the text is shown without formatting */ }
 
+  // the style sheet: each style is a base style, paragraph modifiers and character modifiers; resolved from its base style down
+  const styles = [];
+  try {
+    const fcS = u32(0xa2); const lcbS = u32(0xa6);
+    if (lcbS && fcS + lcbS <= table.length) {
+      const cbStshi = tdv.getUint16(fcS, true); const cstd = tdv.getUint16(fcS + 2, true); const cbBase = tdv.getUint16(fcS + 4, true);
+      let q = fcS + 2 + cbStshi;
+      for (let i = 0; i < cstd && q + 2 <= fcS + lcbS; i++) {
+        const cb = tdv.getUint16(q, true); q += 2;
+        if (!cb || q + cb > fcS + lcbS) { styles.push(null); q += cb; continue; }
+        const st = q; const w1 = tdv.getUint16(st + 2, true); const w2 = tdv.getUint16(st + 4, true);
+        const stk = w1 & 15; const base = w1 >> 4; const cupx = w2 & 15;
+        const cch = tdv.getUint16(st + cbBase, true); let name = '';
+        for (let k = 0; k < cch; k++) name += String.fromCharCode(tdv.getUint16(st + cbBase + 2 + k * 2, true));
+        let up = st + cbBase + 2 + (cch + 1) * 2; const pap = {}; const chp = {};
+        for (let k = 0; k < cupx; k++) {
+          if ((up - st) & 1) up++;
+          if (up + 2 > st + cb) break;
+          const cbU = tdv.getUint16(up, true); const dd = up + 2; const en = Math.min(dd + cbU, st + cb);
+          if (stk === 1 && k === 0) eachSprm(table, dd + 2, en, (op, d) => applyPap(pap, op, d, table));
+          else if ((stk === 1 && k === 1) || (stk === 2 && k === 0)) eachSprm(table, dd, en, (op, d) => applyChp(chp, op, d, table, fonts));
+          up = dd + cbU;
+        }
+        const hm = /^heading (\d)$/i.exec(name); if (hm && !pap.outline) pap.outline = Number(hm[1]);
+        styles.push({ name, base: base === 0xfff || base === i ? -1 : base, pap, chp });
+        q = st + cb;
+      }
+    }
+  } catch { /* styles that cannot be read are left out */ }
+  const resolved = new Map();
+  const styleOf = (i, depth = 0) => {
+    if (resolved.has(i)) return resolved.get(i);
+    const st = styles[i]; let out = { pap: {}, chp: {} };
+    if (st) { const bs = st.base >= 0 && depth < 20 ? styleOf(st.base, depth + 1) : { pap: {}, chp: {} }; out = { pap: { ...bs.pap, ...st.pap }, chp: { ...bs.chp, ...st.chp } }; }
+    resolved.set(i, out); return out;
+  };
+
+  // paragraph formatting: each paragraph has a style and modifiers of its own
+  const pprops = []; const ppIx = new Map(); const papAt = new Int32Array(raw.length).fill(-1);
+  try {
+    const fcP = u32(0x102); const lcbP = u32(0x106);
+    const nP = lcbP >= 12 ? Math.floor((lcbP - 4) / 8) : 0;
+    if (nP && fcP + lcbP <= table.length) {
+      for (let i = 0; i < nP; i++) {
+        const off = (tdv.getUint32(fcP + (nP + 1) * 4 + i * 4, true) & 0x3fffff) * 512;
+        if (off + 512 > wd.length) continue;
+        const crun = wd[off + 511]; if (crun < 1 || (crun + 1) * 4 + crun * 13 > 511) continue;
+        const dvk = new DataView(wd.buffer, wd.byteOffset + off, 512);
+        for (let r = 0; r < crun; r++) {
+          const bo = wd[off + (crun + 1) * 4 + r * 13]; let istd = 0; const dp = {};
+          if (bo) {
+            const px = off + bo * 2; let cb = wd[px]; let a; let size;
+            if (cb === 0) { size = wd[px + 1] * 2; a = px + 2; } else { size = cb * 2 - 1; a = px + 1; }
+            if (size >= 2 && a + size <= off + 512) { istd = wd[a] | (wd[a + 1] << 8); eachSprm(wd, a + 2, a + size, (op, d) => applyPap(dp, op, d, wd)); }
+          }
+          const key = `${istd}|${JSON.stringify(dp)}`;
+          let id = ppIx.get(key); if (id === undefined) { id = pprops.length; pprops.push({ istd, dp }); ppIx.set(key, id); }
+          const a0 = dvk.getUint32(r * 4, true); const a1 = dvk.getUint32((r + 1) * 4, true);
+          for (const pc of pieces) {
+            const unit = pc.uni ? 2 : 1; const pS = pc.fc; const pE = pc.fc + pc.len * unit; const lo = Math.max(a0, pS); const hi = Math.min(a1, pE); if (lo >= hi) continue;
+            const c0 = pc.cp + Math.floor((lo - pS) / unit); const c1 = Math.min(raw.length, pc.cp + Math.ceil((hi - pS) / unit));
+            for (let c = c0; c < c1; c++) papAt[c] = id;
+          }
+        }
+      }
+    }
+  } catch { /* paragraphs are shown without their formatting */ }
+
   // fields keep the shown result and drop the instruction (0x13 begin, 0x14 separator, 0x15 end)
-  const ch = []; const pi = []; const stack = [];
+  const ch = []; const pi = []; const qa = []; const stack = [];
   for (let k = 0; k < raw.length; k++) {
     const c = raw[k];
     if (c === '\x13') { stack.push({ shown: false }); continue; }
     if (c === '\x14') { if (stack.length) stack[stack.length - 1].shown = true; continue; }
     if (c === '\x15') { stack.pop(); continue; }
     if (stack.length && !stack[stack.length - 1].shown) continue;
-    ch.push(c); pi.push(chpAt[k]);
+    ch.push(c); pi.push(chpAt[k]); qa.push(papAt[k]);
   }
   // 0x07 ends a table cell, and twice in a row ends a table row: cells become tab stops, rows become lines
-  const oc = []; const op = [];
+  const oc = []; const op = []; const oq = [];
   for (let k = 0; k < ch.length; k++) {
-    const c = ch[k];
-    if (c === '\x07') { if (ch[k + 1] === '\x07') { oc.push('\r'); k++; } else oc.push('\t'); op.push(pi[k]); }
+    const c = ch[k]; const n0 = oc.length;
+    if (c === '\x07') { if (ch[k + 1] === '\x07') { oc.push('\r'); k++; } else oc.push('\t'); }
     else if (c === '\x01' || c === '\x02' || c === '\x05' || c === '\x08' || c === '\x1f') continue;
-    else if (c === '\x1e') { oc.push('-'); op.push(pi[k]); } else if (c === '\x0b') { oc.push('\n'); op.push(pi[k]); } else { oc.push(c); op.push(pi[k]); }
+    else if (c === '\x1e') oc.push('-'); else if (c === '\x0b') oc.push('\n'); else oc.push(c);
+    if (oc.length > n0) { op.push(pi[k]); oq.push(qa[k]); }
   }
 
   let truncated = false;
   const blocks = [];
   const base = { font: 'Calibri', size: 15 };
-  let runs = []; let cur = null; let curP = -2;
-  const endPara = () => { blocks.push({ t: 'p', level: 0, list: null, pr: {}, runs, sectEnd: undefined }); runs = []; cur = null; curP = -2; };
+  let runs = []; let cur = null; let curP = -2; let curQ = -1;
+  const effective = new Map(); // the run properties of a paragraph style and a run, made once
+  const runProps = (istd, ci) => {
+    const key = `${istd}|${ci}`; let v = effective.get(key); if (v) return v;
+    const direct = ci >= 0 ? { ...props[ci] } : {}; const cs = direct.cs; delete direct.cs;
+    v = { ...styleOf(istd).chp, ...(cs ? styleOf(cs).chp : {}), ...direct }; effective.set(key, v); return v;
+  };
+  const paraPr = (q) => { const pp = q >= 0 ? pprops[q] : null; const st = styleOf(pp ? pp.istd : 0).pap; return { ...st, ...(pp ? pp.dp : {}) }; };
+  const endPara = (q) => { const pr = paraPr(q); blocks.push({ t: 'p', level: pr.outline || 0, list: null, pr, runs, sectEnd: undefined }); runs = []; cur = null; curP = -2; };
   for (let k = 0; k < oc.length; k++) {
     if (blocks.length >= DOC_BLOCK_MAX) { truncated = true; break; }
     const c = oc[k];
-    if (c === '\r') { endPara(); continue; }
+    if (c === '\r') { endPara(oq[k]); continue; }
+    curQ = oq[k];
     if (c === '\n') { runs.push({ br: true }); cur = null; curP = -2; continue; }
-    if (op[k] !== curP || !cur) { cur = { ...base, ...(op[k] >= 0 ? props[op[k]] : {}), text: '' }; runs.push(cur); curP = op[k]; }
+    if (op[k] !== curP || !cur) { const pp = curQ >= 0 ? pprops[curQ] : null; cur = { ...base, ...runProps(pp ? pp.istd : 0, op[k]), text: '' }; runs.push(cur); curP = op[k]; }
     cur.text += c;
   }
-  if (!truncated && oc.length && oc[oc.length - 1] !== '\r') endPara();
+  if (!truncated && oc.length && oc[oc.length - 1] !== '\r') endPara(curQ);
   const page = { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96, hd: 48, ft: 48 };
   const none = { default: undefined, first: undefined, even: undefined };
   return {
     kind: 'docx', blocks, media: {}, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
     sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
     evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text and character formatting only: styles, layout, tables, pictures, headers and footers of this old Word file are not shown.'
+    notice: 'Text, character and paragraph formatting only: tables, lists, pictures, headers, footers and page layout of this old Word file are not shown.'
   };
 }
