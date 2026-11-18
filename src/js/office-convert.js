@@ -14,7 +14,7 @@ const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const SML = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
 const PML = 'application/vnd.openxmlformats-officedocument.presentationml';
 
-// ---- doc -> docx: paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting, and tables (cells, spans, merges, borders, shading) (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
+// ---- doc -> docx: lists (numbering.xml), paragraphs (alignment, indents, spacing, heading level) of runs with their character formatting, and tables (cells, spans, merges, borders, shading) (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
 export function docToDocx(model) {
   const warnings = [];
   const rpr = (r) => { // the character formatting of a run, in the order the schema wants
@@ -29,8 +29,9 @@ export function docToDocx(model) {
     return x.length ? `<w:rPr>${x.join('')}</w:rPr>` : '';
   };
   const run = (text, r) => { const pr = rpr(r); return text.split('\t').map((part, i) => `${i ? `<w:r>${pr}<w:tab/></w:r>` : ''}${part ? `<w:r>${pr}<w:t xml:space="preserve">${esc(part)}</w:t></w:r>` : ''}`).join(''); };
-  const ppr = (q) => { // paragraph formatting in the order the schema wants: spacing, indents, alignment, outline level
+  const ppr = (q, ls) => { // paragraph formatting in the order the schema wants: list, spacing, indents, alignment, outline level
     const x = []; const tw = (px) => Math.round(px * 15);
+    if (ls && ls.ilfo) x.push(`<w:numPr><w:ilvl w:val="${ls.level || 0}"/><w:numId w:val="${ls.ilfo}"/></w:numPr>`);
     if (q.sb !== undefined || q.sa !== undefined || q.line) {
       let a = ''; if (q.sb !== undefined) a += ` w:before="${tw(q.sb)}"`; if (q.sa !== undefined) a += ` w:after="${tw(q.sa)}"`;
       if (q.line) a += q.line.mult ? ` w:line="${Math.round(q.line.mult * 240)}" w:lineRule="auto"` : ` w:line="${tw(q.line.px)}" w:lineRule="${q.line.atLeast ? 'atLeast' : 'exact'}"`;
@@ -48,7 +49,7 @@ export function docToDocx(model) {
   const bdr = (tag, b) => (b ? (b.none ? `<w:${tag} w:val="nil"/>` : `<w:${tag} w:val="${b.style === 'solid' ? 'single' : b.style}" w:sz="${Math.max(2, Math.min(96, Math.round((b.w / (4 / 3)) * 8)))}" w:space="0" w:color="${b.color || 'auto'}"/>`) : '');
   const para = (b) => {
     const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : run(r.text || '', r))).join('');
-    const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) });
+    const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) }, b.list);
     return inner || pPr ? `<w:p>${pPr}${inner}</w:p>` : '<w:p/>';
   };
   const table = (b) => {
@@ -69,13 +70,20 @@ export function docToDocx(model) {
   const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Lists, pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character and paragraph formatting.');
+  warnings.push('Pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character, paragraph and list formatting and its tables.');
+  const defs = model.numDefs || {}; const nums = Object.keys(defs).filter((id) => paras.some((x) => x.includes(`<w:numId w:val="${id}"/>`)));
+  const numbering = nums.length ? `${XML}<w:numbering ${W}>${nums.map((id) => `<w:abstractNum w:abstractNumId="${id}"><w:multiLevelType w:val="hybridMultilevel"/>${defs[id].map((lv, k) => { // one abstract list per list override, 9 levels
+    if (!lv) return '';
+    const ind = lv.l !== undefined ? `<w:pPr><w:ind w:left="${tw(lv.l)}"${lv.first < 0 ? ` w:hanging="${tw(-lv.first)}"` : lv.first > 0 ? ` w:firstLine="${tw(lv.first)}"` : ''}/></w:pPr>` : '';
+    return `<w:lvl w:ilvl="${k}"><w:start w:val="${lv.start}"/><w:numFmt w:val="${lv.fmt}"/><w:lvlText w:val="${esc(lv.text)}"/><w:lvlJc w:val="left"/>${ind}</w:lvl>`;
+  }).join('')}</w:abstractNum>`).join('')}${nums.map((id) => `<w:num w:numId="${id}"><w:abstractNumId w:val="${id}"/></w:num>`).join('')}</w:numbering>` : null;
   const bytes = zip({
-    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`]]),
+    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`], ...(numbering ? [['/word/numbering.xml', `${WML}.numbering+xml`]] : [])]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'word/document.xml']]),
     'word/document.xml': `${XML}<w:document ${W}><w:body>${paras.join('')}${sect}</w:body></w:document>`,
     'word/styles.xml': `${XML}<w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`,
-    'word/_rels/document.xml.rels': rels([['rId1', 'styles', 'styles.xml']])
+    ...(numbering ? { 'word/numbering.xml': numbering } : {}),
+    'word/_rels/document.xml.rels': rels([['rId1', 'styles', 'styles.xml'], ...(numbering ? [['rId2', 'numbering', 'numbering.xml']] : [])])
   });
   return { bytes, warnings };
 }

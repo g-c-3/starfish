@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 271**
+
+Start: "Go". DP288 not yet reported. CI for the Session 270 push (Decision 509, runs 1056 and 581) concluded success. Next was Phase 123 step 4 (lists and numbering).
+- Built (Decision 510): `src/js/office-doc.js` (list definitions and overrides, markers, level indents, `numDefs`), `src/js/office-convert.js` (the .docx copy writes `numbering.xml` and list references).
+- Tested in a sandbox with a real .doc made by an office suite (bullets with a second level, numbered list with letter and roman levels, a return to level one after a plain paragraph, a list starting at 5): the markers, levels and indents of the reader; the copy read back through the docx reader (equal markers and indents); the copy printed by the office suite with the same markers; the earlier plain paragraphs unchanged. Both edited files parse with the bundler. The viewer drawing the markers and the checks of earlier sessions were not run this session. Not run through CI or a device.
+- Size: about 5.4 KB of source added to the reader, 1.3 KB to the converter (Decision 453).
+- Decision 510. DP288 and DP289 open.
+- Next start: the CI log, DP288 and DP289 on a device, then Phase 123 step 5 (pictures: the picture records of the Data and WordDocument streams, inline and floating, into the Word model's media), then step 6 (headers, footers, page set-up), then Phases 124 and 125.
+
+---
+
 **Session 270**
 
 Start: "All dp passed. Do next". DP286 and DP287 confirmed on a device. CI for the Session 269 push (Decision 508, run 1055) concluded success. Next was Phase 123 step 3 (tables).

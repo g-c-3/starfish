@@ -2,11 +2,11 @@
 // WordDocument stream, the style sheet, the paragraph formatting (PAPX) and the character formatting runs (CHPX), and returns the body
 // as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
 // subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
-// Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. No lists, pictures, headers or
-// footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. Lists (Decision 510) come from
+// the list definitions and list overrides of the Table stream. No pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
-import { OfficeError, DOC_BLOCK_MAX } from './office-read.js';
+import { OfficeError, DOC_BLOCK_MAX, formatNum } from './office-read.js';
 import { readOle2, isOle2 } from './ole2.js';
 
 export function isDoc(bytes) { return isOle2(bytes); }
@@ -41,6 +41,8 @@ const brc97 = (b, d) => brcSpec(b[d + 4], b[d + 5], rgbHex(b, d));
 function applyPap(pr, op, d, b, len = 0) {
   switch (op) {
     case 0x2416: pr.inTable = b[d] === 1; break;
+    case 0x460b: pr.ilfo = b[d] | (b[d + 1] << 8); break; // the list override (1 based; 0 and the values above 2000 mean none)
+    case 0x260a: pr.ilvl = b[d]; break;
     case 0x2417: pr.ttp = b[d] === 1; break;
     case 0xd608: { // the cells of a row: n columns, n + 1 boundaries, then a 20-byte description of each cell (merge flags, vertical alignment, four borders)
       const n = b[d]; if (!n || 1 + (n + 1) * 2 > len) break;
@@ -228,6 +230,63 @@ export function readDoc(bytes) {
     resolved.set(i, out); return out;
   };
 
+  // lists (Decision 510): PlfLst holds the lists (1 or 9 levels each), PlfLfo the overrides a paragraph points to (its number is ilfo, 1 based)
+  const NFC = { 0: 'decimal', 1: 'upperRoman', 2: 'lowerRoman', 3: 'upperLetter', 4: 'lowerLetter', 5: 'decimal', 22: 'decimalZero', 23: 'bullet', 255: 'none' };
+  const bulletOf = (t) => { const c = t ? t.charCodeAt(0) : 0; if (!t) return '\u2022'; if (c >= 0xf000 && c <= 0xf0ff) return c === 0xf0a7 ? '\u25aa' : '\u2022'; if (t === 'o') return '\u25e6'; if (t === '\u00a7') return '\u25aa'; return t; };
+  const lists = (() => {
+    try {
+      const fcL = u32(0x2e2); const lcbL = u32(0x2e6); const fcO = u32(0x2ea); const lcbO = u32(0x2ee);
+      if (lcbL < 2 || lcbO < 4 || fcL + lcbL > table.length || fcO + lcbO > table.length) return null;
+      const lvl = (o) => { // LVLF (28 bytes), the paragraph and character modifiers, then the number text
+        if (o + 28 > table.length) return null;
+        const nfc = table[o + 4]; const cbC = table[o + 24]; const cbP = table[o + 25]; let q = o + 28;
+        const pap = {}; const chp = {};
+        eachSprm(table, q, q + cbP, (op, d, ln) => applyPap(pap, op, d, table, ln)); q += cbP;
+        eachSprm(table, q, q + cbC, (op, d) => applyChp(chp, op, d, table, fonts)); q += cbC;
+        const cch = tdv.getUint16(q, true); q += 2; if (q + cch * 2 > table.length) return null;
+        const fmt = NFC[nfc] || 'decimal'; let text = '';
+        for (let k = 0; k < cch; k++) { const c = tdv.getUint16(q + k * 2, true); text += fmt !== 'bullet' && c < 9 ? `%${c + 1}` : String.fromCharCode(c); }
+        if (fmt === 'bullet') text = bulletOf(text);
+        for (const k of ['b', 'i']) if (chp[k] === undefined) delete chp[k];
+        if (fmt === 'bullet' && /symbol|wingdings/i.test(chp.font || '')) delete chp.font;
+        return { lv: { fmt, start: tdv.getInt32(o, true), l: pap.l, first: pap.first, text, chp }, next: q + cch * 2 };
+      };
+      const cLst = tdv.getUint16(fcL, true); let q = fcL + 2 + cLst * 28; const byLsid = new Map();
+      for (let i = 0; i < cLst && i < 4000; i++) {
+        const e = fcL + 2 + i * 28; const n = table[e + 26] & 1 ? 1 : 9; const lv = [];
+        for (let k = 0; k < n; k++) { const r = lvl(q); if (!r) break; lv.push(r.lv); q = r.next; }
+        byLsid.set(tdv.getInt32(e, true), lv);
+      }
+      const lfoMac = Math.min(tdv.getUint32(fcO, true), 2000); const lfos = []; let o = fcO + 4;
+      for (let i = 0; i < lfoMac; i++) { lfos.push({ lsid: tdv.getInt32(o, true), n: table[o + 12], ov: {} }); o += 16; }
+      for (const f of lfos) {
+        o += 4;
+        for (let j = 0; j < f.n; j++) {
+          const st = tdv.getInt32(o, true); const fl = tdv.getUint32(o + 4, true); o += 8; const ov = {};
+          if (fl & 16) ov.start = st;
+          if (fl & 32) { const r = lvl(o); if (!r) break; ov.lv = r.lv; o = r.next; }
+          f.ov[fl & 15] = ov;
+        }
+      }
+      const at = (f, k) => { const base = byLsid.get(f.lsid) || []; const ov = f.ov[k] || {}; const lv = ov.lv || base[Math.min(k, base.length - 1)]; return lv ? { ...lv, start: ov.start !== undefined ? ov.start : lv.start } : null; };
+      const counters = {}; const used = {};
+      const marker = (ilfo, k) => {
+        const f = lfos[ilfo - 1]; if (!f) return null;
+        const lv = at(f, k); if (!lv) return null;
+        if (!used[ilfo]) { used[ilfo] = []; for (let j = 0; j < 9; j++) { const x = at(f, j); used[ilfo].push(x ? { fmt: x.fmt, text: x.text, start: x.start, l: x.l, first: x.first } : null); } }
+        const out = { l: lv.l, first: lv.first, chp: lv.chp, level: k };
+        if (lv.fmt === 'bullet') return { ...out, text: lv.text };
+        const c = (counters[ilfo] = counters[ilfo] || {});
+        c[k] = c[k] === undefined ? lv.start : c[k] + 1;
+        for (const x of Object.keys(c)) if (Number(x) > k) delete c[x];
+        if (lv.fmt === 'none') return { ...out, text: '' };
+        const text = (lv.text || `%${k + 1}.`).replace(/%([1-9])/g, (_, dgt) => { const j = Number(dgt) - 1; const lj = at(f, j) || lv; return formatNum(c[j] === undefined ? lj.start : c[j], lj.fmt); });
+        return { ...out, text };
+      };
+      return { marker, used: () => used };
+    } catch { return null; } // paragraphs are shown without their list markers
+  })();
+
   // paragraph formatting: each paragraph has a style and modifiers of its own
   const pprops = []; const ppIx = new Map(); const papAt = new Int32Array(raw.length).fill(-1);
   try {
@@ -328,8 +387,17 @@ export function readDoc(bytes) {
     rows = []; rowDefs = [];
   };
   const endPara = (q) => {
-    const pr0 = paraPr(q); const pr = cleanPr(pr0);
-    const blk = { t: 'p', level: pr.outline || 0, list: null, pr, runs, sectEnd: undefined };
+    const pr0 = paraPr(q); const pr = cleanPr(pr0); let list = null;
+    const lm = lists && pr0.ilfo > 0 && pr0.ilfo <= 2000 ? lists.marker(pr0.ilfo, Math.min(8, pr0.ilvl || 0)) : null;
+    if (lm) { // the list sets the indents, the paragraph's own modifiers win; the marker takes the first run's look, then the list's
+      const dp = q >= 0 && pprops[q] ? pprops[q].dp : {};
+      if (lm.l !== undefined && dp.l === undefined) pr.l = lm.l;
+      if (lm.first !== undefined && dp.first === undefined) pr.first = lm.first;
+      const t = runs.find((x) => x.text);
+      list = { marker: lm.text, level: lm.level, ilfo: pr0.ilfo, fmt: { ...(t ? { font: t.font, size: t.size, b: t.b, i: t.i, color: t.color } : { font: base.font, size: base.size }), ...lm.chp }, hang: pr.first < 0 ? -pr.first : 0 };
+    }
+    delete pr.ilfo; delete pr.ilvl;
+    const blk = { t: 'p', level: pr.outline || 0, list, pr, runs, sectEnd: undefined };
     if (pr0.inTable) cellBlocks.push(blk); else { flushTable(); blocks.push(blk); }
     runs = []; cur = null; curP = -2;
   };
@@ -358,9 +426,9 @@ export function readDoc(bytes) {
   const page = { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96, hd: 48, ft: 48 };
   const none = { default: undefined, first: undefined, even: undefined };
   return {
-    kind: 'docx', blocks, media: {}, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
+    kind: 'docx', blocks, numDefs: lists ? lists.used() : {}, media: {}, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
     sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
     evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text, character and paragraph formatting and tables only: lists, pictures, headers, footers and page layout of this old Word file are not shown.'
+    notice: 'Text, character and paragraph formatting, tables and lists only: pictures, headers, footers and page layout of this old Word file are not shown.'
   };
 }
