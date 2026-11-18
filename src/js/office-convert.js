@@ -54,8 +54,16 @@ export function docToDocx(model) {
     const cx = Math.round(r.w * 9525); const cy = Math.round(r.h * 9525); const n = pics.size + 100;
     return `<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Picture ${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Picture"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${pics.get(r.img).id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
   };
+  const floatRun = (f) => { // an anchored picture: position from its box, text wrap as read
+    const it = f.item; const m = (model.media || {})[it.path]; if (!m) return '';
+    if (!pics.has(it.path)) pics.set(it.path, { id: `rIdP${pics.size + 1}`, name: `image${pics.size + 1}.${it.path.slice(it.path.lastIndexOf('.') + 1)}`, bytes: m.bytes });
+    const e = (px) => Math.round(px * 9525); const cx = e(it.w); const cy = e(it.h); const n = pics.size + 100; const d = f.dist || {};
+    const wrap = f.wrap === 'topandbottom' ? '<wp:wrapTopAndBottom/>' : f.wrap === 'none' ? '<wp:wrapNone/>' : '<wp:wrapSquare wrapText="bothSides"/>';
+    const cr = it.crop; const src = cr ? `<a:srcRect l="${Math.round(cr.l * 1000)}" t="${Math.round(cr.t * 1000)}" r="${Math.round(cr.r * 1000)}" b="${Math.round(cr.b * 1000)}"/>` : '';
+    return `<w:r><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="${e(d.t || 0)}" distB="${e(d.b || 0)}" distL="${e(d.l || 0)}" distR="${e(d.r || 0)}" simplePos="0" relativeHeight="${251658240 + n}" behindDoc="${f.behind ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="${f.h.rel}"><wp:posOffset>${e(f.h.off)}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="${f.v.rel}"><wp:posOffset>${e(f.v.off)}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/>${wrap}<wp:docPr id="${n}" name="Picture ${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Picture"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${pics.get(it.path).id}"/>${src}<a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>`;
+  };
   const para = (b) => {
-    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : r.img ? picRun(r) : run(r.text || '', r))).join('');
+    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : r.img ? picRun(r) : r.float ? floatRun(r.float) : run(r.text || '', r))).join('');
     const pPr = ppr({ ...(b.pr || {}), ...(b.level && !(b.pr && b.pr.outline) ? { outline: b.level } : {}) }, b.list);
     return inner || pPr ? `<w:p>${pPr}${inner}</w:p>` : '<w:p/>';
   };
@@ -77,7 +85,7 @@ export function docToDocx(model) {
   const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Floating and other pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character, paragraph and list formatting, its tables and its inline JPEG, PNG and bitmap pictures.');
+  warnings.push('Other pictures, headers, footers and page layout of the old file are not carried; the copy holds its text with its character, paragraph and list formatting, its tables and its JPEG, PNG and bitmap pictures, inline and floating.');
   const defs = model.numDefs || {}; const nums = Object.keys(defs).filter((id) => paras.some((x) => x.includes(`<w:numId w:val="${id}"/>`)));
   const numbering = nums.length ? `${XML}<w:numbering ${W}>${nums.map((id) => `<w:abstractNum w:abstractNumId="${id}"><w:multiLevelType w:val="hybridMultilevel"/>${defs[id].map((lv, k) => { // one abstract list per list override, 9 levels
     if (!lv) return '';

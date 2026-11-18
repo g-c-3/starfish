@@ -3,7 +3,7 @@
 // as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
 // subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
 // Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. Lists (Decision 510) come from
-// the list definitions and list overrides of the Table stream, inline pictures (Decision 511) from the Data stream. No floating pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// the list definitions and list overrides of the Table stream, inline pictures (Decision 511) from the Data stream, floating pictures (Decision 512) from the shape table. No headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
 import { OfficeError, DOC_BLOCK_MAX, formatNum } from './office-read.js';
@@ -341,6 +341,65 @@ export function readDoc(bytes) {
     } catch { return null; }
   };
 
+  // floating pictures (Decision 512): the shape table (PlcSpaMom) gives each anchor's position, size and wrap, keyed by the character it sits
+  // at; the drawing group (OfficeArtContent) gives each shape's picture index and the picture store; pictures are read as inline ones are
+  const spaFloats = new Map();
+  try {
+    const fcS = u32(0x1da); const lcbS = u32(0x1de); const fcD = u32(0x22a); const lcbD = u32(0x22e);
+    if (lcbS >= 34 && lcbD >= 8 && fcS + lcbS <= table.length && fcD + lcbD <= table.length) {
+      const walk = (a, e, fn) => {
+        let q = a;
+        while (q + 8 <= e) {
+          const vi = tdv.getUint16(q, true); const type = tdv.getUint16(q + 2, true); const end = q + 8 + tdv.getUint32(q + 4, true);
+          if (end > e) break;
+          fn(type, vi >> 4, q + 8, end, (vi & 15) === 15); q = end;
+        }
+      };
+      const store = []; const shapes = new Map(); const limit = fcD + lcbD;
+      const dggEnd = fcD + 8 + tdv.getUint32(fcD + 4, true);
+      walk(fcD, dggEnd, (type, _i, b, end) => {
+        if (type !== 0xf000) return;
+        walk(b, end, (t2, _j, b2, e2) => {
+          if (t2 !== 0xf001) return;
+          walk(b2, e2, (t3, _k, b3, e3) => { // a picture store entry: its picture is in the entry or at its delay offset in the WordDocument stream
+            if (t3 !== 0xf007) return;
+            const nameLen = table[b3 + 33]; const delay = tdv.getUint32(b3 + 28, true);
+            store.push(() => (e3 - b3 > 36 + nameLen ? blip(table, b3 + 36 + nameLen) : blip(wd, delay)));
+          });
+        });
+      });
+      const scan = (a, e) => walk(a, e, (type, _i, b, end, isC) => {
+        if (type === 0xf004) {
+          let spid = -1; const pr = {};
+          walk(b, end, (t2, inst, b2, e2) => {
+            if (t2 === 0xf00a) spid = tdv.getUint32(b2, true);
+            else if (t2 === 0xf00b) for (let k = 0; k < inst && b2 + k * 6 + 6 <= e2; k++) pr[tdv.getUint16(b2 + k * 6, true) & 0x3fff] = tdv.getInt32(b2 + k * 6 + 2, true);
+          });
+          if (spid >= 0) shapes.set(spid, pr);
+        } else if (isC) scan(b, end);
+      });
+      let q = dggEnd; // then one drawing per entry: a label byte and the drawing container
+      while (q + 9 <= limit) { q += 1; const end = q + 8 + tdv.getUint32(q + 4, true); if (end > limit) break; scan(q, end); q = end; }
+      const n = Math.floor((lcbS - 4) / 30); const first = fcS + 4 * (n + 1);
+      for (let i = 0; i < n && i < 2000; i++) {
+        const o = first + i * 26; const cp = tdv.getUint32(fcS + i * 4, true); const lid = tdv.getUint32(o, true);
+        const xl = tdv.getInt32(o + 4, true); const yt = tdv.getInt32(o + 8, true); const xr = tdv.getInt32(o + 12, true); const yb = tdv.getInt32(o + 16, true); const fl = tdv.getUint16(o + 20, true);
+        const pr = shapes.get(lid); if (!pr || !pr[0x104] || xl < -3 || yt < -3) continue; // shapes without a picture, and anchors placed by alignment, are not shown
+        const w = (xr - xl) / 15; const h = (yb - yt) / 15; if (!(w > 0 && h > 0)) continue;
+        const pic = store[pr[0x104] - 1] ? store[pr[0x104] - 1]() : null; if (!pic || picBytes + pic.bytes.length > PIC_MAX) continue;
+        picBytes += pic.bytes.length; const path = `media/shape${lid}.${pic.ext}`; media[path] = { bytes: pic.bytes, mime: pic.mime };
+        const cr = (k) => Math.max(0, Math.min(99, (pr[k] || 0) / 655.36)); const emu = (k, d) => (pr[k] !== undefined ? pr[k] : d) / 9525;
+        const wr = (fl >> 5) & 15; const crop = { t: cr(0x100), b: cr(0x101), l: cr(0x102), r: cr(0x103) };
+        spaFloats.set(cp, {
+          item: { t: 'pic', x: 0, y: 0, w, h, rot: 0, path, line: null, crop: crop.t || crop.b || crop.l || crop.r ? crop : null },
+          h: { rel: ['margin', 'page', 'column'][(fl >> 1) & 3] || 'column', align: null, off: xl / 15 }, v: { rel: ['margin', 'page', 'paragraph'][(fl >> 3) & 3] || 'paragraph', align: null, off: yt / 15 },
+          wrap: wr === 3 ? 'none' : wr === 1 ? 'topandbottom' : 'square', behind: wr === 3 && ((fl >> 14) & 1) === 1,
+          dist: { l: emu(0x384, 114300), r: emu(0x386, 114300), t: emu(0x385, 0), b: emu(0x387, 0) }
+        });
+      }
+    }
+  } catch { /* floating pictures are left out */ }
+
   // paragraph formatting: each paragraph has a style and modifiers of its own
   const pprops = []; const ppIx = new Map(); const papAt = new Int32Array(raw.length).fill(-1);
   try {
@@ -373,20 +432,21 @@ export function readDoc(bytes) {
   } catch { /* paragraphs are shown without their formatting */ }
 
   // fields keep the shown result and drop the instruction (0x13 begin, 0x14 separator, 0x15 end)
-  const ch = []; const pi = []; const qa = []; const stack = [];
+  const ch = []; const pi = []; const qa = []; const ri = []; const stack = [];
   for (let k = 0; k < raw.length; k++) {
     const c = raw[k];
     if (c === '\x13') { stack.push({ shown: false }); continue; }
     if (c === '\x14') { if (stack.length) stack[stack.length - 1].shown = true; continue; }
     if (c === '\x15') { stack.pop(); continue; }
     if (stack.length && !stack[stack.length - 1].shown) continue;
-    ch.push(c); pi.push(chpAt[k]); qa.push(papAt[k]);
+    ch.push(c); pi.push(chpAt[k]); qa.push(papAt[k]); ri.push(k);
   }
   // 0x07 ends a table cell, and twice in a row ends a table row: cells become tab stops, rows become lines
-  const oc = []; const op = []; const oq = [];
+  const oc = []; const op = []; const oq = []; const ofl = new Map();
   for (let k = 0; k < ch.length; k++) {
     const c = ch[k]; const n0 = oc.length;
     if (c === '\x07') oc.push('\x07'); // a cell or row mark: told apart below by the paragraph's own formatting
+    else if (c === '\x08' && spaFloats.has(ri[k])) { ofl.set(oc.length, spaFloats.get(ri[k])); oc.push('\x08'); } // the anchor of a floating picture
     else if (c === '\x01' && props[pi[k]] && props[pi[k]].spec && props[pi[k]].pic !== undefined && !props[pi[k]].ole && !props[pi[k]].fdata) oc.push('\x01'); // a picture mark
     else if (c === '\x01' || c === '\x02' || c === '\x05' || c === '\x08' || c === '\x1f') continue;
     else if (c === '\x1e') oc.push('-'); else if (c === '\x0b') oc.push('\n'); else oc.push(c);
@@ -468,6 +528,7 @@ export function readDoc(bytes) {
     if (blocks.length + rows.length >= DOC_BLOCK_MAX) { truncated = true; break; }
     const c = oc[k];
     if (c === '\r') { endPara(oq[k]); continue; }
+    if (c === '\x08') { runs.push({ float: ofl.get(k) }); curQ = oq[k]; cur = null; curP = -2; continue; }
     if (c === '\x01') { // a picture: its own run in the line
       const pc = readPic(props[op[k]].pic);
       if (pc) { curQ = oq[k]; runs.push({ img: pc.path, w: pc.w, h: pc.h }); cur = null; curP = -2; }
@@ -491,6 +552,6 @@ export function readDoc(bytes) {
     kind: 'docx', blocks, numDefs: lists ? lists.used() : {}, media, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
     sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
     evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text, character and paragraph formatting, tables, lists and inline JPEG, PNG and bitmap pictures only: other pictures, headers, footers and page layout of this old Word file are not shown.'
+    notice: 'Text, character and paragraph formatting, tables, lists and JPEG, PNG and bitmap pictures only: other pictures, headers, footers and page layout of this old Word file are not shown.'
   };
 }

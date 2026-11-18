@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 273**
+
+Start: "All dp passed, do next". DP288, DP289 and DP290 passed on a device. CI for the Session 272 push (Decision 511, runs 1058 and 583) concluded success. Next was Phase 123 step 5b (floating pictures).
+- Built (Decision 512): `src/js/office-doc.js` (shape table, drawing group, picture store, float runs), `src/js/office-convert.js` (the .docx copy writes anchored drawings).
+- Tested in a sandbox with a real .doc made by an office suite (a picture anchored to a paragraph, offset from the column, text wrapping square): the reader's float (offsets, size, wrap, distances); the copy read back through the docx reader (equal float); the copy drawn by the office suite with the picture. Both edited files parse with the bundler. The viewer drawing the float from a .doc, anchors by alignment, shapes in groups and the checks of earlier sessions were not run. Not run through CI or a device.
+- Size: about 3.5 KB of source added to the reader and 2 KB to the converter (Decision 453).
+- Decision 512. DP291 open.
+- Next start: the CI log, DP291 on a device, then step 6 (headers, footers, page set-up: sections, margins, columns), then Phases 124 and 125.
+
+---
+
 **Session 272**
 
 Start: "Do next". CI for the Session 271 push (Decision 510, runs 1057 and 582) concluded success. DP288 and DP289 not yet reported. Next was Phase 123 step 5 (pictures).
