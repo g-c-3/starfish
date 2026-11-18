@@ -3,7 +3,7 @@
 // as the same Word model as readDocx: text with bold, italic, underline, strike, caps, size, font, colour, highlight, super and
 // subscript, and paragraphs with alignment, indents, spacing and heading level, from the styles and from the paragraph itself.
 // Tables (cells, widths, merges, borders, shading) come from the paragraph marks of the cells and rows. Lists (Decision 510) come from
-// the list definitions and list overrides of the Table stream. No pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
+// the list definitions and list overrides of the Table stream, inline pictures (Decision 511) from the Data stream. No floating pictures, headers or footers yet: the model carries a notice that says so. Older Word 6 and 95 files and password-protected
 // files are refused.
 
 import { OfficeError, DOC_BLOCK_MAX, formatNum } from './office-read.js';
@@ -82,6 +82,10 @@ function applyChp(pr, op, d, b, fonts) {
     case 0x2a48: pr.sup = b[d] === 1; pr.sub = b[d] === 2; break;
     case 0x2a0c: { const c = ICO[b[d]]; if (c) pr.bg = c; else delete pr.bg; break; }
     case 0x4a30: pr.cs = b[d] | (b[d + 1] << 8); break; // a character style, resolved with the style sheet
+    case 0x0855: pr.spec = b[d] === 1; break; // a special character: the picture mark 0x01 is one
+    case 0x6a03: pr.pic = b[d] | (b[d + 1] << 8) | (b[d + 2] << 16) | (b[d + 3] * 0x1000000); break; // where the picture sits in the Data stream
+    case 0x080a: pr.ole = b[d] === 1; break; // an embedded object, not a picture
+    case 0x0806: pr.fdata = b[d] === 1; break; // form field data, not a picture
     default: break;
   }
 }
@@ -287,6 +291,56 @@ export function readDoc(bytes) {
     } catch { return null; } // paragraphs are shown without their list markers
   })();
 
+  // pictures (Decision 511): an inline picture is the mark 0x01 whose modifiers point into the Data stream, at a header (PICF) followed by
+  // the picture's blocks; JPEG, PNG and bitmap are read, other formats are left out
+  const dataS = ole.stream('Data'); const media = {}; const picSeen = new Map(); let picBytes = 0;
+  const PIC_MAX = 40 * 1024 * 1024;
+  const blip = (buf, o) => { // one picture block: header, id (16 bytes, 32 when the instance says two), tag, data
+    if (o < 0 || o + 8 > buf.length) return null;
+    const bv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const inst = bv.getUint16(o, true) >> 4; const type = bv.getUint16(o + 2, true); const len = bv.getUint32(o + 4, true);
+    if (o + 8 + len > buf.length) return null;
+    const two = { 0xf01d: [0x46b, 0x6e3], 0xf01e: [0x6e1], 0xf01f: [0x7a9] }[type]; if (!two) return null;
+    const at = o + 8 + (two.includes(inst) ? 32 : 16) + 1; const end = o + 8 + len; if (at >= end) return null;
+    const data = buf.subarray(at, end);
+    if (type === 0xf01d) return { bytes: data, mime: 'image/jpeg', ext: 'jpg' };
+    if (type === 0xf01e) return { bytes: data, mime: 'image/png', ext: 'png' };
+    if (data.length < 40) return null; // a bitmap without its file header: one is put in front
+    const dv2 = new DataView(data.buffer, data.byteOffset, data.byteLength); const hs = dv2.getUint32(0, true); const bpp = dv2.getUint16(14, true);
+    const used = dv2.getUint32(32, true); const pal = bpp <= 8 ? (used || 1 << bpp) * 4 : (dv2.getUint32(16, true) === 3 && hs === 40 ? 12 : 0);
+    const out = new Uint8Array(14 + data.length); const ov = new DataView(out.buffer);
+    out[0] = 0x42; out[1] = 0x4d; ov.setUint32(2, out.length, true); ov.setUint32(10, 14 + hs + pal, true); out.set(data, 14);
+    return { bytes: out, mime: 'image/bmp', ext: 'bmp' };
+  };
+  const readPic = (off) => {
+    try {
+      if (!dataS || off + 68 > dataS.length) return null;
+      if (picSeen.has(off)) return picSeen.get(off); // the same picture again
+      picSeen.set(off, null);
+      const dd = new DataView(dataS.buffer, dataS.byteOffset, dataS.byteLength);
+      const lcb = dd.getUint32(off, true); const cbh = dd.getUint16(off + 4, true); const mm = dd.getUint16(off + 6, true);
+      if (lcb < 68 || cbh < 68 || off + lcb > dataS.length) return null;
+      const w = Math.round((dd.getInt16(off + 28, true) * dd.getUint16(off + 32, true)) / 1000 / 15); const h = Math.round((dd.getInt16(off + 30, true) * dd.getUint16(off + 34, true)) / 1000 / 15);
+      let q = off + cbh; if (mm === 0x66) q += 1 + dataS[q];
+      const endp = off + lcb;
+      if (q + 8 > endp) return null;
+      q += 8 + dd.getUint32(q + 4, true); // the shape container
+      let found = null;
+      while (!found && q + 8 <= endp) {
+        const type = dd.getUint16(q + 2, true); const len = dd.getUint32(q + 4, true);
+        if (type === 0xf007) { // a picture store entry: the picture follows its 36 byte header and name, or sits in the WordDocument stream (delay offset)
+          const nameLen = dataS[q + 8 + 33]; const emb = q + 8 + 36 + nameLen;
+          found = len > 36 + nameLen ? blip(dataS, emb) : blip(wd, dd.getUint32(q + 8 + 28, true));
+        } else if (type >= 0xf018 && type <= 0xf117) found = blip(dataS, q);
+        q += 8 + len;
+      }
+      if (!found || picBytes + found.bytes.length > PIC_MAX || w <= 0 || h <= 0) return null;
+      picBytes += found.bytes.length;
+      const path = `media/pic${off}.${found.ext}`; media[path] = { bytes: found.bytes, mime: found.mime };
+      const res = { path, w, h }; picSeen.set(off, res); return res;
+    } catch { return null; }
+  };
+
   // paragraph formatting: each paragraph has a style and modifiers of its own
   const pprops = []; const ppIx = new Map(); const papAt = new Int32Array(raw.length).fill(-1);
   try {
@@ -333,6 +387,7 @@ export function readDoc(bytes) {
   for (let k = 0; k < ch.length; k++) {
     const c = ch[k]; const n0 = oc.length;
     if (c === '\x07') oc.push('\x07'); // a cell or row mark: told apart below by the paragraph's own formatting
+    else if (c === '\x01' && props[pi[k]] && props[pi[k]].spec && props[pi[k]].pic !== undefined && !props[pi[k]].ole && !props[pi[k]].fdata) oc.push('\x01'); // a picture mark
     else if (c === '\x01' || c === '\x02' || c === '\x05' || c === '\x08' || c === '\x1f') continue;
     else if (c === '\x1e') oc.push('-'); else if (c === '\x0b') oc.push('\n'); else oc.push(c);
     if (oc.length > n0) { op.push(pi[k]); oq.push(qa[k]); }
@@ -346,7 +401,9 @@ export function readDoc(bytes) {
   const runProps = (istd, ci) => {
     const key = `${istd}|${ci}`; let v = effective.get(key); if (v) return v;
     const direct = ci >= 0 ? { ...props[ci] } : {}; const cs = direct.cs; delete direct.cs;
-    v = { ...styleOf(istd).chp, ...(cs ? styleOf(cs).chp : {}), ...direct }; effective.set(key, v); return v;
+    v = { ...styleOf(istd).chp, ...(cs ? styleOf(cs).chp : {}), ...direct };
+    for (const k of ['spec', 'pic', 'ole', 'fdata']) delete v[k];
+    effective.set(key, v); return v;
   };
   const paraPr = (q) => { const pp = q >= 0 ? pprops[q] : null; const st = styleOf(pp ? pp.istd : 0).pap; return { ...st, ...(pp ? pp.dp : {}) }; };
   const TABLE_KEYS = ['inTable', 'ttp', 'tdef', 'tb', 'tshd'];
@@ -411,6 +468,11 @@ export function readDoc(bytes) {
     if (blocks.length + rows.length >= DOC_BLOCK_MAX) { truncated = true; break; }
     const c = oc[k];
     if (c === '\r') { endPara(oq[k]); continue; }
+    if (c === '\x01') { // a picture: its own run in the line
+      const pc = readPic(props[op[k]].pic);
+      if (pc) { curQ = oq[k]; runs.push({ img: pc.path, w: pc.w, h: pc.h }); cur = null; curP = -2; }
+      continue;
+    }
     if (c === '\x07') {
       const pr0 = paraPr(oq[k]);
       if (pr0.ttp) { rows.push(buildRow(pr0)); rowDefs.push(pr0); cells = []; cellBlocks = []; runs = []; cur = null; curP = -2; }
@@ -426,9 +488,9 @@ export function readDoc(bytes) {
   const page = { w: 816, h: 1056, t: 96, r: 96, b: 96, l: 96, hd: 48, ft: 48 };
   const none = { default: undefined, first: undefined, even: undefined };
   return {
-    kind: 'docx', blocks, numDefs: lists ? lists.used() : {}, media: {}, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
+    kind: 'docx', blocks, numDefs: lists ? lists.used() : {}, media, truncated, page, header: [], footer: [], footnotes: [], embedded: [],
     sections: [{ page, type: 'nextPage', titlePg: false, pgStart: null, pgFmt: null, hdr: { ...none }, ftr: { ...none } }],
     evenOdd: false, storedPages: 0, timing: { unzip: 0, parse: 0, read: 0 },
-    notice: 'Text, character and paragraph formatting, tables and lists only: pictures, headers, footers and page layout of this old Word file are not shown.'
+    notice: 'Text, character and paragraph formatting, tables, lists and inline JPEG, PNG and bitmap pictures only: other pictures, headers, footers and page layout of this old Word file are not shown.'
   };
 }

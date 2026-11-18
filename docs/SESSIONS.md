@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 272**
+
+Start: "Do next". CI for the Session 271 push (Decision 510, runs 1057 and 582) concluded success. DP288 and DP289 not yet reported. Next was Phase 123 step 5 (pictures).
+- Built (Decision 511): `src/js/office-doc.js` (picture marks, the Data stream picture reader, JPEG, PNG and bitmap, media in the model), `src/js/office-convert.js` (the .docx copy writes the pictures as inline drawings).
+- Tested in a sandbox with a real .doc made by an office suite (PNG and JPEG in a line, a picture alone in a paragraph, the same image twice): the reader's runs, sizes and bytes; the copy read back through the docx reader (equal sizes and bytes); the copy drawn by the office suite with every picture. Both edited files parse with the bundler. The bitmap path, the viewer drawing the pictures and the checks of earlier sessions were not run. Not run through CI or a device.
+- Size: the picture reader adds about 4 KB of source to the reader and 1.5 KB to the converter (Decision 453).
+- Decision 511. DP288, DP289 and DP290 open.
+- Next start: the CI log, DP288 to DP290 on a device, then floating pictures (step 5b), then step 6 (headers, footers, page set-up), then Phases 124 and 125.
+
+---
+
 **Session 271**
 
 Start: "Go". DP288 not yet reported. CI for the Session 270 push (Decision 509, runs 1056 and 581) concluded success. Next was Phase 123 step 4 (lists and numbering).
