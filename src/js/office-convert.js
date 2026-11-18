@@ -14,12 +14,23 @@ const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 const SML = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
 const PML = 'application/vnd.openxmlformats-officedocument.presentationml';
 
-// ---- doc -> docx: paragraphs of plain runs; tabs and line breaks kept ----
+// ---- doc -> docx: paragraphs of runs with their character formatting (bold, italic, underline, strike, caps, size, font, colour, highlight, super and subscript); tabs and line breaks kept ----
 export function docToDocx(model) {
   const warnings = [];
-  const run = (text) => text.split('\t').map((part, i) => `${i ? '<w:r><w:tab/></w:r>' : ''}${part ? `<w:r><w:t xml:space="preserve">${esc(part)}</w:t></w:r>` : ''}`).join('');
+  const rpr = (r) => { // the character formatting of a run, in the order the schema wants
+    const x = [];
+    if (r.font && r.font !== 'Calibri') x.push(`<w:rFonts w:ascii="${esc(r.font)}" w:hAnsi="${esc(r.font)}" w:cs="${esc(r.font)}"/>`);
+    if (r.b) x.push('<w:b/>'); if (r.i) x.push('<w:i/>'); if (r.caps) x.push('<w:caps/>'); if (r.sc) x.push('<w:smallCaps/>'); if (r.s) x.push('<w:strike/>');
+    if (r.color) x.push(`<w:color w:val="${esc(r.color)}"/>`);
+    if (r.size && Math.abs(r.size - 15) > 0.2) { const hp = Math.max(2, Math.round((r.size * 3) / 2)); x.push(`<w:sz w:val="${hp}"/><w:szCs w:val="${hp}"/>`); }
+    if (r.u) x.push('<w:u w:val="single"/>');
+    if (r.bg) x.push(`<w:shd w:val="clear" w:color="auto" w:fill="${esc(r.bg)}"/>`);
+    if (r.sup) x.push('<w:vertAlign w:val="superscript"/>'); else if (r.sub) x.push('<w:vertAlign w:val="subscript"/>');
+    return x.length ? `<w:rPr>${x.join('')}</w:rPr>` : '';
+  };
+  const run = (text, r) => { const pr = rpr(r); return text.split('\t').map((part, i) => `${i ? `<w:r>${pr}<w:tab/></w:r>` : ''}${part ? `<w:r>${pr}<w:t xml:space="preserve">${esc(part)}</w:t></w:r>` : ''}`).join(''); };
   const paras = (model.blocks || []).filter((b) => b.t === 'p').map((b) => {
-    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : run(r.text || ''))).join('');
+    const inner = (b.runs || []).map((r) => (r.br ? '<w:r><w:br/></w:r>' : run(r.text || '', r))).join('');
     return inner ? `<w:p>${inner}</w:p>` : '<w:p/>';
   });
   if (!paras.length) paras.push('<w:p/>');
@@ -27,7 +38,7 @@ export function docToDocx(model) {
   const sect = `<w:sectPr><w:pgSz w:w="${tw(pg.w)}" w:h="${tw(pg.h)}"/><w:pgMar w:top="${tw(pg.t)}" w:right="${tw(pg.r)}" w:bottom="${tw(pg.b)}" w:left="${tw(pg.l)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   if (model.truncated) warnings.push('The document is long; only its first part is in the copy.');
-  warnings.push('Layout, tables, pictures, headers, footers and formatting of the old file are not carried; the copy holds its text.');
+  warnings.push('Styles, paragraph layout, tables, pictures, headers and footers of the old file are not carried; the copy holds its text with its character formatting.');
   const bytes = zip({
     '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/word/document.xml', `${WML}.document.main+xml`], ['/word/styles.xml', `${WML}.styles+xml`]]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'word/document.xml']]),

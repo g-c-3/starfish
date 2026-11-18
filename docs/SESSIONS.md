@@ -4,6 +4,17 @@ Most recent first. Numbered, no dates (see TRACK.md).
 
 ---
 
+**Session 268**
+
+Start: "So dp pass do next". DP285 confirmed on a device; Phase 122 is complete. CI for the Session 267 push (Decision 506, run 1053) concluded success. Next was Phase 123 (doc full layout), split into six steps; step 1 is character formatting.
+- Built (Decision 507): `src/js/office-doc.js` (CHPX runs, font table, file position to text position, formatting kept through field and table-cell handling), `src/js/office-convert.js` (the .docx copy carries the formatting).
+- Tested in a sandbox with a real .doc made by an office suite: 29 checks (bold, italic, underline, strike, size, colour, font, highlight, super and subscript, caps, bold italic at 9 pt, unicode text, the text unchanged, the copy read back by the docx reader, opened in the editor, printed by the office suite with the right fonts and sizes); the 24, 28 (viewer), 22, 13, 17, 14 and 6 checks of earlier sessions still pass. A wrong offset for the font table (one entry off) was caught by the test and fixed. Not run through CI or a device.
+- Size: about 6.5 KB of source added (Decision 453).
+- Decision 507. DP286 open.
+- Next start: the CI log, DP286 on a device, then Phase 123 step 2 (the style sheet and paragraph formatting). Read `ole2.js` limits and the STSH layout first.
+
+---
+
 **Session 267**
 
 Start: "Dp pass do next". DP283 and DP284 confirmed on a device. CI for the Session 266 push (Decision 505, run 1052) concluded success. Next item was Phase 122 step 2 (Edit on .doc, .xls and .ppt).
