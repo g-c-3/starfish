@@ -2,11 +2,13 @@
 // a list of records; cells, formats, styles, merges and sizes become the same model as readXlsx, so office-render.js draws it
 // unchanged. Formula cells show the value stored in the file; nothing is recalculated. Older Excel 5 and 95 files are refused.
 // Pictures (JPEG, PNG, bitmap) come from the drawing group of the globals and the drawing records of the sheet, placed by their
-// anchor cells (Decision 520).
+// anchor cells (Decision 520). Charts are read from the chart streams of the sheet into the chart model of the .xlsx reader,
+// their series resolved from the sheet cells the series formulas point to (Decision 521).
 
 import { OfficeError, formatValue, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 import { readOle2, isOle2 } from './ole2.js';
 import { blipAt } from './office-blip.js';
+import { readXlsChart } from './office-xlschart.js';
 
 const PX_PT = 4 / 3;
 const PALETTE = ['000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', '000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF',
@@ -99,7 +101,7 @@ export function readXls(bytes) {
   let is1904 = false; let encrypted = false;
   const palette = PALETTE.slice();
   const fonts = []; const formats = {}; const xfRaw = []; const sheets = []; let sst = [];
-  let version = 0; let dggChunks = null;
+  let version = 0; let dggChunks = null; const xtis = [];
   {
     let sstChunks = null; let first = true; let cont = null;
     for (const r of records(0)) {
@@ -117,7 +119,8 @@ export function readXls(bytes) {
       else if (r.id === 0x85) {
         const state = wb[r.o + 4]; const type = wb[r.o + 5];
         sheets.push({ off: u32(r.o), hidden: state !== 0, type, name: ustr(r.data, 6, 1).text });
-      } else if (r.id === 0xfc) sstChunks = [r.data];
+      } else if (r.id === 0x17) { const n = u16(r.o); for (let i = 0; i < n && r.o + 2 + i * 6 + 6 <= r.o + r.len; i++) xtis.push({ first: u16(r.o + 4 + i * 6) }); } // the sheets a formula's 3-D references name
+      else if (r.id === 0xfc) sstChunks = [r.data];
       else if (r.id === 0xeb) dggChunks = [r.data];
       else if (r.id === 0x3c && cont === 'dgg' && dggChunks) dggChunks.push(r.data);
       else if (r.id === 0x3c && sstChunks) sstChunks.push(r.data);
@@ -170,9 +173,31 @@ export function readXls(bytes) {
   if (!xfs.length) xfs.push({ code: 'General', date: false, font: { name: 'Arial', size: 10, b: false, i: false, u: false, s: false, color: null }, fill: null, border: null, h: 'general', v: 'bottom', wrap: false, indent: 0 });
 
   const colPx = (w) => Math.round((w / 256) * 7 + 5);
+  const cellCache = new Map();
+  const cellsOf = (k) => { // the cells of any sheet, for chart series; no drawings are read
+    if (!cellCache.has(k)) { const sh = sheets[k]; cellCache.set(k, sh && sh.type === 0 ? loadOf(sh, false).rows : []); }
+    return cellCache.get(k);
+  };
   function load(i) {
     const sh = visible[i];
     if (!sh) throw new OfficeError('This sheet could not be read.');
+    return loadOf(sh, true);
+  }
+  function loadOf(sh, deep) {
+    const host = sheets.indexOf(sh); let chartWait = null; let chartRecs = null;
+    const rangeOf = (g) => { // the cells a series formula points to (a cell, an area, or a text), row by row
+      if (!g || g.length < 5) return null;
+      const p = g[0] & 0x1f; const gu = (o) => g[o] | (g[o + 1] << 8);
+      if (p === 0x17) { const n = g[1]; let t = ''; for (let k = 0; k < n && 3 + k < g.length; k++) t += String.fromCharCode(g[3 + k]); return [{ v: t, k: 's' }]; }
+      let sheet = host; let r1; let r2; let c1; let c2;
+      if (p === 0x1a || p === 0x1b) { const x = xtis[gu(1)]; if (!x) return null; sheet = x.first; if (p === 0x1a) { r1 = r2 = gu(3); c1 = c2 = gu(5) & 0x3fff; } else { r1 = gu(3); r2 = gu(5); c1 = gu(7) & 0x3fff; c2 = gu(9) & 0x3fff; } }
+      else if (p === 0x04) { r1 = r2 = gu(1); c1 = c2 = gu(3) & 0x3fff; }
+      else if (p === 0x05) { r1 = gu(1); r2 = gu(3); c1 = gu(5) & 0x3fff; c2 = gu(7) & 0x3fff; }
+      else return null;
+      const rows = cellsOf(sheet); const out = [];
+      for (let r = r1; r <= r2 && out.length < 500; r++) for (let c = c1; c <= c2 && out.length < 500; c++) out.push((rows[r] && rows[r][c]) || { v: '', k: 's' });
+      return out;
+    };
     const rows = []; const colW = {}; const rowH = {}; const merges = [];
     let ncols = 0; let truncated = false; let cellCount = 0; let hasDrawing = false; let grid = true; let freeze = { rows: 0, cols: 0 }; let pane = null; let freezeOn = false;
     let depth = 0; let pendingFormula = null; let pend = null; const shapes = []; let other = 0; const media = {};
@@ -198,9 +223,14 @@ export function readXls(bytes) {
       return sawSp || anchor ? { pib, anchor } : null;
     };
     for (const r of records(sh.off)) {
-      if (r.id === 0x809) { depth++; continue; }
-      if (r.id === 0x0a) { depth--; if (depth <= 0) break; continue; }
-      if (depth !== 1) continue; // a chart or other nested stream
+      if (r.id === 0x809) { depth++; if (depth === 2 && chartWait && deep) chartRecs = []; continue; }
+      if (r.id === 0x0a) {
+        depth--; if (depth <= 0) break;
+        if (depth === 1 && chartWait) { let m = null; try { m = chartRecs ? readXlsChart(chartRecs, rangeOf) : null; } catch { m = null; } if (m && shapes.length < 40) shapes.push({ ...chartWait, chart: m }); else other++; chartWait = null; chartRecs = null; }
+        continue;
+      }
+      if (depth >= 2) { if (chartRecs) chartRecs.push(r); continue; } // a chart stream is collected; other nested streams are skipped
+      if (depth !== 1) continue;
       const row = r.len >= 2 ? u16(r.o) : 0; const c0 = r.len >= 4 ? u16(r.o + 2) : 0; const xf = r.len >= 6 ? u16(r.o + 4) : 0;
       switch (r.id) {
         case 0x203: put(row, c0, num(f64(r.o + 6), xf), xf, 'n', f64(r.o + 6)); break;
@@ -230,7 +260,7 @@ export function readXls(bytes) {
         case 0x3c: break;
         case 0x5d: { // the object record after a drawing record: its type says what the shape is
           const ot = r.len >= 6 && u16(r.o) === 0x15 ? u16(r.o + 4) : 0; const sp = pend; pend = null;
-          if (sp && ot === 8 && sp.pib && sp.anchor) { if (shapes.length < 40) shapes.push(sp); else other++; } else if (sp || ot) other++;
+          if (sp && ot === 8 && sp.pib && sp.anchor) { if (shapes.length < 40) shapes.push(sp); else other++; } else if (sp && ot === 5 && sp.anchor && deep) chartWait = sp; else if (sp || ot) other++;
           break;
         }
         default: break;
@@ -240,10 +270,12 @@ export function readXls(bytes) {
     for (let k = 0; k < rows.length; k++) rows[k] = Array.from(rows[k] || []);
     const cw = (c) => (colW[c] !== undefined ? colW[c] : 64); const rh = (k) => (rowH[k] !== undefined ? rowH[k] : 20);
     const objects = [];
-    for (const sp of shapes) { // the picture, from its anchor cells; offsets are 1/1024 of a cell's width and 1/256 of its height
+    const place = (a) => ({ from: { col: a.c1, colOff: (a.dx1 / 1024) * cw(a.c1), row: a.r1, rowOff: (a.dy1 / 256) * rh(a.r1) }, to: { col: a.c2, colOff: (a.dx2 / 1024) * cw(a.c2), row: a.r2, rowOff: (a.dy2 / 256) * rh(a.r2) }, ext: null, abs: null });
+    for (const sp of shapes) { // the picture or chart, from its anchor cells; offsets are 1/1024 of a cell's width and 1/256 of its height
+      if (sp.chart) { objects.push({ t: 'chart', model: sp.chart, ...place(sp.anchor) }); continue; }
       const im = blipOf(sp.pib); if (!im) { other++; continue; }
       const path = `pic${sp.pib}.${im.ext}`; media[path] = { bytes: im.bytes, mime: im.mime }; const a = sp.anchor;
-      objects.push({ t: 'pic', path, from: { col: a.c1, colOff: (a.dx1 / 1024) * cw(a.c1), row: a.r1, rowOff: (a.dy1 / 256) * rh(a.r1) }, to: { col: a.c2, colOff: (a.dx2 / 1024) * cw(a.c2), row: a.r2, rowOff: (a.dy2 / 256) * rh(a.r2) }, ext: null, abs: null });
+      objects.push({ t: 'pic', path, ...place(a) });
     }
     hasDrawing = other > 0;
     return { rows, ncols, truncated, colW, defCol: 64, rowH, defRow: 20, merges, freeze, grid, objects, media, hasDrawing };
