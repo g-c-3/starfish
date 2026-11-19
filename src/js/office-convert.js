@@ -199,20 +199,29 @@ const phSp = (id, name, ph, xfrm, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" 
 const emu = (px) => Math.round(px * 9525);
 
 export function pptToPptx(model) {
-  const warnings = ['Layout, shapes and pictures of the old file are not carried; each slide holds its text.'];
+  const warnings = ['Text styles, pictures, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and text.'];
   const W = emu(model.size.w); const H = emu(model.size.h);
   const xf = (x, y, w, h) => `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
   const slides = []; const notes = [];
   for (let i = 0; i < model.count; i++) {
     const s = model.load(i); let id = 1;
-    const shapes = (s.items || []).filter((it) => it.t === 'shape' && it.text && it.text.paras && it.text.paras.length).map((it) => {
+    const flat = []; const addFlat = (list, ox, oy) => { for (const it of list || []) { if (it.t === 'group') addFlat(it.items, ox + it.x, oy + it.y); else if (it.t === 'shape') flat.push({ ...it, x: it.x + ox, y: it.y + oy }); } };
+    addFlat(s.items, 0, 0);
+    const shapes = flat.filter((it) => (it.text && it.text.paras && it.text.paras.length) || it.fill || it.line).map((it) => {
       id += 1; const title = it.role === 'title';
-      const ps = it.text.paras.map((p) => {
+      const ps = !(it.text && it.text.paras) ? '' : it.text.paras.map((p) => {
         const run = p.runs && p.runs[0] ? p.runs[0] : { text: '', size: p.size || 24 }; const sz = Math.max(100, Math.round((run.size || p.size || 24) * 0.75 * 100));
         const algn = p.algn === 'center' ? 'ctr' : p.algn === 'right' ? 'r' : 'l';
         const bu = p.bullet ? `<a:buChar char="${esc(p.bullet.text || '\u2022')}"/>` : '<a:buNone/>';
         return `<a:p><a:pPr algn="${algn}" marL="${p.bullet ? emu(p.marL || 24) : 0}" indent="${p.bullet ? emu(p.indent || -24) : 0}">${bu}</a:pPr><a:r><a:rPr lang="en-US" sz="${sz}" dirty="0"/><a:t>${esc(p.runs ? p.runs.map((r) => r.text).join('') : '')}</a:t></a:r></a:p>`;
       }).join('');
+      if (!it.role) { // a text box or a drawn shape: no placeholder, its own geometry, fill and line
+        const fillX = it.fill ? `<a:solidFill><a:srgbClr val="${it.fill.hex}"/></a:solidFill>` : '<a:noFill/>';
+        const lnX = it.line ? `<a:ln w="${Math.round(it.line.w * 9525)}"><a:solidFill><a:srgbClr val="${it.line.color.hex}"/></a:solidFill>${it.line.dash === 'solid' ? '' : `<a:prstDash val="${it.line.dash === 'dotted' ? 'sysDot' : 'dash'}"/>`}</a:ln>` : '<a:ln><a:noFill/></a:ln>';
+        const tb = it.text ? `<p:txBody><a:bodyPr wrap="${it.text.wrap === false ? 'none' : 'square'}" lIns="${emu(it.text.l)}" tIns="${emu(it.text.t)}" rIns="${emu(it.text.r)}" bIns="${emu(it.text.b)}"${it.text.anchor === 'ctr' ? ' anchor="ctr"' : it.text.anchor === 'b' ? ' anchor="b"' : ''}/><a:lstStyle/>${ps}</p:txBody>` : '';
+        const rot = it.rot ? ` rot="${Math.round(it.rot * 60000)}"` : '';
+        return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Shape ${id}"/><p:cNvSpPr${it.text && !it.fill && !it.line ? ' txBox="1"' : ''}/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm${rot}${it.fh ? ' flipH="1"' : ''}${it.fv ? ' flipV="1"' : ''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${emu(it.w)}" cy="${emu(it.h)}"/></a:xfrm><a:prstGeom prst="${it.geom || 'rect'}"><a:avLst/></a:prstGeom>${fillX}${lnX}</p:spPr>${tb}</p:sp>`;
+      }
       return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${title ? 'Title' : 'Content'} ${id}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${title ? 'type="title"' : 'idx="1"'}/></p:nvPr></p:nvSpPr><p:spPr>${xf(emu(it.x), emu(it.y), emu(it.w), emu(it.h))}</p:spPr><p:txBody><a:bodyPr${it.text.anchor === 'ctr' ? ' anchor="ctr"' : ''}><a:normAutofit/></a:bodyPr><a:lstStyle/>${ps}</p:txBody></p:sp>`;
     });
     slides.push(`${XML}<p:sld ${NSP}><p:cSld><p:spTree>${GRP}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
