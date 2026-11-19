@@ -1,4 +1,4 @@
-// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516, 517, 518). Follows the newest edit
+// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516, 517, 518, 519). Follows the newest edit
 // of the "PowerPoint Document" stream to the slide list and the slide objects, and returns each slide's shapes (position, fill, line,
 // text) and notes as the same model as readPptx. Text runs carry their style (character runs and paragraph runs of the style atom,
 // master text styles by level, fonts, bullets, alignment, indents, spacing); a title or body that overflows its box is scaled down.
@@ -21,6 +21,7 @@ const T_CANCHOR = 0xf010; const T_CHANCHOR = 0xf00f;
 const T_PH = 0x0bc3; const T_PPDGG = 0x040b; const T_BSE = 0xf007;
 const T_STYLE = 0x0fa1; const T_RULER = 0x0fa6; const T_MSTYLE = 0x0fa3; const T_ENV = 0x03f2; const T_FONTS = 0x07d5; const T_FONT = 0x0fb7;
 const BODYT = [1, 5, 7, 8];
+const ARRAY_PROPS = new Set([0x145, 0x146, 0x155, 0x156, 0x157, 0x158]); // vertices, segments, handles, guides, inscribe, connection sites
 const GEOM = { 1: 'rect', 2: 'roundRect', 3: 'ellipse', 4: 'diamond', 5: 'triangle', 6: 'rtTriangle', 7: 'parallelogram', 8: 'trapezoid', 9: 'hexagon', 10: 'octagon', 20: 'line', 32: 'line', 33: 'line', 202: 'rect' };
 
 export function isPpt(bytes) { return isOle2(bytes); }
@@ -320,10 +321,16 @@ export function readPpt(bytes) {
     const place = (a, xf) => ({ x: (a.l - xf.cl) * xf.sx, y: (a.t - xf.ct) * xf.sy, w: (a.r - a.l) * xf.sx, h: (a.b - a.t) * xf.sy });
     const used = new Set(); let skipPh = false;
     const shapeOf = (from, to) => { // one shape container: { sp, props, anchor, group, texts }
-      const o = { type: 0, flags: 0, props: {}, anchor: null, group: null, texts: [], isPh: false };
+      const o = { type: 0, flags: 0, props: {}, anchor: null, group: null, texts: [], isPh: false, cx: {} };
       for (const r of recs(from, to)) {
         if (r.type === T_SPREC && r.len >= 8) { o.type = dv.getUint16(r.at, true) >> 4; o.flags = u32(r.o + 4); }
-        else if (r.type === T_OPT) { const n = dv.getUint16(r.at, true) >> 4; for (let k = 0; k < n && r.o + k * 6 + 6 <= r.e; k++) o.props[dv.getUint16(r.o + k * 6, true) & 0x3fff] = dv.getInt32(r.o + k * 6 + 2, true); }
+        else if (r.type === T_OPT) {
+          const n = dv.getUint16(r.at, true) >> 4; let q = r.o + n * 6; // complex values follow the entries, in entry order
+          for (let k = 0; k < n && r.o + k * 6 + 6 <= r.e; k++) {
+            const idw = dv.getUint16(r.o + k * 6, true); const v = dv.getInt32(r.o + k * 6 + 2, true); o.props[idw & 0x3fff] = v;
+            if (idw & 0x8000) { const hd = ARRAY_PROPS.has(idw & 0x3fff) ? 6 : 0; if (v >= 0 && q + hd + v <= r.e) o.cx[idw & 0x3fff] = { o: q, len: v }; q += hd + Math.max(0, v); } // an array has a 6 byte header before its elements, not counted in its size
+          }
+        }
         else if (r.type === T_CANCHOR && r.len === 8) o.anchor = { t: dv.getInt16(r.o, true), l: dv.getInt16(r.o + 2, true), r: dv.getInt16(r.o + 4, true), b: dv.getInt16(r.o + 6, true) };
         else if (r.type === T_CANCHOR && r.len >= 16) o.anchor = { t: dv.getInt32(r.o, true), l: dv.getInt32(r.o + 4, true), r: dv.getInt32(r.o + 8, true), b: dv.getInt32(r.o + 12, true) };
         else if (r.type === T_CHANCHOR && r.len >= 16) o.anchor = { l: dv.getInt32(r.o, true), t: dv.getInt32(r.o + 4, true), r: dv.getInt32(r.o + 8, true), b: dv.getInt32(r.o + 12, true) };
@@ -332,9 +339,34 @@ export function readPpt(bytes) {
       }
       return o;
     };
+    const freeform = (sh) => { // a free-form outline from the vertex array and the segment array, as one path in the shape's own units
+      const P = sh.props; const V = sh.cx[0x145]; const S = sh.cx[0x146]; if (!V || !S) return null;
+      try {
+        const arr = (c) => { const n = u16(c.o); const es = n ? Math.floor(c.len / n) : 0; return { n, es, at: c.o + 6 }; };
+        const va = arr(V); const sa = arr(S); if (!(va.n > 0 && (va.es === 8 || va.es === 4) && sa.es === 2) || va.n > 20000) return null;
+        const pts = []; for (let i = 0; i < va.n; i++) pts.push(va.es === 8 ? [dv.getInt32(va.at + i * 8, true), dv.getInt32(va.at + i * 8 + 4, true)] : [dv.getInt16(va.at + i * 4, true), dv.getInt16(va.at + i * 4 + 2, true)]);
+        if (pts.some((q) => q[0] < (va.es === 8 ? -0x40000000 : -32000) || q[1] < (va.es === 8 ? -0x40000000 : -32000))) return null; // coordinates that are formula references (guides) are not evaluated
+        let gl = P[0x140] !== undefined ? P[0x140] : 0; let gt = P[0x141] !== undefined ? P[0x141] : 0; let gr = P[0x142] !== undefined ? P[0x142] : 21600; let gb = P[0x143] !== undefined ? P[0x143] : 21600;
+        if (!(gr > gl && gb > gt)) { gl = Math.min(...pts.map((q) => q[0])); gr = Math.max(...pts.map((q) => q[0])); gt = Math.min(...pts.map((q) => q[1])); gb = Math.max(...pts.map((q) => q[1])); } // no coordinate space given: the vertices' own extent
+        const w = gr - gl; const h = gb - gt; if (!(w > 0 && h > 0)) return null;
+        const pt = (i) => { const q = pts[i]; if (!q) throw new Error('vertex'); return `${q[0] - gl} ${q[1] - gt}`; };
+        let d = ''; let vi = 0; let nf = false;
+        for (let i = 0; i < sa.n; i++) {
+          const v = u16(sa.at + i * 2); const t = (v >> 13) & 7; const cnt = v & 0xff;
+          if (t === 0) for (let k = 0; k < cnt; k++) d += `L${pt(vi++)}`; // line to, cnt points
+          else if (t === 1) for (let k = 0; k < cnt; k++) { d += `C${pt(vi)} ${pt(vi + 1)} ${pt(vi + 2)}`; vi += 3; }
+          else if (t === 2) d += `M${pt(vi++)}`;
+          else if (t === 3) d += 'Z';
+          else if (t === 4) break;
+          else if (t === 5) { const code = (v >> 8) & 0x1f; if (code === 10) nf = true; else if (code === 11) { /* no line: drawn by the line property */ } else if (code === 12) for (let k = 0; k < cnt; k++) d += `L${pt(vi++)}`; else return null; }
+          else return null;
+        }
+        return d ? { w, h, d, nf } : null;
+      } catch { return null; }
+    };
     const item = (sh, xf) => {
       if (!sh.anchor || (sh.flags & 0x08)) return null; // no box, or a deleted shape
-      const bx = place(sh.anchor, xf); if (!(bx.w > 0 && bx.h > 0)) return null;
+      const bx = place(sh.anchor, xf); const isLn = GEOM[sh.type] === 'line' && !sh.cx[0x145]; if (!(bx.w > 0 && bx.h > 0) && !(isLn && bx.w >= 0 && bx.h >= 0 && bx.w + bx.h > 0)) return null;
       const P = sh.props; const has = (id, mask) => P[id] !== undefined && (P[id] & mask) === mask;
       const fill = has(0x1bf, 0x100010) && P[0x1bf] & 0x10 ? { hex: colorOf(P[0x181] !== undefined ? P[0x181] : 0xffffff, scheme), a: 1 } : null;
       const lined = P[0x1ff] !== undefined && (P[0x1ff] & 0x080000) && (P[0x1ff] & 0x08);
@@ -356,10 +388,10 @@ export function readPpt(bytes) {
         if (isTitle || isBody || texts.some((t) => t.ph)) text.scale = fitScale(paras, bx.w - text.l - text.r, bx.h - text.t - text.b);
         if (isTitle) role = 'title'; else if (isBody) role = 'body';
       }
-      const geom = GEOM[sh.type];
+      const cust = sh.cx[0x145] ? freeform(sh) : null; const geom = GEOM[sh.type] || (sh.cx[0x145] && !cust ? 'rect' : undefined); // a formula-based outline is drawn as its box
       if (!text && !fill && !line) return null;
-      if (!geom && !text) return null; // a shape this reader cannot draw, with nothing to say, is left out
-      return { ...(role ? { role } : {}), t: 'shape', ...bx, rot: P[0x04] ? P[0x04] / 65536 : 0, ...(sh.flags & 0x40 ? { fh: true } : {}), ...(sh.flags & 0x80 ? { fv: true } : {}), geom: geom || 'rect', adj: null, fill, line, text };
+      if (!geom && !cust && !text) return null; // a shape this reader cannot draw, with nothing to say, is left out
+      return { ...(role ? { role } : {}), t: 'shape', ...bx, rot: P[0x04] ? P[0x04] / 65536 : 0, ...(sh.flags & 0x40 ? { fh: true } : {}), ...(sh.flags & 0x80 ? { fv: true } : {}), geom: geom || 'rect', adj: sh.type === 2 && P[0x147] !== undefined ? Math.round((P[0x147] / 21600) * 100000) : null, ...(cust ? { cust } : {}), fill, line, text };
     };
     const walk = (from, to, xf, out, top) => { // a group container: its first shape is the group itself, the rest are its children
       let first = true;

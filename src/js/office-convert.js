@@ -198,6 +198,16 @@ const GRP = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:n
 const phSp = (id, name, ph, xfrm, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${ph}/></p:nvPr></p:nvSpPr><p:spPr>${xfrm}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
 const emu = (px) => Math.round(px * 9525);
 
+const custX = (c) => { // an SVG-style path (M L C Q Z in the shape's own units) as a custom geometry
+  const t = c.d.match(/[MLCQZ]|-?\d+(?:\.\d+)?/g) || []; let out = ''; let i = 0; const n = () => Math.round(Number(t[i++]));
+  const pt = () => { const x = n(); const y = n(); return `<a:pt x="${x}" y="${y}"/>`; };
+  while (i < t.length) {
+    const k = t[i++];
+    if (k === 'M') out += `<a:moveTo>${pt()}</a:moveTo>`; else if (k === 'L') out += `<a:lnTo>${pt()}</a:lnTo>`;
+    else if (k === 'C') out += `<a:cubicBezTo>${pt()}${pt()}${pt()}</a:cubicBezTo>`; else if (k === 'Q') out += `<a:quadBezTo>${pt()}${pt()}</a:quadBezTo>`; else if (k === 'Z') out += '<a:close/>';
+  }
+  return `<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${Math.round(c.w)}" h="${Math.round(c.h)}"${c.nf ? ' fill="none"' : ''}>${out}</a:path></a:pathLst></a:custGeom>`;
+};
 const bgX = (bg) => { // a slide background: a solid colour or a two-colour linear fill; white is the file's default
   if (!bg || (bg.hex && bg.hex.toUpperCase() === 'FFFFFF' && !bg.grad)) return '';
   const fill = bg.grad ? `<a:gradFill rotWithShape="1"><a:gsLst>${bg.grad.map((g) => `<a:gs pos="${Math.round(g.pos * 1000)}"><a:srgbClr val="${g.c.hex}"/></a:gs>`).join('')}</a:gsLst><a:lin ang="${Math.round((((bg.ang - 90) % 360 + 360) % 360) * 60000)}" scaled="0"/></a:gradFill>` : `<a:solidFill><a:srgbClr val="${bg.hex}"/></a:solidFill>`;
@@ -242,7 +252,7 @@ export function pptToPptx(model) {
         const lnX = it.line ? `<a:ln w="${Math.round(it.line.w * 9525)}"><a:solidFill><a:srgbClr val="${it.line.color.hex}"/></a:solidFill>${it.line.dash === 'solid' ? '' : `<a:prstDash val="${it.line.dash === 'dotted' ? 'sysDot' : 'dash'}"/>`}</a:ln>` : '<a:ln><a:noFill/></a:ln>';
         const tb = it.text ? `<p:txBody><a:bodyPr wrap="${it.text.wrap === false ? 'none' : 'square'}" lIns="${emu(it.text.l)}" tIns="${emu(it.text.t)}" rIns="${emu(it.text.r)}" bIns="${emu(it.text.b)}"${it.text.anchor === 'ctr' ? ' anchor="ctr"' : it.text.anchor === 'b' ? ' anchor="b"' : ''}/><a:lstStyle/>${ps}</p:txBody>` : '';
         const rot = it.rot ? ` rot="${Math.round(it.rot * 60000)}"` : '';
-        return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Shape ${id}"/><p:cNvSpPr${it.text && !it.fill && !it.line ? ' txBox="1"' : ''}/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm${rot}${it.fh ? ' flipH="1"' : ''}${it.fv ? ' flipV="1"' : ''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${emu(it.w)}" cy="${emu(it.h)}"/></a:xfrm><a:prstGeom prst="${it.geom || 'rect'}"><a:avLst/></a:prstGeom>${fillX}${lnX}</p:spPr>${tb}</p:sp>`;
+        return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Shape ${id}"/><p:cNvSpPr${it.text && !it.fill && !it.line ? ' txBox="1"' : ''}/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm${rot}${it.fh ? ' flipH="1"' : ''}${it.fv ? ' flipV="1"' : ''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${emu(it.w)}" cy="${emu(it.h)}"/></a:xfrm>${it.cust ? custX(it.cust) : `<a:prstGeom prst="${it.geom || 'rect'}">${it.adj && it.geom === 'roundRect' ? `<a:avLst><a:gd name="adj" fmla="val ${Math.round(it.adj)}"/></a:avLst>` : '<a:avLst/>'}</a:prstGeom>`}${fillX}${lnX}</p:spPr>${tb}</p:sp>`;
       }
       return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${title ? 'Title' : 'Content'} ${id}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${title ? 'type="title"' : 'idx="1"'}/></p:nvPr></p:nvSpPr><p:spPr>${xf(emu(it.x), emu(it.y), emu(it.w), emu(it.h))}</p:spPr><p:txBody><a:bodyPr${it.text.anchor === 'ctr' ? ' anchor="ctr"' : ''}><a:normAutofit/></a:bodyPr><a:lstStyle/>${ps}</p:txBody></p:sp>`;
     });
