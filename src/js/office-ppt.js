@@ -1,8 +1,8 @@
-// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516, 517). Follows the newest edit
+// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516, 517, 518). Follows the newest edit
 // of the "PowerPoint Document" stream to the slide list and the slide objects, and returns each slide's shapes (position, fill, line,
 // text) and notes as the same model as readPptx. Text runs carry their style (character runs and paragraph runs of the style atom,
 // master text styles by level, fonts, bullets, alignment, indents, spacing); a title or body that overflows its box is scaled down.
-// Pictures (JPEG, PNG, bitmap) come from the picture store of the drawing group and the "Pictures" stream. No master shapes yet: the model carries a notice that says so.
+// Pictures (JPEG, PNG, bitmap) come from the picture store of the drawing group and the "Pictures" stream. The slide background (its own, else its master's, else the scheme's) and the master's own shapes (not its placeholders) are drawn behind the slide's shapes. The model carries a notice of what is not shown.
 // Password-protected files are refused.
 
 import { OfficeError } from './office-read.js';
@@ -18,7 +18,7 @@ const T_USEREDIT = 0x0ff5; const T_PDIR = 0x1772; const T_HEADER = 0x0f9f; const
 const T_CLIENTTEXT = 0xf00d; const T_CLIENTDATA = 0xf011;
 const T_PPDRAW = 0x040c; const T_SCHEME = 0x07f0; const T_SPGR = 0xf003; const T_SP = 0xf004; const T_SPREC = 0xf00a; const T_OPT = 0xf00b; const T_GRPREC = 0xf009;
 const T_CANCHOR = 0xf010; const T_CHANCHOR = 0xf00f;
-const T_PPDGG = 0x040b; const T_BSE = 0xf007;
+const T_PH = 0x0bc3; const T_PPDGG = 0x040b; const T_BSE = 0xf007;
 const T_STYLE = 0x0fa1; const T_RULER = 0x0fa6; const T_MSTYLE = 0x0fa3; const T_ENV = 0x03f2; const T_FONTS = 0x07d5; const T_FONT = 0x0fb7;
 const BODYT = [1, 5, 7, 8];
 const GEOM = { 1: 'rect', 2: 'roundRect', 3: 'ellipse', 4: 'diamond', 5: 'triangle', 6: 'rtTriangle', 7: 'parallelogram', 8: 'trapezoid', 9: 'hexagon', 10: 'octagon', 20: 'line', 32: 'line', 33: 'line', 202: 'rect' };
@@ -253,16 +253,16 @@ export function readPpt(bytes) {
     if (fl & 0x10) return (v & 0xff) === 0xf0 ? 'FFFFFF' : '000000';
     return [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   };
-  function shapeItems(s, media) {
+  function shapeItems(s, media, out) {
     const so = persist.get(s.ref);
     if (so === undefined || so + 8 > ps.length || dv.getUint16(so + 2, true) !== T_SLIDE) return null;
     const soE = so + 8 + u32(so + 4);
-    let drawing = null; let masterId = 0;
-    for (const r of recs(so + 8, soE)) { if (r.type === T_PPDRAW) drawing = r; else if (r.type === 0x03ef && r.len >= 16) masterId = u32(r.o + 12); }
+    let drawing = null; let masterId = 0; let objFlag = 1;
+    for (const r of recs(so + 8, soE)) { if (r.type === T_PPDRAW) drawing = r; else if (r.type === 0x03ef && r.len >= 16) { masterId = u32(r.o + 12); if (r.len >= 22) objFlag = dv.getUint16(r.o + 20, true) & 1; } }
     if (!drawing) return null;
     const mref = masterRef.get(masterId) !== undefined ? masterRef.get(masterId) : lists[1][0] && lists[1][0].ref; // the slide's master: a persist reference, resolved to its offset
     const moff = mref !== undefined ? persist.get(mref) : undefined;
-    const scheme = schemeOf(so) || schemeOf(moff);
+    let scheme = schemeOf(so) || schemeOf(moff);
     const textsOf = (from, to, depth, out) => { // the texts a shape holds: its own, or placeholder references into the slide list
       let type = 4;
       for (const r of recs(from, to)) {
@@ -294,7 +294,7 @@ export function readPpt(bytes) {
         for (const c of cfs) {
           const x = Math.max(a, c.s); const y = Math.min(b, c.s + c.n); if (y <= x) continue;
           const cf = { ...(ml.cf || {}), ...c.v }; const pt = cf.sz || defPt;
-          const base = { size: Math.round(pt * PX_PT), b: !!cf.b, i: !!cf.i, u: !!cf.u, font: fonts[cf.face] || fonts[0] || 'Arial', color: { hex: txColor(cf.col, '000000'), a: 1 }, ...(cf.pos > 0 ? { sup: true } : cf.pos < 0 ? { sub: true } : {}) };
+          const base = { size: Math.round(pt * PX_PT), b: !!cf.b, i: !!cf.i, u: !!cf.u, font: fonts[cf.face] || fonts[0] || 'Arial', color: { hex: txColor(cf.col, (scheme && scheme[1]) || '000000'), a: 1 }, ...(cf.pos > 0 ? { sup: true } : cf.pos < 0 ? { sub: true } : {}) };
           raw.slice(x, y).split('\v').forEach((piece, k) => {
             if (k) runs.push({ br: true });
             const tx = piece.replace(/\x09/g, '    ').replace(/[\x00-\x08\x0b\x0e-\x1f]/g, ''); if (tx) runs.push({ ...base, text: tx });
@@ -318,9 +318,9 @@ export function readPpt(bytes) {
     };
     const ROOT = { cl: 0, ct: 0, sx: 1 / 6, sy: 1 / 6 };
     const place = (a, xf) => ({ x: (a.l - xf.cl) * xf.sx, y: (a.t - xf.ct) * xf.sy, w: (a.r - a.l) * xf.sx, h: (a.b - a.t) * xf.sy });
-    const used = new Set();
+    const used = new Set(); let skipPh = false;
     const shapeOf = (from, to) => { // one shape container: { sp, props, anchor, group, texts }
-      const o = { type: 0, flags: 0, props: {}, anchor: null, group: null, texts: [] };
+      const o = { type: 0, flags: 0, props: {}, anchor: null, group: null, texts: [], isPh: false };
       for (const r of recs(from, to)) {
         if (r.type === T_SPREC && r.len >= 8) { o.type = dv.getUint16(r.at, true) >> 4; o.flags = u32(r.o + 4); }
         else if (r.type === T_OPT) { const n = dv.getUint16(r.at, true) >> 4; for (let k = 0; k < n && r.o + k * 6 + 6 <= r.e; k++) o.props[dv.getUint16(r.o + k * 6, true) & 0x3fff] = dv.getInt32(r.o + k * 6 + 2, true); }
@@ -328,7 +328,7 @@ export function readPpt(bytes) {
         else if (r.type === T_CANCHOR && r.len >= 16) o.anchor = { t: dv.getInt32(r.o, true), l: dv.getInt32(r.o + 4, true), r: dv.getInt32(r.o + 8, true), b: dv.getInt32(r.o + 12, true) };
         else if (r.type === T_CHANCHOR && r.len >= 16) o.anchor = { l: dv.getInt32(r.o, true), t: dv.getInt32(r.o + 4, true), r: dv.getInt32(r.o + 8, true), b: dv.getInt32(r.o + 12, true) };
         else if (r.type === T_GRPREC && r.len >= 16) o.group = { l: dv.getInt32(r.o, true), t: dv.getInt32(r.o + 4, true), r: dv.getInt32(r.o + 8, true), b: dv.getInt32(r.o + 12, true) };
-        else if (r.type === T_CLIENTTEXT || r.type === T_CLIENTDATA) textsOf(r.o, r.e, 0, o.texts);
+        else if (r.type === T_CLIENTTEXT || r.type === T_CLIENTDATA) { textsOf(r.o, r.e, 0, o.texts); if (r.type === T_CLIENTDATA) for (const c of recs(r.o, r.e)) if (c.type === T_PH) o.isPh = true; }
       }
       return o;
     };
@@ -377,12 +377,39 @@ export function readPpt(bytes) {
           if (first && top === false && r.type === T_SP && recs(r.o, r.e) && [...recs(r.o, r.e)].some((x) => x.type === T_GRPREC)) { first = false; continue; } // the group's own shape
           first = false;
           const sh = shapeOf(r.o, r.e); if (sh.flags & 0x04) continue; // the page's patriarch shape
+          if (skipPh && sh.isPh) continue; // a master's placeholders are layout, not drawing
           const it = item(sh, xf); if (it) out.push(it);
         } else if (r.ver === 15 && r.type >= 0xf000) walk(r.o, r.e, xf, out, top);
       }
     };
-    const items = [];
-    try { walk(drawing.o, drawing.e, ROOT, items, true); } catch { return null; }
+    const bgOf = (rec) => { // the background shape of a drawing: a shape container beside the group, flagged as background
+      const find = (from, to, d) => {
+        for (const r of recs(from, to)) {
+          if (r.type === T_SP && r.ver === 15) { const sh = shapeOf(r.o, r.e); if (sh.flags & 0x400) return sh; }
+          else if (r.ver === 15 && r.type >= 0xf000 && r.type !== T_SPGR && d < 3) { const x = find(r.o, r.e, d + 1); if (x) return x; }
+        }
+        return null;
+      };
+      return find(rec.o, rec.e, 0);
+    };
+    const fillOf = (sh, sc) => { // a solid or two-colour linear fill
+      if (!sh) return null; const P = sh.props; if (P[0x181] === undefined && P[0x180] === undefined) return null;
+      const t = P[0x180] || 0; const c1 = colorOf(P[0x181] !== undefined ? P[0x181] : 0xffffff, sc);
+      if (t >= 4 && t <= 7) { const c2 = colorOf(P[0x183] !== undefined ? P[0x183] : 0xffffff, sc); const a = P[0x18b] !== undefined ? P[0x18b] / 65536 : 0; return { grad: [{ c: { hex: c1, a: 1 }, pos: 0 }, { c: { hex: c2, a: 1 }, pos: 100 }], ang: ((180 - a) % 360 + 360) % 360 }; }
+      return { hex: c1, a: 1 };
+    };
+    const items = []; const own = scheme;
+    let bg = null;
+    try {
+      let mdraw = null; let mscheme = null;
+      if (moff !== undefined && moff + 8 <= ps.length) { for (const r of recs(moff + 8, moff + 8 + u32(moff + 4))) if (r.type === T_PPDRAW) mdraw = r; mscheme = schemeOf(moff); }
+      bg = fillOf(bgOf(drawing), own);
+      if (!bg && mdraw) bg = fillOf(bgOf(mdraw), mscheme || own);
+      if (mdraw && objFlag) { scheme = mscheme || own; skipPh = true; try { walk(mdraw.o, mdraw.e, ROOT, items, true); } catch { items.length = 0; } skipPh = false; scheme = own; } // the master's own shapes, behind the slide's
+      walk(drawing.o, drawing.e, ROOT, items, true);
+    } catch { return null; }
+    if (!bg && own) bg = { hex: own[0], a: 1 };
+    if (out) out.bg = bg;
     void used;
     return items;
   }
@@ -397,10 +424,10 @@ export function readPpt(bytes) {
 
   function load(i) {
     const s = slides[i];
-    const media = {}; const real = shapeItems(s, media);
-    if (real && real.length) return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items: real, media, notes: notesOf.get(s.slideId) || '' };
+    const media = {}; const out = {}; const real = shapeItems(s, media, out);
+    if (real && real.length) return { w: W, h: H, bg: out.bg || { hex: 'FFFFFF', a: 1 }, items: real, media, notes: notesOf.get(s.slideId) || '' };
     const texts = slideTexts(s); // a slide without a readable drawing: its texts laid out by size
-    const items = [];
+    const items = real ? [...real] : []; // the master's shapes stay behind the laid-out texts
     const ti = texts.findIndex((t) => t.type === 0 || t.type === 6);
     const title = ti >= 0 ? texts[ti] : null;
     if (title) {
@@ -419,7 +446,7 @@ export function readPpt(bytes) {
       const y = title ? Math.round(H * 0.28) : Math.round(H * 0.06);
       items.push({ role: 'body', ...box(Math.round(W * 0.06), y, Math.round(W * 0.88), Math.round(H - y - H * 0.06), 't', paras) });
     }
-    return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items, media: {}, notes: notesOf.get(s.slideId) || '' };
+    return { w: W, h: H, bg: out.bg || { hex: 'FFFFFF', a: 1 }, items, media, notes: notesOf.get(s.slideId) || '' };
   }
-  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and styled text, and JPEG, PNG and bitmap pictures: other pictures, master shapes and backgrounds of this old PowerPoint file are not shown.' };
+  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and styled text, JPEG, PNG and bitmap pictures, and solid or two-colour backgrounds with the shapes of the master: other pictures, picture backgrounds and other fills of this old PowerPoint file are not shown.' };
 }

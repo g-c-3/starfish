@@ -198,8 +198,13 @@ const GRP = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:n
 const phSp = (id, name, ph, xfrm, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${ph}/></p:nvPr></p:nvSpPr><p:spPr>${xfrm}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
 const emu = (px) => Math.round(px * 9525);
 
+const bgX = (bg) => { // a slide background: a solid colour or a two-colour linear fill; white is the file's default
+  if (!bg || (bg.hex && bg.hex.toUpperCase() === 'FFFFFF' && !bg.grad)) return '';
+  const fill = bg.grad ? `<a:gradFill rotWithShape="1"><a:gsLst>${bg.grad.map((g) => `<a:gs pos="${Math.round(g.pos * 1000)}"><a:srgbClr val="${g.c.hex}"/></a:gs>`).join('')}</a:gsLst><a:lin ang="${Math.round((((bg.ang - 90) % 360 + 360) % 360) * 60000)}" scaled="0"/></a:gradFill>` : `<a:solidFill><a:srgbClr val="${bg.hex}"/></a:solidFill>`;
+  return `<p:bg><p:bgPr>${fill}<a:effectLst/></p:bgPr></p:bg>`;
+};
 export function pptToPptx(model) {
-  const warnings = ['Pictures other than JPEG, PNG and bitmap, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and styled text (numbered bullets become plain bullets).'];
+  const warnings = ['Pictures other than JPEG, PNG and bitmap, picture backgrounds and other fills of the old file are not carried; each slide holds its background, the shapes of its master and its own shapes with their position, fill, line and styled text (numbered bullets become plain bullets).'];
   const W = emu(model.size.w); const H = emu(model.size.h);
   const xf = (x, y, w, h) => `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
   const slides = []; const notes = []; const slideRels = []; const picFiles = new Map();
@@ -242,7 +247,7 @@ export function pptToPptx(model) {
       return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${title ? 'Title' : 'Content'} ${id}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${title ? 'type="title"' : 'idx="1"'}/></p:nvPr></p:nvSpPr><p:spPr>${xf(emu(it.x), emu(it.y), emu(it.w), emu(it.h))}</p:spPr><p:txBody><a:bodyPr${it.text.anchor === 'ctr' ? ' anchor="ctr"' : ''}><a:normAutofit/></a:bodyPr><a:lstStyle/>${ps}</p:txBody></p:sp>`;
     });
     slideRels.push(rel);
-    slides.push(`${XML}<p:sld ${NSP}><p:cSld><p:spTree>${GRP}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
+    slides.push(`${XML}<p:sld ${NSP}><p:cSld>${bgX(s.bg)}<p:spTree>${GRP}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
     notes.push(s.notes || '');
   }
   if (!slides.length) throw new Error('This presentation has no slides to copy.');
