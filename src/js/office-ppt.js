@@ -1,7 +1,8 @@
-// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515). Follows the newest edit
+// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516). Follows the newest edit
 // of the "PowerPoint Document" stream to the slide list and the slide objects, and returns each slide's shapes (position, fill, line,
-// text) and notes as the same model as readPptx. Text sizes are fitted to the box; no text styles, pictures or master shapes yet: the
-// model carries a notice that says so.
+// text) and notes as the same model as readPptx. Text runs carry their style (character runs and paragraph runs of the style atom,
+// master text styles by level, fonts, bullets, alignment, indents, spacing); a title or body that overflows its box is scaled down.
+// No pictures or master shapes yet: the model carries a notice that says so.
 // Password-protected files are refused.
 
 import { OfficeError } from './office-read.js';
@@ -17,6 +18,8 @@ const T_USEREDIT = 0x0ff5; const T_PDIR = 0x1772; const T_HEADER = 0x0f9f; const
 const T_CLIENTTEXT = 0xf00d; const T_CLIENTDATA = 0xf011;
 const T_PPDRAW = 0x040c; const T_SCHEME = 0x07f0; const T_SPGR = 0xf003; const T_SP = 0xf004; const T_SPREC = 0xf00a; const T_OPT = 0xf00b; const T_GRPREC = 0xf009;
 const T_CANCHOR = 0xf010; const T_CHANCHOR = 0xf00f;
+const T_STYLE = 0x0fa1; const T_RULER = 0x0fa6; const T_MSTYLE = 0x0fa3; const T_ENV = 0x03f2; const T_FONTS = 0x07d5; const T_FONT = 0x0fb7;
+const BODYT = [1, 5, 7, 8];
 const GEOM = { 1: 'rect', 2: 'roundRect', 3: 'ellipse', 4: 'diamond', 5: 'triangle', 6: 'rtTriangle', 7: 'parallelogram', 8: 'trapezoid', 9: 'hexagon', 10: 'octagon', 20: 'line', 32: 'line', 33: 'line', 202: 'rect' };
 
 export function isPpt(bytes) { return isOle2(bytes); }
@@ -88,8 +91,14 @@ export function readPpt(bytes) {
   if (doc.e > ps.length) throw new OfficeError('This file is protected or damaged.');
   let W = 960; let H = 720;
   const lists = { 0: [], 1: [], 2: [] };
+  const fonts = []; const envStyles = new Map();
   for (const r of recs(doc.o, doc.e)) {
-    if (r.type === T_DOCATOM && r.len >= 8) { W = Math.round(u32(r.o) / 6) || 960; H = Math.round(u32(r.o + 4) / 6) || 720; }
+    if (r.type === T_ENV) { // the font collection and the default text styles
+      for (const c of recs(r.o, r.e)) {
+        if (c.type === T_FONTS) { for (const f of recs(c.o, c.e)) if (f.type === T_FONT && f.len >= 64) { let n = ''; for (let k = 0; k < 32; k++) { const ch = dv.getUint16(f.o + k * 2, true); if (!ch) break; n += String.fromCharCode(ch); } fonts.push(n); } }
+        else if (c.type === T_MSTYLE) masterStyle(c, envStyles);
+      }
+    } else if (r.type === T_DOCATOM && r.len >= 8) { W = Math.round(u32(r.o) / 6) || 960; H = Math.round(u32(r.o + 4) / 6) || 720; }
     else if (r.type === T_SLWT) {
       const inst = dv.getUint16(r.at, true) >> 4;
       if (inst !== 0 && inst !== 1 && inst !== 2) continue;
@@ -98,6 +107,8 @@ export function readPpt(bytes) {
         if (c.type === T_PERSIST && c.len >= 16) { cur = { ref: u32(c.o), slideId: u32(c.o + 12), texts: [] }; lists[inst].push(cur); type = 4; }
         else if (c.type === T_HEADER && c.len >= 4) type = u32(c.o);
         else if ((c.type === T_CHARS || c.type === T_BYTES) && cur) cur.texts.push({ type, text: decode(c) });
+        else if (c.type === T_STYLE && cur && cur.texts.length) cur.texts[cur.texts.length - 1].style = c;
+        else if (c.type === T_RULER && cur && cur.texts.length) cur.texts[cur.texts.length - 1].ruler = c;
       }
     }
   }
@@ -125,6 +136,74 @@ export function readPpt(bytes) {
   }
 
 
+  // ---- text styles: the paragraph and character runs of a text (style atom), the master styles by text type and level, the ruler ----
+  const i16 = (o) => dv.getInt16(o, true); const u16 = (o) => dv.getUint16(o, true);
+  function readPF(p) { // one paragraph property block: the mask, then the fields it names in a fixed order; margins are 1/576 inch
+    const m = u32(p); p += 4; const v = {};
+    if (m & 0x0f) { const f = u16(p); p += 2; if (m & 1) v.bu = !!(f & 1); }
+    if (m & 0x80) { v.ch = u16(p); p += 2; }
+    if (m & 0x10) { v.bf = u16(p); p += 2; }
+    if (m & 0x40) { v.bus = i16(p); p += 2; }
+    if (m & 0x20) { v.buc = u32(p); p += 4; }
+    if (m & 0x800) { v.al = u16(p); p += 2; }
+    if (m & 0x1000) { v.ln = i16(p); p += 2; }
+    if (m & 0x2000) { v.sb = i16(p); p += 2; }
+    if (m & 0x4000) { v.sa = i16(p); p += 2; }
+    if (m & 0x100) { v.ml = i16(p); p += 2; }
+    if (m & 0x400) { v.ind = i16(p); p += 2; }
+    if (m & 0x8000) p += 2;
+    if (m & 0x100000) p += 2 + u16(p) * 4;
+    if (m & 0x10000) p += 2;
+    if (m & 0xe0000) p += 2;
+    if (m & 0x200000) p += 2;
+    return { v, p };
+  }
+  function readCF(p) { // one character property block
+    const m = u32(p); p += 4; const v = {};
+    if (m & 0x3fff) { const f = u16(p); p += 2; if (m & 1) v.b = !!(f & 1); if (m & 2) v.i = !!(f & 2); if (m & 4) v.u = !!(f & 4); }
+    if (m & 0x10000) { v.face = u16(p); p += 2; }
+    if (m & 0x200000) p += 2;
+    if (m & 0x400000) p += 2;
+    if (m & 0x800000) p += 2;
+    if (m & 0x20000) { v.sz = u16(p); p += 2; }
+    if (m & 0x40000) { v.col = u32(p); p += 4; }
+    if (m & 0x80000) { v.pos = i16(p); p += 2; }
+    return { v, p };
+  }
+  function styleRuns(a, len) { // the style atom of a text: paragraph runs, then character runs; each run counts its characters, the last one includes the paragraph mark
+    try {
+      const pf = []; const cf = []; let p = a.o; let n = 0; let st = 0;
+      while (n < len + 1 && p + 10 <= a.e && pf.length < 5000) { const c = u32(p); const lvl = u16(p + 4); const r = readPF(p + 6); pf.push({ n: c, s: st, lvl: Math.min(lvl, 4), v: r.v }); st += c; n += c; p = r.p; if (!c) break; }
+      n = 0; st = 0;
+      while (n < len + 1 && p + 8 <= a.e && cf.length < 5000) { const c = u32(p); const r = readCF(p + 4); cf.push({ n: c, s: st, v: r.v }); st += c; n += c; p = r.p; if (!c) break; }
+      return { pf, cf };
+    } catch { return null; }
+  }
+  function readRuler(a) { // per-level text start and first-line margins of a text box; a block that does not end where its record does is ignored
+    try {
+      let p = a.o; const m = u32(p); p += 4; const L = []; const I = [];
+      if (m & 1) p += 2; if (m & 2) p += 2; if (m & 4) p += 2 + u16(p) * 4;
+      for (let k = 0; k < 5; k++) if (m & (8 << k)) { L[k] = i16(p); p += 2; }
+      for (let k = 0; k < 5; k++) if (m & (0x100 << k)) { I[k] = i16(p); p += 2; }
+      return p === a.e ? { L, I } : null;
+    } catch { return null; }
+  }
+  function masterStyle(r, map) { // a master text style atom: five levels of paragraph and character properties for one text type
+    try {
+      const inst = u16(r.at) >> 4; let p = r.o; const n = u16(p); p += 2; const lv = [];
+      for (let k = 0; k < Math.min(n, 5); k++) { if (inst >= 5) p += 2; const a = readPF(p); const c = readCF(a.p); p = c.p; lv.push({ pf: a.v, cf: c.v }); }
+      if (lv.length) map.set(inst, lv);
+    } catch { /* a style this reader cannot follow: defaults apply */ }
+  }
+  const masterStyles = new Map();
+  const stylesOf = (off) => { // the text styles of a master container, by text type
+    if (off === undefined) return new Map();
+    if (!masterStyles.has(off)) { const m = new Map(); if (off + 8 <= ps.length) for (const r of recs(off + 8, off + 8 + u32(off + 4))) if (r.type === T_MSTYLE) masterStyle(r, m); masterStyles.set(off, m); }
+    return masterStyles.get(off);
+  };
+  const BULLETS = { 0x6c: '\u25cf', 0x6e: '\u25a0', 0x71: '\u2751', 0x76: '\u2756', 0xa7: '\u25aa', 0xd8: '\u27a2', 0xfc: '\u2713', 0xb7: '\u2022', 0x9f: '\u2022', 0x6f: '\u25a1', 0xa8: '\u25a1' };
+  const bulletOf = (ch, face) => { const sym = /wingdings|symbol|webdings/i.test(face || ''); if (sym) return BULLETS[ch & 0xff] || '\u2022'; return ch ? String.fromCharCode(ch) : '\u2022'; };
+
   // ---- shapes: the slide's drawing (Escher records): per shape its box, fill, line and text; boxes are in 1/576 inch, six units to a pixel ----
   const schemeOf = (so) => { // the eight scheme colours of a slide or master container
     if (so === undefined || so + 8 > ps.length) return null;
@@ -138,14 +217,6 @@ export function readPpt(bytes) {
     if (fl & 0x10) return (v & 0xff) === 0xf0 ? 'FFFFFF' : '000000';
     return [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   };
-  const fitPt = (lines, w, h, maxPt) => { // the largest size from maxPt down to 10 at which the lines fit the box
-    for (let pt = maxPt; pt > 10; pt -= 2) {
-      const px = pt * PX_PT; let n = 0;
-      for (const l of lines) n += Math.max(1, Math.ceil((l.length * px * 0.5) / Math.max(20, w - 20)));
-      if (n * px * 1.2 <= h - 8) return pt;
-    }
-    return 10;
-  };
   function shapeItems(s) {
     const so = persist.get(s.ref);
     if (so === undefined || so + 8 > ps.length || dv.getUint16(so + 2, true) !== T_SLIDE) return null;
@@ -153,16 +224,61 @@ export function readPpt(bytes) {
     let drawing = null; let masterId = 0;
     for (const r of recs(so + 8, soE)) { if (r.type === T_PPDRAW) drawing = r; else if (r.type === 0x03ef && r.len >= 16) masterId = u32(r.o + 12); }
     if (!drawing) return null;
-    const scheme = schemeOf(so) || schemeOf(masterRef.get(masterId) !== undefined ? masterRef.get(masterId) : lists[1][0] && lists[1][0].ref);
+    const mref = masterRef.get(masterId) !== undefined ? masterRef.get(masterId) : lists[1][0] && lists[1][0].ref; // the slide's master: a persist reference, resolved to its offset
+    const moff = mref !== undefined ? persist.get(mref) : undefined;
+    const scheme = schemeOf(so) || schemeOf(moff);
     const textsOf = (from, to, depth, out) => { // the texts a shape holds: its own, or placeholder references into the slide list
       let type = 4;
       for (const r of recs(from, to)) {
         if ((r.ver === 15 || r.type === T_CLIENTTEXT || r.type === T_CLIENTDATA) && depth < 8) textsOf(r.o, r.e, depth + 1, out);
-        else if (r.type === T_REF && r.len >= 4) { const t = s.texts[u32(r.o)]; if (t) out.push(t); }
+        else if (r.type === T_REF && r.len >= 4) { const t = s.texts[u32(r.o)]; if (t) { t.ph = true; out.push(t); } }
         else if (r.type === T_HEADER && r.len >= 4) type = u32(r.o);
         else if (r.type === T_CHARS || r.type === T_BYTES) out.push({ type, text: decode(r) });
+        else if ((r.type === T_STYLE || r.type === T_RULER) && out.length) { const last = out[out.length - 1]; const k = r.type === T_STYLE ? 'style' : 'ruler'; if (!last[k]) last[k] = r; }
       }
       return out;
+    };
+    const mstyles = stylesOf(moff);
+    const levelsOf = (type) => mstyles.get(type) || mstyles.get(type === 0 || type === 6 ? 0 : BODYT.includes(type) ? 1 : 4) || envStyles.get(type) || envStyles.get(type === 0 || type === 6 ? 0 : BODYT.includes(type) ? 1 : 4) || [];
+    const txColor = (v, dflt) => { // a text colour: RGB (index byte 0xfe), or an index into the scheme
+      if (v === undefined) return dflt; const idx = v >>> 24;
+      if (idx === 0xfe) return [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+      if (idx < 8 && scheme) return scheme[idx] || dflt; return dflt;
+    };
+    const wholeLen = (d) => d.n + d.s;
+    const spanAt = (runs, i) => { for (const r of runs) if (i >= r.s && i < r.s + r.n) return r; return runs[runs.length - 1] || null; };
+    const styled = (t, defPt) => { // the paragraphs of one text: paragraph properties from the master level, the ruler, then the text's own run; runs split at character-run edges
+      const raw = t.text; const sr = t.style ? styleRuns(t.style, raw.length) : null; const lv = levelsOf(t.type); const ru = t.ruler ? readRuler(t.ruler) : null;
+      const pfs = sr && sr.pf.length ? sr.pf : [{ n: raw.length + 1, s: 0, lvl: 0, v: {} }]; const cfs = sr && sr.cf.length ? sr.cf : [{ n: raw.length + 1, s: 0, v: {} }];
+      const out = []; let st = 0;
+      const mkPara = (a, b) => {
+        const pr = spanAt(pfs, a); const ml = lv[pr.lvl] || {}; const rv = ru ? { ...(ru.L[pr.lvl] !== undefined ? { ml: ru.L[pr.lvl] } : {}), ...(ru.I[pr.lvl] !== undefined ? { ind: ru.I[pr.lvl] } : {}) } : {};
+        const pf = { ...ml.pf, ...rv, ...pr.v };
+        const runs = [];
+        for (const c of cfs) {
+          const x = Math.max(a, c.s); const y = Math.min(b, c.s + c.n); if (y <= x) continue;
+          const cf = { ...(ml.cf || {}), ...c.v }; const pt = cf.sz || defPt;
+          const base = { size: Math.round(pt * PX_PT), b: !!cf.b, i: !!cf.i, u: !!cf.u, font: fonts[cf.face] || fonts[0] || 'Arial', color: { hex: txColor(cf.col, '000000'), a: 1 }, ...(cf.pos > 0 ? { sup: true } : cf.pos < 0 ? { sub: true } : {}) };
+          raw.slice(x, y).split('\v').forEach((piece, k) => {
+            if (k) runs.push({ br: true });
+            const tx = piece.replace(/\x09/g, '    ').replace(/[\x00-\x08\x0b\x0e-\x1f]/g, ''); if (tx) runs.push({ ...base, text: tx });
+          });
+        }
+        const first = runs.find((r) => !r.br); const size = first ? first.size : Math.round(((ml.cf && ml.cf.sz) || defPt) * PX_PT);
+        const hasBu = pf.bu !== undefined ? pf.bu : BODYT.includes(t.type); const bulletOn = hasBu && !!first;
+        const left = pf.ml !== undefined ? pf.ml / 6 : hasBu ? 24 : 0; const firstLine = pf.ind !== undefined ? pf.ind / 6 : hasBu ? 0 : left;
+        const sp = (v) => (v === undefined ? undefined : v >= 0 ? (v ? { pct: v / 100 } : undefined) : v <= -3 ? { px: -v / 6 } : undefined);
+        const bullet = bulletOn ? { text: bulletOf(pf.ch, fonts[pf.bf]), color: pf.buc !== undefined ? { hex: txColor(pf.buc, '000000'), a: 1 } : first.color, ...(pf.bus > 0 ? { size: pf.bus / 100 } : {}) } : null;
+        return { algn: [, 'center', 'right', 'justify'][pf.al] || (t.type === 6 && pf.al === undefined ? 'center' : 'left'), marL: left, indent: firstLine - left, sb: sp(pf.sb), sa: sp(pf.sa), ln: sp(pf.ln), bullet, runs, size };
+      };
+      for (let i = 0; i <= raw.length; i++) if (i === raw.length || raw[i] === '\r') { out.push(mkPara(st, i)); st = i + 1; }
+      while (out.length && !out[out.length - 1].runs.length) out.pop();
+      return out;
+    };
+    void wholeLen;
+    const fitScale = (paras, w, h) => { // a title or body that overflows its box is scaled down, as the editor's shrink on overflow does
+      const est = (k) => { let sum = 0; for (const p of paras) { const sz = p.size * k; const n = p.runs.reduce((c, r) => c + (r.text ? r.text.length : 0), 0); const cpl = Math.max(1, Math.floor(Math.max(20, w - p.marL) / (sz * 0.5))); const lh = p.ln ? (p.ln.pct !== undefined ? p.ln.pct * 1.2 : p.ln.px / sz) : 1.2; sum += Math.max(1, Math.ceil(n / cpl)) * sz * lh + (p.sb ? (p.sb.px !== undefined ? p.sb.px : p.sb.pct * sz) : 0) + (p.sa ? (p.sa.px !== undefined ? p.sa.px : p.sa.pct * sz) : 0); } return sum; };
+      let k = 1; while (k > 0.5 && est(k) > h - 4) k = Math.round((k - 0.05) * 100) / 100; return k;
     };
     const ROOT = { cl: 0, ct: 0, sx: 1 / 6, sy: 1 / 6 };
     const place = (a, xf) => ({ x: (a.l - xf.cl) * xf.sx, y: (a.t - xf.ct) * xf.sy, w: (a.r - a.l) * xf.sx, h: (a.b - a.t) * xf.sy });
@@ -190,13 +306,11 @@ export function readPpt(bytes) {
       const texts = sh.texts.filter((t) => { const k = t.text; return k && k.replace(/[\x00-\x08\x0e-\x1f\r\v\n\x09 ]/g, ''); });
       let text = null; let role;
       if (texts.length) {
-        const lines = []; const paras = [];
-        const head = texts[0]; const isTitle = head.type === 0 || head.type === 6; const isBody = [1, 5, 7, 8].includes(head.type);
-        for (const t of texts) for (const l of clean(t.text)) lines.push({ l, t });
-        const pt = fitPt(lines.map((x) => x.l), bx.w, bx.h, isTitle ? 40 : isBody ? 28 : 18);
-        for (const x of lines) paras.push(para(x.l, Math.round(pt * PX_PT), x.t.type === 6 ? 'center' : 'left', [1, 5, 7, 8].includes(x.t.type)));
+        const head = texts[0]; const isTitle = head.type === 0 || head.type === 6; const isBody = BODYT.includes(head.type);
         const ins = (id, d) => (P[id] !== undefined ? P[id] : d) / 9525;
+        const paras = []; for (const t of texts) paras.push(...styled(t, isTitle ? 40 : isBody ? 28 : 18));
         const an = P[0x87]; text = { anchor: an === 1 || an === 4 ? 'ctr' : an === 2 || an === 5 ? 'b' : an === 0 || an === 3 ? 't' : isTitle ? 'ctr' : 't', l: ins(0x81, 91440), r: ins(0x83, 91440), t: ins(0x82, 45720), b: ins(0x84, 45720), wrap: P[0x85] !== 2, scale: 1, paras };
+        if (isTitle || isBody || texts.some((t) => t.ph)) text.scale = fitScale(paras, bx.w - text.l - text.r, bx.h - text.t - text.b);
         if (isTitle) role = 'title'; else if (isBody) role = 'body';
       }
       const geom = GEOM[sh.type];
@@ -264,5 +378,5 @@ export function readPpt(bytes) {
     }
     return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items, media: {}, notes: notesOf.get(s.slideId) || '' };
   }
-  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and text only: text styles, pictures, master shapes and backgrounds of this old PowerPoint file are not shown.' };
+  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and styled text: pictures, master shapes and backgrounds of this old PowerPoint file are not shown.' };
 }

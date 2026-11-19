@@ -199,7 +199,7 @@ const phSp = (id, name, ph, xfrm, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" 
 const emu = (px) => Math.round(px * 9525);
 
 export function pptToPptx(model) {
-  const warnings = ['Text styles, pictures, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and text.'];
+  const warnings = ['Pictures, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and styled text (numbered bullets become plain bullets).'];
   const W = emu(model.size.w); const H = emu(model.size.h);
   const xf = (x, y, w, h) => `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
   const slides = []; const notes = [];
@@ -209,11 +209,18 @@ export function pptToPptx(model) {
     addFlat(s.items, 0, 0);
     const shapes = flat.filter((it) => (it.text && it.text.paras && it.text.paras.length) || it.fill || it.line).map((it) => {
       id += 1; const title = it.role === 'title';
+      const k = (it.text && it.text.scale) || 1;
       const ps = !(it.text && it.text.paras) ? '' : it.text.paras.map((p) => {
-        const run = p.runs && p.runs[0] ? p.runs[0] : { text: '', size: p.size || 24 }; const sz = Math.max(100, Math.round((run.size || p.size || 24) * 0.75 * 100));
-        const algn = p.algn === 'center' ? 'ctr' : p.algn === 'right' ? 'r' : 'l';
-        const bu = p.bullet ? `<a:buChar char="${esc(p.bullet.text || '\u2022')}"/>` : '<a:buNone/>';
-        return `<a:p><a:pPr algn="${algn}" marL="${p.bullet ? emu(p.marL || 24) : 0}" indent="${p.bullet ? emu(p.indent || -24) : 0}">${bu}</a:pPr><a:r><a:rPr lang="en-US" sz="${sz}" dirty="0"/><a:t>${esc(p.runs ? p.runs.map((r) => r.text).join('') : '')}</a:t></a:r></a:p>`;
+        const algn = p.algn === 'center' ? 'ctr' : p.algn === 'right' ? 'r' : p.algn === 'justify' ? 'just' : 'l';
+        const spc = (tag, v) => (v ? `<a:${tag}>${v.px !== undefined ? `<a:spcPts val="${Math.round(v.px * 75)}"/>` : `<a:spcPct val="${Math.round(v.pct * 100000)}"/>`}</a:${tag}>` : '');
+        const bu = p.bullet ? `${p.bullet.color ? `<a:buClr><a:srgbClr val="${p.bullet.color.hex}"/></a:buClr>` : ''}${p.bullet.size ? `<a:buSzPct val="${Math.round(p.bullet.size * 100000)}"/>` : ''}<a:buFont typeface="Arial"/><a:buChar char="${esc(p.bullet.text || '\u2022')}"/>` : '<a:buNone/>';
+        const runs = (p.runs || []).map((r) => {
+          if (r.br) return '<a:br/>';
+          const rsz = Math.max(100, Math.round((r.size || p.size || 24) * k * 0.75 * 2) * 50);
+          return `<a:r><a:rPr lang="en-US" sz="${rsz}"${r.b ? ' b="1"' : ''}${r.i ? ' i="1"' : ''}${r.u ? ' u="sng"' : ''}${r.sup ? ' baseline="30000"' : r.sub ? ' baseline="-25000"' : ''} dirty="0">${r.color ? `<a:solidFill><a:srgbClr val="${r.color.hex}"/></a:solidFill>` : ''}${r.font ? `<a:latin typeface="${esc(r.font)}"/>` : ''}</a:rPr><a:t>${esc(r.text || '')}</a:t></a:r>`;
+        }).join('');
+        const end = runs ? '' : `<a:endParaRPr lang="en-US" sz="${Math.max(100, Math.round((p.size || 24) * k * 0.75 * 2) * 50)}" dirty="0"/>`;
+        return `<a:p><a:pPr algn="${algn}" marL="${emu(p.marL || 0)}" indent="${emu(p.indent || 0)}">${spc('lnSpc', p.ln)}${spc('spcBef', p.sb)}${spc('spcAft', p.sa)}${bu}</a:pPr>${runs}${end}</a:p>`;
       }).join('');
       if (!it.role) { // a text box or a drawn shape: no placeholder, its own geometry, fill and line
         const fillX = it.fill ? `<a:solidFill><a:srgbClr val="${it.fill.hex}"/></a:solidFill>` : '<a:noFill/>';
