@@ -199,16 +199,26 @@ const phSp = (id, name, ph, xfrm, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" 
 const emu = (px) => Math.round(px * 9525);
 
 export function pptToPptx(model) {
-  const warnings = ['Pictures, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and styled text (numbered bullets become plain bullets).'];
+  const warnings = ['Pictures other than JPEG, PNG and bitmap, master shapes and backgrounds of the old file are not carried; each slide holds its shapes with their position, fill, line and styled text (numbered bullets become plain bullets).'];
   const W = emu(model.size.w); const H = emu(model.size.h);
   const xf = (x, y, w, h) => `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
-  const slides = []; const notes = [];
+  const slides = []; const notes = []; const slideRels = []; const picFiles = new Map();
   for (let i = 0; i < model.count; i++) {
     const s = model.load(i); let id = 1;
-    const flat = []; const addFlat = (list, ox, oy) => { for (const it of list || []) { if (it.t === 'group') addFlat(it.items, ox + it.x, oy + it.y); else if (it.t === 'shape') flat.push({ ...it, x: it.x + ox, y: it.y + oy }); } };
+    const flat = []; const addFlat = (list, ox, oy) => { for (const it of list || []) { if (it.t === 'group') addFlat(it.items, ox + it.x, oy + it.y); else if (it.t === 'shape' || it.t === 'pic') flat.push({ ...it, x: it.x + ox, y: it.y + oy }); } };
     addFlat(s.items, 0, 0);
-    const shapes = flat.filter((it) => (it.text && it.text.paras && it.text.paras.length) || it.fill || it.line).map((it) => {
+    const rel = [['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']];
+    const shapes = flat.filter((it) => it.t === 'pic' || (it.text && it.text.paras && it.text.paras.length) || it.fill || it.line).map((it) => {
       id += 1; const title = it.role === 'title';
+      if (it.t === 'pic') { // a picture: its bytes become a media part, shared by the pictures of one slide that use the same image
+        const m = (s.media || {})[it.path]; if (!m) return '';
+        const key = `${i}:${it.path}`; if (!picFiles.has(key)) picFiles.set(key, { name: `image${picFiles.size + 1}.${it.path.slice(it.path.lastIndexOf('.') + 1)}`, bytes: m.bytes });
+        const rid = `rIdP${rel.length}`; rel.push([rid, 'image', `../media/${picFiles.get(key).name}`]);
+        const c = it.crop || {}; const src = c.l || c.t || c.r || c.b ? `<a:srcRect l="${Math.round((c.l || 0) * 1000)}" t="${Math.round((c.t || 0) * 1000)}" r="${Math.round((c.r || 0) * 1000)}" b="${Math.round((c.b || 0) * 1000)}"/>` : '';
+        const ln = it.line ? `<a:ln w="${Math.round(it.line.w * 9525)}"><a:solidFill><a:srgbClr val="${it.line.color.hex}"/></a:solidFill></a:ln>` : '';
+        const rot = it.rot ? ` rot="${Math.round(it.rot * 60000)}"` : '';
+        return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Picture ${id}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/>${src}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm${rot}${it.fh ? ' flipH="1"' : ''}${it.fv ? ' flipV="1"' : ''}><a:off x="${emu(it.x)}" y="${emu(it.y)}"/><a:ext cx="${emu(it.w)}" cy="${emu(it.h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${ln}</p:spPr></p:pic>`;
+      }
       const k = (it.text && it.text.scale) || 1;
       const ps = !(it.text && it.text.paras) ? '' : it.text.paras.map((p) => {
         const algn = p.algn === 'center' ? 'ctr' : p.algn === 'right' ? 'r' : p.algn === 'justify' ? 'just' : 'l';
@@ -231,6 +241,7 @@ export function pptToPptx(model) {
       }
       return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${title ? 'Title' : 'Content'} ${id}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph ${title ? 'type="title"' : 'idx="1"'}/></p:nvPr></p:nvSpPr><p:spPr>${xf(emu(it.x), emu(it.y), emu(it.w), emu(it.h))}</p:spPr><p:txBody><a:bodyPr${it.text.anchor === 'ctr' ? ' anchor="ctr"' : ''}><a:normAutofit/></a:bodyPr><a:lstStyle/>${ps}</p:txBody></p:sp>`;
     });
+    slideRels.push(rel);
     slides.push(`${XML}<p:sld ${NSP}><p:cSld><p:spTree>${GRP}${shapes.join('')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
     notes.push(s.notes || '');
   }
@@ -240,7 +251,7 @@ export function pptToPptx(model) {
   const layout = `${XML}<p:sldLayout ${NSP} type="obj" preserve="1"><p:cSld name="Title and Content"><p:spTree>${GRP}${phSp(2, 'Title 1', 'type="title"', '', 'Click to edit Master title style')}${phSp(3, 'Content Placeholder 2', 'idx="1"', '', 'Click to edit Master text styles')}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`;
   const notesMaster = `${XML}<p:notesMaster ${NSP}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree>${GRP}<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg" idx="2"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="1143000"/><a:ext cx="5486400" cy="3086100"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="12700"><a:solidFill><a:prstClr val="black"/></a:solidFill></a:ln></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" sz="quarter" idx="3"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4400550"/><a:ext cx="5486400" cy="3600450"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Click to edit Master text styles</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:notesStyle><a:lvl1pPr marL="0" algn="l"><a:defRPr sz="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:defRPr></a:lvl1pPr></p:notesStyle></p:notesMaster>`;
   const files = {
-    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml']], [['/ppt/presentation.xml', `${PML}.presentation.main+xml`], ['/ppt/slideMasters/slideMaster1.xml', `${PML}.slideMaster+xml`], ['/ppt/slideLayouts/slideLayout1.xml', `${PML}.slideLayout+xml`], ['/ppt/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'], ['/ppt/theme/theme2.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'], ['/ppt/notesMasters/notesMaster1.xml', `${PML}.notesMaster+xml`], ...slides.map((_, i) => [`/ppt/slides/slide${i + 1}.xml`, `${PML}.slide+xml`])]),
+    '[Content_Types].xml': ct([['rels', RELS_T], ['xml', 'application/xml'], ...[...new Set([...picFiles.values()].map((x) => x.name.slice(x.name.lastIndexOf('.') + 1)))].map((e) => [e, { jpg: 'image/jpeg', png: 'image/png', bmp: 'image/bmp' }[e]])], [['/ppt/presentation.xml', `${PML}.presentation.main+xml`], ['/ppt/slideMasters/slideMaster1.xml', `${PML}.slideMaster+xml`], ['/ppt/slideLayouts/slideLayout1.xml', `${PML}.slideLayout+xml`], ['/ppt/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'], ['/ppt/theme/theme2.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'], ['/ppt/notesMasters/notesMaster1.xml', `${PML}.notesMaster+xml`], ...slides.map((_, i) => [`/ppt/slides/slide${i + 1}.xml`, `${PML}.slide+xml`])]),
     '_rels/.rels': rels([['rId1', 'officeDocument', 'ppt/presentation.xml']]),
     'ppt/presentation.xml': `${XML}<p:presentation ${NSP}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:notesMasterIdLst><p:notesMasterId r:id="rId2"/></p:notesMasterIdLst><p:sldIdLst>${slides.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 4}"/>`).join('')}</p:sldIdLst><p:sldSz cx="${W}" cy="${H}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`,
     'ppt/_rels/presentation.xml.rels': rels([['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml'], ['rId2', 'notesMaster', 'notesMasters/notesMaster1.xml'], ['rId3', 'theme', 'theme/theme1.xml'], ...slides.map((_, i) => [`rId${i + 4}`, 'slide', `slides/slide${i + 1}.xml`])]),
@@ -249,7 +260,8 @@ export function pptToPptx(model) {
     'ppt/notesMasters/notesMaster1.xml': notesMaster, 'ppt/notesMasters/_rels/notesMaster1.xml.rels': rels([['rId1', 'theme', '../theme/theme2.xml']]),
     'ppt/theme/theme1.xml': THEME, 'ppt/theme/theme2.xml': THEME
   };
-  slides.forEach((x, i) => { files[`ppt/slides/slide${i + 1}.xml`] = x; files[`ppt/slides/_rels/slide${i + 1}.xml.rels`] = rels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml']]); });
+  slides.forEach((x, i) => { files[`ppt/slides/slide${i + 1}.xml`] = x; files[`ppt/slides/_rels/slide${i + 1}.xml.rels`] = rels(slideRels[i]); });
+  for (const p of picFiles.values()) files[`ppt/media/${p.name}`] = p.bytes;
   let bytes = zip(files);
   if (notes.some((n) => n.trim())) { // notes are written by the slide editor, which makes the notes parts
     try { const eng = openPptx(bytes); notes.forEach((n, i) => { if (n.trim()) eng.setNotes(i, n); }); bytes = eng.toBytes(); } catch { warnings.push('The notes of the old file could not be carried.'); }

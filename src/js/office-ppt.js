@@ -1,8 +1,8 @@
-// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516). Follows the newest edit
+// office-ppt.js — view-only reader for ppt, the PowerPoint 97 to 2003 format (Decisions 451, 456, 515, 516, 517). Follows the newest edit
 // of the "PowerPoint Document" stream to the slide list and the slide objects, and returns each slide's shapes (position, fill, line,
 // text) and notes as the same model as readPptx. Text runs carry their style (character runs and paragraph runs of the style atom,
 // master text styles by level, fonts, bullets, alignment, indents, spacing); a title or body that overflows its box is scaled down.
-// No pictures or master shapes yet: the model carries a notice that says so.
+// Pictures (JPEG, PNG, bitmap) come from the picture store of the drawing group and the "Pictures" stream. No master shapes yet: the model carries a notice that says so.
 // Password-protected files are refused.
 
 import { OfficeError } from './office-read.js';
@@ -18,6 +18,7 @@ const T_USEREDIT = 0x0ff5; const T_PDIR = 0x1772; const T_HEADER = 0x0f9f; const
 const T_CLIENTTEXT = 0xf00d; const T_CLIENTDATA = 0xf011;
 const T_PPDRAW = 0x040c; const T_SCHEME = 0x07f0; const T_SPGR = 0xf003; const T_SP = 0xf004; const T_SPREC = 0xf00a; const T_OPT = 0xf00b; const T_GRPREC = 0xf009;
 const T_CANCHOR = 0xf010; const T_CHANCHOR = 0xf00f;
+const T_PPDGG = 0x040b; const T_BSE = 0xf007;
 const T_STYLE = 0x0fa1; const T_RULER = 0x0fa6; const T_MSTYLE = 0x0fa3; const T_ENV = 0x03f2; const T_FONTS = 0x07d5; const T_FONT = 0x0fb7;
 const BODYT = [1, 5, 7, 8];
 const GEOM = { 1: 'rect', 2: 'roundRect', 3: 'ellipse', 4: 'diamond', 5: 'triangle', 6: 'rtTriangle', 7: 'parallelogram', 8: 'trapezoid', 9: 'hexagon', 10: 'octagon', 20: 'line', 32: 'line', 33: 'line', 202: 'rect' };
@@ -91,14 +92,16 @@ export function readPpt(bytes) {
   if (doc.e > ps.length) throw new OfficeError('This file is protected or damaged.');
   let W = 960; let H = 720;
   const lists = { 0: [], 1: [], 2: [] };
-  const fonts = []; const envStyles = new Map();
+  const fonts = []; const envStyles = new Map(); const bse = [];
+  function collectBse(from, to, depth) { for (const r of recs(from, to)) { if (r.type === T_BSE) bse.push(r); else if (r.ver === 15 && depth < 6) collectBse(r.o, r.e, depth + 1); } }
   for (const r of recs(doc.o, doc.e)) {
     if (r.type === T_ENV) { // the font collection and the default text styles
       for (const c of recs(r.o, r.e)) {
         if (c.type === T_FONTS) { for (const f of recs(c.o, c.e)) if (f.type === T_FONT && f.len >= 64) { let n = ''; for (let k = 0; k < 32; k++) { const ch = dv.getUint16(f.o + k * 2, true); if (!ch) break; n += String.fromCharCode(ch); } fonts.push(n); } }
         else if (c.type === T_MSTYLE) masterStyle(c, envStyles);
       }
-    } else if (r.type === T_DOCATOM && r.len >= 8) { W = Math.round(u32(r.o) / 6) || 960; H = Math.round(u32(r.o + 4) / 6) || 720; }
+    } else if (r.type === T_PPDGG) collectBse(r.o, r.e, 0);
+    else if (r.type === T_DOCATOM && r.len >= 8) { W = Math.round(u32(r.o) / 6) || 960; H = Math.round(u32(r.o + 4) / 6) || 720; }
     else if (r.type === T_SLWT) {
       const inst = dv.getUint16(r.at, true) >> 4;
       if (inst !== 0 && inst !== 1 && inst !== 2) continue;
@@ -204,6 +207,39 @@ export function readPpt(bytes) {
   const BULLETS = { 0x6c: '\u25cf', 0x6e: '\u25a0', 0x71: '\u2751', 0x76: '\u2756', 0xa7: '\u25aa', 0xd8: '\u27a2', 0xfc: '\u2713', 0xb7: '\u2022', 0x9f: '\u2022', 0x6f: '\u25a1', 0xa8: '\u25a1' };
   const bulletOf = (ch, face) => { const sym = /wingdings|symbol|webdings/i.test(face || ''); if (sym) return BULLETS[ch & 0xff] || '\u2022'; return ch ? String.fromCharCode(ch) : '\u2022'; };
 
+  // ---- pictures: the picture store entries of the drawing group point into the "Pictures" stream (or carry the picture); JPEG, PNG and bitmap are read ----
+  const picS = ole.stream('Pictures'); const blips = new Map(); let picBytes = 0;
+  const blipAt = (buf, o) => { // one picture block: header, id (16 bytes, 32 when the instance says two), tag, data
+    if (!buf || o < 0 || o + 8 > buf.length) return null;
+    const bv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const inst = bv.getUint16(o, true) >> 4; const type = bv.getUint16(o + 2, true); const len = bv.getUint32(o + 4, true);
+    if (o + 8 + len > buf.length) return null;
+    const two = { 0xf01d: [0x46b, 0x6e3], 0xf01e: [0x6e1], 0xf01f: [0x7a9] }[type]; if (!two) return null;
+    const at = o + 8 + (two.includes(inst) ? 32 : 16) + 1; const end = o + 8 + len; if (at >= end) return null;
+    const data = buf.subarray(at, end);
+    if (type === 0xf01d) return { bytes: data, mime: 'image/jpeg', ext: 'jpg' };
+    if (type === 0xf01e) return { bytes: data, mime: 'image/png', ext: 'png' };
+    if (data.length < 40) return null; // a bitmap without its file header: one is put in front
+    const d2 = new DataView(data.buffer, data.byteOffset, data.byteLength); const hs = d2.getUint32(0, true); const bpp = d2.getUint16(14, true);
+    const used = d2.getUint32(32, true); const pal = bpp <= 8 ? (used || 1 << bpp) * 4 : (d2.getUint32(16, true) === 3 && hs === 40 ? 12 : 0);
+    const out = new Uint8Array(14 + data.length); const ov = new DataView(out.buffer);
+    out[0] = 0x42; out[1] = 0x4d; ov.setUint32(2, out.length, true); ov.setUint32(10, 14 + hs + pal, true); out.set(data, 14);
+    return { bytes: out, mime: 'image/bmp', ext: 'bmp' };
+  };
+  const blipOf = (idx) => { // the picture of a shape's picture index (1-based into the store)
+    if (blips.has(idx)) return blips.get(idx);
+    let im = null;
+    try {
+      const e = bse[idx - 1];
+      if (e && e.len >= 36) {
+        const nameLen = ps[e.o + 33];
+        im = e.len > 36 + nameLen ? blipAt(ps, e.o + 36 + nameLen) : blipAt(picS, u32(e.o + 28));
+        if (im) { picBytes += im.bytes.length; if (picBytes > 40 * 1024 * 1024) im = null; }
+      }
+    } catch { im = null; }
+    blips.set(idx, im); return im;
+  };
+
   // ---- shapes: the slide's drawing (Escher records): per shape its box, fill, line and text; boxes are in 1/576 inch, six units to a pixel ----
   const schemeOf = (so) => { // the eight scheme colours of a slide or master container
     if (so === undefined || so + 8 > ps.length) return null;
@@ -217,7 +253,7 @@ export function readPpt(bytes) {
     if (fl & 0x10) return (v & 0xff) === 0xf0 ? 'FFFFFF' : '000000';
     return [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
   };
-  function shapeItems(s) {
+  function shapeItems(s, media) {
     const so = persist.get(s.ref);
     if (so === undefined || so + 8 > ps.length || dv.getUint16(so + 2, true) !== T_SLIDE) return null;
     const soE = so + 8 + u32(so + 4);
@@ -303,6 +339,13 @@ export function readPpt(bytes) {
       const fill = has(0x1bf, 0x100010) && P[0x1bf] & 0x10 ? { hex: colorOf(P[0x181] !== undefined ? P[0x181] : 0xffffff, scheme), a: 1 } : null;
       const lined = P[0x1ff] !== undefined && (P[0x1ff] & 0x080000) && (P[0x1ff] & 0x08);
       const dash = P[0x1ce]; const line = lined ? { w: Math.max(1, (P[0x1cb] !== undefined ? P[0x1cb] : 9525) / 9525), color: { hex: colorOf(P[0x1c0] !== undefined ? P[0x1c0] : 0, scheme), a: 1 }, dash: dash >= 6 ? 'dotted' : dash >= 2 ? 'dashed' : 'solid' } : null;
+      const bid = P[0x104];
+      if (bid > 0 && (sh.type === 75 || (!sh.texts.length && !fill))) { // a picture frame: the picture, its crop (fractions of the picture, 16.16) and its line
+        const im = blipOf(bid); if (!im) return null;
+        const path = `pic${bid}.${im.ext}`; media[path] = { bytes: im.bytes, mime: im.mime };
+        const cr = (id) => (P[id] ? Math.max(0, Math.min(95, (P[id] / 65536) * 100)) : 0);
+        return { t: 'pic', ...bx, rot: P[0x04] ? P[0x04] / 65536 : 0, ...(sh.flags & 0x40 ? { fh: true } : {}), ...(sh.flags & 0x80 ? { fv: true } : {}), path, line, crop: { l: cr(0x102), t: cr(0x100), r: cr(0x103), b: cr(0x101) } };
+      }
       const texts = sh.texts.filter((t) => { const k = t.text; return k && k.replace(/[\x00-\x08\x0e-\x1f\r\v\n\x09 ]/g, ''); });
       let text = null; let role;
       if (texts.length) {
@@ -354,8 +397,8 @@ export function readPpt(bytes) {
 
   function load(i) {
     const s = slides[i];
-    const real = shapeItems(s);
-    if (real && real.length) return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items: real, media: {}, notes: notesOf.get(s.slideId) || '' };
+    const media = {}; const real = shapeItems(s, media);
+    if (real && real.length) return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items: real, media, notes: notesOf.get(s.slideId) || '' };
     const texts = slideTexts(s); // a slide without a readable drawing: its texts laid out by size
     const items = [];
     const ti = texts.findIndex((t) => t.type === 0 || t.type === 6);
@@ -378,5 +421,5 @@ export function readPpt(bytes) {
     }
     return { w: W, h: H, bg: { hex: 'FFFFFF', a: 1 }, items, media: {}, notes: notesOf.get(s.slideId) || '' };
   }
-  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and styled text: pictures, master shapes and backgrounds of this old PowerPoint file are not shown.' };
+  return { kind: 'pptx', count: slides.length, load, size: { w: W, h: H }, notice: 'Shapes with their position, fill, line and styled text, and JPEG, PNG and bitmap pictures: other pictures, master shapes and backgrounds of this old PowerPoint file are not shown.' };
 }
