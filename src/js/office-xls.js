@@ -3,7 +3,8 @@
 // unchanged. Formula cells show the value stored in the file; nothing is recalculated. Older Excel 5 and 95 files are refused.
 // Pictures (JPEG, PNG, bitmap) come from the drawing group of the globals and the drawing records of the sheet, placed by their
 // anchor cells (Decision 520). Charts are read from the chart streams of the sheet into the chart model of the .xlsx reader,
-// their series resolved from the sheet cells the series formulas point to (Decision 521).
+// their series resolved from the sheet cells the series formulas point to (Decision 521). Rectangles, ovals, rounded rectangles and
+// text boxes come as plain shapes with fill, line and text; notes are not drawings (Decision 522).
 
 import { OfficeError, formatValue, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 import { readOle2, isOle2 } from './ole2.js';
@@ -200,7 +201,7 @@ export function readXls(bytes) {
     };
     const rows = []; const colW = {}; const rowH = {}; const merges = [];
     let ncols = 0; let truncated = false; let cellCount = 0; let hasDrawing = false; let grid = true; let freeze = { rows: 0, cols: 0 }; let pane = null; let freezeOn = false;
-    let depth = 0; let pendingFormula = null; let pend = null; const shapes = []; let other = 0; const media = {};
+    let depth = 0; let pendingFormula = null; let pend = null; const shapes = []; let other = 0; const media = {}; let lastShape = null; let txoNext = null;
     const put = (r, c, text, xf, kind, raw) => {
       if (r >= SHEET_ROW_MAX || cellCount > 100000) { truncated = true; return; }
       if (c >= SHEET_COL_MAX) { truncated = true; return; }
@@ -211,16 +212,16 @@ export function readXls(bytes) {
     };
     const num = (v, xf) => formatValue(String(v), (xfs[xf] || xfs[0]).code, is1904);
     const escher = (d0) => { // one drawing record: a shape (picture index, anchor cells); null for the group's own header, false for what holds no shape
-      const bv = new DataView(d0.buffer, d0.byteOffset, d0.byteLength); let o = 0; let pib = 0; let anchor = null; let sawSp = false;
+      const bv = new DataView(d0.buffer, d0.byteOffset, d0.byteLength); let o = 0; let pib = 0; let anchor = null; let sawSp = false; let spType = 0; const P = {};
       while (o + 8 <= d0.length) {
         const vi = bv.getUint16(o, true); const ty = bv.getUint16(o + 2, true); const len = bv.getUint32(o + 4, true);
         if ((vi & 15) === 15) { o += 8; continue; }
-        if (ty === 0xf004) sawSp = true;
-        else if (ty === 0xf00b) { const np = vi >> 4; for (let k = 0; k < np && o + 8 + k * 6 + 6 <= d0.length; k++) if ((bv.getUint16(o + 8 + k * 6, true) & 0x3fff) === 0x104) pib = bv.getInt32(o + 8 + k * 6 + 2, true); }
+        if (ty === 0xf00a) { sawSp = true; spType = vi >> 4; }
+        else if (ty === 0xf00b) { const np = vi >> 4; for (let k = 0; k < np && o + 8 + k * 6 + 6 <= d0.length; k++) { const pid = bv.getUint16(o + 8 + k * 6, true) & 0x3fff; const pv = bv.getInt32(o + 8 + k * 6 + 2, true); P[pid] = pv; if (pid === 0x104) pib = pv; } }
         else if (ty === 0xf010 && len >= 18 && o + 8 + 18 <= d0.length) { const g = (k) => bv.getUint16(o + 8 + k * 2, true); anchor = { c1: g(1), dx1: g(2), r1: g(3), dy1: g(4), c2: g(5), dx2: g(6), r2: g(7), dy2: g(8) }; }
         o += 8 + len;
       }
-      return sawSp || anchor ? { pib, anchor } : null;
+      return sawSp || anchor ? { pib, anchor, spType, P } : null;
     };
     for (const r of records(sh.off)) {
       if (r.id === 0x809) { depth++; if (depth === 2 && chartWait && deep) chartRecs = []; continue; }
@@ -257,10 +258,20 @@ export function readXls(bytes) {
         case 0x23e: grid = !!(u16(r.o) & 0x02); freezeOn = !!(u16(r.o) & 0x08); break;
         case 0x41: pane = { x: u16(r.o), y: u16(r.o + 2) }; break;
         case 0xec: { pend = null; const sp = escher(r.data); if (sp) pend = sp; else if (!(sp === null)) other++; break; }
-        case 0x3c: break;
+        case 0x1b6: txoNext = lastShape ? { ls: lastShape, cch: r.len >= 12 ? u16(r.o + 10) : 0, text: false } : null; break; // the text of a shape follows in continuation records
+        case 0x3c:
+          if (txoNext) {
+            const d = r.data;
+            if (!txoNext.text) { const wide = d[0] & 1; let t = ''; for (let k = 0; k < txoNext.cch && 1 + k * (wide ? 2 : 1) + (wide ? 2 : 1) <= d.length; k++) t += String.fromCharCode(wide ? u16(r.o + 1 + k * 2) : d[1 + k]); txoNext.ls.text = t.replace(/\r\n?/g, '\n'); txoNext.text = true; }
+            else { if (d.length >= 4) txoNext.ls.font = fonts[u16(r.o + 2)] || null; txoNext = null; } // the first format run says the font
+          }
+          break;
         case 0x5d: { // the object record after a drawing record: its type says what the shape is
-          const ot = r.len >= 6 && u16(r.o) === 0x15 ? u16(r.o + 4) : 0; const sp = pend; pend = null;
-          if (sp && ot === 8 && sp.pib && sp.anchor) { if (shapes.length < 40) shapes.push(sp); else other++; } else if (sp && ot === 5 && sp.anchor && deep) chartWait = sp; else if (sp || ot) other++;
+          const ot = r.len >= 6 && u16(r.o) === 0x15 ? u16(r.o + 4) : 0; const sp = pend; pend = null; lastShape = null; txoNext = null;
+          if (sp && ot === 8 && sp.pib && sp.anchor) { if (shapes.length < 40) shapes.push(sp); else other++; } else if (sp && ot === 5 && sp.anchor && deep) chartWait = sp;
+          else if (ot === 0x19) { /* a note: a comment, not a drawing */ }
+          else if (sp && sp.anchor && [2, 3, 6, 0x1e].includes(ot) && [1, 2, 3, 202].includes(sp.spType)) { if (shapes.length < 40) { lastShape = { shape: true, sp, text: '', font: null }; shapes.push(lastShape); } else other++; }
+          else if (sp || ot) other++;
           break;
         }
         default: break;
@@ -273,6 +284,14 @@ export function readXls(bytes) {
     const place = (a) => ({ from: { col: a.c1, colOff: (a.dx1 / 1024) * cw(a.c1), row: a.r1, rowOff: (a.dy1 / 256) * rh(a.r1) }, to: { col: a.c2, colOff: (a.dx2 / 1024) * cw(a.c2), row: a.r2, rowOff: (a.dy2 / 256) * rh(a.r2) }, ext: null, abs: null });
     for (const sp of shapes) { // the picture or chart, from its anchor cells; offsets are 1/1024 of a cell's width and 1/256 of its height
       if (sp.chart) { objects.push({ t: 'chart', model: sp.chart, ...place(sp.anchor) }); continue; }
+      if (sp.shape) { // a plain shape: fill, line and the text as one block
+        const P = sp.sp.P; const col = (v) => (v === undefined || v >>> 24 ? null : [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase());
+        const filled = P[0x1bf] === undefined || !(P[0x1bf] & 0x100000) || !!(P[0x1bf] & 0x10); const lined = P[0x1ff] === undefined || !(P[0x1ff] & 0x80000) || !!(P[0x1ff] & 0x8);
+        const fn = sp.font; const fc = fn && fn.color < palette.length ? palette[fn.color] : null;
+        objects.push({ t: 'shape', geom: sp.sp.spType === 3 ? 'ellipse' : sp.sp.spType === 2 ? 'roundRect' : 'rect', fill: filled ? col(P[0x181]) || 'FFFFFF' : null, line: lined ? { w: Math.max(1, (P[0x1cb] !== undefined ? P[0x1cb] : 9525) / 9525), color: col(P[0x1c0]) || '000000' } : null,
+          text: sp.text, size: fn ? Math.round((fn.size * 4) / 3) : 13, b: !!(fn && fn.b), i: !!(fn && fn.i), color: fc || '000000', ...place(sp.sp.anchor) });
+        continue;
+      }
       const im = blipOf(sp.pib); if (!im) { other++; continue; }
       const path = `pic${sp.pib}.${im.ext}`; media[path] = { bytes: im.bytes, mime: im.mime }; const a = sp.anchor;
       objects.push({ t: 'pic', path, ...place(a) });

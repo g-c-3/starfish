@@ -1003,6 +1003,11 @@ function mountXlsx(model, host, ui, bars, u) {
         const box = el('div', `eo-xobj${o.t === 'chart' ? ' eo-xchart' : ''}`);
         box.style.left = `${x}px`; box.style.top = `${y}px`; box.style.width = `${w}px`; box.style.height = `${h}px`;
         if (o.t === 'chart') { cv(box, 'c', '404040', 'E8E6F2'); box.appendChild(chartSvg(o.model, w, h)); }
+        else if (o.t === 'shape') { // a plain shape: fill, line and one block of text
+          const st = box.style; st.boxSizing = 'border-box'; if (o.fill) st.background = `#${o.fill}`; if (o.line) st.border = `${o.line.w}px solid #${o.line.color}`;
+          if (o.geom === 'ellipse') st.borderRadius = '50%'; else if (o.geom === 'roundRect') st.borderRadius = '12%';
+          if (o.text) { const tx = el('div'); tx.textContent = o.text; const ts = tx.style; ts.whiteSpace = 'pre-wrap'; ts.overflow = 'hidden'; ts.padding = '2px 4px'; ts.fontSize = `${o.size}px`; ts.color = `#${o.color}`; if (o.b) ts.fontWeight = '700'; if (o.i) ts.fontStyle = 'italic'; box.appendChild(tx); }
+        }
         else { const src = u.get(o.path, s.media); if (!src) continue; const im = el('img'); im.alt = ''; im.src = src; box.appendChild(im); }
         ov.appendChild(box);
       }
