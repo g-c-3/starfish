@@ -1,9 +1,12 @@
 // office-xls.js — view-only reader for xls, the Excel 97 to 2003 format (Decision 455). The workbook stream of an OLE2 file is
 // a list of records; cells, formats, styles, merges and sizes become the same model as readXlsx, so office-render.js draws it
 // unchanged. Formula cells show the value stored in the file; nothing is recalculated. Older Excel 5 and 95 files are refused.
+// Pictures (JPEG, PNG, bitmap) come from the drawing group of the globals and the drawing records of the sheet, placed by their
+// anchor cells (Decision 520).
 
 import { OfficeError, formatValue, SHEET_ROW_MAX, SHEET_COL_MAX } from './office-read.js';
 import { readOle2, isOle2 } from './ole2.js';
+import { blipAt } from './office-blip.js';
 
 const PX_PT = 4 / 3;
 const PALETTE = ['000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', '000000', 'FFFFFF', 'FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF',
@@ -96,10 +99,11 @@ export function readXls(bytes) {
   let is1904 = false; let encrypted = false;
   const palette = PALETTE.slice();
   const fonts = []; const formats = {}; const xfRaw = []; const sheets = []; let sst = [];
-  let version = 0;
+  let version = 0; let dggChunks = null;
   {
-    let sstChunks = null; let first = true;
+    let sstChunks = null; let first = true; let cont = null;
     for (const r of records(0)) {
+      if (r.id !== 0x3c) cont = r.id === 0xfc ? 'sst' : r.id === 0xeb ? 'dgg' : null; // what a following continuation belongs to
       if (r.id === 0x809) { if (first) version = u16(r.o); first = false; if (version !== 0x600) throw new OfficeError('This old Excel version is not supported here.'); }
       else if (r.id === 0x2f) encrypted = true;
       else if (r.id === 0x22) is1904 = u16(r.o) === 1;
@@ -114,12 +118,34 @@ export function readXls(bytes) {
         const state = wb[r.o + 4]; const type = wb[r.o + 5];
         sheets.push({ off: u32(r.o), hidden: state !== 0, type, name: ustr(r.data, 6, 1).text });
       } else if (r.id === 0xfc) sstChunks = [r.data];
+      else if (r.id === 0xeb) dggChunks = [r.data];
+      else if (r.id === 0x3c && cont === 'dgg' && dggChunks) dggChunks.push(r.data);
       else if (r.id === 0x3c && sstChunks) sstChunks.push(r.data);
       else if (r.id === 0x0a) { if (sstChunks) sst = readSst(sstChunks); break; }
       else if (sstChunks && r.id !== 0x3c) { sst = readSst(sstChunks); sstChunks = null; }
     }
   }
   if (encrypted) throw new OfficeError('This file is protected or damaged.');
+  // the picture store: entries of the drawing group; each holds its picture after its name
+  const store = []; let dgg = null;
+  if (dggChunks) {
+    let n = 0; for (const c of dggChunks) n += c.length; dgg = new Uint8Array(n); n = 0; for (const c of dggChunks) { dgg.set(c, n); n += c.length; }
+    const dd = new DataView(dgg.buffer);
+    let o = 0; // a flat scan: containers are entered, other records skipped
+    while (o + 8 <= dgg.length) {
+      const vi = dd.getUint16(o, true); const ty = dd.getUint16(o + 2, true); const len = dd.getUint32(o + 4, true);
+      if ((vi & 15) === 15) { o += 8; continue; }
+      if (ty === 0xf007 && len >= 36) store.push({ o: o + 8, len });
+      o += 8 + len;
+    }
+  }
+  const blips = new Map(); let picBytes = 0;
+  const blipOf = (idx) => {
+    if (blips.has(idx)) return blips.get(idx);
+    let im = null;
+    try { const e = store[idx - 1]; if (e) { const nameLen = dgg[e.o + 33]; if (e.len > 36 + nameLen) im = blipAt(dgg, e.o + 36 + nameLen); if (im) { picBytes += im.bytes.length; if (picBytes > 40 * 1024 * 1024) im = null; } } } catch { im = null; }
+    blips.set(idx, im); return im;
+  };
   const visible = sheets.filter((s) => !s.hidden && s.type === 0);
   if (!visible.length) throw new OfficeError('This workbook has no sheets to show.');
 
@@ -149,7 +175,7 @@ export function readXls(bytes) {
     if (!sh) throw new OfficeError('This sheet could not be read.');
     const rows = []; const colW = {}; const rowH = {}; const merges = [];
     let ncols = 0; let truncated = false; let cellCount = 0; let hasDrawing = false; let grid = true; let freeze = { rows: 0, cols: 0 }; let pane = null; let freezeOn = false;
-    let depth = 0; let pendingFormula = null;
+    let depth = 0; let pendingFormula = null; let pend = null; const shapes = []; let other = 0; const media = {};
     const put = (r, c, text, xf, kind, raw) => {
       if (r >= SHEET_ROW_MAX || cellCount > 100000) { truncated = true; return; }
       if (c >= SHEET_COL_MAX) { truncated = true; return; }
@@ -159,6 +185,18 @@ export function readXls(bytes) {
       if (text !== '' || x.fill || x.border) if (c + 1 > ncols) ncols = c + 1;
     };
     const num = (v, xf) => formatValue(String(v), (xfs[xf] || xfs[0]).code, is1904);
+    const escher = (d0) => { // one drawing record: a shape (picture index, anchor cells); null for the group's own header, false for what holds no shape
+      const bv = new DataView(d0.buffer, d0.byteOffset, d0.byteLength); let o = 0; let pib = 0; let anchor = null; let sawSp = false;
+      while (o + 8 <= d0.length) {
+        const vi = bv.getUint16(o, true); const ty = bv.getUint16(o + 2, true); const len = bv.getUint32(o + 4, true);
+        if ((vi & 15) === 15) { o += 8; continue; }
+        if (ty === 0xf004) sawSp = true;
+        else if (ty === 0xf00b) { const np = vi >> 4; for (let k = 0; k < np && o + 8 + k * 6 + 6 <= d0.length; k++) if ((bv.getUint16(o + 8 + k * 6, true) & 0x3fff) === 0x104) pib = bv.getInt32(o + 8 + k * 6 + 2, true); }
+        else if (ty === 0xf010 && len >= 18 && o + 8 + 18 <= d0.length) { const g = (k) => bv.getUint16(o + 8 + k * 2, true); anchor = { c1: g(1), dx1: g(2), r1: g(3), dy1: g(4), c2: g(5), dx2: g(6), r2: g(7), dy2: g(8) }; }
+        o += 8 + len;
+      }
+      return sawSp || anchor ? { pib, anchor } : null;
+    };
     for (const r of records(sh.off)) {
       if (r.id === 0x809) { depth++; continue; }
       if (r.id === 0x0a) { depth--; if (depth <= 0) break; continue; }
@@ -188,13 +226,27 @@ export function readXls(bytes) {
         case 0x208: { const h = u16(r.o + 6); const opt = u32(r.o + 12); if (opt & 0x20) rowH[row] = 0; else if ((opt & 0x40) && h) rowH[row] = Math.round(((h & 0x7fff) / 20) * PX_PT); break; }
         case 0x23e: grid = !!(u16(r.o) & 0x02); freezeOn = !!(u16(r.o) & 0x08); break;
         case 0x41: pane = { x: u16(r.o), y: u16(r.o + 2) }; break;
-        case 0xec: hasDrawing = true; break;
+        case 0xec: { pend = null; const sp = escher(r.data); if (sp) pend = sp; else if (!(sp === null)) other++; break; }
+        case 0x3c: break;
+        case 0x5d: { // the object record after a drawing record: its type says what the shape is
+          const ot = r.len >= 6 && u16(r.o) === 0x15 ? u16(r.o + 4) : 0; const sp = pend; pend = null;
+          if (sp && ot === 8 && sp.pib && sp.anchor) { if (shapes.length < 40) shapes.push(sp); else other++; } else if (sp || ot) other++;
+          break;
+        }
         default: break;
       }
     }
     if (freezeOn && pane) freeze = { rows: Math.min(pane.y, 20), cols: Math.min(pane.x, 10) };
     for (let k = 0; k < rows.length; k++) rows[k] = Array.from(rows[k] || []);
-    return { rows, ncols, truncated, colW, defCol: 64, rowH, defRow: 20, merges, freeze, grid, objects: [], media: {}, hasDrawing };
+    const cw = (c) => (colW[c] !== undefined ? colW[c] : 64); const rh = (k) => (rowH[k] !== undefined ? rowH[k] : 20);
+    const objects = [];
+    for (const sp of shapes) { // the picture, from its anchor cells; offsets are 1/1024 of a cell's width and 1/256 of its height
+      const im = blipOf(sp.pib); if (!im) { other++; continue; }
+      const path = `pic${sp.pib}.${im.ext}`; media[path] = { bytes: im.bytes, mime: im.mime }; const a = sp.anchor;
+      objects.push({ t: 'pic', path, from: { col: a.c1, colOff: (a.dx1 / 1024) * cw(a.c1), row: a.r1, rowOff: (a.dy1 / 256) * rh(a.r1) }, to: { col: a.c2, colOff: (a.dx2 / 1024) * cw(a.c2), row: a.r2, rowOff: (a.dy2 / 256) * rh(a.r2) }, ext: null, abs: null });
+    }
+    hasDrawing = other > 0;
+    return { rows, ncols, truncated, colW, defCol: 64, rowH, defRow: 20, merges, freeze, grid, objects, media, hasDrawing };
   }
   return { kind: 'xlsx', names: visible.map((s) => s.name), load, xfs, is1904 };
 }
