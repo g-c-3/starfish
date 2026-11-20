@@ -587,7 +587,9 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     if (sp) { sectNodes.push(sp); sectEnd = sectNodes.length - 1; }
     if (list) { const t = runs.find((x) => x.text); list.fmt = t ? { font: t.font, size: t.size, b: t.b, i: t.i, color: t.color } : { font: rbase.font, size: rbase.size }; list.hang = eff.first < 0 ? -eff.first : 0; }
     const { outline, ...pr } = eff;
-    return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd, src: pIdx ? pIdx.get(p) : undefined };
+    const mkr = parseR(kid(pp, 'rPr')); // the paragraph mark sets the height of an empty paragraph and of the last line (Decision 526)
+    const mk = { font: mkr.font || rbase.font, size: mkr.size || rbase.size };
+    return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd, mk, src: pIdx ? pIdx.get(p) : undefined };
   };
   const blocksOf = (node, depth) => {
     const out = [];
