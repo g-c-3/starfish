@@ -1,0 +1,13 @@
+# Sandbox tools
+
+Development aids for testing the Office readers without a device. Not part of the app: nothing here is bundled or imported by `src/`.
+
+- `setup.sh`: installs node and python packages, links `node_modules` for the repo's source.
+- `make_ppt.py`, `make_xls.py`: build sample files (styled text, pictures, backgrounds and master shapes, gradients, free-forms; pictures, five charts, shapes, a plain workbook) and convert them to `.ppt` / `.xls` with the office suite.
+- `dump.mjs`: prints what the `.ppt` or `.xls` reader makes of a file.
+- `copy.mjs`: makes the `.pptx` copy of a `.ppt`.
+- `mount.mjs`: mounts the app's viewer on a file in a simulated page and prints what it drew.
+- `charts.mjs`: draws the charts of an `.xls` to SVG with the app's chart code.
+
+Typical run: `sh setup.sh`, `python3 make_xls.py /tmp/s`, `node dump.mjs /tmp/s/in8.xls`, `node mount.mjs /tmp/s/in9.xls`.
+`SRC` sets the source folder (default `/home/claude/repo/src/js`).
