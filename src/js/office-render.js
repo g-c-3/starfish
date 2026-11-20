@@ -726,6 +726,20 @@ const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? 
 registerEditor('docx', () => import('./docview-edit.js'));
 registerEditor('xlsx', () => import('./xlsview-edit.js'));
 registerEditor('pptx', () => import('./pptview-edit.js'));
+// Page border (Decision 524): one box over the sheet, each side with its own style, width and colour; the double and
+// thin-thick styles are drawn as one double line.
+const BD_CSS = (v) => (v === 'dotted' ? 'dotted' : /^dash/.test(v) ? 'dashed' : v === 'single' || v === 'thick' ? 'solid' : /double|thinThick|thickThin|triple/i.test(v) ? 'double' : 'solid');
+function pageBorder(q) {
+  const b = q.bd; if (!b) return null;
+  const d = el('div', 'eo-pgb'); d.setAttribute('aria-hidden', 'true');
+  const edge = { top: q.t, left: q.l, bottom: q.b, right: q.r };
+  for (const side of ['top', 'left', 'bottom', 'right']) {
+    const e = b[side]; const sp = e ? e.s : 0; const cap = side[0].toUpperCase() + side.slice(1);
+    d.style[side] = `${Math.max(0, b.from === 'text' ? edge[side] - sp : sp)}px`;
+    d.style[`border${cap}`] = e ? `${BD_CSS(e.v) === 'double' ? Math.max(3, e.w) : e.w}px ${BD_CSS(e.v)} ${e.c || 'var(--eo-line)'}` : '0 none';
+  }
+  return d;
+}
 function mountDocx(model, host, u, ui, bars) {
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
@@ -788,7 +802,7 @@ function mountDocx(model, host, u, ui, bars) {
       const head = el('div', 'eo-sh-head'); head.style.padding = `${q.hd}px ${q.r}px 0 ${q.l}px`; head.style.minHeight = `${q.t}px`;
       const body = el('div', 'eo-sh-body'); body.style.padding = `0 ${q.r}px 0 ${q.l}px`;
       const foot = el('div', 'eo-sh-foot'); foot.style.padding = `0 ${q.r}px ${q.ft}px ${q.l}px`; foot.style.minHeight = `${q.b}px`;
-      sh.append(head, body, foot); col.appendChild(sh);
+      sh.append(head, body, foot); const bdr = pageBorder(q); if (bdr) sh.appendChild(bdr); col.appendChild(sh);
       const rec = { s, q, sh, ctx: { pg: { label: s.label, total: lay.total, secPages: s.secPages }, col: { w: q.w - q.l - q.r, l: q.l } }, head, body, foot, heads: [], done: false };
       recs.push(rec); byEl.set(sh, rec);
     }
@@ -806,6 +820,16 @@ function mountDocx(model, host, u, ui, bars) {
   };
   const fit = () => (prefs.doc === 'page' && !forceFlow && scroll.clientWidth ? Math.max(0.2, (scroll.clientWidth - 16) / pg.w) : 1);
   const zoom = setupZoom(scroll, zoomer, fit, ui);
+  // page counter (Decision 524): the sheet under the upper part of the view, as n / total
+  const cnt = el('div', 'eo-pgcount-w'); const pill = el('div', 'eo-pgcount'); cnt.appendChild(pill); cnt.hidden = true;
+  let raf = 0;
+  const pgNow = () => {
+    raf = 0; cnt.hidden = !recs.length; if (!recs.length) return;
+    const mid = scroll.getBoundingClientRect().top + scroll.clientHeight * 0.4; let i = recs.length - 1;
+    for (let k = 0; k < recs.length; k++) if (recs[k].sh.getBoundingClientRect().bottom > mid) { i = k; break; }
+    pill.textContent = `${i + 1} / ${recs.length}`;
+  };
+  const onScr = () => { if (!raf) raf = requestAnimationFrame(pgNow); };
   const apply = () => {
     const page = prefs.doc === 'page' && !forceFlow; const sheeted = page && !!lay;
     if (page && (auto === 'idle' || auto === 'check')) { // idle: show the text at once, then lay the pages out
@@ -840,18 +864,19 @@ function mountDocx(model, host, u, ui, bars) {
     paper.style.setProperty('--eo-indk', page ? '1' : '0.5');
     zoomer.style.width = page ? `${pg.w}px` : '100%';
     paper.style.padding = sheeted ? '0' : page ? `${pg.t}px ${pg.r}px ${pg.b}px ${pg.l}px` : '16px';
-    zoom.apply();
+    zoom.apply(); pgNow();
   };
   bars.extra = (bar) => {
     const view = segment([['page', 'Page', 'Page view'], ['reflow', 'Reflow', 'Reflow view']], prefs.doc, (v) => { ui.onActivity(); prefs.doc = v; view.sync(v); zoom.reset(); apply(); savePrefs(); });
     bar.append(view.wrap, zoomButtons(ui, zoom));
     bars.viewSync = () => view.sync(prefs.doc);
   };
-  zoomer.appendChild(paper); scroll.appendChild(zoomer); host.appendChild(scroll);
+  zoomer.appendChild(paper); scroll.appendChild(zoomer); scroll.appendChild(cnt); host.appendChild(scroll);
+  scroll.addEventListener('scroll', onScr, { passive: true });
   apply();
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(apply); ro.observe(scroll); }
-  return { heads, ensureAll, timing, flow(on) { if (forceFlow === on) return Promise.resolve(); forceFlow = on; return fadeSwap(scroll, apply); }, destroy() { gone = true; if (ro) ro.disconnect(); if (io) io.disconnect(); } };
+  return { heads, ensureAll, timing, flow(on) { if (forceFlow === on) return Promise.resolve(); forceFlow = on; return fadeSwap(scroll, apply); }, destroy() { gone = true; scroll.removeEventListener('scroll', onScr); if (raf) cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (io) io.disconnect(); } };
 }
 
 // ---- xlsx: a tab per sheet; cells keep font, fill, border, alignment, number format, widths, heights, merges ----

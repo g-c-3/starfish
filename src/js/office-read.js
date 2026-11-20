@@ -642,9 +642,23 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
 
   // ---- page, header, footer, footnotes ----
   const sect = kid(body, 'sectPr');
+  // page borders (Decision 524): per side the style, width (eighths of a point to px), space (points to px) and colour
+  const bdOf = (sp) => {
+    const b = kid(sp, 'pgBorders'); if (!b) return null;
+    const out = { from: at(b, 'offsetFrom') === 'text' ? 'text' : 'page' }; let any = false;
+    for (const side of ['top', 'left', 'bottom', 'right']) {
+      const e = kid(b, side); const v = e && at(e, 'val');
+      if (!v || v === 'nil' || v === 'none') continue;
+      const c = at(e, 'color');
+      out[side] = { v, w: Math.max(1, (Number(at(e, 'sz')) || 4) / 6), s: ((Number(at(e, 'space')) || 0) * 96) / 72, c: c && /^[0-9a-fA-F]{6}$/.test(c) ? `#${c}` : null };
+      any = true;
+    }
+    return any ? out : null;
+  };
   const pageOf = (sp) => {
     const sz = kid(sp, 'pgSize') || kid(sp, 'pgSz'); const mg = kid(sp, 'pgMar');
     return {
+      bd: bdOf(sp),
       w: tw(at(sz, 'w')) || 816, h: tw(at(sz, 'h')) || 1056,
       t: tw(at(mg, 'top')) ?? 96, r: tw(at(mg, 'right')) ?? 96, b: tw(at(mg, 'bottom')) ?? 96, l: tw(at(mg, 'left')) ?? 96,
       hd: tw(at(mg, 'header')) ?? 48, ft: tw(at(mg, 'footer')) ?? 48

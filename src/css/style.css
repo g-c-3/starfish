@@ -1244,6 +1244,9 @@ body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom,
 .eo-tab.active { background: var(--eo-accent); color: var(--eo-accent-fg); border-color: transparent; }
 .eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); touch-action: pan-x pan-y; }
 .eo-sheet { margin: 0; position: relative; }
+.eo-pgb { position: absolute; pointer-events: none; box-sizing: border-box; z-index: 0; }
+.eo-pgcount-w { position: sticky; bottom: 0; left: 0; height: 0; z-index: 5; pointer-events: none; }
+.eo-pgcount { position: absolute; left: 12px; bottom: 12px; padding: 4px 10px; border-radius: 10px; font: 600 13px/1.2 Roboto, sans-serif; background: rgba(40,38,52,.82); color: #fff; }
 .eo-cells { --eo-grid: #d6d3e4; border-collapse: collapse; table-layout: fixed; font-family: Calibri, Carlito, Roboto, sans-serif; font-size: 14.67px; background: var(--surface); color: var(--fg); }
 .eo-host[data-theme="dark"] .eo-cells { --eo-grid: #34323f; }
 .eo-nogrid { --eo-grid: transparent !important; }
