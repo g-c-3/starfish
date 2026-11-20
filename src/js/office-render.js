@@ -721,7 +721,21 @@ function makeEnv(model, u) {
     done() { if (host) host.remove(); host = null; kids = []; }
   };
 }
-const fontsReady = () => Promise.race([document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 2500))]);
+// While a document is open the phone's text size is fixed at 100 percent (Decision 525): the web view scales text by it and not the page boxes,
+// which moved the page breaks. window.ArklyNav.textLock exists in the app only; one lock is held per open document.
+let textLocks = 0; let textSettled = Promise.resolve();
+const lockText = () => {
+  let held = false;
+  try {
+    const nav = window.ArklyNav;
+    if (nav && typeof nav.textLock === 'function') { if (textLocks === 0) { nav.textLock(true); textSettled = new Promise((r) => setTimeout(r, 120)); } textLocks++; held = true; }
+  } catch { /* the text keeps the phone's size */ }
+  return () => {
+    if (!held) return; held = false; textLocks--;
+    if (textLocks === 0) { try { window.ArklyNav.textLock(false); } catch { /* nothing to put back */ } }
+  };
+};
+const fontsReady = () => Promise.all([Promise.race([document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(), new Promise((r) => setTimeout(r, 2500))]), textSettled]).then(() => {});
 
 registerEditor('docx', () => import('./docview-edit.js'));
 registerEditor('xlsx', () => import('./xlsview-edit.js'));
@@ -1259,6 +1273,14 @@ function mountPptx(model, host, ui, count, u, bars, root) {
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
 // fit to show; any other error is shown as the generic one by the caller.
 export function mountOffice(kind, bytes, host, ctx) {
+  const unlock = lockText();
+  try {
+    const m = mountOfficeView(kind, bytes, host, ctx); const end = m.destroy;
+    m.destroy = () => { try { end(); } finally { unlock(); } };
+    return m;
+  } catch (e) { unlock(); throw e; }
+}
+function mountOfficeView(kind, bytes, host, ctx) {
   const { ui, setCount = () => {}, toast = () => {}, edit = null } = ctx;
   let shell = null; let editor = null; // the tool shell and the editor of a docx that may be changed (Decision 474)
   const u = urls();

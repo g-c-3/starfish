@@ -1244,8 +1244,6 @@ body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom,
 .eo-tab.active { background: var(--eo-accent); color: var(--eo-accent-fg); border-color: transparent; }
 .eo-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); touch-action: pan-x pan-y; }
 .eo-sheet { margin: 0; position: relative; }
-/* a document is laid out at the size its file states: the phone's text size setting does not scale it (Decision 525) */
-.eo-paper { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .eo-pgb { position: absolute; pointer-events: none; box-sizing: border-box; z-index: 0; }
 .eo-pgcount-w { position: sticky; bottom: 0; left: 0; height: 0; z-index: 5; pointer-events: none; }
 .eo-pgcount { position: absolute; left: 12px; bottom: 12px; padding: 4px 10px; border-radius: 10px; font: 600 13px/1.2 Roboto, sans-serif; background: rgba(40,38,52,.82); color: #fff; }
