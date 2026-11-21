@@ -522,6 +522,7 @@ function mathNode(r) {
 
 // A line height given as a multiple (Word: auto, 240ths of a line) is a multiple of the font's own line height, not of its size
 // (Decision 526). Times New Roman and Arial are 1.149 of their size, Calibri 1.22. A font not listed takes 1.17.
+const JUSTIFY_SHRINK = -0.03;
 const NAT = { 'times new roman': 1.149, tinos: 1.149, 'liberation serif': 1.149, times: 1.149, arial: 1.149, arimo: 1.149, 'liberation sans': 1.149, helvetica: 1.149, calibri: 1.22, carlito: 1.22, cambria: 1.172, caladea: 1.172, 'courier new': 1.133, cousine: 1.133, verdana: 1.215, tahoma: 1.207, georgia: 1.136, gelasio: 1.136, 'trebuchet ms': 1.16, 'segoe ui': 1.33, 'comic sans ms': 1.39, 'comic neue': 1.39, roboto: 1.172, inter: 1.21, lato: 1.2, 'open sans': 1.362, montserrat: 1.219, poppins: 1.5 };
 const lineMult = (m, font) => String(+(m * (NAT[String(font || '').toLowerCase().replace(/["']/g, '').trim()] || 1.17)).toFixed(4));
 function appendRuns(parent, runs, media, u, ctx = {}) {
@@ -548,6 +549,7 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
     if (r.font) st.fontFamily = stack(r.font);
     if (r.size) st.fontSize = `${r.size}px`;
     if (ctx.lm) st.lineHeight = lineMult(ctx.lm, r.font);
+    if (ctx.js) st.wordSpacing = `${JUSTIFY_SHRINK}em`; // a justified line may close its spaces a little, as in Word (Decision 527)
     if (r.b) st.fontWeight = '700';
     if (r.i) st.fontStyle = 'italic';
     const deco = [r.u ? 'underline' : '', r.s ? 'line-through' : ''].filter(Boolean).join(' ');
@@ -654,7 +656,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
       if (f.color) cv(m, 'c', f.color, fill && fill.kept ? f.color : adaptText(f.color));
       p.appendChild(m);
     }
-    appendRuns(p, b.runs, media, u, { fill, pg: ctx.pg, col: ctx.col, lm: pr.line && pr.line.mult ? pr.line.mult : 0 });
+    appendRuns(p, b.runs, media, u, { fill, pg: ctx.pg, col: ctx.col, lm: pr.line && pr.line.mult ? pr.line.mult : 0, js: pr.align === 'justify' });
     if (!blank && b.runs.every((r) => r.img || r.float || r.lrb || r.pb)) p.classList.add('eo-imgonly'); // a paragraph of pictures is as high as the picture (Decision 526)
     if (blank) p.appendChild(el('br'));
     if (ctx.heads && b.level && b.runs.length && !b.cont) ctx.heads.push(p);
