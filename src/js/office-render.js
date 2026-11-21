@@ -521,10 +521,10 @@ function mathNode(r) {
 }
 
 // A line height given as a multiple (Word: auto, 240ths of a line) is a multiple of the font's own line height, not of its size
-// (Decision 526). Times New Roman and Arial are 1.149 of their size, Calibri 1.22. A font not listed takes 1.17.
+// (Decision 526); below 1.1 it stays a multiple of the size (Decision 528: a file whose pages are laid out line by line, with multiples such as 1.04, overflowed its pages by a line). Times New Roman and Arial are 1.149 of their size, Calibri 1.22. A font not listed takes 1.17.
 const JUSTIFY_SHRINK = -0.03;
 const NAT = { 'times new roman': 1.149, tinos: 1.149, 'liberation serif': 1.149, times: 1.149, arial: 1.149, arimo: 1.149, 'liberation sans': 1.149, helvetica: 1.149, calibri: 1.22, carlito: 1.22, cambria: 1.172, caladea: 1.172, 'courier new': 1.133, cousine: 1.133, verdana: 1.215, tahoma: 1.207, georgia: 1.136, gelasio: 1.136, 'trebuchet ms': 1.16, 'segoe ui': 1.33, 'comic sans ms': 1.39, 'comic neue': 1.39, roboto: 1.172, inter: 1.21, lato: 1.2, 'open sans': 1.362, montserrat: 1.219, poppins: 1.5 };
-const lineMult = (m, font) => String(+(m * (NAT[String(font || '').toLowerCase().replace(/["']/g, '').trim()] || 1.17)).toFixed(4));
+const lineMult = (m, font) => m < 1.1 ? String(m) : String(+(m * (NAT[String(font || '').toLowerCase().replace(/["']/g, '').trim()] || 1.17)).toFixed(4));
 function appendRuns(parent, runs, media, u, ctx = {}) {
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
