@@ -130,7 +130,7 @@ function bulletChar(t) {
   return t;
 }
 
-const PROP_KEYS = ['font', 'size', 'color', 'bg', 'b', 'i', 'u', 's', 'caps', 'sc', 'sup', 'sub'];
+const PROP_KEYS = ['font', 'size', 'color', 'bg', 'b', 'i', 'u', 's', 'caps', 'sc', 'sup', 'sub', 'ls'];
 const fieldKind = (s) => { const m = /^\s*(PAGE|NUMPAGES|SECTIONPAGES)\b/i.exec(s || ''); return m ? m[1].toLowerCase() : null; };
 function hasLrb(blocks) { // a saved page break (Decision 242) anywhere in these blocks
   for (const b of blocks) {
@@ -191,6 +191,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     const c = kid(rp, 'color'); if (c) o.color = colorOf(c);
     for (const [k, n] of [['b', 'b'], ['i', 'i'], ['u', 'u'], ['s', 'strike'], ['caps', 'caps'], ['sc', 'smallCaps'], ['hidden', 'vanish']]) if (kid(rp, n)) o[k] = flag(kid(rp, n));
     const va = at(kid(rp, 'vertAlign'), 'val'); if (va === 'superscript') o.sup = true; else if (va === 'subscript') o.sub = true; else if (va === 'baseline') { o.sup = false; o.sub = false; }
+    const spc = at(kid(rp, 'spacing'), 'val'); if (spc !== null && spc !== undefined && spc !== '' && Number(spc)) o.ls = Number(spc) / 15; // character spacing, twips to px (Decision 531)
     const hl = at(kid(rp, 'highlight'), 'val'); if (hl) o.bg = HL[hl] || null;
     const shd = kid(rp, 'shd'); if (shd && !o.bg) o.bg = colorOf(shd, 'fill', 'themeFill');
     return o;
@@ -528,7 +529,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
           else if (kn === 't') { if (fld && fld.stage === 'instr') continue; if (fld && fld.kind) fld.text += k.textContent; else text += k.textContent; }
           else if (kn === 'tab') text += '\t';
           else if (kn === 'noBreakHyphen') text += '-';
-          else if (kn === 'br' || kn === 'cr') { flush(); out.push(at(k, 'type') === 'page' ? { pb: true } : { br: true }); }
+          else if (kn === 'br' || kn === 'cr') { flush(); out.push(at(k, 'type') === 'page' ? { pb: true } : at(k, 'type') === 'column' ? { br: true, cb: true } : { br: true }); }
           else if (kn === 'footnoteReference') {
             flush();
             const id = at(k, 'id');
@@ -695,6 +696,46 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
       pgStart: st !== null && st !== undefined && st !== '' ? Number(st) : null, pgFmt: pn ? at(pn, 'fmt') : null, hdr, ftr
     };
   });
+  // Multi-column sections (Decision 530): a column break splits the section into columns drawn side by side, as a borderless one-row table.
+  // A section that also holds a page break stays as it is.
+  const colWidths = (sp) => {
+    const c = kid(sp, 'cols'); const n = c ? Number(at(c, 'num')) || 1 : 1;
+    if (n < 2) return null;
+    const list = kids(c, 'col'); const q = pageOf(sp); const gap = tw(at(c, 'space')) ?? 48;
+    if (at(c, 'equalWidth') === '0' && list.length === n) return list.map((x, i) => (tw(at(x, 'w')) || 0) + (i < n - 1 ? tw(at(x, 'space')) || 0 : 0));
+    return Array.from({ length: n }, (_, i) => (q.w - q.l - q.r - gap * (n - 1)) / n + (i < n - 1 ? gap : 0));
+  };
+  const hasCb = (b) => b.t === 'p' && b.runs.some((r) => r.cb);
+  const hasPb = (b) => (b.t === 'table' ? b.rowBrk.some(Boolean) : !!(b.pr && b.pr.pb) || b.runs.some((r) => r.pb || r.lrb));
+  const docBlocks = [];
+  { let from = 0;
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].sectEnd === undefined) continue;
+      const range = blocks.slice(from, i + 1); from = i + 1;
+      const w = colWidths(sectNodes[blocks[i].sectEnd]);
+      if (!w || !range.some(hasCb) || range.some(hasPb)) { docBlocks.push(...range); continue; }
+      const cols = [[]];
+      for (const b of range) {
+        const { sectEnd, ...rest } = b;
+        if (!hasCb(b)) { cols[cols.length - 1].push(sectEnd === undefined ? b : rest); continue; }
+        const segs = [[]];
+        for (const r of b.runs) { if (r.cb) segs.push([]); else segs[segs.length - 1].push(r); }
+        segs.forEach((runs, k) => {
+          if (k > 0) cols.push([]);
+          if (runs.length) cols[cols.length - 1].push({ ...rest, runs, sectEnd: k === segs.length - 1 ? sectEnd : undefined });
+        });
+      }
+      while (cols.length > w.length) cols[cols.length - 2].push(...cols.pop());
+      while (cols.length < w.length) cols.push([]);
+      const sectEnd = blocks[i].sectEnd;
+      for (const c of cols) for (let k = 0; k < c.length; k++) if (c[k].sectEnd !== undefined) c[k] = { ...c[k], sectEnd: undefined };
+      docBlocks.push({
+        t: 'table', sectEnd, rowBrk: [false], borders: {}, grid: w, pct: null, pad: { t: 0, l: 0, r: 0, b: 0 }, align: null,
+        rows: [cols.map((blocksIn, k) => ({ span: 1, col: k, vm: null, bg: null, borders: {}, valign: null, width: w[k], bold: false, blocks: blocksIn }))]
+      });
+    }
+    docBlocks.push(...blocks.slice(from));
+  }
   const evenOdd = !!kid(xml(files, 'word/settings.xml'), 'evenAndOddHeaders');
   const app = xml(files, 'docProps/app.xml');
   const pagesEl = app ? descendants(app, 'Pages')[0] : null;
@@ -727,7 +768,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     }
   }
   const T3 = performance.now();
-  return { kind: 'docx', blocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages, timing: { unzip: T1 - T0, parse: T2 - T1, read: T3 - T2 } };
+  return { kind: 'docx', blocks: docBlocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages, timing: { unzip: T1 - T0, parse: T2 - T1, read: T3 - T2 } };
 }
 
 // ---- xlsx ----

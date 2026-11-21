@@ -548,6 +548,7 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
     const st = t.style;
     if (r.font) st.fontFamily = stack(r.font);
     if (r.size) st.fontSize = `${r.size}px`;
+    if (r.ls) st.letterSpacing = `${r.ls}px`;
     if (ctx.lm) st.lineHeight = lineMult(ctx.lm, r.font);
     if (ctx.js) st.wordSpacing = `${JUSTIFY_SHRINK}em`; // a justified line may close its spaces a little, as in Word (Decision 527)
     if (r.b) st.fontWeight = '700';
