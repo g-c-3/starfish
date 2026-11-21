@@ -539,7 +539,7 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
     }
     if (r.img) {
       const src = u.get(r.img, media);
-      if (src) { const im = el('img', 'eo-img'); im.alt = ''; im.src = src; if (r.w) im.style.width = `${r.w}px`; parent.appendChild(im); }
+      if (src) { const im = el('img', 'eo-img'); im.alt = ''; im.src = src; if (r.w) im.style.width = `${r.w}px`; if (r.w && r.h) im.style.aspectRatio = `${r.w} / ${r.h}`; parent.appendChild(im); } // the size the file states, as Word draws it (Decision 529)
       continue;
     }
     let node = el('span', '', r.field && ctx.pg ? ({ page: ctx.pg.label, numpages: String(ctx.pg.total), sectionpages: String(ctx.pg.secPages) })[r.field] : r.text);
