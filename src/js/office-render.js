@@ -372,7 +372,7 @@ function buildBar(host, ui, extra, tools) {
 
 // An anchored picture, shape or text box (Decision 250). Wrapped floats sit in the text; the rest overlay the paragraph.
 function floatNode(f, media, u, ctx) {
-  const it = slideItem(f.item, media, u, '#404040'); if (!it) return null;
+  const it = slideItem(f.item, media, u, '#404040', ctx && ctx.pg); if (!it) return null;
   const w = el('span', 'eo-float'); const st = w.style; const { w: fw, h: fh } = f.item; const d = f.dist;
   st.width = `${fw}px`; st.height = `${fh}px`; w.appendChild(it);
   const col = ctx.col || null;
@@ -526,11 +526,12 @@ const JUSTIFY_SHRINK = -0.03;
 const NAT = { 'times new roman': 1.149, tinos: 1.149, 'liberation serif': 1.149, times: 1.149, arial: 1.149, arimo: 1.149, 'liberation sans': 1.149, helvetica: 1.149, calibri: 1.22, carlito: 1.22, cambria: 1.172, caladea: 1.172, 'courier new': 1.133, cousine: 1.133, verdana: 1.215, tahoma: 1.207, georgia: 1.136, gelasio: 1.136, 'trebuchet ms': 1.16, 'segoe ui': 1.33, 'comic sans ms': 1.39, 'comic neue': 1.39, roboto: 1.172, inter: 1.21, lato: 1.2, 'open sans': 1.362, montserrat: 1.219, poppins: 1.5 };
 const lineMult = (m, font) => m < 1.1 ? String(m) : String(+(m * (NAT[String(font || '').toLowerCase().replace(/["']/g, '').trim()] || 1.17)).toFixed(4));
 function appendRuns(parent, runs, media, u, ctx = {}) {
+  const late = []; // a box wrapped above and below, set below the paragraph's top, sits after its text (Decision 534)
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
     if (r.math) { parent.appendChild(mathNode(r)); continue; }
     if (r.lrb) continue;
-    if (r.float) { const fl = floatNode(r.float, media, u, ctx); if (fl) parent.appendChild(fl); continue; }
+    if (r.float) { if (r.float.wrap === 'topandbottom' && r.float.v && r.float.v.rel === 'paragraph' && r.float.v.off > 0) { late.push(r.float); continue; } const fl = floatNode(r.float, media, u, ctx); if (fl) parent.appendChild(fl); continue; }
     if (r.pb) { parent.appendChild(el('span', 'eo-pb')); continue; }
     if (r.chart) {
       const w = el('span', 'eo-chartwrap'); w.style.width = `${r.w}px`; cv(w, 'c', '404040', 'E8E6F2');
@@ -562,6 +563,7 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
     if (r.color) cv(t, 'c', r.color, fill && fill.kept ? r.color : adaptText(r.color));
     parent.appendChild(node);
   }
+  for (const f of late) { const fl = floatNode(f, media, u, ctx); if (fl) parent.appendChild(fl); }
 }
 
 // The page changes between Page and Reflow behind a fade (the one recipe: opacity only): it leaves, the view is rebuilt while hidden and drawn
@@ -595,7 +597,7 @@ function docxTable(b, media, u, ctx) {
   const total = b.grid.reduce((a, x) => a + (x || 0), 0);
   if (b.pct) t.style.width = `${b.pct}%`; else if (total) t.style.width = `${total}px`;
   if (b.grid.length && total) { t.style.tableLayout = 'fixed'; const cg = el('colgroup'); for (const g of b.grid) { const c = el('col'); if (g) c.style.width = `${g}px`; cg.appendChild(c); } t.appendChild(cg); }
-  if (b.align === 'center') t.style.margin = '0 auto'; else if (b.align === 'right') t.style.marginLeft = 'auto';
+  if (b.align === 'center') t.style.margin = '0 auto'; else if (b.align === 'right') t.style.marginLeft = 'auto'; else if (b.ind > 0) t.style.marginLeft = `${b.ind}px`; // left indent of the table (Decision 533)
   const tb = el('tbody');
   const last = b.rows.length - 1;
   b.rows.forEach((row, ri) => {
@@ -1080,7 +1082,7 @@ function fillCss(f) {
   return css(f);
 }
 const CLIP = { triangle: 'polygon(50% 0,100% 100%,0 100%)', rtTriangle: 'polygon(0 0,100% 100%,0 100%)', diamond: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', hexagon: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)', pentagon: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)', parallelogram: 'polygon(25% 0,100% 0,75% 100%,0 100%)', trapezoid: 'polygon(25% 0,75% 0,100% 100%,0 100%)', rightArrow: 'polygon(0 25%,60% 25%,60% 0,100% 50%,60% 100%,60% 75%,0 75%)', leftArrow: 'polygon(100% 25%,40% 25%,40% 0,0 50%,40% 100%,40% 75%,100% 75%)', chevron: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%,25% 50%)', homePlate: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%)' };
-function paragraphs(body, parent, u, scale) {
+function paragraphs(body, parent, u, scale, pg) {
   for (const p of body.paras) {
     const d = el('div');
     const st = d.style;
@@ -1101,7 +1103,7 @@ function paragraphs(body, parent, u, scale) {
     }
     for (const r of p.runs) {
       if (r.br) { d.appendChild(document.createElement('br')); continue; }
-      let node = el('span', '', r.text);
+      let node = el('span', '', r.field && pg ? ({ page: pg.label, numpages: String(pg.total), sectionpages: String(pg.secPages) })[r.field] : r.text);
       if (r.sup) { const x = el('sup'); x.appendChild(node); node = x; } else if (r.sub) { const x = el('sub'); x.appendChild(node); node = x; }
       const ns = node.style;
       ns.fontFamily = stack(r.font || 'Calibri'); ns.fontSize = `${(r.size || 24) * scale}px`;
@@ -1115,7 +1117,7 @@ function paragraphs(body, parent, u, scale) {
     parent.appendChild(d);
   }
 }
-function slideItem(it, media, u, ink) {
+function slideItem(it, media, u, ink, pg) {
   const n = el('div', 'eo-it'); const st = n.style; if (it.sid) n.dataset.sid = it.sid;
   st.left = `${it.x}px`; st.top = `${it.y}px`; st.width = `${it.w}px`; st.height = `${it.h}px`;
   const tf = [it.rot ? `rotate(${it.rot}deg)` : '', it.fh ? 'scaleX(-1)' : '', it.fv ? 'scaleY(-1)' : ''].filter(Boolean).join(' '); if (tf) st.transform = tf;
@@ -1145,7 +1147,7 @@ function slideItem(it, media, u, ink) {
         if (c.fill) ts.background = fillCss(c.fill);
         for (const [k, side] of [['l', 'Left'], ['r', 'Right'], ['t', 'Top'], ['b', 'Bottom']]) { const b = c.bd[k]; ts[`border${side}`] = b && b.color ? `${b.w}px ${b.dash} ${css(b.color)}` : 'none'; }
         ts.padding = `${c.pt}px ${c.pr}px ${c.pb}px ${c.pl}px`; ts.verticalAlign = c.anchor === 'ctr' ? 'middle' : c.anchor === 'b' ? 'bottom' : 'top';
-        paragraphs(c.body, td, u, 1);
+        paragraphs(c.body, td, u, 1, pg);
         tr.appendChild(td);
       }
       tb.appendChild(tr);
@@ -1155,7 +1157,7 @@ function slideItem(it, media, u, ink) {
     st.background = 'rgba(255,255,255,0)';
     n.appendChild(chartSvg(it.chart, it.w, it.h, ink));
   } else if (it.t === 'group') {
-    for (const c of it.items) { const cn = slideItem(c, media, u, ink); if (cn) n.appendChild(cn); }
+    for (const c of it.items) { const cn = slideItem(c, media, u, ink, pg); if (cn) n.appendChild(cn); }
   } else if (it.t === 'note') {
     st.border = '1px dashed #888'; st.display = 'flex'; st.alignItems = 'center'; st.justifyContent = 'center'; st.color = '#666'; st.fontSize = '16px'; st.background = 'rgba(128,128,128,.08)';
     n.textContent = it.text;
@@ -1188,7 +1190,7 @@ function slideItem(it, media, u, ink) {
       const b = it.text; const tx = el('div', 'eo-tx'); const ts = tx.style;
       ts.padding = `${b.t}px ${b.r}px ${b.b}px ${b.l}px`;
       ts.justifyContent = b.anchor === 'ctr' ? 'center' : b.anchor === 'b' ? 'flex-end' : 'flex-start';
-      paragraphs(b, tx, u, b.scale);
+      paragraphs(b, tx, u, b.scale, pg);
       n.appendChild(tx);
     }
   }

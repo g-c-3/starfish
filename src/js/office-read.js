@@ -340,17 +340,25 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     const baseSize = (defaults.r && defaults.r.size) || 14.67;
     const paras = kids(tb, 'p').map((p) => {
       const jc = at(kid(kid(p, 'pPr'), 'jc'), 'val');
-      const runs = [];
+      const runs = []; let fl = null;
       for (const r of descendants(p, 'r')) {
         const rp = kid(r, 'rPr'); const on = (k) => { const e = kid(rp, k); return !!e && at(e, 'val') !== '0' && at(e, 'val') !== 'false'; };
         const sz = at(kid(rp, 'sz'), 'val'); const col = at(kid(rp, 'color'), 'val');
         const base = { font: at(kid(rp, 'rFonts'), 'ascii') || undefined, size: sz ? (Number(sz) / 2) * PX_PT : baseSize, b: on('b'), i: on('i'), u: on('u'), color: col && col !== 'auto' ? { hex: col, a: 1 } : undefined };
         let text = '';
+        const flush = () => { if (text) { if (!fl) runs.push({ ...base, text }); else if (fl.stage === 'result') fl.text += text; text = ''; } };
         for (const k of r.children) {
-          if (k.localName === 't') text += k.textContent; else if (k.localName === 'tab') text += '\t';
-          else if (k.localName === 'br') { if (text) { runs.push({ ...base, text }); text = ''; } runs.push({ br: true }); }
+          const kn = k.localName;
+          if (kn === 'fldChar') { // a field in a text box (Decision 532): PAGE, NUMPAGES and SECTIONPAGES are worked out when drawn
+            flush(); const ty = at(k, 'fldCharType');
+            if (ty === 'begin') { if (!fl) fl = { depth: 1, instr: '', stage: 'instr', text: '', base }; else fl.depth++; }
+            else if (ty === 'separate') { if (fl && fl.depth === 1) fl.stage = 'result'; }
+            else if (ty === 'end' && fl) { fl.depth--; if (fl.depth === 0) { const kind = fieldKind(fl.instr); if (kind) runs.push({ ...fl.base, field: kind, text: fl.text }); else if (fl.text) runs.push({ ...fl.base, text: fl.text }); fl = null; } }
+          } else if (kn === 'instrText') { if (fl && fl.depth === 1 && fl.stage === 'instr') fl.instr += k.textContent; }
+          else if (kn === 't') text += k.textContent; else if (kn === 'tab') text += '\t';
+          else if (kn === 'br') { flush(); runs.push({ br: true }); }
         }
-        if (text) runs.push({ ...base, text });
+        flush();
       }
       return { algn: jc === 'center' ? 'center' : jc === 'right' || jc === 'end' ? 'right' : jc === 'both' ? 'justify' : 'left', marL: 0, indent: 0, bullet: null, runs, size: (runs.find((x) => x.size) || {}).size || baseSize };
     });
@@ -636,7 +644,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
       for (let k = ri + 1; k < rows.length; k++) { const nx = rows[k].find((x) => x.col === cell.col); if (nx && nx.vm === 'cont') { nx.skip = true; n++; } else break; }
       cell.rowSpan = n;
     }
-    return { t: 'table', rows, rowBrk: rows.map((r) => r.some((c) => hasLrb(c.blocks))), borders: bd, grid, pct: at(w, 'type') === 'pct' ? Number(at(w, 'w')) / 50 : null, pad, align: at(kid(tp, 'jc'), 'val') };
+    return { t: 'table', rows, rowBrk: rows.map((r) => r.some((c) => hasLrb(c.blocks))), borders: bd, ind: tw(at(kid(tp, 'tblInd'), 'w')) || 0, grid, pct: at(w, 'type') === 'pct' ? Number(at(w, 'w')) / 50 : null, pad, align: at(kid(tp, 'jc'), 'val') };
   }
 
   const body = kid(root, 'body') || root;
