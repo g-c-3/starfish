@@ -527,10 +527,24 @@ const NAT = { 'times new roman': 1.149, tinos: 1.149, 'liberation serif': 1.149,
 const lineMult = (m, font) => m < 1.1 ? String(m) : String(+(m * (NAT[String(font || '').toLowerCase().replace(/["']/g, '').trim()] || 1.17)).toFixed(4));
 function appendRuns(parent, runs, media, u, ctx = {}) {
   const late = []; // a box wrapped above and below, set below the paragraph's top, sits after its text (Decision 534)
+  // two or more boxes wrapped above and below, set against the paragraph, share one band: each at its own x and offset, the text below the lowest (Decision 535)
+  const band = runs.filter((r) => r.float && r.float.wrap === 'topandbottom' && r.float.v && r.float.v.rel === 'paragraph').map((r) => r.float);
+  const inBand = band.length > 1 ? new Set(band) : null; let bandDone = false;
   for (const r of runs) {
     if (r.br) { parent.appendChild(document.createElement('br')); continue; }
     if (r.math) { parent.appendChild(mathNode(r)); continue; }
     if (r.lrb) continue;
+    if (r.float && inBand && inBand.has(r.float)) {
+      if (bandDone) continue; bandDone = true;
+      const base = Math.min(0, ...band.map((f) => f.v.off)); const gap = Math.max(...band.map((f) => Math.max(f.dist.t, f.dist.b)));
+      const box = el('span', 'eo-floatrow'); const bs = box.style; bs.position = 'relative'; bs.display = 'block'; bs.clear = 'both'; bs.height = `${Math.max(...band.map((f) => f.v.off + f.item.h)) - base + gap}px`;
+      for (const f of band) {
+        const n = floatNode(f, media, u, ctx); if (!n) continue;
+        const ns = n.style; ns.position = 'absolute'; ns.margin = '0'; ns.clear = 'none'; ns.left = `${f.h.rel === 'page' && ctx.col ? f.h.off - ctx.col.l : f.h.off}px`; ns.top = `${f.v.off - base}px`;
+        box.appendChild(n);
+      }
+      parent.appendChild(box); continue;
+    }
     if (r.float) { if (r.float.wrap === 'topandbottom' && r.float.v && r.float.v.rel === 'paragraph' && r.float.v.off > 0) { late.push(r.float); continue; } const fl = floatNode(r.float, media, u, ctx); if (fl) parent.appendChild(fl); continue; }
     if (r.pb) { parent.appendChild(el('span', 'eo-pb')); continue; }
     if (r.chart) {
