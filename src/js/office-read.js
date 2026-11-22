@@ -360,7 +360,13 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
         }
         flush();
       }
-      return { algn: jc === 'center' ? 'center' : jc === 'right' || jc === 'end' ? 'right' : jc === 'both' ? 'justify' : 'left', marL: 0, indent: 0, bullet: null, runs, size: (runs.find((x) => x.size) || {}).size || baseSize };
+      const pp = kid(p, 'pPr'); const ind = kid(pp, 'ind'); const sp = kid(pp, 'spacing'); // indent and spacing of a paragraph in a text box (Decision 537)
+      const hang = tw(at(ind, 'hanging')) || 0; const first = tw(at(ind, 'firstLine')) || 0; const line = Number(at(sp, 'line')) || 0;
+      const o = { algn: jc === 'center' ? 'center' : jc === 'right' || jc === 'end' ? 'right' : jc === 'both' ? 'justify' : 'left', marL: tw(at(ind, 'left') || at(ind, 'start')) || 0, indent: hang ? -hang : first, bullet: null, runs, size: (runs.find((x) => x.size) || {}).size || baseSize };
+      if (at(sp, 'before')) o.sb = { px: tw(at(sp, 'before')) || 0 };
+      if (at(sp, 'after')) o.sa = { px: tw(at(sp, 'after')) || 0 };
+      if (line) o.ln = at(sp, 'lineRule') === 'exact' || at(sp, 'lineRule') === 'atLeast' ? { px: tw(String(line)) } : { pct: line / 240 };
+      return o;
     });
     return { anchor: at(bp, 'anchor') || 't', l: ins('lIns', 91440), r: ins('rIns', 91440), t: ins('tIns', 45720), b: ins('bIns', 45720), wrap: at(bp, 'wrap') !== 'none', scale: 1, paras };
   };

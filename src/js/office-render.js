@@ -379,6 +379,7 @@ function floatNode(f, media, u, ctx) {
   const x = f.h.rel === 'page' && col ? f.h.off - col.l : f.h.off; // from the column's left edge
   if (f.wrap === 'topandbottom') {
     st.position = 'relative'; st.display = 'block'; st.clear = 'both'; st.margin = `${d.t}px 0 ${d.b}px 0`;
+    if (f.v && f.v.rel === 'paragraph' && f.v.off > 0) w.dataset.tboff = String(f.v.off); // set below the paragraph's top: the gap is worked out once laid out (Decision 538)
     if (f.h.align === 'center') { st.marginLeft = 'auto'; st.marginRight = 'auto'; } else if (f.h.align === 'right') st.marginLeft = 'auto'; else if (x > 0) st.marginLeft = `${x}px`;
   } else if (f.wrap !== 'none' && !f.behind) {
     const right = f.h.align === 'right' || (f.h.align !== 'left' && f.h.align !== 'center' && col && x + fw / 2 > col.w / 2);
@@ -394,9 +395,10 @@ function floatNode(f, media, u, ctx) {
 }
 // Page- and margin-relative vertical positions are set once the sheet is laid out.
 function placeFloats(sh, q) {
-  const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage]'); if (!list.length) return;
+  const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage], .eo-float[data-tboff]'); if (!list.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / q.w || 1;
   for (const w of list) {
+    if (w.dataset.tboff) { const need = Number(w.dataset.tboff) - w.offsetTop; if (need > 0) w.style.marginTop = `${(parseFloat(w.style.marginTop) || 0) + need}px`; continue; }
     const rel = w.dataset.vrel; const al = w.dataset.valign; const h = w.offsetHeight; const par = w.offsetParent; if (!par) continue;
     if (w.dataset.hpage) w.style.left = `${Number(w.dataset.hpage) - (par.getBoundingClientRect().left - sr.left) / k}px`;
     if (!rel) continue;
