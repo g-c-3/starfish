@@ -379,6 +379,7 @@ function floatNode(f, media, u, ctx) {
   const x = f.h.rel === 'page' && col ? f.h.off - col.l : f.h.off; // from the column's left edge
   if (f.wrap === 'topandbottom') {
     st.position = 'relative'; st.display = 'block'; st.clear = 'both'; st.margin = `${d.t}px 0 ${d.b}px 0`;
+    if (f.h && f.h.rel === 'page' && !f.h.align && f.h.off !== undefined) w.dataset.hpage = String(f.h.off); // x from the page's left edge, as for the other floats (Decision 540)
     if (f.v && f.v.rel === 'paragraph' && f.v.off > 0) w.dataset.tboff = String(f.v.off); // set below the paragraph's top: the gap is worked out once laid out (Decision 538)
     if (f.h.align === 'center') { st.marginLeft = 'auto'; st.marginRight = 'auto'; } else if (f.h.align === 'right') st.marginLeft = 'auto'; else if (x > 0) st.marginLeft = `${x}px`;
   } else if (f.wrap !== 'none' && !f.behind) {
@@ -398,9 +399,10 @@ function placeFloats(sh, q) {
   const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage], .eo-float[data-tboff]'); if (!list.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / q.w || 1;
   for (const w of list) {
+    if (w.dataset.tboff && w.dataset.hpage) { w.style.left = '0px'; w.style.left = `${Number(w.dataset.hpage) - (w.getBoundingClientRect().left - sr.left) / k}px`; }
     if (w.dataset.tboff) { const need = Number(w.dataset.tboff) - w.offsetTop; if (need > 0) w.style.marginTop = `${(parseFloat(w.style.marginTop) || 0) + need}px`; continue; }
     const rel = w.dataset.vrel; const al = w.dataset.valign; const h = w.offsetHeight; const par = w.offsetParent; if (!par) continue;
-    if (w.dataset.hpage) w.style.left = `${Number(w.dataset.hpage) - (par.getBoundingClientRect().left - sr.left) / k}px`;
+    if (w.dataset.hpage) { w.style.left = '0px'; w.style.left = `${Number(w.dataset.hpage) - (w.getBoundingClientRect().left - sr.left) / k}px`; } // measured from where the box sits, so a paragraph's indent does not shift it (Decision 540)
     if (!rel) continue;
     const top = rel === 'page' || rel === 'topMargin' ? 0 : rel === 'bottomMargin' ? q.h - q.b : q.t;
     const span = rel === 'page' ? q.h : rel === 'topMargin' ? q.t : rel === 'bottomMargin' ? q.b : q.h - q.t - q.b;
