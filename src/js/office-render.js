@@ -395,6 +395,37 @@ function floatNode(f, media, u, ctx) {
   return w;
 }
 // Page- and margin-relative vertical positions are set once the sheet is laid out.
+// A tab runs to the next tab stop: a custom one of the paragraph (left, centre, right, decimal as right) or, past the last, the default grid (Decision 541).
+// Positions are from the text margin, so the paragraph's own left margin is added to where the tab sits.
+function placeTabs(sh) {
+  const spans = sh.querySelectorAll('.eo-tabstop'); if (!spans.length) return;
+  const sr = sh.getBoundingClientRect(); const k = sr.width / sh.offsetWidth || 1;
+  const byP = new Map();
+  for (const t of spans) { const p = t.closest('p'); if (!p) continue; if (!byP.has(p)) byP.set(p, []); byP.get(p).push(t); }
+  for (const [p, list] of byP) {
+    let stops = []; try { stops = p.dataset.tabs ? JSON.parse(p.dataset.tabs) : []; } catch (e) { stops = []; }
+    stops = stops.filter((t) => t.val !== 'clear' && t.val !== 'bar');
+    const def = Number(p.dataset.tabdef) || 48; const ml = parseFloat(getComputedStyle(p).marginLeft) || 0;
+    for (const t of list) t.style.width = '0px';
+    const left0 = p.getBoundingClientRect().left; const last = stops.length ? stops[stops.length - 1].pos : 0;
+    list.forEach((t, i) => {
+      const x = (t.getBoundingClientRect().left - left0) / k + ml;
+      const stop = stops.find((q) => q.pos > x + 0.5);
+      const pos = stop ? stop.pos : (Math.floor(Math.max(x, last) / def) + 1) * def; const kind = stop ? stop.val : 'left';
+      let w = pos - x;
+      if (kind === 'right' || kind === 'center' || kind === 'decimal') {
+        const rg = document.createRange(); rg.setStartAfter(t); if (list[i + 1]) rg.setEndBefore(list[i + 1]); else rg.setEnd(p, p.childNodes.length);
+        const tw = rg.getBoundingClientRect().width / k; w = kind === 'center' ? pos - x - tw / 2 : pos - x - tw;
+      }
+      t.style.width = `${Math.max(0, w)}px`;
+      const ld = stop ? stop.leader : '';
+      if (ld === 'dot' || ld === 'middleDot') { t.style.backgroundImage = 'radial-gradient(circle, currentColor 0.9px, transparent 1.1px)'; t.style.backgroundSize = '5px 5px'; t.style.backgroundRepeat = 'repeat-x'; t.style.backgroundPosition = 'left bottom 2px'; }
+      else if (ld === 'underscore') t.style.borderBottom = '1px solid currentColor';
+      else if (ld === 'hyphen') t.style.borderBottom = '1px dashed currentColor';
+    });
+  }
+}
+
 function placeFloats(sh, q) {
   const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage], .eo-float[data-tboff]'); if (!list.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / q.w || 1;
@@ -579,6 +610,9 @@ function appendRuns(parent, runs, media, u, ctx = {}) {
     let fill = ctx.fill || null;
     if (r.bg) fill = applyFill(t, r.bg);
     if (r.color) cv(t, 'c', r.color, fill && fill.kept ? r.color : adaptText(r.color));
+    if (r.text && r.text.includes('\t') && !r.field) { // each tab is its own box, sized once laid out (Decision 541)
+      node.textContent = ''; r.text.split('\t').forEach((seg, i) => { if (i) node.appendChild(el('span', 'eo-tabstop', '\t')); if (seg) node.appendChild(document.createTextNode(seg)); });
+    }
     parent.appendChild(node);
   }
   for (const f of late) { const fl = floatNode(f, media, u, ctx); if (fl) parent.appendChild(fl); }
@@ -665,6 +699,8 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     let fill = ctx.fill || null;
     if (pr.bg) fill = applyFill(p, pr.bg);
     if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if (bd.t || bd.b || bd.l || bd.r) st.padding = '2px 4px'; }
+    if (pr.tabs) p.dataset.tabs = JSON.stringify(pr.tabs);
+    if (tabDef !== 48) p.dataset.tabdef = String(tabDef);
     if (pr.pb) p.classList.add('eo-pbb');
     if (b.src !== undefined) p.dataset.pi = String(b.src);
     if (b.list) {
@@ -786,7 +822,9 @@ function pageBorder(q) {
   }
   return d;
 }
+let tabDef = 48; // the document's default tab stop in px, set when it is mounted
 function mountDocx(model, host, u, ui, bars) {
+  tabDef = model.tabStop || 48;
   const scroll = el('div', 'eo-scroll'); const zoomer = el('div', 'eo-zoomer'); const paper = el('div', 'eo-paper');
   const saved = hasSavedBreaks(model);
   const TP = performance.now();
@@ -828,7 +866,7 @@ function mountDocx(model, host, u, ui, bars) {
     const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
     if (notes.length) notesOf(notes, body);
     const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
-    placeFloats(rec.sh, rec.q);
+    placeFloats(rec.sh, rec.q); placeTabs(rec.sh);
     timing.fill = (timing.fill || 0) + (performance.now() - tf); timing.sheets = (timing.sheets || 0) + 1;
   };
   const ensureAll = () => {

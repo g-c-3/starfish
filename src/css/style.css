@@ -1536,3 +1536,4 @@ body.selecting .note-grid .note-card::after { top: 8px; right: 8px; margin-top: 
 /* Ruled lines in a note (Decision 417): one thin line at the foot of every row, from --ev-lh (row height) and --ev-pt (top padding). */
 .ev-ruled .cm-scroller { background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--ev-rule, rgba(110, 100, 175, 0.22)) calc(100% - 1px)); background-size: 100% var(--ev-lh, 28px); background-position: 0 var(--ev-pt, 14px); background-repeat: repeat-y; background-attachment: local; }
 :root[data-theme="dark"] .ev-ruled .cm-scroller { --ev-rule: rgba(255, 255, 255, 0.11); }
+.eo-tabstop { display: inline-block; white-space: pre; tab-size: 48px; } /* a tab in a Word paragraph; its width is set once laid out (Decision 541) */

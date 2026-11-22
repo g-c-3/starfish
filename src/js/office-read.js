@@ -229,6 +229,8 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
       if (at(ind, 'hanging') !== null) o.first = -tw(at(ind, 'hanging'));
       else if (at(ind, 'firstLine') !== null) o.first = tw(at(ind, 'firstLine'));
     }
+    const tbs = kid(pp, 'tabs'); // custom tab stops: position in px from the text margin, type, leader (Decision 541)
+    if (tbs) o.tabs = kids(tbs, 'tab').map((t) => ({ pos: Number(at(t, 'pos')) / 15, val: at(t, 'val') || 'left', leader: at(t, 'leader') || '' })).filter((t) => Number.isFinite(t.pos));
     const shd = kid(pp, 'shd'); if (shd) o.bg = colorOf(shd, 'fill', 'themeFill');
     const bd = borders(kid(pp, 'pBdr')); if (bd) o.borders = bd;
     if (kid(pp, 'pageBreakBefore')) o.pb = flag(kid(pp, 'pageBreakBefore'));
@@ -595,7 +597,10 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
       if (m.l !== undefined) eff.l = m.l;
       if (m.first !== undefined) eff.first = m.first;
     }
+    const styleTabs = eff.tabs;
     eff = { ...eff, ...direct };
+    if (styleTabs && direct.tabs) { const m = new Map(styleTabs.map((t) => [t.pos, t])); for (const t of direct.tabs) { if (t.val === 'clear') m.delete(t.pos); else m.set(t.pos, t); } eff.tabs = [...m.values()].sort((x, y) => x.pos - y.pos); }
+    if (eff.tabs && !eff.tabs.length) delete eff.tabs;
     fld = null;
     const runs = runsOf(p, [], rbase, false);
     const sp = kid(pp, 'sectPr'); let sectEnd;
@@ -751,6 +756,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     docBlocks.push(...blocks.slice(from));
   }
   const evenOdd = !!kid(xml(files, 'word/settings.xml'), 'evenAndOddHeaders');
+  const tabStop = tw(at(kid(xml(files, 'word/settings.xml'), 'defaultTabStop'), 'val')) || 48;
   const app = xml(files, 'docProps/app.xml');
   const pagesEl = app ? descendants(app, 'Pages')[0] : null;
   const storedPages = pagesEl ? Number(pagesEl.textContent) || 0 : 0; // pages as last saved by the program that wrote the file
@@ -782,7 +788,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     }
   }
   const T3 = performance.now();
-  return { kind: 'docx', blocks: docBlocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, storedPages, timing: { unzip: T1 - T0, parse: T2 - T1, read: T3 - T2 } };
+  return { kind: 'docx', blocks: docBlocks, media, truncated, page, header, footer, footnotes, embedded, sections, evenOdd, tabStop, storedPages, timing: { unzip: T1 - T0, parse: T2 - T1, read: T3 - T2 } };
 }
 
 // ---- xlsx ----
