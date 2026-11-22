@@ -32,6 +32,8 @@ no pre-baked margin). `@capacitor/assets` generates every density (legacy `mipma
 --android`, right after the `android/` platform exists, before `cap sync`). To change the icon:
 replace `resources/icon.png` with a full-bleed square and commit; nothing else to touch.
 
+**Logo (Decision 539).** The artwork is `branding/logo-A-sunset.svg` and `.png`. `scripts/sandbox/make_icons.py` makes `branding/icon-light.png` (white, the default) and `branding/icon-dark.png` (near black) and copies the light one to `resources/icon.png`. The logo is 66 percent of the icon's width on a solid background, so the generator's inset leaves it inside the circular launcher window. The dark icon is not used by CI yet (Phase 135).
+
 **Do not supply a pre-padded source.** The generator applies its own adaptive-icon safe-zone inset;
 a source that already carries margin stacks with that inset and renders visibly smaller than sibling
 icons on the launcher (confirmed on-device, Session 7 — see Decision 24). If you want more breathing
