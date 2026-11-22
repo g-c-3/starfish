@@ -657,6 +657,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     const blank = !b.runs.length; // an empty paragraph is as high as its mark (Decision 526)
     if (blank && b.mk) { if (b.mk.font) st.fontFamily = stack(b.mk.font); if (b.mk.size) st.fontSize = `${b.mk.size}px`; }
     if (pr.line) st.lineHeight = pr.line.mult ? lineMult(pr.line.mult, b.mk && b.mk.font) : `${pr.line.px}px`;
+    else { const nf = NAT[String((b.runs.find((x) => x.font) || b.mk || {}).font || '').toLowerCase().replace(/["']/g, '').trim()]; if (nf) st.lineHeight = String(nf); } // single spacing is the font's own line height (Decision 536)
     let fill = ctx.fill || null;
     if (pr.bg) fill = applyFill(p, pr.bg);
     if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if (bd.t || bd.b || bd.l || bd.r) st.padding = '2px 4px'; }
