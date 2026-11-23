@@ -402,7 +402,7 @@ function placeTabs(sh) {
   const spans = sh.querySelectorAll('.eo-tabstop'); if (!spans.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / sh.offsetWidth || 1;
   const byP = new Map();
-  for (const t of spans) { const p = t.closest('p'); if (!p) continue; if (!byP.has(p)) byP.set(p, []); byP.get(p).push(t); }
+  for (const t of spans) { const p = t.closest('.eo-p'); if (!p) continue; if (!byP.has(p)) byP.set(p, []); byP.get(p).push(t); }
   for (const [p, list] of byP) {
     let stops = []; try { stops = p.dataset.tabs ? JSON.parse(p.dataset.tabs) : []; } catch (e) { stops = []; }
     stops = stops.filter((t) => t.val !== 'clear' && t.val !== 'bar');
