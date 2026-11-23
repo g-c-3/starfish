@@ -1,5 +1,6 @@
 # Mounts the app's Word viewer on a .docx in a real browser and reports, per sheet, how far its content runs past the sheet (Decision 530).
 # Usage: python3 browser.py file.docx [out_dir] [sheet,sheet,...]   Writes sheets.json (per-sheet height, overflow, text) and sheet<N>.png for the sheets listed.
+# DUMPSHEET=<N> also prints each paragraph of that sheet: text start, top and height in points, line height, margin, font size (Decision 548).
 # Needs: esbuild (setup.sh), playwright with chromium. The preferences plugin is replaced by a stub; nothing here is part of the app.
 import base64, json, os, subprocess, sys, tempfile, time
 from playwright.sync_api import sync_playwright
@@ -33,4 +34,10 @@ with sync_playwright() as p:
     for k in want:
         pg.evaluate(f"document.querySelectorAll('.eo-sheet')[{k - 1}].scrollIntoView()"); time.sleep(1.2)
         pg.query_selector_all('.eo-sheet')[k - 1].screenshot(path=f'{out}/sheet{k}.png')
+    k = int(os.environ.get('DUMPSHEET', '0'))
+    if k:
+        rows = pg.evaluate("""(k) => { const s = document.querySelectorAll('.eo-sheet')[k - 1]; const r0 = s.getBoundingClientRect(); const sc = 595.3 / r0.width;
+          return [...s.querySelectorAll('.eo-sh-content .eo-p')].map((p) => { const r = p.getBoundingClientRect(); const cs = getComputedStyle(p); const sp = p.querySelector('span'); const fs = sp ? getComputedStyle(sp) : cs;
+            return [(p.textContent || '').slice(0, 22), +((r.top - r0.top) * sc).toFixed(1), +(r.height * sc).toFixed(1), cs.lineHeight, cs.marginTop, cs.paddingTop, fs.fontSize]; }); }""", k)
+        for r in rows: print(r)
     br.close()
