@@ -121,13 +121,16 @@ export function formatNum(n, fmt) {
   if (fmt === 'decimalZero') return String(n).padStart(2, '0');
   return String(n);
 }
+// Symbol-font characters (Wingdings, Symbol and look-alikes) sit in the private-use range; the phone has no such font, so each maps to a plain character.
+const SYM = { 0xf06c: '\u25cf', 0xf06e: '\u25a0', 0xf06f: '\u25a1', 0xf071: '\u25a1', 0xf075: '\u25c6', 0xf076: '\u25c6', 0xf0a1: '\u25cb', 0xf0a7: '\u25aa', 0xf0a8: '\u25a1', 0xf0b7: '\u2022', 0xf0d8: '\u25ba', 0xf0e8: '\u2192', 0xf0fb: '\u2717', 0xf0fc: '\u2713' };
+function symText(t) {
+  return t && /[\uf020-\uf0ff]/.test(t) ? t.replace(/[\uf020-\uf0ff]/g, (c) => SYM[c.charCodeAt(0)] || '\u2022') : t;
+}
 function bulletChar(t) {
   if (!t) return '\u2022';
-  const c = t.charCodeAt(0);
-  if (c >= 0xf000 && c <= 0xf0ff) return c === 0xf0a7 ? '\u25aa' : '\u2022'; // symbol-font private use
   if (t === 'o') return '\u25e6';
   if (t === '\u00a7') return '\u25aa';
-  return t;
+  return symText(t);
 }
 
 const PROP_KEYS = ['font', 'size', 'color', 'bg', 'b', 'i', 'u', 's', 'caps', 'sc', 'sup', 'sub', 'ls'];
@@ -348,7 +351,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
         const sz = at(kid(rp, 'sz'), 'val'); const col = at(kid(rp, 'color'), 'val');
         const base = { font: at(kid(rp, 'rFonts'), 'ascii') || undefined, size: sz ? (Number(sz) / 2) * PX_PT : baseSize, b: on('b'), i: on('i'), u: on('u'), color: col && col !== 'auto' ? { hex: col, a: 1 } : undefined };
         let text = '';
-        const flush = () => { if (text) { if (!fl) runs.push({ ...base, text }); else if (fl.stage === 'result') fl.text += text; text = ''; } };
+        const flush = () => { if (text) { if (!fl) runs.push({ ...base, text: symText(text) }); else if (fl.stage === 'result') fl.text += text; text = ''; } };
         for (const k of r.children) {
           const kn = k.localName;
           if (kn === 'fldChar') { // a field in a text box (Decision 532): PAGE, NUMPAGES and SECTIONPAGES are worked out when drawn
@@ -531,7 +534,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
         const props = {};
         for (const k of PROP_KEYS) if (f[k]) props[k] = f[k];
         let text = '';
-        const flush = () => { if (text) { out.push({ ...props, text }); text = ''; } };
+        const flush = () => { if (text) { out.push({ ...props, text: symText(text) }); text = ''; } };
         for (const k of c.children) {
           const kn = k.localName;
           if (kn === 'fldChar') {
