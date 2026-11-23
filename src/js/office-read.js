@@ -351,7 +351,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
         const sz = at(kid(rp, 'sz'), 'val'); const col = at(kid(rp, 'color'), 'val');
         const base = { font: at(kid(rp, 'rFonts'), 'ascii') || undefined, size: sz ? (Number(sz) / 2) * PX_PT : baseSize, b: on('b'), i: on('i'), u: on('u'), color: col && col !== 'auto' ? { hex: col, a: 1 } : undefined };
         let text = '';
-        const flush = () => { if (text) { if (!fl) runs.push({ ...base, text: symText(text) }); else if (fl.stage === 'result') fl.text += text; text = ''; } };
+        const flush = () => { if (text) { if (!fl) runs.push(symText(text) === text ? { ...base, text } : { ...base, font: undefined, text: symText(text) }); else if (fl.stage === 'result') fl.text += text; text = ''; } };
         for (const k of r.children) {
           const kn = k.localName;
           if (kn === 'fldChar') { // a field in a text box (Decision 532): PAGE, NUMPAGES and SECTIONPAGES are worked out when drawn
@@ -534,7 +534,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
         const props = {};
         for (const k of PROP_KEYS) if (f[k]) props[k] = f[k];
         let text = '';
-        const flush = () => { if (text) { out.push({ ...props, text: symText(text) }); text = ''; } };
+        const flush = () => { if (text) { const t = symText(text); out.push(t === text ? { ...props, text } : { ...props, font: undefined, text: t }); text = ''; } };
         for (const k of c.children) {
           const kn = k.localName;
           if (kn === 'fldChar') {
