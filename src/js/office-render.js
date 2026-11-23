@@ -389,7 +389,8 @@ function floatNode(f, media, u, ctx) {
     st.position = 'absolute'; st.zIndex = f.behind ? '-1' : '2'; st.pointerEvents = 'none';
     if (col && !f.h.align) w.dataset.hpage = String(x + col.l); // page x; set against the paragraph's left in placeFloats
     if (f.h.align === 'right') st.right = '0'; else if (f.h.align === 'center') { st.left = '50%'; st.transform = 'translateX(-50%)'; } else st.left = `${f.h.align === 'left' ? 0 : x}px`;
-    if (f.v.rel === 'paragraph' || f.v.rel === 'line') st.top = `${f.v.off}px`;
+    if (f.v.rel === 'paragraph') { st.top = `${f.v.off}px`; w.dataset.pof = String(f.v.off); } // measured from the top of the paragraph's space before (Decision 542)
+    else if (f.v.rel === 'line') st.top = `${f.v.off}px`;
     else { st.top = `${f.v.off}px`; w.dataset.vrel = f.v.rel; w.dataset.voff = String(f.v.off); if (f.v.align) w.dataset.valign = f.v.align; }
   }
   return w;
@@ -427,11 +428,12 @@ function placeTabs(sh) {
 }
 
 function placeFloats(sh, q) {
-  const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage], .eo-float[data-tboff]'); if (!list.length) return;
+  const list = sh.querySelectorAll('.eo-float[data-vrel], .eo-float[data-hpage], .eo-float[data-tboff], .eo-float[data-pof]'); if (!list.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / q.w || 1;
   for (const w of list) {
     if (w.dataset.tboff && w.dataset.hpage) { w.style.left = '0px'; w.style.left = `${Number(w.dataset.hpage) - (w.getBoundingClientRect().left - sr.left) / k}px`; }
     if (w.dataset.tboff) { const need = Number(w.dataset.tboff) - w.offsetTop; if (need > 0) w.style.marginTop = `${(parseFloat(w.style.marginTop) || 0) + need}px`; continue; }
+    if (w.dataset.pof && w.parentNode) w.style.top = `${Number(w.dataset.pof) - (parseFloat(getComputedStyle(w.parentNode).marginTop) || 0)}px`;
     const rel = w.dataset.vrel; const al = w.dataset.valign; const h = w.offsetHeight; const par = w.offsetParent; if (!par) continue;
     if (w.dataset.hpage) { w.style.left = '0px'; w.style.left = `${Number(w.dataset.hpage) - (w.getBoundingClientRect().left - sr.left) / k}px`; } // measured from where the box sits, so a paragraph's indent does not shift it (Decision 540)
     if (!rel) continue;
@@ -716,7 +718,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     }
     appendRuns(p, b.runs, media, u, { fill, pg: ctx.pg, col: ctx.col, lm: pr.line && pr.line.mult ? pr.line.mult : 0, js: pr.align === 'justify' });
     if (!blank && b.runs.every((r) => r.img || r.float || r.lrb || r.pb)) p.classList.add('eo-imgonly'); // a paragraph of pictures is as high as the picture (Decision 526)
-    if (blank) p.appendChild(el('br'));
+    if (blank || (b.runs.length && b.runs.every((r) => r.float && r.float.wrap !== 'topandbottom' && (r.float.wrap === 'none' || r.float.behind)))) p.appendChild(el('br')); // a paragraph holding only absolutely placed boxes keeps its empty line (Decision 543)
     if (ctx.heads && b.level && b.runs.length && !b.cont) ctx.heads.push(p);
     parent.appendChild(p);
   }
