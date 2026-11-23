@@ -718,6 +718,8 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
       pgStart: st !== null && st !== undefined && st !== '' ? Number(st) : null, pgFmt: pn ? at(pn, 'fmt') : null, hdr, ftr
     };
   });
+  // An empty paragraph that only carries the break into a continuous section takes no height, as in the converter's PDF (Decision 554).
+  for (const b of blocks) if (b.t === 'p' && b.sectEnd !== undefined && !b.runs.length && sections[b.sectEnd + 1] && sections[b.sectEnd + 1].type === 'continuous') b.nh = true;
   // Multi-column sections (Decision 530): a column break splits the section into columns drawn side by side, as a borderless one-row table.
   // A section that also holds a page break stays as it is.
   const colWidths = (sp) => {

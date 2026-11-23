@@ -702,6 +702,7 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     if (pr.bg) fill = applyFill(p, pr.bg);
     if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if (bd.t || bd.b || bd.l || bd.r) st.padding = '2px 4px'; }
     if (pr.tabs) p.dataset.tabs = JSON.stringify(pr.tabs);
+    if (b.nh) p.dataset.nh = '1';
     if (tabDef !== 48) p.dataset.tabdef = String(tabDef);
     if (pr.pb) p.classList.add('eo-pbb');
     if (b.src !== undefined) p.dataset.pi = String(b.src);
