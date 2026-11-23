@@ -398,6 +398,12 @@ function floatNode(f, media, u, ctx) {
 // Page- and margin-relative vertical positions are set once the sheet is laid out.
 // A tab runs to the next tab stop: a custom one of the paragraph (left, centre, right, decimal as right) or, past the last, the default grid (Decision 541).
 // Positions are from the text margin, so the paragraph's own left margin is added to where the tab sits.
+// A sheet whose last paragraph is empty and which has grown past its page: that paragraph takes no height, so the page does not grow for something nobody sees (Decision 551).
+function trimTail(sh, q) {
+  const c = sh.querySelector('.eo-sh-content'), last = c && c.lastElementChild;
+  if (!last || !last.classList.contains('eo-p') || (last.textContent || '').trim() || last.querySelector('img, svg, canvas, table')) return;
+  if (sh.offsetHeight > q.h + 0.5) last.classList.add('eo-tail');
+}
 function placeTabs(sh) {
   const spans = sh.querySelectorAll('.eo-tabstop'); if (!spans.length) return;
   const sr = sh.getBoundingClientRect(); const k = sr.width / sh.offsetWidth || 1;
@@ -868,7 +874,7 @@ function mountDocx(model, host, u, ui, bars) {
     const notes = s.fns.map((n) => model.footnotes.find((f) => f.n === n)).filter(Boolean);
     if (notes.length) notesOf(notes, body);
     const fb = pickHF(model, s, 'ftr'); if (fb.length) { const h = el('div', 'eo-hf'); docxBlocks(fb, h, model.media, u, ctx); foot.appendChild(h); }
-    placeFloats(rec.sh, rec.q); placeTabs(rec.sh);
+    placeFloats(rec.sh, rec.q); placeTabs(rec.sh); trimTail(rec.sh, rec.q);
     timing.fill = (timing.fill || 0) + (performance.now() - tf); timing.sheets = (timing.sheets || 0) + 1;
   };
   const ensureAll = () => {

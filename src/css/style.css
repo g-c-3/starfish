@@ -1228,6 +1228,7 @@ body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom,
 .eo-p { margin: 0; font: inherit; font-weight: inherit; white-space: pre-wrap; }
 .eo-mark { display: inline-block; text-indent: 0; white-space: pre; }
 .eo-tri { position: relative; display: inline-block; width: .8em; height: 1em; vertical-align: text-bottom; overflow: hidden; white-space: nowrap; text-indent: -3em; } /* an arrowhead drawn in the run's colour, whatever fonts the device has (Decision 546); the character stays for search and edit */
+.eo-tail { height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden; }
 .eo-tri::before { content: ''; position: absolute; left: .08em; top: .18em; width: .6em; height: .64em; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); }
 .eo-hf { opacity: .85; }
 .eo-pb { display: block; border-top: 1px dashed var(--eo-line); opacity: .35; margin: 8px 0; }
