@@ -23,7 +23,7 @@ function unpack(bytes, rootDir, mainPart, extra = []) {
       filter: (f) => {
         if (!f.name.startsWith(rootDir) && !extra.includes(f.name)) return false;
         const ext = f.name.slice(f.name.lastIndexOf('.') + 1).toLowerCase();
-        if (ext !== 'xml' && ext !== 'rels' && ext !== 'odttf' && !IMG_MIME[ext]) return false;
+        if (ext !== 'xml' && ext !== 'rels' && ext !== 'odttf' && ext !== 'emf' && !IMG_MIME[ext]) return false;
         if (f.originalSize > PART_MAX) return false;
         total += f.originalSize;
         return total <= TOTAL_MAX;
@@ -79,8 +79,33 @@ function rels(files, part) {
   }
   return map;
 }
+// A picture pasted into Office is often saved as an EMF (a Windows metafile) that holds one bitmap and nothing else. The bitmap,
+// as a file a browser draws; null for a metafile without one (its vector drawing is not read).
+function emfBitmap(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  for (let o = 0; o + 8 <= b.length;) {
+    const t = dv.getUint32(o, true); const sz = dv.getUint32(o + 4, true); if (sz < 8 || o + sz > b.length) break;
+    if ((t === 81 || t === 80) && sz >= 80) { // stretch-DIB-bits, set-DIB-bits-to-device: the header and the bits sit at offsets given in the record
+      const oBmi = dv.getUint32(o + 48, true); const cBmi = dv.getUint32(o + 52, true); const oBits = dv.getUint32(o + 56, true); const cBits = dv.getUint32(o + 60, true);
+      if (cBmi >= 40 && o + oBmi + cBmi <= b.length && o + oBits + cBits <= b.length && cBits > 0) {
+        const comp = dv.getUint32(o + oBmi + 16, true); const bpp = dv.getUint16(o + oBmi + 14, true); const bits = b.subarray(o + oBits, o + oBits + cBits);
+        if (comp === 4) return { bytes: bits, mime: 'image/jpeg' };
+        if (comp === 5) return { bytes: bits, mime: 'image/png' };
+        if (comp !== 0 && comp !== 3) return null;
+        const out = new Uint8Array(14 + cBmi + cBits); const ov = new DataView(out.buffer);
+        out[0] = 0x42; out[1] = 0x4d; ov.setUint32(2, out.length, true); ov.setUint32(10, 14 + cBmi, true);
+        out.set(b.subarray(o + oBmi, o + oBmi + cBmi), 14); out.set(bits, 14 + cBmi);
+        if (bpp === 32) { let any = false; for (let i = 3; i < cBits; i += 4) if (bits[i]) { any = true; break; } if (!any) for (let i = 3; i < cBits; i += 4) out[14 + cBmi + i] = 255; } // no alpha stored: opaque
+        return { bytes: out, mime: 'image/bmp' };
+      }
+    }
+    o += sz;
+  }
+  return null;
+}
 function image(files, path) {
   const ext = (path.slice(path.lastIndexOf('.') + 1) || '').toLowerCase();
+  if (ext === 'emf') return files[path] ? emfBitmap(files[path]) : null;
   const mime = IMG_MIME[ext];
   return mime && files[path] ? { bytes: files[path], mime } : null;
 }
@@ -1198,6 +1223,7 @@ export function readPptx(bytes) {
       if (at(rp, 'baseline')) { const b = Number(at(rp, 'baseline')); if (b > 0) o.sup = true; else if (b < 0) o.sub = true; }
       const sf = kid(rp, 'solidFill'); if (sf) o.color = clr(sf);
       const lat = kid(rp, 'latin'); if (lat && at(lat, 'typeface')) o.font = fontName(at(lat, 'typeface'));
+      if (kid(rp, 'hlinkClick') && T.colors.hlink) { o.color = { hex: T.colors.hlink, a: 1 }; o.u = true; } // a link is drawn in the theme's link colour, underlined, whatever the run says
       return o;
     };
     const readP = (pp) => {
@@ -1236,9 +1262,9 @@ export function readPptx(bytes) {
     const spTreeOf = (n) => kid(kid(n, 'cSld'), 'spTree');
     const phOf = (sp) => kid(kid(kid(sp, 'nvSpPr'), 'nvPr'), 'ph');
     const baseType = (t) => (t === 'ctrTitle' ? 'title' : t === 'subTitle' || t === 'obj' || t === '' || t === null ? 'body' : t);
-    function findPh(tree, ph) {
+    function findPh(tree, ph, byIdx = true) { // the index links a slide to its layout; a master's indexes mean something else (its slide-number box has the index a content box often has)
       if (!tree || !ph) return null;
-      const idx = at(ph, 'idx'); const type = at(ph, 'type');
+      const idx = byIdx ? at(ph, 'idx') : null; const type = at(ph, 'type');
       const all = kids(tree, 'sp').filter((s) => phOf(s));
       return all.find((s) => idx !== null && at(phOf(s), 'idx') === idx && (at(phOf(s), 'type') || null) === (type || null))
         || all.find((s) => idx !== null && at(phOf(s), 'idx') === idx)
@@ -1344,7 +1370,7 @@ export function readPptx(bytes) {
         if (ph && level !== 'slide') continue; // layout and master placeholders only lend their properties
         const spPr = kid(c, 'spPr');
         const lph = level === 'slide' && ph ? findPh(lTree, ph) : null;
-        const mph = ph ? findPh(mTree, lph ? phOf(lph) : ph) : null;
+        const mph = ph ? findPh(mTree, lph ? phOf(lph) : ph, false) : null;
         const g = xfrmOf(spPr) || xfrmOf(kid(lph, 'spPr')) || xfrmOf(kid(mph, 'spPr'));
         if (!g) continue;
         const style = kid(c, 'style');
@@ -1357,8 +1383,8 @@ export function readPptx(bytes) {
         else if (line && line.color === undefined) line = lnr && Number(at(lnr, 'idx')) > 0 ? { ...line, color: phc(lnr), dash: 'solid' } : null;
         const gn = [spPr, kid(lph, 'spPr'), kid(mph, 'spPr')].map((x) => kid(x, 'prstGeom')).find(Boolean);
         const prst = at(gn, 'prst') || (n === 'cxnSp' ? 'line' : 'rect');
-        const gd = kid(kid(gn, 'avLst'), 'gd'); const am = gd && /val (-?\d+)/.exec(at(gd, 'fmla') || ''); const adj = am ? Number(am[1]) : 0;
-        const item = { t: 'shape', ...place(g, xf), geom: prst, adj: adj || null, fill, line };
+        const gds = kids(kid(gn, 'avLst'), 'gd').map((x) => { const am = /val (-?\d+)/.exec(at(x, 'fmla') || ''); return am ? Number(am[1]) : null; }); // adjust values: the first two shape the outline
+        const item = { t: 'shape', ...place(g, xf), geom: prst, adj: gds[0] || null, adj2: gds[1] ?? null, fill, line };
         if (n === 'sp' && level === 'slide') { const cn = kid(kid(c, 'nvSpPr'), 'cNvPr'); if (cn && at(cn, 'id')) item.sid = at(cn, 'id'); } // the editor finds the shape by it (Decision 498)
         const tx = kid(c, 'txBody');
         if (tx && n === 'sp') {
@@ -1478,6 +1504,22 @@ function chartLine(sp, tc) {
   if (kid(ln, 'noFill')) return null;
   const sf = kid(ln, 'solidFill'); return sf ? chartClr(sf, tc) || undefined : undefined;
 }
+// The chart area's own background: { hex } or { grad: [{ pos, hex }], ang, path }; null: none; undefined: not set.
+function chartBg(sp, tc) {
+  if (!sp) return undefined;
+  if (kid(sp, 'noFill')) return null;
+  const sf = kid(sp, 'solidFill'); if (sf) { const hex = chartClr(sf, tc); return hex ? { hex } : undefined; }
+  const g = kid(sp, 'gradFill'); if (!g) return undefined;
+  const grad = kids(kid(g, 'gsLst'), 'gs').map((x) => ({ pos: Number(at(x, 'pos') || 0) / 1000, hex: chartClr(x, tc) })).filter((x) => x.hex);
+  if (!grad.length) return undefined;
+  const lin = kid(g, 'lin');
+  return { hex: grad[0].hex, grad, ang: lin ? Number(at(lin, 'ang') || 0) / 60000 : 90, path: !!kid(g, 'path') };
+}
+// the text colour a text-properties node sets (the first default run colour in it)
+function chartInk(txPr, tc) {
+  const d = txPr && descendants(txPr, 'defRPr')[0]; const sf = d && kid(d, 'solidFill');
+  return sf ? chartClr(sf, tc) || null : null;
+}
 const BAR_T = ['barChart', 'bar3DChart']; const LINE_T = ['lineChart', 'line3DChart']; const AREA_T = ['areaChart', 'area3DChart'];
 const PIE_T = ['pieChart', 'pie3DChart', 'ofPieChart'];
 export function readChart(files, path, tc) {
@@ -1550,5 +1592,7 @@ export function readChart(files, path, tc) {
   if (!groups.length) return null;
   const t = kid(chart, 'title'); const deleted = on(kid(chart, 'autoTitleDeleted'));
   const lg = kid(chart, 'legend');
-  return { title: deleted ? '' : textOf(t), autoTitle: !!t && !deleted && !textOf(t), legend: lg && !on(kid(lg, 'delete')) ? val(kid(lg, 'legendPos'), 'r') : null, axes, groups };
+  const firstAx = Object.values(axes).length ? plot.children && Array.from(plot.children).find((x) => /Ax$/.test(x.localName)) : null;
+  const ink = chartInk(kid(root, 'txPr'), tc) || chartInk(kid(t, 'txPr'), tc) || (t && chartInk(t, tc)) || chartInk(firstAx && kid(firstAx, 'txPr'), tc);
+  return { title: deleted ? '' : textOf(t), autoTitle: !!t && !deleted && !textOf(t), legend: lg && !on(kid(lg, 'delete')) ? val(kid(lg, 'legendPos'), 'r') : null, axes, groups, bg: chartBg(kid(root, 'spPr'), tc), ink };
 }

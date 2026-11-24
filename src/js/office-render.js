@@ -23,7 +23,8 @@ function urls() {
       if (!made.has(path)) made.set(path, URL.createObjectURL(new Blob([m.bytes], { type: m.mime })));
       return made.get(path);
     },
-    revoke() { for (const u of made.values()) URL.revokeObjectURL(u); made.clear(); }
+    revoke() { for (const u of made.values()) URL.revokeObjectURL(u); made.clear(); },
+    retain(keep) { for (const [k, u] of made) if (!keep.has(k)) { URL.revokeObjectURL(u); made.delete(k); } } // a picture the next slide shares stays decoded: no flash of an empty slide
   };
 }
 
@@ -62,6 +63,23 @@ function applyFill(e, hex) {
 }
 // ---- fonts: bundled stand-ins (Decisions 231, 232), a similar bundled font for any other name, and a notice for missing ones ----
 const BUNDLED = new Set(['Anton', 'Aptos', 'Arial', 'Caladea', 'Calibri', 'Calibri Light', 'Cambria', 'Candara', 'Century Gothic', 'Comic Neue', 'Comic Sans MS', 'Consolas', 'Corbel', 'Courier New', 'Cousine', 'Gelasio', 'Georgia', 'Gotham', 'Helvetica', 'Helvetica Neue', 'Impact', 'Lato', 'Lucida Console', 'Montserrat', 'Open Sans', 'Poppins', 'Roboto', 'Segoe UI', 'Tahoma', 'Times', 'Times New Roman', 'Trebuchet MS', 'Verdana']);
+// Names that say what the face looks like: the stand-in copies the weight and, where one is bundled, the shape. close: near enough in width to need no notice.
+const FACES = [
+  { re: /^arial rounded/i, use: 'Arial', bold: true, close: true },
+  { re: /^(arial black|impact|aharoni|haettenschweiler|bernard mt condensed|stencil)/i, use: 'Anton', bold: true, close: true },
+  { re: /^algerian/i, use: 'Georgia', bold: true, upper: true }, // a face with capitals only: lowercase letters are drawn as capitals
+  { re: /^(elephant|rockwell extra bold|showcard gothic|broadway|goudy stout|bodoni mt (black|poster))/i, use: 'Georgia', bold: true },
+  { re: /^lucida (fax|bright)/i, use: 'Georgia' },
+  { re: /^(franklin gothic (heavy|demi)|gill sans ultra|berlin sans fb demi|britannic)/i, use: 'Arial', bold: true }
+];
+// letter spacing (em) that brings a stand-in to the width of the face it replaces
+const SPACING = [[/^comic sans/i, 0.065]];
+const spacingOf = (n) => { const f = SPACING.find((x) => x[0].test(n || '')); return f ? f[1] : 0; };
+const faceOf = (n) => FACES.find((f) => f.re.test(n)) || null;
+const fontBold = (n) => { const f = n && faceOf(n); return f ? !!f.bold : /\b(bold|black|heavy|ultra|demi ?bold|semi ?bold)\b/i.test(n || ''); };
+// fonts whose bundled stand-in has the same character widths: text set in them lays out as in the file
+const TWIN = new Set(['arial', 'times new roman', 'calibri', 'calibri light', 'cambria', 'courier new', 'helvetica', 'helvetica neue', 'times', 'georgia', 'arimo', 'tinos', 'carlito', 'caladea', 'cousine', 'gelasio']);
+const substituted = (n) => !TWIN.has(String(n || 'Calibri').toLowerCase());
 const SERIF = /times|georgia|cambria|garamond|palatino|book antiqua|bookman|baskerville|minion|century schoolbook|constantia|didot|serif/i;
 const MONO = /courier|consolas|mono|menlo|lucida console|andale|typewriter/i;
 let usedFonts = new Set();
@@ -69,6 +87,8 @@ let embeddedNames = new Set();
 function stack(name) {
   const n = name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'sans-serif';
   usedFonts.add(n);
+  const fc = faceOf(n);
+  if (fc) return `"${n}", "${fc.use}", ${fc.use === 'Georgia' ? 'serif' : 'sans-serif'}`;
   if (BUNDLED.has(n)) {
     const gen = SERIF.test(n) && !/sans/i.test(n) ? 'serif' : MONO.test(n) ? 'monospace' : 'sans-serif';
     return `"${n}", ${gen}`;
@@ -88,7 +108,7 @@ function phoneHasFont(name) {
   } catch { return true; }
 }
 function fontNotice(host) {
-  const missing = [...usedFonts].filter((n) => !BUNDLED.has(n) && !embeddedNames.has(n) && !/^(sans-serif|serif|monospace)$/.test(n) && !phoneHasFont(n));
+  const missing = [...usedFonts].filter((n) => !BUNDLED.has(n) && !(faceOf(n) && faceOf(n).close) && !embeddedNames.has(n) && !/^(sans-serif|serif|monospace)$/.test(n) && !phoneHasFont(n));
   if (!missing.length) return null;
   const note = el('div', 'eo-fontnote');
   note.appendChild(el('span', 'eo-fontnote-t', `Fonts not on this phone, shown in a similar one: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}.`));
@@ -1142,6 +1162,35 @@ function fillCss(f) {
   return css(f);
 }
 const CLIP = { triangle: 'polygon(50% 0,100% 100%,0 100%)', rtTriangle: 'polygon(0 0,100% 100%,0 100%)', diamond: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', hexagon: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)', pentagon: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)', parallelogram: 'polygon(25% 0,100% 0,75% 100%,0 100%)', trapezoid: 'polygon(25% 0,75% 0,100% 100%,0 100%)', rightArrow: 'polygon(0 25%,60% 25%,60% 0,100% 50%,60% 100%,60% 75%,0 75%)', leftArrow: 'polygon(100% 25%,40% 25%,40% 0,0 50%,40% 100%,40% 75%,100% 75%)', chevron: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%,25% 50%)', homePlate: 'polygon(0 0,75% 0,100% 50%,75% 100%,0 100%)' };
+// The outline of a preset shape in pixels, from its own size and adjust values (the share of the shorter side, as in the file).
+function clipPx(g, w, h, a1, a2) {
+  const ss = Math.min(w, h); const P = (pts) => `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(',')})`;
+  const cl = (a, d, mx) => Math.max(0, Math.min(mx, a === null || a === undefined ? d : a));
+  if (g === 'parallelogram') { const x = ss * cl(a1, 25000, 100000 * w / ss) / 100000; return P([[x, 0], [w, 0], [w - x, h], [0, h]]); }
+  if (g === 'trapezoid') { const x = ss * cl(a1, 25000, 50000 * w / ss) / 100000; return P([[x, 0], [w - x, 0], [w, h], [0, h]]); }
+  if (g === 'homePlate') { const x = ss * cl(a1, 50000, 100000 * w / ss) / 100000; return P([[0, 0], [w - x, 0], [w, h / 2], [w - x, h], [0, h]]); }
+  if (g === 'chevron') { const x = ss * cl(a1, 50000, 100000 * w / ss) / 100000; return P([[0, 0], [w - x, 0], [w, h / 2], [w - x, h], [0, h], [x, h / 2]]); }
+  if (g === 'rightArrow' || g === 'leftArrow') {
+    const t = h * cl(a1, 50000, 100000) / 200000; const hd = ss * cl(a2, 50000, 100000 * w / ss) / 100000; const c = h / 2;
+    return g === 'rightArrow' ? P([[0, c - t], [w - hd, c - t], [w - hd, 0], [w, c], [w - hd, h], [w - hd, c + t], [0, c + t]]) : P([[w, c - t], [hd, c - t], [hd, 0], [0, c], [hd, h], [hd, c + t], [w, c + t]]);
+  }
+  if (g === 'hexagon') { const x = ss * cl(a1, 25000, 50000 * w / ss) / 100000; return P([[x, 0], [w - x, 0], [w, h / 2], [w - x, h], [x, h], [0, h / 2]]); }
+  return null;
+}
+// Where a preset shape puts its text: the space left of its rectangle, in pixels (the "text rectangle" of the shape definition).
+function textInset(g, w, h, a1) {
+  const ss = Math.min(w, h); const z = { l: 0, t: 0, r: 0, b: 0 };
+  if (g === 'parallelogram') {
+    const mx = 100000 * w / ss; const a = Math.max(0, Math.min(mx, a1 === null || a1 === undefined ? 25000 : a1));
+    const q1 = -mx / 2; const q2 = a + q1; const q3 = q2 > 0 ? 4 : 2; const q4 = q2 > 0 ? 3 : 2; const q5 = q2 > 0 ? q1 : 0; const q8 = q3 + ((a + q5) / q1) * q4 / -1;
+    return { l: w * q8 / 24, r: w * q8 / 24, t: h * q8 / 24, b: h * q8 / 24 };
+  }
+  if (g === 'ellipse') { const k = (1 - Math.SQRT1_2) / 2; return { l: w * k, r: w * k, t: h * k, b: h * k }; }
+  if (g === 'roundRect') { const k = ss * (a1 === null || a1 === undefined ? 16667 : a1) / 100000 * 0.29289; return { l: k, r: k, t: k, b: k }; }
+  if (g === 'can') { const y = ss * (a1 === null || a1 === undefined ? 25000 : a1) / 100000; return { ...z, t: y, b: y / 2 }; }
+  return z;
+}
+const fz = (px) => `calc(${px}px * var(--fit, 1))`; // the size set in the file, times the fit that a substituted font needs (see fitText)
 function paragraphs(body, parent, u, scale, pg) {
   for (const p of body.paras) {
     const d = el('div');
@@ -1158,7 +1207,7 @@ function paragraphs(body, parent, u, scale, pg) {
       m.style.display = 'inline-block'; m.style.textIndent = '0';
       if (p.indent < 0) m.style.minWidth = `${-p.indent}px`; else m.style.marginRight = '6px';
       if (p.bullet.color) m.style.color = css(p.bullet.color);
-      if (p.bullet.size) m.style.fontSize = `${size * p.bullet.size}px`;
+      if (p.bullet.size) m.style.fontSize = fz(size * p.bullet.size);
       d.appendChild(m);
     }
     for (const r of p.runs) {
@@ -1166,14 +1215,17 @@ function paragraphs(body, parent, u, scale, pg) {
       let node = el('span', '', r.field && pg ? ({ page: pg.label, numpages: String(pg.total), sectionpages: String(pg.secPages) })[r.field] : r.text);
       if (r.sup) { const x = el('sup'); x.appendChild(node); node = x; } else if (r.sub) { const x = el('sub'); x.appendChild(node); node = x; }
       const ns = node.style;
-      ns.fontFamily = stack(r.font || 'Calibri'); ns.fontSize = `${(r.size || 24) * scale}px`;
+      ns.fontFamily = stack(r.font || 'Calibri'); ns.fontSize = fz((r.size || 24) * scale);
+      if (substituted(r.font)) node.dataset.sub = '1';
+      { const ls = spacingOf(r.font); if (ls) ns.letterSpacing = `${ls}em`; }
       if (r.color) ns.color = css(r.color);
-      if (r.b) ns.fontWeight = '700'; if (r.i) ns.fontStyle = 'italic';
+      if (r.b || fontBold(r.font)) ns.fontWeight = '700'; if (r.i) ns.fontStyle = 'italic';
       const deco = [r.u ? 'underline' : '', r.s ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) ns.textDecoration = deco;
-      if (r.caps) ns.textTransform = 'uppercase';
+      if (r.caps || (faceOf(r.font || '') || {}).upper) ns.textTransform = 'uppercase';
       d.appendChild(node);
     }
-    if (!p.runs.length) { d.appendChild(el('br')); st.fontSize = `${size}px`; }
+    if (!p.runs.length) { d.appendChild(el('br')); st.fontSize = fz(size); }
+    { const t0 = p.runs.map((r) => r.text || '').join(''); if (/^ {8,}\S/.test(t0) && t0.trim().length <= 40 && !p.runs.some((r) => r.br)) d.dataset.pad = '1'; } // a short line pushed across the box by spaces: kept on one line (see fitText)
     parent.appendChild(d);
   }
 }
@@ -1238,9 +1290,11 @@ function slideItem(it, media, u, ink, pg) {
       if (it.line && it.line.dash !== 'solid') ln.setAttribute('stroke-dasharray', it.line.dash === 'dotted' ? '2 3' : '6 4');
       sv.appendChild(ln); n.appendChild(sv);
     } else {
-      if (it.fill) st.background = fillCss(it.fill);
-      if (CLIP[g]) st.clipPath = CLIP[g];
-      else {
+      const poly = clipPx(g, it.w, it.h, it.adj, it.adj2) || CLIP[g];
+      if (poly) { // the fill is clipped to the outline on a layer of its own: the text on top is not cut by it
+        const bg = el('div', 'eo-bg'); if (it.fill) bg.style.background = fillCss(it.fill); bg.style.clipPath = poly; n.appendChild(bg);
+      } else {
+        if (it.fill) st.background = fillCss(it.fill);
         if (it.line && it.line.color) st.border = `${it.line.w}px ${it.line.dash} ${css(it.line.color)}`;
         if (g === 'ellipse') st.borderRadius = '50%';
         else if (g === 'roundRect') st.borderRadius = `${Math.min(it.w, it.h) * (it.adj ? it.adj / 100000 : 0.16667)}px`;
@@ -1248,9 +1302,11 @@ function slideItem(it, media, u, ink, pg) {
     }
     if (it.text) {
       const b = it.text; const tx = el('div', 'eo-tx'); const ts = tx.style;
-      ts.padding = `${b.t}px ${b.r}px ${b.b}px ${b.l}px`;
+      const ins = textInset(g, it.w, it.h, it.adj);
+      ts.padding = `${b.t + ins.t}px ${b.r + ins.r}px ${b.b + ins.b}px ${b.l + ins.l}px`;
       ts.justifyContent = b.anchor === 'ctr' ? 'center' : b.anchor === 'b' ? 'flex-end' : 'flex-start';
       paragraphs(b, tx, u, b.scale, pg);
+      if (tx.querySelector('[data-sub]')) tx.dataset.fit = '1';
       n.appendChild(tx);
     }
   }
@@ -1279,6 +1335,32 @@ function icon(kind) {
   sv.appendChild(path);
   return sv;
 }
+// A substituted font is wider or narrower than the one the file was laid out with. A text that now runs past its shape is scaled
+// down until it fits (never up, never below 55%), and a short line pushed across its box by spaces is kept on one line.
+function fitText(root) {
+  const tx = [...root.querySelectorAll('.eo-tx[data-fit]')]; const pd = [...root.querySelectorAll('[data-pad]')];
+  for (const x of tx) x.style.removeProperty('--fit');
+  for (const x of pd) x.style.removeProperty('--fit');
+  for (const t of tx) {
+    let k = 1;
+    for (let n = 0; n < 16 && k > 0.55 && t.scrollHeight > t.clientHeight + 1.5; n++) { k *= 0.95; t.style.setProperty('--fit', k.toFixed(3)); }
+  }
+  for (const p of pd) { // offsetHeight: the layout height, not the one a zoom transform scales
+    const base = parseFloat(getComputedStyle(p).getPropertyValue('--fit')) || 1; let k = base;
+    const line = () => { const sp = p.querySelector('span'); const lh = p.style.lineHeight; return /px$/.test(lh) ? parseFloat(lh) : (parseFloat(lh) || 1.2) * parseFloat(getComputedStyle(sp || p).fontSize); }; // the height of one line, from the text's own size
+    for (let n = 0; n < 16 && k > 0.55 && p.offsetHeight > line() * 1.5; n++) { k *= 0.95; p.style.setProperty('--fit', k.toFixed(3)); }
+  }
+}
+// the fit is measured with the fonts in; it is measured again when they have loaded
+const fitWhenFonts = (root) => { fitText(root); if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (root.isConnected) fitText(root); }); };
+// Waits (at most `ms`) until the pictures of a slide are decoded, so it appears whole instead of filling in.
+function decoded(cv, ms) {
+  const srcs = [...cv.querySelectorAll('img')].map((i) => i.src);
+  const bg = /url\("?([^")]+)"?\)/.exec(cv.style.backgroundImage || ''); if (bg) srcs.push(bg[1]);
+  const jobs = srcs.filter((x) => x).map((x) => { const im = new Image(); im.src = x; return im.decode ? im.decode().catch(() => {}) : null; }).filter(Boolean);
+  if (!jobs.length) return null;
+  return Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, ms))]);
+}
 const PLAY_MS = 5000; // time each slide stays up while playing
 
 // root is the viewer host (the part of the page that goes full screen while playing)
@@ -1302,16 +1384,26 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   zoomer.style.width = `${sw}px`;
   bars.extra = (b) => b.appendChild(zoomButtons(ui, zoom));
   let index = 0; let playing = false; let timer = null;
+  let token = 0;
   function show(i) {
     index = i;
     count(`${i + 1}/${model.count}`);
     first.disabled = prev.disabled = i === 0; next.disabled = last.disabled = i === model.count - 1;
-    stage.replaceChildren(); notes.replaceChildren(); u.revoke();
-    zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
+    const mine = ++token;
     let s;
-    try { s = model.load(i); } catch (e) { stage.appendChild(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This slide could not be read.')); return; }
-    stage.appendChild(slideDom(s, u));
-    if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); notes.appendChild(n); }
+    try { s = model.load(i); } catch (e) { stage.replaceChildren(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This slide could not be read.')); notes.replaceChildren(); u.revoke(); return; }
+    const used = new Set(); const uu = { get: (path, media) => { used.add(path); return u.get(path, media); } };
+    const cv = slideDom(s, uu);
+    // the new slide is built beside the old one and swapped in whole once its pictures are decoded (a slow picture does not hold it past 700 ms)
+    const put = () => {
+      if (mine !== token) return;
+      stage.replaceChildren(cv); notes.replaceChildren(); u.retain(used);
+      zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
+      fitWhenFonts(cv);
+      if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); notes.appendChild(n); }
+    };
+    const wait = decoded(cv, 700);
+    if (wait) wait.then(put); else put();
   }
   // Play: each slide stays PLAY_MS, then the next; stops on the last. Playing blurs the rest of the page (see .eo-playing).
   // The timer is not user activity, so the auto-lock still applies.
@@ -1327,20 +1419,23 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   const go = (i) => { if (i < 0 || i >= model.count || i === index) return; ui.onActivity(); show(i); if (playing) arm(); };
   first.onclick = () => go(0); prev.onclick = () => go(index - 1); next.onclick = () => go(index + 1); last.onclick = () => go(model.count - 1);
   play.onclick = () => { ui.onActivity(); if (!playing && index === model.count - 1) show(0); setPlaying(!playing); };
-  // swipe sideways to change slide, only while not zoomed in
+  // swipe sideways, or tap the left half (previous) or the right half (next), only while not zoomed in; each tap is one slide
   let t0 = null;
-  scroll.addEventListener('touchstart', (e) => { t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+  scroll.addEventListener('touchstart', (e) => { t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null; }, { passive: true });
   scroll.addEventListener('touchend', (e) => {
     if (!t0 || !e.changedTouches.length || zoom.user() > 1.05) { t0 = null; return; }
-    const dx = e.changedTouches[0].clientX - t0.x; const dy = e.changedTouches[0].clientY - t0.y; t0 = null;
-    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) go(dx < 0 ? index + 1 : index - 1);
+    const c = e.changedTouches[0]; const dx = c.clientX - t0.x; const dy = c.clientY - t0.y; const dt = Date.now() - t0.t; t0 = null;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) { go(dx < 0 ? index + 1 : index - 1); return; }
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 400 && !(e.target.closest && e.target.closest('a,button,input,textarea'))) {
+      const r = scroll.getBoundingClientRect(); go(c.clientX < r.left + r.width / 2 ? index - 1 : index + 1);
+    }
   }, { passive: true });
   show(0);
   let ro = null;
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
   // the editor gives a new model: the slide count and the slides are read from it (Decision 498)
   const setModel = (m, i) => { model = m; show(Math.max(0, Math.min(i, m.count - 1))); };
-  return { stage, go, cur: () => index, setModel, destroy() { if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
+  return { stage, go, cur: () => index, setModel, destroy() { token++; if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message

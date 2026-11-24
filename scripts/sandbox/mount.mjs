@@ -9,7 +9,7 @@ const SRC = process.env.SRC || '/home/claude/repo/src/js'; const tmp = fs.mkdtem
 fs.writeFileSync(path.join(tmp, 'stub.js'), 'export const Preferences = { get: async () => ({ value: null }), set: async () => {}, remove: async () => {} };');
 execFileSync('npx', ['esbuild', `${SRC}/office-render.js`, '--bundle', '--format=esm', `--alias:@capacitor/preferences=${tmp}/stub.js`, `--outfile=${tmp}/render.mjs`, '--log-level=error']);
 const dom = new JSDOM('<!doctype html><body><div id="h"></div></body>', { pretendToBeVisual: true, url: 'https://example.org/' });
-for (const k of ['document', 'window', 'HTMLElement', 'Node', 'navigator', 'getComputedStyle', 'requestAnimationFrame', 'localStorage']) { try { globalThis[k] = dom.window[k]; } catch { Object.defineProperty(globalThis, k, { value: dom.window[k], configurable: true }); } }
+for (const k of ['document', 'window', 'DOMParser', 'HTMLElement', 'Node', 'navigator', 'getComputedStyle', 'requestAnimationFrame', 'localStorage']) { try { globalThis[k] = dom.window[k]; } catch { Object.defineProperty(globalThis, k, { value: dom.window[k], configurable: true }); } }
 globalThis.URL.createObjectURL = () => 'blob:x'; globalThis.URL.revokeObjectURL = () => {};
 const { mountOffice } = await import(`${tmp}/render.mjs`);
 const file = process.argv[2]; const kind = /\.(xls|xlsx|ods)$/.test(file) ? 'xlsx' : /\.(ppt|pptx|odp)$/.test(file) ? 'pptx' : 'docx';

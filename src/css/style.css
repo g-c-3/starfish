@@ -1271,6 +1271,7 @@ body.overlay-open #explorer-viewer { padding-bottom: env(safe-area-inset-bottom,
 .eo-canvas { position: relative; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.3); color: #000; font-family: Calibri, Carlito, Roboto, sans-serif; }
 .eo-it { position: absolute; }
 .eo-tx { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: visible; }
+.eo-bg { position: absolute; inset: 0; } /* the outline layer of a shape: its fill, clipped; the text sits above it (Decision 557) */
 .eo-ptable { border-collapse: collapse; table-layout: fixed; }
 .eo-ptable td { overflow: hidden; }
 .eo-notes-wrap { padding: 0 10px; }

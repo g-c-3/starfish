@@ -35,11 +35,25 @@ function smoothPath(pts) {
   return d;
 }
 
+let gradId = 0;
 export function chartSvg(m, W, H, ink = 'currentColor') {
   W = Math.max(80, Math.round(W)); H = Math.max(60, Math.round(H));
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img' });
   svg.style.display = 'block'; svg.style.maxWidth = '100%'; svg.style.height = 'auto';
+  // a chart that paints its own background keeps the text colour it sets, whatever the page behind it is
+  if (m.bg && m.bg.hex && m.ink) ink = `#${m.ink}`;
+  else if (m.bg && m.bg.hex) ink = lumOf(m.bg.hex) > 0.55 ? '#404040' : '#F2F2F2';
   if (ink !== 'currentColor') svg.style.color = ink;
+  if (m.bg && m.bg.hex) {
+    let fill = hexOf(m.bg.hex);
+    if (m.bg.grad && m.bg.grad.length > 1) {
+      const id = `eo-cg${++gradId}`; const defs = sv('defs', {}, svg); const rad = m.bg.path; const a = (m.bg.ang || 0) * Math.PI / 180;
+      const gr = sv(rad ? 'radialGradient' : 'linearGradient', rad ? { id, cx: '50%', cy: '50%', r: '75%' } : { id, x1: 0.5 - Math.cos(a) / 2, y1: 0.5 - Math.sin(a) / 2, x2: 0.5 + Math.cos(a) / 2, y2: 0.5 + Math.sin(a) / 2 }, defs);
+      for (const g of m.bg.grad) sv('stop', { offset: `${g.pos}%`, 'stop-color': hexOf(g.hex) }, gr);
+      fill = `url(#${id})`;
+    }
+    sv('rect', { x: 0, y: 0, width: W, height: H, fill }, svg);
+  }
   const fs = Math.max(10, Math.min(16, W / 42));
   const T = (x, y, s, o = {}, parent = svg) => {
     const a = { x, y, 'font-size': o.size || fs, 'text-anchor': o.anchor || 'middle', fill: o.fill || 'currentColor', 'font-family': 'Calibri, Carlito, "Open Sans", sans-serif' };

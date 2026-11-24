@@ -8,6 +8,8 @@ Development aids for testing the Office readers without a device. Not part of th
 - `copy.mjs`: makes the `.pptx` copy of a `.ppt`.
 - `mount.mjs`: mounts the app's viewer on a file in a simulated page and prints what it drew.
 - `browser.py`: mounts the Word viewer on a `.docx` in a real browser and prints, per sheet, how far its content runs past the sheet; saves screenshots of chosen sheets (Decision 530).
+- `slides.py`: mounts the PowerPoint viewer on a `.pptx` in a real browser, saves a screenshot of each slide listed and prints the text that runs past its shape (Decision 564).
+- `slidetap.py`: taps the PowerPoint viewer with real touch events (left half, right half, quick taps) and checks that a slide is put on the stage with its pictures decoded (Decision 564).
 - `charts.mjs`: draws the charts of an `.xls` to SVG with the app's chart code.
 
 Typical run: `sh setup.sh`, `python3 make_xls.py /tmp/s`, `node dump.mjs /tmp/s/in8.xls`, `node mount.mjs /tmp/s/in9.xls`.
