@@ -7779,11 +7779,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       title: item.label || 'File', isVault, entry: item, viewOnly,
       onEdit: async () => { if (unsaved()) { toast('Save or discard your changes first.'); return; } await editEntryUI(await fresh(), isVault); },
       onClose: () => { token++; shut(); viewerScreen.classList.remove('file-mode', 'pdf-mode', 'text-mode'); },
-      guard: canEditDoc ? async () => { // Back asks about unsaved changes
-        if (!unsaved()) return true;
+      guard: async () => { // Back leaves full screen, then the slide overview, before it leaves the viewer; then it asks about unsaved changes
+        if (mounted && mounted.closeTop && mounted.closeTop()) return false;
+        if (!canEditDoc || !unsaved()) return true;
         const v = await mounted.confirmLeave();
         return v === 'discard' ? true : v === 'save' ? mounted.saveNow() : false;
-      } : null,
+      },
       render: async (body, { refresh, close } = {}) => {
         if (unsaved() && !discarding) return; // a refresh must not drop unsaved changes
         discarding = false;

@@ -1326,7 +1326,8 @@ function slideDom(s, u) {
 }
 const ICONS = {
   first: 'M6 5h2.4v14H6zM19 5v14L9 12z', prev: 'M17 5v14L7 12z', play: 'M8 5v14l11-7z', pause: 'M6.5 5h4v14h-4zM13.5 5h4v14h-4z',
-  next: 'M7 5v14l10-7z', last: 'M15.6 5H18v14h-2.4zM5 5v14l10-7z'
+  next: 'M7 5v14l10-7z', last: 'M15.6 5H18v14h-2.4zM5 5v14l10-7z',
+  full: 'M5 5h5v2H7v3H5zM14 5h5v5h-2V7h-3zM5 14h2v3h3v2H5zM17 14h2v5h-5v-2h3z', exitfull: 'M8 5v3H5v2h5V5zM14 5v5h5V8h-3V5zM5 14v2h3v3h2v-5zM14 14v5h2v-3h3v-2z'
 };
 function icon(kind) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -1361,6 +1362,19 @@ function decoded(cv, ms) {
   if (!jobs.length) return null;
   return Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, ms))]);
 }
+// One pane gives way to another inside the viewer (single slide, overview): the old one leaves (0.17 s), the new one arrives after 0.11 s,
+// with the page recipe's keyframes and easing (see motion.css, .eo-sw-*). Nothing moves under reduced motion.
+const calm = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function swapPane(out, inc, fwd, after) {
+  const done = () => {
+    out.classList.add('hidden'); out.classList.remove('eo-sw-out-l', 'eo-sw-out-r'); inc.classList.remove('hidden');
+    if (!calm()) { inc.classList.add(fwd ? 'eo-sw-in-r' : 'eo-sw-in-l'); setTimeout(() => inc.classList.remove('eo-sw-in-r', 'eo-sw-in-l'), 340); }
+    if (after) after();
+  };
+  if (calm() || out.classList.contains('hidden')) { done(); return; }
+  out.classList.add(fwd ? 'eo-sw-out-l' : 'eo-sw-out-r');
+  setTimeout(done, 110);
+}
 const PLAY_MS = 5000; // time each slide stays up while playing
 
 // root is the viewer host (the part of the page that goes full screen while playing)
@@ -1368,14 +1382,19 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   const scroll = el('div', 'eo-scroll eo-pscroll'); const zoomer = el('div', 'eo-zoomer'); const stage = el('div'); const notes = el('div', 'eo-notes-wrap');
   const veil = el('div', 'eo-veil');
   const bar = el('div', 'eo-slidebar');
+  const wrap = el('div', 'eo-pwrap'); const ovw = el('div', 'eo-ovw hidden');
+  const pill = el('button', 'eo-slidecount eo-ctl'); pill.type = 'button'; pill.setAttribute('aria-label', 'All slides');
+  const exitB = el('button', 'eo-exitfull eo-ctl hidden'); exitB.type = 'button'; exitB.setAttribute('aria-label', 'Exit full screen'); exitB.appendChild(icon('exitfull'));
+  let full = false; let bare = false; // full screen; the controls hidden by a long press
   const mk = (label, kind) => { const b = el('button', 'eo-nav eo-navi'); b.type = 'button'; b.setAttribute('aria-label', label); b.appendChild(icon(kind)); return b; };
   const first = mk('First slide', 'first'); const prev = mk('Previous slide', 'prev'); const play = mk('Play', 'play'); const next = mk('Next slide', 'next'); const last = mk('Last slide', 'last');
-  bar.append(first, prev, play, next, last);
-  zoomer.appendChild(stage); scroll.append(zoomer, notes); host.append(veil, scroll, bar);
+  const fullB = mk('Full screen', 'full');
+  bar.append(first, prev, play, next, last, fullB);
+  zoomer.appendChild(stage); scroll.append(zoomer, notes); wrap.append(scroll, ovw, pill, exitB); host.append(veil, wrap, bar);
   const sw = model.size.w; const sh = model.size.h;
   // the whole slide fits the area, in portrait and in landscape
   const fit = () => {
-    const cw = scroll.clientWidth - 16; const ch = scroll.clientHeight - 24;
+    const cw = scroll.clientWidth - (full ? 0 : 16); const ch = scroll.clientHeight - (full ? 0 : 24); // full screen: the slide takes the whole area
     if (!(cw > 0)) return 1;
     const byW = cw / sw;
     return Math.max(0.1, ch > 0 ? Math.min(byW, ch / sh) : byW);
@@ -1387,7 +1406,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   let token = 0;
   function show(i) {
     index = i;
-    count(`${i + 1}/${model.count}`);
+    count(`${i + 1}/${model.count}`); pill.textContent = `${i + 1}/${model.count}`;
     first.disabled = prev.disabled = i === 0; next.disabled = last.disabled = i === model.count - 1;
     const mine = ++token;
     let s;
@@ -1416,13 +1435,84 @@ function mountPptx(model, host, ui, count, u, bars, root) {
     if (on) arm();
     zoom.reset();
   }
-  const go = (i) => { if (i < 0 || i >= model.count || i === index) return; ui.onActivity(); show(i); if (playing) arm(); };
+  const go = (i) => {
+    if (ovOpen) { closeOverview(Math.max(0, Math.min(i, model.count - 1))); return; }
+    if (i < 0 || i >= model.count || i === index) return; ui.onActivity(); show(i); if (playing) arm();
+  };
   first.onclick = () => go(0); prev.onclick = () => go(index - 1); next.onclick = () => go(index + 1); last.onclick = () => go(model.count - 1);
   play.onclick = () => { ui.onActivity(); if (!playing && index === model.count - 1) show(0); setPlaying(!playing); };
+  // ---- Overview: every slide stacked one after the other like the pages of a PDF, each with its number; a tap on one opens it ----
+  let ovOpen = false; let ovIndex = 0; let ovItems = []; let ovIo = null;
+  const ovUrls = { get: (path, media) => u.get(path, media) };
+  const ovScale = () => { for (const it of ovItems) { const cv = it.firstChild.firstChild; if (cv) cv.style.transform = `scale(${it.clientWidth / sw})`; } };
+  function paintOv(it) {
+    const box = it.firstChild; if (box.firstChild) return;
+    try { const cv = slideDom(model.load(Number(it.dataset.i)), ovUrls); cv.style.transformOrigin = '0 0'; cv.style.transform = `scale(${it.clientWidth / sw})`; box.appendChild(cv); fitWhenFonts(cv); } catch { /* a slide that cannot be read stays empty */ }
+  }
+  const ovMid = () => { const it = ovItems[0]; if (!it) return 0; const h = it.offsetHeight + 14; return Math.max(0, Math.min(model.count - 1, Math.floor((ovw.scrollTop + ovw.clientHeight / 2 - 12) / h))); };
+  const onOvScroll = () => { const m = ovMid(); if (m !== ovIndex) { ovIndex = m; pill.textContent = `${m + 1}/${model.count}`; ovItems.forEach((x, k) => x.classList.toggle('cur', k === m)); } };
+  function openOverview() {
+    if (ovOpen) return; ovOpen = true; ui.onActivity(); if (playing) setPlaying(false);
+    ovw.replaceChildren(); const lst = el('div', 'eo-ovl'); ovw.appendChild(lst); ovItems = []; ovIndex = index;
+    ovIo = window.IntersectionObserver ? new window.IntersectionObserver((es) => { for (const e of es) { if (e.isIntersecting) paintOv(e.target); else e.target.firstChild.replaceChildren(); } }, { root: ovw, rootMargin: '120% 0px' }) : null;
+    for (let i = 0; i < model.count; i++) {
+      const it = el('div', 'eo-ovp'); it.dataset.i = String(i); it.style.aspectRatio = `${sw} / ${sh}`;
+      it.append(el('div', 'eo-ovc'), el('div', 'eo-ovn', `${i + 1}/${model.count}`));
+      it.onclick = () => closeOverview(i);
+      lst.appendChild(it); ovItems.push(it);
+    }
+    swapPane(scroll, ovw, true, () => {
+      const it = ovItems[index]; ovw.scrollTop = it ? it.offsetTop - Math.max(0, (ovw.clientHeight - it.offsetHeight) / 2) : 0;
+      ovItems.forEach((x, k) => x.classList.toggle('cur', k === index));
+      if (ovIo) ovItems.forEach((x) => ovIo.observe(x)); else ovItems.forEach(paintOv);
+      pill.textContent = `${index + 1}/${model.count}`; ovIndex = index;
+    });
+  }
+  function closeOverview(i) {
+    if (!ovOpen) return; ovOpen = false; ui.onActivity();
+    if (ovIo) { ovIo.disconnect(); ovIo = null; }
+    index = Math.max(0, Math.min(i, model.count - 1)); show(index);
+    swapPane(ovw, scroll, false, () => { ovw.replaceChildren(); ovItems = []; });
+  }
+  ovw.addEventListener('scroll', onOvScroll, { passive: true });
+  pill.onclick = () => { if (ovOpen) closeOverview(ovIndex); else openOverview(); };
+  // ---- Full screen: only the slide, the slide number and the exit button; a long press on the slide hides those two, another brings them back ----
+  const nativeFull = (on) => { try { if (window.ArklyScreen) window.ArklyScreen.immersive(on, false); } catch { /* no native bridge: the window-filling mode stays */ } };
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  let overlay = false;
+  const onFsChange = () => { if (fsEl() === root) overlay = true; else if (overlay) { overlay = false; if (full) setFull(false); } };
+  document.addEventListener('fullscreenchange', onFsChange);
+  function setFull(on) {
+    if (on === full) return; full = on; bare = false;
+    if (on && playing) setPlaying(false);
+    root.classList.toggle('eo-full', on); root.classList.remove('eo-bare'); exitB.classList.toggle('hidden', !on);
+    if (!calm()) { root.classList.add('eo-fade-in'); setTimeout(() => root.classList.remove('eo-fade-in'), 340); }
+    nativeFull(on);
+    try {
+      if (on) { if (window.ArklyScreen && root.requestFullscreen) { const r = root.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } }
+      else { overlay = false; if (fsEl() && document.exitFullscreen) { const r = document.exitFullscreen(); if (r && r.catch) r.catch(() => {}); } }
+    } catch { /* the window-filling mode stays */ }
+    zoom.reset();
+  }
+  fullB.onclick = () => { ui.onActivity(); setFull(true); };
+  exitB.onclick = () => { ui.onActivity(); setFull(false); };
+  // Back leaves full screen first, then the overview; true when it did something
+  const closeTop = () => { if (full) { setFull(false); return true; } if (ovOpen) { closeOverview(ovIndex); return true; } return false; };
+  // long press (a finger held still for 0.5 s) toggles the controls in full screen; the lift after it is not a tap
+  let lpT = null; let lp = false;
+  scroll.addEventListener('contextmenu', (e) => { if (full) e.preventDefault(); });
   // swipe sideways, or tap the left half (previous) or the right half (next), only while not zoomed in; each tap is one slide
   let t0 = null;
-  scroll.addEventListener('touchstart', (e) => { t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null; }, { passive: true });
+  scroll.addEventListener('touchstart', (e) => {
+    t0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+    clearTimeout(lpT); lpT = null;
+    if (full && t0) lpT = setTimeout(() => { lpT = null; lp = true; bare = !bare; root.classList.toggle('eo-bare', bare); }, 500);
+  }, { passive: true });
+  scroll.addEventListener('touchmove', (e) => { if (lpT && t0 && e.touches.length && Math.hypot(e.touches[0].clientX - t0.x, e.touches[0].clientY - t0.y) > 10) { clearTimeout(lpT); lpT = null; } }, { passive: true });
+  scroll.addEventListener('touchcancel', () => { clearTimeout(lpT); lpT = null; lp = false; t0 = null; }, { passive: true });
   scroll.addEventListener('touchend', (e) => {
+    clearTimeout(lpT); lpT = null;
+    if (lp) { lp = false; t0 = null; return; }
     if (!t0 || !e.changedTouches.length || zoom.user() > 1.05) { t0 = null; return; }
     const c = e.changedTouches[0]; const dx = c.clientX - t0.x; const dy = c.clientY - t0.y; const dt = Date.now() - t0.t; t0 = null;
     if (Math.abs(dx) > 70 && Math.abs(dy) < 50) { go(dx < 0 ? index + 1 : index - 1); return; }
@@ -1435,7 +1525,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
   // the editor gives a new model: the slide count and the slides are read from it (Decision 498)
   const setModel = (m, i) => { model = m; show(Math.max(0, Math.min(i, m.count - 1))); };
-  return { stage, go, cur: () => index, setModel, destroy() { token++; if (timer) clearInterval(timer); root.classList.remove('eo-playing'); if (ro) ro.disconnect(); } };
+  return { stage, go, cur: () => index, setModel, closeTop, destroy() { token++; clearTimeout(lpT); if (timer) clearInterval(timer); if (ovIo) ovIo.disconnect(); document.removeEventListener('fullscreenchange', onFsChange); if (full) setFull(false); root.classList.remove('eo-playing', 'eo-full', 'eo-bare'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -1560,5 +1650,5 @@ function mountOfficeView(kind, bytes, host, ctx) {
   const fnote = fontNotice(host);
   // the notice folds away with the title bar on scroll (Decision 243)
   const stopChrome = chromeOnScroll(host, (h) => { if (fnote) fnote.classList.toggle('eo-folded', h); if (ctx.onChrome) ctx.onChrome(h); }, '.eo-scroll, .eo-grid');
-  return { dirty: () => !!(editor && editor.dirty()), confirmLeave: () => shell.confirmLeave(), saveNow: () => shell.saveNow(), destroy() { stopChrome(); if (editor) editor.destroy(); if (shell) shell.destroy(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
+  return { closeTop: () => !!(inner.closeTop && inner.closeTop()), dirty: () => !!(editor && editor.dirty()), confirmLeave: () => shell.confirmLeave(), saveNow: () => shell.saveNow(), destroy() { stopChrome(); if (editor) editor.destroy(); if (shell) shell.destroy(); for (const f of faces) { try { document.fonts.delete(f); } catch { /* not added */ } } if (inner.destroy) inner.destroy(); bars.bar.destroy(); u.revoke(); host.replaceChildren(); host.classList.remove('ev-office'); delete host.dataset.theme; setCount(''); } };
 }

@@ -41,6 +41,14 @@
   .np-in-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
   .np-in-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
 
+  /* PowerPoint viewer (Decision 565): the slide and the overview give way to each other, and full screen arrives, with the same keyframes and timings. */
+  .eo-sw-out-l { animation: mx-out-l 0.17s var(--mx-leave) both; will-change: transform, opacity; }
+  .eo-sw-out-r { animation: mx-out-r 0.17s var(--mx-leave) both; will-change: transform, opacity; }
+  .eo-sw-in-r { animation: mx-in-r 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+  .eo-sw-in-l { animation: mx-in-l 0.3s var(--mx-settle) both; will-change: transform, opacity; }
+  .eo-fade-in { animation: mx-fade-in 0.3s var(--mx-settle) both; }
+  .eo-ctl { transition: opacity 0.3s var(--mx-settle); }
+
   /* Dialogs (Select files, confirmations): the box drops away first, then the backdrop clears. */
   .modal-overlay.mx-out.mx-out.hidden { animation: mx-fade-out 0.26s cubic-bezier(0.3, 0, 0.6, 1) both; }
   .modal-overlay.mx-out.mx-out.hidden .modal-box { animation: mx-box-out 0.24s cubic-bezier(0.4, 0, 0.9, 0.4) both; }
