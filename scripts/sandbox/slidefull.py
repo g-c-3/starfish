@@ -22,6 +22,16 @@ with sync_playwright() as p:
     q = lambda js: pg.evaluate(js)
     pill = lambda: q("document.querySelector('.eo-slidecount').textContent")
     check('pill shows slide number / total', pill() == '1/41', pill())
+    pg.screenshot(path='/tmp/port.png'); pg.set_viewport_size({'width': 900, 'height': 400}); time.sleep(0.8); pg.screenshot(path='/tmp/landn.png'); pg.set_viewport_size({'width': 400, 'height': 800}); time.sleep(0.6)
+    # slide change animation: the old slide leaves, the new one arrives, no frame without a slide
+    q("window.cls = []; new MutationObserver(() => { const c = document.querySelector('.eo-pscroll .eo-canvas'); window.cls.push(c ? c.className : 'none'); }).observe(document.querySelector('.eo-pscroll'), { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })")
+    q("document.querySelectorAll('.eo-navi')[3].click()"); time.sleep(0.9)
+    seen = q("window.cls"); check('next: old slide leaves, new one arrives', any('eo-sw-out-l' in c for c in seen) and any('eo-sw-in-r' in c for c in seen) and 'none' not in seen, str(sorted(set(seen)))[:120])
+    q("document.querySelectorAll('.eo-navi')[1].click()"); time.sleep(0.9)
+    seen = q("window.cls"); check('previous: the other way', any('eo-sw-out-r' in c for c in seen) and any('eo-sw-in-l' in c for c in seen))
+    check('no animation class is left behind', q("document.querySelector('.eo-pscroll .eo-canvas').className") == 'eo-canvas')
+    check('full screen button is in the corner, not in the bar', q("document.querySelectorAll('.eo-slidebar .eo-navi').length") == 5 and q("(() => { const b = document.querySelector('.eo-fsbtn').getBoundingClientRect(); const w = document.querySelector('.eo-pwrap').getBoundingClientRect(); return b.right <= w.right && w.right - b.right < 20 && b.top - w.top < 20; })()"))
+    check('slide number is bottom right', q("(() => { const b = document.querySelector('.eo-slidecount').getBoundingClientRect(); const w = document.querySelector('.eo-pwrap').getBoundingClientRect(); return w.right - b.right < 20 && w.bottom - b.bottom < 20; })()"))
     # overview
     pg.click('.eo-slidecount'); time.sleep(1.2)
     n = q("document.querySelectorAll('.eo-ovp').length"); painted = q("[...document.querySelectorAll('.eo-ovp')].filter(i => i.firstChild.firstChild).length")
@@ -37,9 +47,10 @@ with sync_playwright() as p:
     pg.click('.eo-slidecount'); time.sleep(0.8); pg.click('.eo-slidecount'); time.sleep(0.8)
     check('the pill toggles the overview', q("document.querySelector('.eo-ovw').classList.contains('hidden')"))
     # full screen
-    pg.click('.eo-navi:nth-child(6)'); time.sleep(0.8)
+    pg.click('.eo-fsbtn'); time.sleep(0.8)
     check('full screen hides the bar, header area is covered', q("getComputedStyle(document.querySelector('.eo-slidebar')).display") == 'none' and q("document.querySelector('#h').getBoundingClientRect().top") == 0)
-    check('exit button and number visible', q("getComputedStyle(document.querySelector('.eo-exitfull')).opacity") == '1' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '1')
+    check('edit strip and font notice are gone', q("[...document.querySelectorAll('.eo-shell, .eo-fontnote, .eo-bar')].every(e => getComputedStyle(e).display === 'none')"))
+    check('exit button and number visible (button top right, number bottom right)', q("getComputedStyle(document.querySelector('.eo-fsbtn')).opacity") == '1' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '1')
     # landscape fill
     pg.set_viewport_size({'width': 900, 'height': 400}); time.sleep(0.8)
     g = q("(() => { const s = document.querySelector('.eo-pscroll').getBoundingClientRect(); const c = document.querySelector('.eo-canvas').getBoundingClientRect(); return [s.width, s.height, c.width, c.height]; })()")
@@ -51,10 +62,10 @@ with sync_playwright() as p:
     def hold(ms):
         pt = [{'x': 200, 'y': 400}]; cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': pt}); time.sleep(ms / 1000); cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []}); time.sleep(0.6)
     before = pill(); hold(750)
-    check('long press hides the controls', q("getComputedStyle(document.querySelector('.eo-exitfull')).opacity") == '0' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '0')
+    check('long press hides the controls', q("getComputedStyle(document.querySelector('.eo-fsbtn')).opacity") == '0' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '0')
     check('the lift after a long press changes no slide', pill() == before, pill())
     hold(750)
-    check('another long press brings them back', q("getComputedStyle(document.querySelector('.eo-exitfull')).opacity") == '1' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '1')
+    check('another long press brings them back', q("getComputedStyle(document.querySelector('.eo-fsbtn')).opacity") == '1' and q("getComputedStyle(document.querySelector('.eo-slidecount')).opacity") == '1')
     # overview inside full screen, then Back order
     pg.click('.eo-slidecount'); time.sleep(0.8)
     check('overview opens in full screen', not q("document.querySelector('.eo-ovw').classList.contains('hidden')"))
@@ -64,6 +75,6 @@ with sync_playwright() as p:
     check('Back then closes the overview', ok2 and q("document.querySelector('.eo-ovw').classList.contains('hidden')"))
     check('Back then leaves the viewer (nothing left to close)', q("window.m.closeTop()") is False)
     # Back at any time: hidden controls
-    pg.click('.eo-navi:nth-child(6)'); time.sleep(0.6); hold(750)
+    pg.click('.eo-fsbtn'); time.sleep(0.6); hold(750)
     check('Back leaves full screen with the controls hidden', q("window.m.closeTop()") is True and not q("document.querySelector('#h').classList.contains('eo-full')"))
     br.close(); sys.exit(0 if all(res) else 1)

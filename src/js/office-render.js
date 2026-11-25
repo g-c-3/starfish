@@ -1384,13 +1384,12 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   const bar = el('div', 'eo-slidebar');
   const wrap = el('div', 'eo-pwrap'); const ovw = el('div', 'eo-ovw hidden');
   const pill = el('button', 'eo-slidecount eo-ctl'); pill.type = 'button'; pill.setAttribute('aria-label', 'All slides');
-  const exitB = el('button', 'eo-exitfull eo-ctl hidden'); exitB.type = 'button'; exitB.setAttribute('aria-label', 'Exit full screen'); exitB.appendChild(icon('exitfull'));
+  const fsB = el('button', 'eo-fsbtn eo-ctl'); fsB.type = 'button'; fsB.setAttribute('aria-label', 'Full screen'); fsB.appendChild(icon('full')); // top right, in both orientations: full screen on, and off
   let full = false; let bare = false; // full screen; the controls hidden by a long press
   const mk = (label, kind) => { const b = el('button', 'eo-nav eo-navi'); b.type = 'button'; b.setAttribute('aria-label', label); b.appendChild(icon(kind)); return b; };
   const first = mk('First slide', 'first'); const prev = mk('Previous slide', 'prev'); const play = mk('Play', 'play'); const next = mk('Next slide', 'next'); const last = mk('Last slide', 'last');
-  const fullB = mk('Full screen', 'full');
-  bar.append(first, prev, play, next, last, fullB);
-  zoomer.appendChild(stage); scroll.append(zoomer, notes); wrap.append(scroll, ovw, pill, exitB); host.append(veil, wrap, bar);
+  bar.append(first, prev, play, next, last);
+  zoomer.appendChild(stage); scroll.append(zoomer, notes); wrap.append(scroll, ovw, pill, fsB); host.append(veil, wrap, bar);
   const sw = model.size.w; const sh = model.size.h;
   // the whole slide fits the area, in portrait and in landscape
   const fit = () => {
@@ -1403,7 +1402,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   zoomer.style.width = `${sw}px`;
   bars.extra = (b) => b.appendChild(zoomButtons(ui, zoom));
   let index = 0; let playing = false; let timer = null;
-  let token = 0;
+  let token = 0; let shown = -1; // shown: the slide on the stage
   function show(i) {
     index = i;
     count(`${i + 1}/${model.count}`); pill.textContent = `${i + 1}/${model.count}`;
@@ -1416,10 +1415,22 @@ function mountPptx(model, host, ui, count, u, bars, root) {
     // the new slide is built beside the old one and swapped in whole once its pictures are decoded (a slow picture does not hold it past 700 ms)
     const put = () => {
       if (mine !== token) return;
-      stage.replaceChildren(cv); notes.replaceChildren(); u.retain(used);
-      zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
-      fitWhenFonts(cv);
+      // the slide on view leaves (0.17 s) toward where the next one comes from, the next arrives after 0.11 s: the page recipe, forward from the right
+      const fwd = i > shown; const old = stage.firstElementChild; const anim = !!old && shown >= 0 && shown !== i && !calm();
+      const arrive = () => {
+        if (mine !== token) return;
+        stage.replaceChildren(cv); notes.replaceChildren(); u.retain(used); shown = i;
+        zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
+        fitWhenFonts(cv);
+        if (anim) { cv.classList.add(fwd ? 'eo-sw-in-r' : 'eo-sw-in-l'); setTimeout(() => cv.classList.remove('eo-sw-in-r', 'eo-sw-in-l'), 340); }
+        showNotes();
+      };
+      const showNotes = () => {
       if (s.notes) { const n = el('div', 'eo-notes'); n.appendChild(el('div', 'eo-notes-h', 'Notes')); n.appendChild(el('div', 'eo-notes-t', s.notes)); notes.appendChild(n); }
+      };
+      if (anim && old.isConnected) {
+        old.classList.remove('eo-sw-in-r', 'eo-sw-in-l'); old.classList.add(fwd ? 'eo-sw-out-l' : 'eo-sw-out-r'); setTimeout(arrive, 110);
+      } else arrive();
     };
     const wait = decoded(cv, 700);
     if (wait) wait.then(put); else put();
@@ -1485,7 +1496,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   function setFull(on) {
     if (on === full) return; full = on; bare = false;
     if (on && playing) setPlaying(false);
-    root.classList.toggle('eo-full', on); root.classList.remove('eo-bare'); exitB.classList.toggle('hidden', !on);
+    root.classList.toggle('eo-full', on); root.classList.remove('eo-bare'); fsB.replaceChildren(icon(on ? 'exitfull' : 'full')); fsB.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
     if (!calm()) { root.classList.add('eo-fade-in'); setTimeout(() => root.classList.remove('eo-fade-in'), 340); }
     nativeFull(on);
     try {
@@ -1494,8 +1505,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
     } catch { /* the window-filling mode stays */ }
     zoom.reset();
   }
-  fullB.onclick = () => { ui.onActivity(); setFull(true); };
-  exitB.onclick = () => { ui.onActivity(); setFull(false); };
+  fsB.onclick = () => { ui.onActivity(); setFull(!full); };
   // Back leaves full screen first, then the overview; true when it did something
   const closeTop = () => { if (full) { setFull(false); return true; } if (ovOpen) { closeOverview(ovIndex); return true; } return false; };
   // long press (a finger held still for 0.5 s) toggles the controls in full screen; the lift after it is not a tap
