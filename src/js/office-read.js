@@ -1597,5 +1597,5 @@ export function readChart(files, path, tc) {
   const lg = kid(chart, 'legend');
   const firstAx = Object.values(axes).length ? plot.children && Array.from(plot.children).find((x) => /Ax$/.test(x.localName)) : null;
   const ink = chartInk(kid(root, 'txPr'), tc) || chartInk(kid(t, 'txPr'), tc) || (t && chartInk(t, tc)) || chartInk(firstAx && kid(firstAx, 'txPr'), tc);
-  return { title: deleted ? '' : textOf(t), autoTitle: !!t && !deleted && !textOf(t), legend: lg && !on(kid(lg, 'delete')) ? val(kid(lg, 'legendPos'), 'r') : null, axes, groups, bg: chartBg(kid(root, 'spPr'), tc), ink };
+  return { title: deleted ? '' : textOf(t), autoTitle: !!t && !deleted && !textOf(t), legend: lg && !on(kid(lg, 'delete')) ? val(kid(lg, 'legendPos'), 'r') : null, axes, groups, bg: chartBg(kid(root, 'spPr'), tc), ink, sz: { title: t ? chartSz(t) : null, titleBold: t ? chartBold(t) : false, axis: chartSz(firstAx && kid(firstAx, 'txPr')) } }; // the sizes (pt) the file sets for the title and the axes
 }

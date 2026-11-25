@@ -54,7 +54,9 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
     }
     sv('rect', { x: 0, y: 0, width: W, height: H, fill }, svg);
   }
-  const fs = Math.max(10, Math.min(16, W / 42));
+  const pxOf = (pt) => pt * 96 / 72; // a chart is drawn in slide pixels (96 per inch): the file's own text sizes
+  const fs = m.sz && m.sz.axis ? Math.max(8, Math.min(24, pxOf(m.sz.axis) / 0.92)) : Math.max(10, Math.min(16, W / 42));
+  const tfs = m.sz && m.sz.title ? Math.min(pxOf(m.sz.title), W / 12) : fs * 1.25;
   const T = (x, y, s, o = {}, parent = svg) => {
     const a = { x, y, 'font-size': o.size || fs, 'text-anchor': o.anchor || 'middle', fill: o.fill || 'currentColor', 'font-family': 'Calibri, Carlito, "Open Sans", sans-serif' };
     if (o.rot) a.transform = `rotate(${o.rot} ${x} ${y})`;
@@ -71,7 +73,7 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
 
   // ---- margins: title, legend ----
   let top = 6; let bottom = 6; let left = 6; let right = 6;
-  if (title) { T(W / 2, top + fs * 1.15, clip(title, Math.floor(W / (fs * 0.62))), { size: fs * 1.25 }); top += fs * 2; }
+  if (title) { T(W / 2, top + tfs * 0.95, clip(title, Math.floor(W / (tfs * 0.62))), { size: tfs, bold: !!(m.sz && m.sz.titleBold) }); top += tfs * 1.6; }
   let legendEntries = [];
   if (m.legend) {
     legendEntries = (first.kind === 'pie' || first.kind === 'doughnut')
@@ -261,8 +263,8 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
   if (!xy && !horiz) {
     catLab = Array.from({ length: n }, (_, i) => cats[i] || '');
     const longest = Math.max(1, ...catLab.map((c) => c.length));
-    const slot = (W - left - right) / n;
-    rot = !hideC && longest * fs * 0.55 > slot ? -40 : 0;
+    const slot = (W - left - right - (hideV ? 4 : widest(vTicks, vCode) * fs * 0.56 + 8)) / n; // the room of one category: the plot, not the whole chart
+    rot = !hideC && longest * fs * 0.55 > slot * 0.9 ? -40 : 0; // rotated rather than skipped
     catH = hideC ? 4 : rot ? Math.min(H * 0.28, longest * fs * 0.4 + fs * 1.4) : fs * 1.7;
   } else if (xy) catH = fs * 1.7;
   else catH = fs * 1.7;
@@ -372,7 +374,8 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
   }
   if (catTitle) T(px0 + pw / 2, H - bottom - fs * 0.3, catTitle, { size: fs });
   if (valTitle) T(left + fs * 0.7, py0 + ph / 2, valTitle, { size: fs, rot: -90 });
-  for (const [x, y, s, anchor, fill] of labelQueue) T(x, y, s, { size: fs * 0.88, anchor, fill: fill || 'currentColor' });
+  const dlPt = (groups.map((g) => g.labels && g.labels.sz).find(Boolean)) || null;
+  for (const [x, y, s, anchor, fill] of labelQueue) T(x, y, s, { size: dlPt ? pxOf(dlPt) : fs * 0.88, anchor, fill: fill || 'currentColor' });
   if (legendDraw) legendDraw();
   return svg;
 }
