@@ -73,7 +73,7 @@ const FACES = [
   { re: /^(franklin gothic (heavy|demi)|gill sans ultra|berlin sans fb demi|britannic)/i, use: 'Arial', bold: true }
 ];
 // letter spacing (em) that brings a stand-in to the width of the face it replaces
-const SPACING = [[/^comic sans/i, 0.065]];
+const SPACING = [[/^comic sans/i, 0.065], [/^algerian/i, -0.09]]; // Algerian is a narrow face; its serif stand-in is 18% wider (measured against the converter's PDF)
 const spacingOf = (n) => { const f = SPACING.find((x) => x[0].test(n || '')); return f ? f[1] : 0; };
 const faceOf = (n) => FACES.find((f) => f.re.test(n)) || null;
 const fontBold = (n) => { const f = n && faceOf(n); return f ? !!f.bold : /\b(bold|black|heavy|ultra|demi ?bold|semi ?bold)\b/i.test(n || ''); };
@@ -1174,6 +1174,10 @@ function clipPx(g, w, h, a1, a2) {
     const t = h * cl(a1, 50000, 100000) / 200000; const hd = ss * cl(a2, 50000, 100000 * w / ss) / 100000; const c = h / 2;
     return g === 'rightArrow' ? P([[0, c - t], [w - hd, c - t], [w - hd, 0], [w, c], [w - hd, h], [w - hd, c + t], [0, c + t]]) : P([[w, c - t], [hd, c - t], [hd, 0], [0, c], [hd, h], [hd, c + t], [w, c + t]]);
   }
+  if (g === 'can') { // a cylinder: the body with its curved ends; the lighter top ellipse is a second layer (see slideItem)
+    const y = ss * cl(a1, 25000, 50000) / 200000; const rx = w / 2;
+    return `path('M0 ${y.toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 ${w.toFixed(1)} ${y.toFixed(1)}L${w.toFixed(1)} ${(h - y).toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 0 ${(h - y).toFixed(1)}Z')`;
+  }
   if (g === 'hexagon') { const x = ss * cl(a1, 25000, 50000 * w / ss) / 100000; return P([[x, 0], [w - x, 0], [w, h / 2], [w - x, h], [x, h], [0, h / 2]]); }
   return null;
 }
@@ -1217,7 +1221,7 @@ function paragraphs(body, parent, u, scale, pg) {
       const ns = node.style;
       ns.fontFamily = stack(r.font || 'Calibri'); ns.fontSize = fz((r.size || 24) * scale);
       if (substituted(r.font)) node.dataset.sub = '1';
-      { const ls = spacingOf(r.font); if (ls) ns.letterSpacing = `${ls}em`; }
+      { const ls = spacingOf(r.font); if (ls) { ns.letterSpacing = `${ls}em`; if (ls < 0) ns.wordSpacing = `${-ls}em`; } } // a narrowing keeps the spaces at their own width: lines are often pushed across a box by spaces
       if (r.color) ns.color = css(r.color);
       if (r.b || fontBold(r.font)) ns.fontWeight = '700'; if (r.i) ns.fontStyle = 'italic';
       const deco = [r.u ? 'underline' : '', r.s ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) ns.textDecoration = deco;
@@ -1293,6 +1297,11 @@ function slideItem(it, media, u, ink, pg) {
       const poly = clipPx(g, it.w, it.h, it.adj, it.adj2) || CLIP[g];
       if (poly) { // the fill is clipped to the outline on a layer of its own: the text on top is not cut by it
         const bg = el('div', 'eo-bg'); if (it.fill) bg.style.background = fillCss(it.fill); bg.style.clipPath = poly; n.appendChild(bg);
+        if (g === 'can' && it.fill) { // the top of a cylinder: its ellipse, lighter than the body
+          const y = Math.min(it.w, it.h) * (it.adj === null || it.adj === undefined ? 25000 : it.adj) / 200000; const rx = it.w / 2;
+          const top = el('div', 'eo-bg'); top.style.background = 'rgba(255,255,255,.28)';
+          top.style.clipPath = `path('M0 ${y.toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 ${it.w.toFixed(1)} ${y.toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 0 ${y.toFixed(1)}Z')`; n.appendChild(top);
+        }
       } else {
         if (it.fill) st.background = fillCss(it.fill);
         if (it.line && it.line.color) st.border = `${it.line.w}px ${it.line.dash} ${css(it.line.color)}`;

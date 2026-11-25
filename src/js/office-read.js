@@ -1520,6 +1520,9 @@ function chartInk(txPr, tc) {
   const d = txPr && descendants(txPr, 'defRPr')[0]; const sf = d && kid(d, 'solidFill');
   return sf ? chartClr(sf, tc) || null : null;
 }
+// the size (pt) and weight a text-properties node sets
+function chartSz(txPr) { const d = txPr && descendants(txPr, 'defRPr')[0]; const z = d && Number(at(d, 'sz')); return z ? z / 100 : null; }
+function chartBold(txPr) { const d = txPr && descendants(txPr, 'defRPr')[0]; return !!(d && at(d, 'b') === '1'); }
 const BAR_T = ['barChart', 'bar3DChart']; const LINE_T = ['lineChart', 'line3DChart']; const AREA_T = ['areaChart', 'area3DChart'];
 const PIE_T = ['pieChart', 'pie3DChart', 'ofPieChart'];
 export function readChart(files, path, tc) {
@@ -1544,7 +1547,7 @@ export function readChart(files, path, tc) {
   const labelsOf = (d) => {
     if (!d || on(kid(d, 'delete'))) return null;
     const nf = kid(d, 'numFmt');
-    return { val: on(kid(d, 'showVal')), cat: on(kid(d, 'showCatName')), pct: on(kid(d, 'showPercent')), fmt: nf && at(nf, 'sourceLinked') !== '1' ? at(nf, 'formatCode') : null };
+    return { val: on(kid(d, 'showVal')), cat: on(kid(d, 'showCatName')), pct: on(kid(d, 'showPercent')), fmt: nf && at(nf, 'sourceLinked') !== '1' ? at(nf, 'formatCode') : null, pos: val(kid(d, 'dLblPos'), ''), sz: chartSz(kid(d, 'txPr')), bold: chartBold(kid(d, 'txPr')) };
   };
   const axes = {};
   for (const ax of plot.children) {
@@ -1565,7 +1568,7 @@ export function readChart(files, path, tc) {
       : n === 'scatterChart' ? 'scatter' : n === 'bubbleChart' ? 'bubble' : n === 'radarChart' ? 'radar' : null;
     if (!kind) continue;
     const grp = { kind, dir: val(kid(g, 'barDir'), 'col'), grouping: val(kid(g, 'grouping'), 'standard'), axIds: kids(g, 'axId').map((a) => val(a)),
-      gap: Number(val(kid(g, 'gapWidth'), 150)), hole: Number(val(kid(g, 'holeSize'), 50)), style: val(kid(g, 'scatterStyle'), 'lineMarker'), labels: labelsOf(kid(g, 'dLbls')), series: [] };
+      threeD: /3DChart$/.test(n), gap: Number(val(kid(g, 'gapWidth'), 150)), hole: Number(val(kid(g, 'holeSize'), 50)), style: val(kid(g, 'scatterStyle'), 'lineMarker'), labels: labelsOf(kid(g, 'dLbls')), series: [] };
     const isLine = kind === 'line' || kind === 'scatter' || kind === 'radar';
     const gMarker = on(kid(g, 'marker'), true);
     for (const s of kids(g, 'ser')) {

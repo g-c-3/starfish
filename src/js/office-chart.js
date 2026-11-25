@@ -118,34 +118,57 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
   if (first.kind === 'pie' || first.kind === 'doughnut') {
     const s = first.series[0];
     const vals = s.vals.map((v) => (v && v > 0 ? v : 0)); const sum = vals.reduce((a, b) => a + b, 0);
-    const pw = W - left - right; const ph = H - top - bottom;
-    const cx = left + pw / 2; const cy = top + ph / 2; const r = Math.max(10, Math.min(pw, ph) / 2 - 4);
     const lab = s.labels === undefined ? first.labels : s.labels;
+    const shown = !!(lab && (lab.val || lab.pct || lab.cat));
+    const lfs = lab && lab.sz ? Math.max(9, lab.sz * 96 / 72) : fs * 0.9;
+    const three = !!first.threeD && first.kind === 'pie'; const k = three ? 0.62 : 1; const t3 = three ? 0.14 : 0; // 3D: the disc is seen from above (squashed) and has a thickness
+    // a slice that is small, or a label the file puts outside, is written beside the pie, in the slice's colour; the pie leaves room for it
+    const outside = (v) => shown && first.kind === 'pie' && (lab.pos === 'outEnd' || v / sum < 0.1);
+    const anyOut = sum > 0 && vals.some((v) => v && outside(v));
+    const pw = W - left - right; const ph = H - top - bottom;
+    const roomX = anyOut ? lfs * 4.2 : 0; const roomY = anyOut ? lfs * 1.7 : 0;
+    const r = Math.max(10, Math.min((pw - 2 * roomX) / 2, (ph - 2 * roomY) / (2 * k + t3)) - 2);
+    const cx = left + pw / 2; const cy = top + ph / 2 - (r * t3) / 2; const th = r * t3;
+    const hole = first.kind === 'doughnut' ? r * Math.max(0.1, Math.min(0.9, first.hole / 100)) : 0;
     if (sum > 0) {
-      let a0 = -Math.PI / 2;
-      const hole = first.kind === 'doughnut' ? r * Math.max(0.1, Math.min(0.9, first.hole / 100)) : 0;
-      vals.forEach((v, i) => {
-        if (!v) return;
-        const a1 = a0 + (v / sum) * Math.PI * 2; const col = s.pcolors[i];
-        const pt = (rad, a) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
-        if (v / sum > 0.9999) {
-          const ring = (q) => `M${cx - q},${cy}a${q},${q} 0 1,0 ${2 * q},0a${q},${q} 0 1,0 ${-2 * q},0Z`;
-          sv('path', { d: hole ? ring(r) + ring(hole) : ring(r), 'fill-rule': 'evenodd', fill: hexOf(col) }, svg);
+      const slices = []; let a0 = -Math.PI / 2;
+      vals.forEach((v, i) => { if (v) { const a1 = a0 + (v / sum) * Math.PI * 2; slices.push({ v, i, a0, a1, col: s.pcolors[i] }); a0 = a1; } });
+      const pt = (rad, a, dy = 0) => `${cx + rad * Math.cos(a)},${cy + dy + rad * k * Math.sin(a)}`;
+      if (three) { // the side wall: drawn where the rim faces the viewer
+        for (const sl of slices) {
+          let d = ''; const steps = Math.max(2, Math.ceil((sl.a1 - sl.a0) / 0.05));
+          for (let j = 0; j < steps; j++) {
+            const x0 = sl.a0 + ((sl.a1 - sl.a0) * j) / steps; const x1 = sl.a0 + ((sl.a1 - sl.a0) * (j + 1)) / steps;
+            if (Math.sin((x0 + x1) / 2) <= 0) continue;
+            d += `M${pt(r, x0)}L${pt(r, x1)}L${pt(r, x1, th)}L${pt(r, x0, th)}Z`;
+          }
+          if (d) { sv('path', { d, fill: hexOf(sl.col), stroke: hexOf(sl.col), 'stroke-width': 0.6 }, svg); sv('path', { d, fill: '#000000', 'fill-opacity': 0.3, stroke: '#000000', 'stroke-opacity': 0.3, 'stroke-width': 0.6 }, svg); }
+        }
+      }
+      for (const sl of slices) {
+        if (sl.v / sum > 0.9999) {
+          const ring = (q) => `M${cx - q},${cy}a${q},${q * k} 0 1,0 ${2 * q},0a${q},${q * k} 0 1,0 ${-2 * q},0Z`;
+          sv('path', { d: hole ? ring(r) + ring(hole) : ring(r), 'fill-rule': 'evenodd', fill: hexOf(sl.col) }, svg);
         } else {
-          const big = a1 - a0 > Math.PI ? 1 : 0;
-          const d = hole ? `M${pt(r, a0)}A${r},${r} 0 ${big} 1 ${pt(r, a1)}L${pt(hole, a1)}A${hole},${hole} 0 ${big} 0 ${pt(hole, a0)}Z` : `M${cx},${cy}L${pt(r, a0)}A${r},${r} 0 ${big} 1 ${pt(r, a1)}Z`;
-          sv('path', { d, fill: hexOf(col), stroke: '#ffffff', 'stroke-opacity': 0.7, 'stroke-width': 1 }, svg);
+          const big = sl.a1 - sl.a0 > Math.PI ? 1 : 0;
+          const d = hole ? `M${pt(r, sl.a0)}A${r},${r * k} 0 ${big} 1 ${pt(r, sl.a1)}L${pt(hole, sl.a1)}A${hole},${hole * k} 0 ${big} 0 ${pt(hole, sl.a0)}Z` : `M${cx},${cy}L${pt(r, sl.a0)}A${r},${r * k} 0 ${big} 1 ${pt(r, sl.a1)}Z`;
+          sv('path', { d, fill: hexOf(sl.col), stroke: '#ffffff', 'stroke-opacity': 0.7, 'stroke-width': 1 }, svg);
         }
-        if (lab && (lab.val || lab.pct || lab.cat) && v / sum > 0.04) {
-          const am = (a0 + a1) / 2; const rr = hole ? (r + hole) / 2 : r * 0.64;
-          const parts = [];
-          if (lab.cat && s.cats[i]) parts.push(clip(s.cats[i], 12));
-          if (lab.val) parts.push(fmt(s.vals[i], lab.fmt || s.fmt));
-          if (lab.pct) parts.push(`${Math.round((v / sum) * 100)}%`);
-          T(cx + rr * Math.cos(am), cy + rr * Math.sin(am) + fs * 0.35, parts.join(' '), { fill: inkOn(col), size: fs * 0.9 });
+      }
+      if (shown) for (const sl of slices) {
+        if (sl.v / sum <= 0.04 && !outside(sl.v)) continue;
+        const am = (sl.a0 + sl.a1) / 2; const parts = [];
+        if (lab.cat && s.cats[sl.i]) parts.push(clip(s.cats[sl.i], 22));
+        if (lab.val) parts.push(fmt(s.vals[sl.i], lab.fmt || s.fmt));
+        if (lab.pct) parts.push(`${Math.round((sl.v / sum) * 100)}%`);
+        if (outside(sl.v)) {
+          const c = Math.cos(am); const sn = Math.sin(am); const rr = r * 1.06;
+          T(cx + rr * c, cy + rr * k * sn + (sn > 0 ? th + lfs * 0.9 : -lfs * 0.3), parts.join(' '), { fill: hexOf(sl.col), size: lfs, anchor: c > 0.25 ? 'start' : c < -0.25 ? 'end' : 'middle', bold: true });
+        } else {
+          const rr = hole ? (r + hole) / 2 : r * 0.64;
+          T(cx + rr * Math.cos(am), cy + rr * k * Math.sin(am) + lfs * 0.35, parts.join(' '), { fill: inkOn(sl.col), size: lfs, bold: !!lab.bold });
         }
-        a0 = a1;
-      });
+      }
     }
     if (legendDraw) legendDraw();
     return svg;
@@ -244,7 +267,8 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
   const vLabW = (horiz ? Math.max(1, ...Array.from({ length: n }, (_, i) => (cats[i] || '').length)) : widest(vTicks, vCode)) * fs * 0.56 + 8;
   const secW = v2 && !horiz ? widest(v2Ticks, v2Code) * fs * 0.56 + 8 : 0;
   const px0 = left + (hideV && !horiz ? 4 : vLabW) + (valTitle ? fs * 1.5 : 0);
-  const px1 = W - right - secW - 4;
+  const lastTick = horiz ? (widest(vTicks, vCode) * fs * 0.56) / 2 + 2 : 0; // the last number of a horizontal value axis is centred on the plot's end
+  const px1 = W - right - secW - Math.max(4, lastTick);
   const py0 = top + fs * 0.6;
   const py1 = H - bottom - catH - (catTitle ? fs * 1.5 : 0);
   const pw = Math.max(20, px1 - px0); const ph = Math.max(20, py1 - py0);
