@@ -223,6 +223,8 @@ export function chartSvg(m, W, H, ink = 'currentColor') {
   const scaleFor = (list, ax, span) => {
     let [lo, hi] = xy ? [Infinity, -Infinity] : extent(list);
     if (xy) { for (const g of list) for (const s of g.series) for (const v of s.vals) if (v !== null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } if (!Number.isFinite(lo)) { lo = 0; hi = 1; } }
+    // as the spreadsheet program does: the axis ends on the first mark above the largest value plus 5% of the range, so the last bar and its label have room
+    if (!xy) { const room = 0.05 * (hi - lo); if (!(ax && ax.max !== null) && hi > 0) hi += room; if (!(ax && ax.min !== null) && lo < 0) lo -= room; }
     if (ax && ax.min !== null) lo = ax.min; if (ax && ax.max !== null) hi = ax.max;
     const sc = niceScale(lo, hi, Math.max(3, Math.min(8, Math.round(span / (fs * 3.4)))));
     if (ax && ax.min !== null) sc.min = ax.min; if (ax && ax.max !== null) sc.max = ax.max;

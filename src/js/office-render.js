@@ -1414,11 +1414,11 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   let token = 0; let shown = -1; // shown: the slide on the stage
   function show(i) {
     index = i;
-    count(`${i + 1}/${model.count}`); pill.textContent = `${i + 1}/${model.count}`;
-    first.disabled = prev.disabled = i === 0; next.disabled = last.disabled = i === model.count - 1;
+    // the number and the buttons follow the slide that is on the stage, not the one asked for (a slide may wait for its pictures)
+    const label = () => { count(`${i + 1}/${model.count}`); pill.textContent = `${i + 1}/${model.count}`; first.disabled = prev.disabled = i === 0; next.disabled = last.disabled = i === model.count - 1; };
     const mine = ++token;
     let s;
-    try { s = model.load(i); } catch (e) { stage.replaceChildren(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This slide could not be read.')); notes.replaceChildren(); u.revoke(); return; }
+    try { s = model.load(i); } catch (e) { label(); stage.replaceChildren(el('p', 'ev-media-msg', e instanceof OfficeError ? e.message : 'This slide could not be read.')); notes.replaceChildren(); u.revoke(); return; }
     const used = new Set(); const uu = { get: (path, media) => { used.add(path); return u.get(path, media); } };
     const cv = slideDom(s, uu);
     // the new slide is built beside the old one and swapped in whole once its pictures are decoded (a slow picture does not hold it past 700 ms)
@@ -1428,7 +1428,7 @@ function mountPptx(model, host, ui, count, u, bars, root) {
       const fwd = i > shown; const old = stage.firstElementChild; const anim = !!old && shown >= 0 && shown !== i && !calm();
       const arrive = () => {
         if (mine !== token) return;
-        stage.replaceChildren(cv); notes.replaceChildren(); u.retain(used); shown = i;
+        stage.replaceChildren(cv); notes.replaceChildren(); u.retain(used); shown = i; label();
         zoom.reset(); scroll.scrollTop = 0; scroll.scrollLeft = 0;
         fitWhenFonts(cv);
         if (anim) { cv.classList.add(fwd ? 'eo-sw-in-r' : 'eo-sw-in-l'); setTimeout(() => cv.classList.remove('eo-sw-in-r', 'eo-sw-in-l'), 340); }
