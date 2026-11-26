@@ -7848,7 +7848,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               reload: () => { if (mine === token && refresh) { discarding = true; refresh(); } }
             },
             setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
-            openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault) // no phone app for a trashed file
+            openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault),
+            pdfCopy: viewOnly ? null : async (bytes) => { const made = await saveConvertedCopy(item, bytes, 'pdf', isVault); toast(`Saved as ${made.label}.pdf`); } // a PDF copy of a presentation: a new entry, like the converted copies
           });
           if (mine !== token) { m.destroy(); return; }
           mounted = m;

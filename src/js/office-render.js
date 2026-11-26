@@ -2,6 +2,7 @@
 // is set with textContent; no markup from a file is ever parsed. Pictures become object URLs, revoked on destroy.
 
 import { Preferences } from '@capacitor/preferences';
+import { nodeToJpeg, pagesToPdf } from './office-pdf.js';
 import { chartSvg } from './office-chart.js';
 import { chromeOnScroll } from './chrome-scroll.js';
 import { paginate, paginateAuto, hasSavedBreaks, pickHF } from './office-pages.js';
@@ -181,6 +182,7 @@ function buildTools(host, ui, bar, t) {
   const bFind = mkb('Find', 'Find in this file'); const bCopy = mkb('Copy', 'Copy text'); const bInfo = mkb('Info', 'File information');
   const o = t.outline || null; const bOut = o ? mkb(o.label, o.title) : null;
   if (t.open) { const bo = mkb('Open with', 'Open with another app'); bo.onclick = () => { closeMenu(); ui.onActivity(); t.open(); }; }
+  if (t.pdfCopy) { const bp = mkb('PDF copy', 'Save the slides as a PDF copy'); bp.onclick = () => { closeMenu(); ui.onActivity(); t.pdfCopy(); }; }
   const fbar = el('div', 'eo-fbar'); fbar.hidden = true;
   const inp = el('input', 'eo-finput'); inp.type = 'search'; inp.placeholder = 'Find'; inp.setAttribute('aria-label', 'Find text');
   const cnt = el('span', 'eo-fcount');
@@ -1568,7 +1570,25 @@ function mountPptx(model, host, ui, count, u, bars, root) {
   if (window.ResizeObserver) { ro = new window.ResizeObserver(() => zoom.apply()); ro.observe(scroll); }
   // the editor gives a new model: the slide count and the slides are read from it (Decision 498)
   const setModel = (m, i) => { model = m; show(Math.max(0, Math.min(i, m.count - 1))); };
-  return { stage, go, cur: () => index, setModel, closeTop, destroy() { token++; clearTimeout(lpT); if (timer) clearInterval(timer); if (ovIo) ovIo.disconnect(); document.removeEventListener('fullscreenchange', onFsChange); if (full) setFull(false); root.classList.remove('eo-playing', 'eo-full', 'eo-bare'); if (ro) ro.disconnect(); } };
+  // A PDF copy of the deck: every slide drawn off screen, one after the other, as a picture on its own page (Decision 577)
+  let pdfBusy = false;
+  async function makePdf(save, toast) {
+    if (pdfBusy) return; pdfBusy = true; let cancel = false;
+    const prog = el('button', 'eo-pdfprog', 'PDF 0/' + model.count); prog.type = 'button'; prog.onclick = () => { cancel = true; prog.textContent = 'Cancelling'; };
+    wrap.appendChild(prog);
+    const pu = urls(); const off = el('div'); off.style.cssText = `position:fixed;left:-20000px;top:0;width:${sw}px;height:${sh}px;overflow:hidden;`; document.body.appendChild(off);
+    try {
+      const bytes = await pagesToPdf(model.count, async (i) => {
+        const cv = slideDom(model.load(i), pu); off.replaceChildren(cv);
+        const wait = decoded(cv, 4000); if (wait) await wait;
+        fitText(cv); if (document.fonts && document.fonts.ready) await document.fonts.ready; fitText(cv);
+        const jpg = await nodeToJpeg(cv, sw, sh, 1.5); off.replaceChildren(); return jpg;
+      }, { onProgress: (n, c) => { prog.textContent = `PDF ${n}/${c} \u00b7 tap to cancel`; }, isCancelled: () => cancel });
+      await save(bytes);
+    } catch (e) { toast(e && e.cancelled ? 'PDF copy cancelled' : e && e.code === 'limit' ? 'Too many slides for a PDF copy.' : 'The PDF copy could not be made.'); }
+    finally { pu.revoke(); off.remove(); prog.remove(); pdfBusy = false; }
+  }
+  return { stage, go, cur: () => index, setModel, closeTop, makePdf, destroy() { token++; clearTimeout(lpT); if (timer) clearInterval(timer); if (ovIo) ovIo.disconnect(); document.removeEventListener('fullscreenchange', onFsChange); if (full) setFull(false); root.classList.remove('eo-playing', 'eo-full', 'eo-bare'); if (ro) ro.disconnect(); } };
 }
 
 // Reads the bytes and draws them into host (an empty element). Returns { destroy }. Throws OfficeError with a message
@@ -1623,7 +1643,7 @@ function mountOfficeView(kind, bytes, host, ctx) {
   } else {
     const holder = el('div'); const tmp = { extra: null };
     inner = mountPptx(model, holder, ui, setCount, u, tmp, host);
-    tmp.tools = pptTools({ get count() { return model.count; }, load: (i) => model.load(i) }, inner); tmp.tools.open = ctx.openWith; // read through `model`: the editor replaces it
+    tmp.tools = pptTools({ get count() { return model.count; }, load: (i) => model.load(i) }, inner); tmp.tools.open = ctx.openWith; tmp.tools.pdfCopy = ctx.pdfCopy && inner.makePdf ? () => inner.makePdf(ctx.pdfCopy, ctx.toast || (() => {})) : null; // read through `model`: the editor replaces it
     bars.bar = buildBar(host, ui, tmp.extra, tmp.tools);
     if (edit && hasEditor('pptx') && (old || ((!odf || odf === 'presentation') && bytes[0] === 0x50 && bytes[1] === 0x4B))) shell = makeShell(inner, 'pptx');
     while (holder.firstChild) host.appendChild(holder.firstChild);
