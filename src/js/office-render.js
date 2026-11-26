@@ -1178,6 +1178,18 @@ function clipPx(g, w, h, a1, a2) {
     const y = ss * cl(a1, 25000, 50000) / 200000; const rx = w / 2;
     return `path('M0 ${y.toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 ${w.toFixed(1)} ${y.toFixed(1)}L${w.toFixed(1)} ${(h - y).toFixed(1)}A${rx.toFixed(1)} ${y.toFixed(1)} 0 0 1 0 ${(h - y).toFixed(1)}Z')`;
   }
+  if (g === 'downArrow' || g === 'upArrow') {
+    const t = w * cl(a1, 50000, 100000) / 200000; const hd = ss * cl(a2, 50000, 100000 * h / ss) / 100000; const c = w / 2;
+    return g === 'downArrow' ? P([[c - t, 0], [c + t, 0], [c + t, h - hd], [w, h - hd], [c, h], [0, h - hd], [c - t, h - hd]]) : P([[c - t, h], [c + t, h], [c + t, hd], [w, hd], [c, 0], [0, hd], [c - t, hd]]);
+  }
+  if (g === 'cloud') { // a ring of round bumps along an ellipse: the arcs bulge outward, the points sit one bump's depth inside the box
+    const per = Math.PI * (3 * (w / 2 + h / 2) - Math.sqrt((3 * w / 2 + h / 2) * (w / 2 + 3 * h / 2))); const c0 = ss * 0.62;
+    const n = Math.max(8, Math.min(26, Math.round(per / c0))); const chord = per / n; const r = chord * 0.62; const bulge = r - Math.sqrt(Math.max(0, r * r - chord * chord / 4));
+    const ax = Math.max(1, w / 2 - bulge); const by = Math.max(1, h / 2 - bulge); let d = '';
+    for (let i = 0; i <= n; i++) { const t = (2 * Math.PI * i) / n - Math.PI / 2; const x = w / 2 + ax * Math.cos(t); const y = h / 2 + by * Math.sin(t); d += i === 0 ? `M${x.toFixed(1)} ${y.toFixed(1)}` : `A${r.toFixed(1)} ${r.toFixed(1)} 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}`; }
+    return `path('${d}Z')`;
+  }
+  if (g === 'cube') { const y = ss * cl(a1, 25000, 100000) / 100000; return P([[0, y], [y, 0], [w, 0], [w, h - y], [w - y, h], [0, h]]); }
   if (g === 'hexagon') { const x = ss * cl(a1, 25000, 50000 * w / ss) / 100000; return P([[x, 0], [w - x, 0], [w, h / 2], [w - x, h], [x, h], [0, h / 2]]); }
   return null;
 }
@@ -1189,9 +1201,12 @@ function textInset(g, w, h, a1) {
     const q1 = -mx / 2; const q2 = a + q1; const q3 = q2 > 0 ? 4 : 2; const q4 = q2 > 0 ? 3 : 2; const q5 = q2 > 0 ? q1 : 0; const q8 = q3 + ((a + q5) / q1) * q4 / -1;
     return { l: w * q8 / 24, r: w * q8 / 24, t: h * q8 / 24, b: h * q8 / 24 };
   }
+  if (g === 'cloud') return { l: w * 0.12, r: w * 0.12, t: h * 0.14, b: h * 0.1 };
   if (g === 'ellipse') { const k = (1 - Math.SQRT1_2) / 2; return { l: w * k, r: w * k, t: h * k, b: h * k }; }
   if (g === 'roundRect') { const k = ss * (a1 === null || a1 === undefined ? 16667 : a1) / 100000 * 0.29289; return { l: k, r: k, t: k, b: k }; }
   if (g === 'can') { const y = ss * (a1 === null || a1 === undefined ? 25000 : a1) / 100000; return { ...z, t: y, b: y / 2 }; }
+  if (g === 'cube') { const y = ss * (a1 === null || a1 === undefined ? 25000 : a1) / 100000; return { ...z, t: y, r: y }; }
+  if (g === 'downArrow' || g === 'upArrow') { const x = w * (1 - (a1 === null || a1 === undefined ? 50000 : a1) / 100000) / 2; return { ...z, l: x, r: x }; } // the text sits in the shaft
   return z;
 }
 const fz = (px) => `calc(${px}px * var(--fit, 1))`; // the size set in the file, times the fit that a substituted font needs (see fitText)
@@ -1297,6 +1312,11 @@ function slideItem(it, media, u, ink, pg) {
       const poly = clipPx(g, it.w, it.h, it.adj, it.adj2) || CLIP[g];
       if (poly) { // the fill is clipped to the outline on a layer of its own: the text on top is not cut by it
         const bg = el('div', 'eo-bg'); if (it.fill) bg.style.background = fillCss(it.fill); bg.style.clipPath = poly; n.appendChild(bg);
+        if (g === 'cube' && it.fill) { // the top face lighter, the right face darker
+          const y = Math.min(it.w, it.h) * (it.adj === null || it.adj === undefined ? 25000 : it.adj) / 100000; const f = (v) => v.toFixed(1);
+          const top = el('div', 'eo-bg'); top.style.background = 'rgba(255,255,255,.32)'; top.style.clipPath = `polygon(0 ${f(y)}px,${f(y)}px 0,${f(it.w)}px 0,${f(it.w - y)}px ${f(y)}px)`; n.appendChild(top);
+          const rt = el('div', 'eo-bg'); rt.style.background = 'rgba(0,0,0,.28)'; rt.style.clipPath = `polygon(${f(it.w - y)}px ${f(y)}px,${f(it.w)}px 0,${f(it.w)}px ${f(it.h - y)}px,${f(it.w - y)}px ${f(it.h)}px)`; n.appendChild(rt);
+        }
         if (g === 'can' && it.fill) { // the top of a cylinder: its ellipse, lighter than the body
           const y = Math.min(it.w, it.h) * (it.adj === null || it.adj === undefined ? 25000 : it.adj) / 200000; const rx = it.w / 2;
           const top = el('div', 'eo-bg'); top.style.background = 'rgba(255,255,255,.28)';
@@ -1355,11 +1375,15 @@ function fitText(root) {
     let k = 1;
     for (let n = 0; n < 16 && k > 0.55 && t.scrollHeight > t.clientHeight + 1.5; n++) { k *= 0.95; t.style.setProperty('--fit', k.toFixed(3)); }
   }
+  const padK = new Map(); // the smallest fit of the padded lines of one text box
   for (const p of pd) { // offsetHeight: the layout height, not the one a zoom transform scales
     const base = parseFloat(getComputedStyle(p).getPropertyValue('--fit')) || 1; let k = base;
     const line = () => { const sp = p.querySelector('span'); const lh = p.style.lineHeight; return /px$/.test(lh) ? parseFloat(lh) : (parseFloat(lh) || 1.2) * parseFloat(getComputedStyle(sp || p).fontSize); }; // the height of one line, from the text's own size
     for (let n = 0; n < 16 && k > 0.55 && p.offsetHeight > line() * 1.5; n++) { k *= 0.95; p.style.setProperty('--fit', k.toFixed(3)); }
+    const box = p.parentElement; padK.set(box, Math.min(padK.get(box) || 1, k));
   }
+  // lines of one box that are pushed by spaces keep their positions relative to each other only when they are scaled alike
+  for (const p of pd) { const k = padK.get(p.parentElement); if (k && k < 1) p.style.setProperty('--fit', k.toFixed(3)); }
 }
 // the fit is measured with the fonts in; it is measured again when they have loaded
 const fitWhenFonts = (root) => { fitText(root); if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (root.isConnected) fitText(root); }); };
