@@ -1904,6 +1904,7 @@ async function getAppearance() {
 function applyAppearance({ darkMode }) {
   const root = document.documentElement;
   root.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  try { if (window.ArklyIcon) window.ArklyIcon.widgetTheme(!!darkMode); } catch { /* the widget keeps its logo (Decision 585) */ }
 }
 
 async function setDarkMode(on) {
@@ -3926,6 +3927,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     darkToggle.checked = appearance.darkMode;
     darkToggle.addEventListener('change', (e) => setDarkMode(e.target.checked));
   }
+
+  // Launcher icon choice (Decision 584): white or dark, switched by the native bridge (window.ArklyIcon); the row shows only where the bridge exists.
+  (function wireLauncherIcon() {
+    const box = document.getElementById('launcher-icon-settings');
+    const chips = document.getElementById('launcher-icon-chips');
+    if (!box || !chips || !window.ArklyIcon) return;
+    const paint = () => {
+      let cur = 'white';
+      try { cur = window.ArklyIcon.get(); } catch { /* shows white */ }
+      chips.querySelectorAll('button[data-icon]').forEach((btn) => btn.classList.toggle('selected', btn.dataset.icon === cur));
+    };
+    chips.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-icon]');
+      if (!btn) return;
+      try { window.ArklyIcon.set(btn.dataset.icon); } catch { /* the choice stays as it was */ }
+      paint();
+    });
+    box.classList.remove('hidden');
+    paint();
+  })();
 
   // Currency symbol (Decision 130): chips for common symbols, free text for any other. Relabels only.
   (function wireCurrencySettings() {

@@ -324,3 +324,8 @@ Powers the File explorer card (Home and Vault): browsing the phone's internal an
 - It uses `SpeechRecognizer.createSpeechRecognizer`, the phone's standard recognizer; while it runs the voice goes over the internet to Google's speech service. Languages come from the phone's preferred language list.
 - Permission: `RECORD_AUDIO` (already declared for the voice recorder), asked at the first tap on the Mic. `patch-manifest.js` adds the `RecognitionService` query. No Gradle change.
 - The page polls `status()` and `poll()` (partial and final text, voice level); `start(language)` begins one round, which ends after a pause in speech.
+
+## Launcher icon choice and widget logo (Decisions 583 to 585)
+- `scripts/patch-launcher-icon.js` runs after "Generate app icons". It makes the dark icon set from `branding/icon-dark.png` (the icon generator in a scratch folder, background `#121214`) as `ic_launcher_dark*`, moves MainActivity's launcher entry to two `activity-alias` entries (`.LauncherWhite` enabled, `.LauncherDark` disabled) and writes `ArklyIconBridge.java`, registered as `window.ArklyIcon`. The white set stays the one made from `resources/icon.png`.
+- `ArklyIcon.get()` answers `white` or `dark`; `set(name)` enables one alias and disables the other with `DONT_KILL_APP`. A launcher may close the app or show the new icon after a moment. `widgetTheme(dark)` stores the app's Dark mode and redraws the widget, whose logo is `ic_launcher_dark` in Dark mode and `ic_launcher` otherwise.
+- No permission, no Gradle change.

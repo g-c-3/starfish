@@ -130,6 +130,7 @@ write('layout/arkly_widget.xml', `<?xml version="1.0" encoding="utf-8"?>
             android:gravity="center"
             android:orientation="vertical">
             <ImageView
+                android:id="@+id/arkly_w_logo"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:contentDescription="Arkly"

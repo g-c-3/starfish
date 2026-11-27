@@ -25,6 +25,8 @@ public class ArklyWidgetProvider extends AppWidgetProvider {
                 PendingIntent pending = PendingIntent.getActivity(context, i, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
                 views.setOnClickPendingIntent(IDS[i], pending);
             }
+            boolean dark = context.getSharedPreferences("arkly_launcher", Context.MODE_PRIVATE).getBoolean("widgetDark", false); // the app's Dark mode (ArklyIconBridge.widgetTheme, Decision 585)
+            views.setImageViewResource(R.id.arkly_w_logo, dark ? R.mipmap.ic_launcher_dark : R.mipmap.ic_launcher);
             Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
             if (launch != null) {
                 views.setOnClickPendingIntent(R.id.arkly_w_brand, PendingIntent.getActivity(context, KINDS.length, launch, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
