@@ -434,7 +434,7 @@ function placeTabs(sh) {
     list.forEach((t, i) => {
       const x = (t.getBoundingClientRect().left - left0) / k + ml;
       const stop = stops.find((q) => q.pos > x + 0.5);
-      const pos = stop ? stop.pos : (Math.floor(Math.max(x, last) / def) + 1) * def; const kind = stop ? stop.val : 'left';
+      const pos = stop ? stop.pos : (Math.floor((Math.max(x, last) + 0.5) / def) + 1) * def; const kind = stop ? stop.val : 'left'; // half a pixel of slack above: a tab that ends on a stop starts the next beyond it (Decision 579)
       let w = pos - x;
       if (kind === 'right' || kind === 'center' || kind === 'decimal') {
         const rg = document.createRange(); rg.setStartAfter(t); if (list[i + 1]) rg.setEndBefore(list[i + 1]); else rg.setEnd(p, p.childNodes.length);
@@ -722,14 +722,14 @@ function docxBlocks(blocks, parent, media, u, ctx = {}) {
     else { const nf = NAT[String((b.runs.find((x) => x.font) || b.mk || {}).font || '').toLowerCase().replace(/["']/g, '').trim()]; if (nf) st.lineHeight = String(nf); } // single spacing is the font's own line height (Decision 536)
     let fill = ctx.fill || null;
     if (pr.bg) fill = applyFill(p, pr.bg);
-    if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if (bd.t || bd.b || bd.l || bd.r) st.padding = '2px 4px'; }
+    if (pr.borders) { const bd = pr.borders; for (const [k, s] of [['bt', bd.t], ['bb', bd.b], ['bl', bd.l], ['br', bd.r]]) borderStyle(p, k, k, s); if ([bd.t, bd.b, bd.l, bd.r].some((e) => e && !e.none)) st.padding = '2px 4px'; /* only a drawn border pads (Decision 580) */ }
     if (pr.tabs) p.dataset.tabs = JSON.stringify(pr.tabs);
     if (b.nh) p.dataset.nh = '1';
     if (tabDef !== 48) p.dataset.tabdef = String(tabDef);
     if (pr.pb) p.classList.add('eo-pbb');
     if (b.src !== undefined) p.dataset.pi = String(b.src);
     if (b.list) {
-      const m = el('span', 'eo-mark', b.list.marker);
+      const m = el('span', b.list.marker === '\u25ba' ? 'eo-mark eo-tri' : 'eo-mark', b.list.marker); // an arrowhead label is drawn (Decision 581)
       const f = b.list.fmt || {};
       if (f.font) m.style.fontFamily = stack(f.font);
       if (f.size) m.style.fontSize = `${f.size}px`;
@@ -786,7 +786,7 @@ function makeEnv(model, u) {
       if (host) host.remove();
       host = el('div', 'eo-paper eo-measure'); host.style.width = `${page.w - page.l - page.r}px`; host.style.setProperty('--eo-indk', '1');
       document.body.appendChild(host);
-      docxBlocks(blocks, host, model.media, u, {});
+      docxBlocks(blocks, host, model.media, u, {}); placeTabs(host); // a tab is as wide here as on the sheet, so a line breaks where it will (Decision 579)
       top0 = host.getBoundingClientRect().top; kids = Array.from(host.children);
       return kids.map((c) => {
         const r = c.getBoundingClientRect();

@@ -155,6 +155,7 @@ function bulletChar(t) {
   if (!t) return '\u2022';
   if (t === 'o') return '\u25e6';
   if (t === '\u00a7') return '\u25aa';
+  if (t === '\u2b9a' || t === '\u27a2') return '\u25ba'; // arrowheads the phone's fonts lack: drawn as the one arrowhead (Decisions 546, 581)
   return symText(t);
 }
 
@@ -637,6 +638,7 @@ export function readDocx(bytes, pre = null) { // `pre`: the parts of a file alre
     const { outline, ...pr } = eff;
     const mkr = parseR(kid(pp, 'rPr')); // the paragraph mark sets the height of an empty paragraph and of the last line (Decision 526)
     const mk = { font: mkr.font || rbase.font, size: mkr.size || rbase.size };
+    if (list && list.fmt) { if (mkr.b) list.fmt.b = true; if (mkr.i) list.fmt.i = true; } // the label takes the paragraph mark's bold and italic, as in Word (Decision 581)
     return { t: 'p', level: Math.min(level, 6), list, pr, runs, sectEnd, mk, src: pIdx ? pIdx.get(p) : undefined };
   };
   const blocksOf = (node, depth) => {
