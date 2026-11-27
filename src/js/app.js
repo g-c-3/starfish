@@ -7506,12 +7506,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const taken = async (l) => isVault
       ? (getVaultIndex() || []).some((e) => e.label === l && e.extension === ext)
       : ((await db.query(`SELECT 1 FROM entries WHERE label = ? AND extension = ? AND deleted_at IS NULL LIMIT 1`, [l, ext])).values || []).length > 0;
-    let newLabel = label; for (let n = 2; await taken(newLabel) && n < 1000; n++) newLabel = `${label} ${n}`;
+    // A label that ends with the source's extension (a file named in the Files list) takes the new ending in its place, so the copy reads as what it is.
+    const srcExt = String(item.extension || '').toLowerCase();
+    const base = srcExt && label.toLowerCase().endsWith(`.${srcExt}`) ? label.slice(0, -(srcExt.length + 1)) : label;
+    const ending = base !== label ? `.${ext}` : '';
+    let stem = base; for (let n = 2; await taken(stem + ending) && n < 1000; n++) stem = `${base} ${n}`;
+    const newLabel = stem + ending;
     const args = { type: item.type, label: newLabel, tags, description, fileData: bytesToBase64(bytes), extension: ext };
     const id = isVault ? await captureToVault(args) : await captureFile(item.type, args);
     const made = isVault ? ((getVaultIndex() || []).find((e) => e.id === id) || { id, type: item.type, label: newLabel, extension: ext })
       : ((await db.query(`SELECT * FROM entries WHERE id = ?`, [id])).values || [])[0];
-    return { label: newLabel, item: made };
+    return { label: newLabel, name: ending ? newLabel : `${newLabel}.${ext}`, item: made }; // name: the file name as the person sees it (Decision 582)
   }
 
   // Merge and Make a PDF output (Decision 168): always a new entry, no tags or description (the sources may differ).
@@ -7837,7 +7842,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ext: convertExt,
                 save: async (out) => { // the copy is a new entry with the same label, tags and description; the old viewer closes and the copy opens in the editor
                   const made = await saveConvertedCopy(item, out, convertExt, isVault);
-                  toast(`Saved as ${made.label}.${convertExt}`);
+                  toast(`Saved as ${made.name}`);
                   if (close) close();
                   await openFileInArkly(made.item, isVault, { startEdit: true });
                 }
@@ -7849,7 +7854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             },
             setCount: (t) => { if (mine === token) document.getElementById('viewer-title').textContent = t ? `${item.label || 'File'} · ${t}` : (item.label || 'File'); },
             openWith: viewOnly ? () => toast('Not available in the Trash') : () => openFile(item, isVault),
-            pdfCopy: viewOnly ? null : async (bytes) => { const made = await saveConvertedCopy(item, bytes, 'pdf', isVault); toast(`Saved as ${made.label}.pdf`); } // a PDF copy of a presentation: a new entry, like the converted copies
+            pdfCopy: viewOnly ? null : async (bytes) => { const made = await saveConvertedCopy(item, bytes, 'pdf', isVault); toast(`Saved as ${made.name}`); } // a PDF copy of a presentation: a new entry, like the converted copies
           });
           if (mine !== token) { m.destroy(); return; }
           mounted = m;
