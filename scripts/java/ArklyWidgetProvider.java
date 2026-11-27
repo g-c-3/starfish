@@ -3,8 +3,10 @@ package __PACKAGE__;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.widget.RemoteViews;
 
@@ -13,6 +15,15 @@ import android.widget.RemoteViews;
 public class ArklyWidgetProvider extends AppWidgetProvider {
     private static final String[] KINDS = { "note", "voice", "image", "money", "more" };
     private static final int[] IDS = { R.id.arkly_w_note, R.id.arkly_w_voice, R.id.arkly_w_image, R.id.arkly_w_money, R.id.arkly_w_more };
+
+    private static boolean darkIcon(Context context) {
+        try {
+            ComponentName alias = new ComponentName(context.getPackageName(), "__PACKAGE__.LauncherDark");
+            return context.getPackageManager().getComponentEnabledSetting(alias) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] widgetIds) {
@@ -25,7 +36,7 @@ public class ArklyWidgetProvider extends AppWidgetProvider {
                 PendingIntent pending = PendingIntent.getActivity(context, i, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
                 views.setOnClickPendingIntent(IDS[i], pending);
             }
-            boolean dark = context.getSharedPreferences("arkly_launcher", Context.MODE_PRIVATE).getBoolean("widgetDark", false); // the app's Dark mode (ArklyIconBridge.widgetTheme, Decision 585)
+            boolean dark = darkIcon(context); // the logo follows the launcher icon choice (ArklyIconBridge, Decision 586)
             views.setImageViewResource(R.id.arkly_w_logo, dark ? R.mipmap.ic_launcher_dark : R.mipmap.ic_launcher);
             Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
             if (launch != null) {

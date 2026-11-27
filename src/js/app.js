@@ -1904,7 +1904,6 @@ async function getAppearance() {
 function applyAppearance({ darkMode }) {
   const root = document.documentElement;
   root.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-  try { if (window.ArklyIcon) window.ArklyIcon.widgetTheme(!!darkMode); } catch { /* the widget keeps its logo (Decision 585) */ }
 }
 
 async function setDarkMode(on) {
