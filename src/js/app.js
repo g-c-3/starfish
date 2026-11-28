@@ -19,6 +19,9 @@ import {
   ensureSignedIn, signOut, backupToDrive, listDriveBackups, previewDriveBackup,
   restoreFromDrive
 } from './gdrive.js';
+import {
+  startLibraryLoop, onLibraryStatus, libraryStatusText, libraryIsEnabled, libraryExists, enableLibrary, unlockLibrary, disableLibrary, restoreLibrary
+} from './drivelib.js';
 import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEntry } from './fileactions.js';
 import * as Money from './money.js';
 import { chartHtml, bucketReadout } from './moneychart.js';
@@ -1133,6 +1136,7 @@ async function onUnlocked() {
   // Update check (Decision 71) is NOT run here, by design (Decision 72): it is a manual Settings button
   // (handleCheckForUpdateClick()), not a background check on every open.
   await checkAutoBackupOnOpen(); // never blocks getting into the app
+  startLibraryLoop(db); // continuous Drive backup: does nothing unless the person turned it on (Decision 594)
   // Actual rendering (digest, on-this-day, timeline) happens via DOMContentLoaded's render*()
   // functions, called once right after bootstrap() resolves — showDigest()/showMainTimeline()
   // themselves are pure data queries with no DOM side effect, so calling them here too would just
@@ -3608,6 +3612,7 @@ async function refreshDriveConnectionView() {
   document.getElementById('auto-backup-toggle').checked = (await metaGet('auto_backup_enabled', 'false')) === 'true';
   document.getElementById('auto-backup-frequency').value = await metaGet('auto_backup_frequency', 'weekly');
   document.getElementById('auto-backup-time').value = await metaGet('auto_backup_time', DEFAULT_TIME);
+  document.getElementById('lib-toggle').checked = await libraryIsEnabled(db);
   await renderDriveBackupList(auth.accessToken);
 }
 
@@ -3674,6 +3679,66 @@ async function handleDriveBackupNow() {
   } catch (err) {
     statusEl.textContent = err.message; // e.g. "Google Drive isn't set up yet..." — same guard as connect
   }
+}
+
+// ---- Continuous Drive backup (Decisions 594 to 600) ----
+async function handleLibToggle(toggle) {
+  const statusEl = document.getElementById('lib-status');
+  if (toggle.checked) {
+    if (!(await confirmBackupAccess(ALL_CATEGORIES, 'turn on continuous backup'))) { toggle.checked = false; return; } // Decisions 202, 271
+    const passphrase = await askText({ title: 'Backup passkey', text: 'Asked once, never stored. A new phone needs it to open the library.', password: true, ok: 'Turn on' });
+    if (!passphrase) { toggle.checked = false; return; }
+    try {
+      if (!(await libraryExists()) && !(await confirmStrength('passkey', passphrase))) { toggle.checked = false; return; } // a new library gets the strength check
+      statusEl.textContent = 'Turning on…';
+      const r = await enableLibrary(db, { passphrase });
+      toast(r.adopted ? 'Continuing the library already on Drive.' : 'Continuous backup is on.');
+    } catch (err) {
+      toggle.checked = false;
+      statusEl.textContent = err.message === 'wrong_passkey' ? 'Wrong passkey for the library on Drive.' : (err.message || 'Could not turn on.');
+    }
+    return;
+  }
+  const choice = await askYesNo({
+    title: 'Turn off continuous backup?',
+    text: 'Uploads stop and the key is removed from this phone. The library stays on Drive unless you delete it.',
+    yes: 'Turn off, keep on Drive', no: 'Turn off and delete from Drive', explicitNo: true
+  });
+  if (!choice) { toggle.checked = true; return; } // Back or a lock never turns it off
+  try { await disableLibrary(db, { deleteFromDrive: choice === 'no' }); statusEl.textContent = choice === 'no' ? 'Off. The library was moved to the Drive trash.' : 'Off. The library stays on Drive.'; }
+  catch (err) { statusEl.textContent = err.message || 'Could not turn off.'; }
+}
+
+async function handleLibResume() {
+  const passphrase = await askText({ title: 'Backup passkey', text: 'Opens the library again on this phone. Not stored.', password: true, ok: 'Resume' });
+  if (!passphrase) return;
+  try { await unlockLibrary(db, passphrase); }
+  catch (err) { document.getElementById('lib-status').textContent = err.message === 'wrong_passkey' ? 'Wrong passkey.' : err.message === 'no_library' ? 'No library on Drive.' : (err.message || 'Could not resume.'); }
+}
+
+async function handleLibRestore() {
+  const statusEl = document.getElementById('lib-status');
+  const passphrase = await askText({ title: 'Backup passkey', text: 'For the library on Drive. Not stored.', password: true, ok: 'Continue' });
+  if (!passphrase) return;
+  const go = await askYesNo({ title: 'Restore from the Drive library?', text: 'Adds what is on Drive to this phone. Nothing here is replaced; exact duplicates are skipped.', yes: 'Restore', no: 'Cancel' });
+  if (go !== true) return;
+  const attempt = (extra = {}) => withoutIdleLock(() => restoreLibrary(db, {
+    passphrase, currentPrivateKey: privateSessionKey, onProgress: ({ done, total }) => { statusEl.textContent = `Restoring ${done} of ${total}…`; }, ...extra
+  }));
+  statusEl.textContent = 'Restoring…';
+  let r;
+  try {
+    r = await attempt();
+    if (!r.ok && (r.reason === 'vault_pin_needed' || r.reason === 'vault_pin_wrong' || r.reason === 'vault_locked')) r = await restoreWithSourcePin(r.vaultWrap, attempt);
+  } catch (err) { r = { ok: false, reason: err.message || 'unknown error' }; }
+  const REASONS = {
+    wrong_passkey: 'wrong passkey', no_library: 'no library on Drive yet', vault_cancelled: 'cancelled, nothing was changed',
+    vault_old_format: 'the library holds Vault items in an earlier format', vault_not_set_up: 'set up the Vault first (Vault tab), then restore again',
+    insufficient_storage: 'not enough free space'
+  };
+  statusEl.textContent = r.ok
+    ? `Done: added ${r.summary.added}, skipped ${r.summary.skippedExactDup} exact duplicates${r.summary.failed ? `, ${r.summary.failed} could not be read` : ''}.`
+    : `Restore failed: ${REASONS[r.reason] || r.reason}.`;
 }
 
 // Earlier builds kept a GitHub token here (Decision 164). The repo is public (Decision 214); any saved copy is deleted at start-up.
@@ -4010,11 +4075,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   document.getElementById('drive-disconnect-btn').addEventListener('click', async () => {
+    await disableLibrary(db, { deleteFromDrive: false }).catch(() => {}); // the library stays on Drive; the key leaves this phone
     await signOut();
     await metaSet('auto_backup_enabled', 'false'); // disconnecting implies no more unattended uploads
     await refreshDriveConnectionView();
   });
   document.getElementById('drive-backup-now-btn').addEventListener('click', handleDriveBackupNow);
+  document.getElementById('lib-toggle').addEventListener('change', (e) => handleLibToggle(e.target));
+  document.getElementById('lib-resume-btn').addEventListener('click', handleLibResume);
+  document.getElementById('lib-restore-btn').addEventListener('click', handleLibRestore);
+  onLibraryStatus((s) => {
+    document.getElementById('lib-status').textContent = libraryStatusText(s);
+    document.getElementById('lib-resume-btn').classList.toggle('hidden', s.state !== 'key_missing');
+  });
   bindAutoBackup({ toggle: 'auto-backup-toggle', frequency: 'auto-backup-frequency', time: 'auto-backup-time', what: 'automatic backup to Google Drive',
     keys: { enabled: 'auto_backup_enabled', frequency: 'auto_backup_frequency', time: 'auto_backup_time' } });
   bindAutoBackup({ toggle: 'auto-phone-toggle', frequency: 'auto-phone-frequency', time: 'auto-phone-time', what: 'automatic backup to this phone',

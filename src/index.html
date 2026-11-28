@@ -346,6 +346,12 @@
           <label class="field-label">Not before <input type="time" id="auto-backup-time" value="02:00" /></label>
           <button id="drive-backup-now-btn">Back up now to Drive</button>
           <div id="drive-backup-status" class="status-line"></div>
+          <h4>Continuous backup</h4>
+          <p class="mode-description">Each change is encrypted on this phone and kept on Drive while the app is open. The passkey is asked once and never stored; a new phone needs only it.</p>
+          <label class="switch-row"><input type="checkbox" id="lib-toggle" /> Continuous backup</label>
+          <div id="lib-status" class="status-line"></div>
+          <button id="lib-resume-btn" class="hidden">Enter passkey to resume</button>
+          <button id="lib-restore-btn" class="secondary-btn">Restore from Drive library</button>
           <h4>Backups on Drive</h4>
           <div id="drive-backup-list"></div>
         </div>

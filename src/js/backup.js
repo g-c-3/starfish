@@ -820,10 +820,119 @@ async function extractCategoryToStorage(payload, category, destDir = 'Arkly/Rest
   return written;
 }
 
+
+// ---------------------------------------------------------------------------
+// Drive library (Decision 594): one object per entry, written by drivelib.js under a data key, not a passkey-derived one.
+// Same line layout as format 2 (plain header, then entry record, body pieces and file chunks, each line numbered from 1 as
+// AES-GCM additional data). Restore here is append only.
+// ---------------------------------------------------------------------------
+const LIB_MAX_FILE_BYTES = 150 * 1024 * 1024; // a larger file stays out of the library and is counted as skipped
+
+async function libraryObject(db, key, row, cat) {
+  initFiles(db);
+  const isFile = (FILE_BEARING_CATEGORIES.has(cat) || row.is_private) && row.file_path;
+  if (isFile && (await statSize(row)) > LIB_MAX_FILE_BYTES) return { tooLarge: true };
+  const out = { ...row, _category: cat };
+  if (!row.is_private) { delete out.encrypted_meta; delete out.file_key; } // same exclusions as the archive (Decisions 156, 161)
+  const tagRows = (await db.query(
+    `SELECT t.name FROM tags t JOIN entry_tags et ON et.tag_id = t.id WHERE et.entry_id = ?`, [row.id]
+  )).values || [];
+  out.tags = tagRows.map((t) => t.name);
+  if (row.type === 'reminder') out.reminder_log = await readReminderLog(db, row.id);
+  let pieces = null;
+  if (typeof out.encrypted_body === 'string' && out.encrypted_body.length > INLINE_BODY_CHARS) {
+    pieces = [];
+    for (let p = 0; p < out.encrypted_body.length; p += BODY_PIECE_CHARS) pieces.push(out.encrypted_body.slice(p, p + BODY_PIECE_CHARS));
+    out.encrypted_body = null;
+  }
+  const blob = isFile ? await readFileBlob(row) : null;
+  const nFile = blob ? Math.ceil(blob.size / FILE_CHUNK_BYTES) : 0;
+
+  let n = 0, chars = 0, parts = [JSON.stringify({ version: FORMAT2, lib: 1 }) + '\n'], acc = new Blob([]);
+  const put = async (data) => { // buffered text goes into a Blob so a large file never sits in memory as one string
+    n += 1;
+    const line = JSON.stringify(await encryptChunk(key, data, n)) + '\n';
+    parts.push(line); chars += line.length;
+    if (chars > FLUSH_CHARS) { acc = new Blob([acc, ...parts]); parts = []; chars = 0; }
+  };
+  await put(ENC_T.encode(JSON.stringify({ t: 'entry', entry: out, nBody: pieces ? pieces.length : 0, nFile, hasFile: !!blob })));
+  if (pieces) for (const piece of pieces) await put(ENC_T.encode(piece));
+  for (let c = 0; c < nFile; c++) await put(await blob.slice(c * FILE_CHUNK_BYTES, (c + 1) * FILE_CHUNK_BYTES).arrayBuffer());
+  return { blob: new Blob([acc, ...parts]), hasFile: !!blob, missingFile: !!isFile && !blob };
+}
+
+// Tags, settings and the Vault wrap: kept in the library manifest, read each run (small).
+async function libraryExtras(db) {
+  return readBackupExtras(db, ALL_CATEGORIES, true);
+}
+
+// The same stream-in as restoreFormat2's loop, for one library object.
+async function restoreLibraryObject(db, key, file, opts, summary) {
+  const cur = openV2(file, key);
+  await cur.skipHeader();
+  const rec = await cur.nextRecord();
+  if (!rec || rec.t !== 'entry') throw new Error('library object damaged');
+  const entry = rec.entry;
+  if (!opts.categories.includes(entry._category)) return;
+  const target = await planEntryTarget(db, entry, 'append', summary);
+  if (!target) return; // exact UUID match among live entries: skipped
+  if (rec.nBody > 0) {
+    let body = '';
+    for (let i = 0; i < rec.nBody; i++) body += DEC_T.decode(await cur.nextBytes());
+    entry.encrypted_body = body;
+  }
+  prepareRestoredFile(entry);
+  if (rec.hasFile && entry.is_private) {
+    const t = await vaultFileTarget(entry, opts);
+    const w = await beginRawFile(t.path);
+    try {
+      for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());
+      await w.finish();
+      entry.file_path = t.path;
+      entry.file_key = t.fileKey;
+    } catch (err) { await w.abort(); throw err; }
+  } else if (rec.hasFile) {
+    const w = await beginFile();
+    try {
+      for (let c = 0; c < rec.nFile; c++) await w.append(await cur.nextBytes());
+      const saved = await w.finish();
+      entry.file_path = saved.path;
+      entry.file_key = saved.fileKey;
+    } catch (err) { await w.abort(); throw err; }
+  }
+  await insertRestoredEntry(db, entry, target.targetId, target.label, opts, summary);
+}
+
+// entries: [{ id, fid, cat, size }] from the manifest; fetchObject(fid) resolves a Blob. Nothing is replaced. An object that
+// cannot be read is counted in summary.failed and the rest still restore.
+async function restoreFromLibrary(db, { key, extras, entries, fetchObject, categories = ALL_CATEGORIES, sourcePin = null, currentPrivateKey = null, onProgress }) {
+  initFiles(db);
+  const picked = entries.filter((e) => e.fid && categories.includes(e.cat));
+  const plan = await planVaultRestore(db, {
+    mode: 'append', categories, hasEntries: picked.some((e) => e.cat === 'private_vault'),
+    wrap: extras.privateVaultWrap, sourcePin, currentKey: currentPrivateKey
+  });
+  if (!plan.ok) return { ok: false, reason: plan.reason, vaultWrap: plan.wrap };
+  const opts = { mode: 'append', categories, sourcePin, currentPrivateKey, _vault: plan };
+  const required = picked.reduce((a, e) => a + (e.size || 0), 0);
+  const { availableBytes } = await getStorageEstimate();
+  if (availableBytes !== null && required > availableBytes) return { ok: false, reason: 'insufficient_storage', requiredBytes: required, availableBytes };
+
+  const summary = { added: 0, skippedExactDup: 0, restoredLabeled: 0, tagsAdded: 0, settingsRestored: false, failed: 0 };
+  for (let i = 0; i < picked.length; i++) {
+    onProgress?.({ done: i + 1, total: picked.length });
+    try { await restoreLibraryObject(db, key, await fetchObject(picked[i].fid), opts, summary); }
+    catch { summary.failed += 1; }
+  }
+  await restoreTagsAndSettings(db, extras, categories, summary);
+  return { ok: true, summary };
+}
+
 export {
   ALL_CATEGORIES, ENTRY_CATEGORIES, FILE_BEARING_CATEGORIES,
   buildBackupPayload, estimateBackupSize, createBackup,
   listPhoneBackups, deletePhoneBackup, getPhoneBackupFile, RESTORE_FROM_LIST_MAX,
   openBackupFile, readBackupHeader, decryptBackupPayload, estimateRestoreSize, restoreBackup,
-  extractCategoryToStorage, getStorageEstimate, backupFileName
+  extractCategoryToStorage, getStorageEstimate, backupFileName,
+  libraryObject, libraryExtras, restoreFromLibrary
 };
