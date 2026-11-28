@@ -3695,17 +3695,17 @@ async function handleLibToggle(toggle) {
       toast(r.adopted ? 'Continuing the library already on Drive.' : 'Continuous backup is on.');
     } catch (err) {
       toggle.checked = false;
-      statusEl.textContent = err.message === 'wrong_passkey' ? 'Wrong passkey for the library on Drive.' : (err.message || 'Could not turn on.');
+      statusEl.textContent = err.message === 'wrong_passkey' ? 'Wrong passkey for the library on Drive.' : err.message === 'needs_access' ? 'Drive needs one more permission: Disconnect, then Connect Drive again.' : (err.message || 'Could not turn on.');
     }
     return;
   }
   const choice = await askYesNo({
     title: 'Turn off continuous backup?',
-    text: 'Uploads stop and the key is removed from this phone. The library stays on Drive unless you delete it.',
+    text: 'Uploads stop and the key is removed from this phone. The library stays in Drive\'s hidden app data unless you delete it.',
     yes: 'Turn off, keep on Drive', no: 'Turn off and delete from Drive', explicitNo: true
   });
   if (!choice) { toggle.checked = true; return; } // Back or a lock never turns it off
-  try { await disableLibrary(db, { deleteFromDrive: choice === 'no' }); statusEl.textContent = choice === 'no' ? 'Off. The library was moved to the Drive trash.' : 'Off. The library stays on Drive.'; }
+  try { await disableLibrary(db, { deleteFromDrive: choice === 'no' }); statusEl.textContent = choice === 'no' ? 'Off. The library was deleted from Drive.' : 'Off. The library stays on Drive.'; }
   catch (err) { statusEl.textContent = err.message || 'Could not turn off.'; }
 }
 
@@ -3713,7 +3713,7 @@ async function handleLibResume() {
   const passphrase = await askText({ title: 'Backup passkey', text: 'Opens the library again on this phone. Not stored.', password: true, ok: 'Resume' });
   if (!passphrase) return;
   try { await unlockLibrary(db, passphrase); }
-  catch (err) { document.getElementById('lib-status').textContent = err.message === 'wrong_passkey' ? 'Wrong passkey.' : err.message === 'no_library' ? 'No library on Drive.' : (err.message || 'Could not resume.'); }
+  catch (err) { document.getElementById('lib-status').textContent = err.message === 'wrong_passkey' ? 'Wrong passkey.' : err.message === 'no_library' ? 'No library on Drive.' : err.message === 'needs_access' ? 'Drive needs one more permission: Disconnect, then Connect Drive again.' : (err.message || 'Could not resume.'); }
 }
 
 async function handleLibRestore() {
@@ -3732,7 +3732,7 @@ async function handleLibRestore() {
     if (!r.ok && (r.reason === 'vault_pin_needed' || r.reason === 'vault_pin_wrong' || r.reason === 'vault_locked')) r = await restoreWithSourcePin(r.vaultWrap, attempt);
   } catch (err) { r = { ok: false, reason: err.message || 'unknown error' }; }
   const REASONS = {
-    wrong_passkey: 'wrong passkey', no_library: 'no library on Drive yet', vault_cancelled: 'cancelled, nothing was changed',
+    wrong_passkey: 'wrong passkey', no_library: 'no library on Drive yet', needs_access: 'Drive needs one more permission (Disconnect, then Connect Drive again)', drive_error: 'Drive could not be reached', vault_cancelled: 'cancelled, nothing was changed',
     vault_old_format: 'the library holds Vault items in an earlier format', vault_not_set_up: 'set up the Vault first (Vault tab), then restore again',
     insufficient_storage: 'not enough free space'
   };

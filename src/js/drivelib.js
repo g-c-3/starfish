@@ -1,10 +1,11 @@
 // drivelib.js — continuous Google Drive backup (Decisions 594 to 600). Opt-in, off by default, runs only while the app is open.
 //
-// One encrypted object per entry in the Drive folder "Arkly Library", plus manifest.json. Objects are encrypted under a random
+// One encrypted object per entry in Drive's hidden app data space (scope drive.appdata, Decision 600), plus manifest.json. The
+// space does not show in the Drive app; manual backups stay in the visible folder (gdrive.js). Objects are encrypted under a random
 // data key. That key lives in two places only: on this phone as a non-extractable CryptoKey in IndexedDB, and in the manifest
 // wrapped under the backup passkey (PBKDF2 600000). The passkey itself is never stored (Decision 32 stands for the passkey), so a
 // new phone needs the passkey alone. Changes are found by comparing a fingerprint per entry with the local index; no write path
-// in the app is hooked. A removed entry's object goes to the Drive trash, not deleted.
+// in the app is hooked. A removed entry's object is deleted from the app data space.
 
 import { ensureSignedIn, getDriveStorageEstimate } from './gdrive.js';
 import { deriveAesKey, encryptChunk, decryptChunk, BACKUP_KDF_ITERATIONS } from './crypto.js';
@@ -13,8 +14,7 @@ import { transferInbox } from './widget-inbox.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
-const FOLDER_NAME = 'Arkly Library';
-const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const APPDATA = 'appDataFolder'; // the hidden space; also the parent id of every library file
 const MANIFEST_NAME = 'manifest.json';
 const MULTIPART_MAX = 4 * 1024 * 1024; // above this an object goes up as a resumable upload
 const TICK_MS = 60 * 1000;
@@ -113,25 +113,25 @@ async function dfetch(token, path, opts = {}) {
   return res;
 }
 
-async function findFolder(token, create) {
-  const q = encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='${FOLDER_MIME}' and trashed=false`);
-  const found = await (await dfetch(token, `/files?q=${q}&fields=files(id)`)).json();
-  if (found.files && found.files.length) return found.files[0].id;
-  if (!create) return null;
-  const made = await (await dfetch(token, '/files', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME })
-  })).json();
-  return made.id;
-}
-
-async function findManifest(token, folderId) {
-  const q = encodeURIComponent(`name='${MANIFEST_NAME}' and '${folderId}' in parents and trashed=false`);
-  const found = await (await dfetch(token, `/files?q=${q}&fields=files(id)`)).json();
+async function findManifest(token) {
+  const q = encodeURIComponent(`name='${MANIFEST_NAME}' and '${APPDATA}' in parents and trashed=false`);
+  const found = await (await dfetch(token, `/files?spaces=${APPDATA}&q=${q}&fields=files(id)`)).json();
   return found.files && found.files.length ? found.files[0].id : null;
 }
 
-async function uploadOnce(token, { folderId, name, blob, fileId, mime }) {
-  const meta = fileId ? { name } : { name, parents: [folderId] };
+async function listAppFiles(token) {
+  const ids = [];
+  let page = '';
+  do {
+    const r = await (await dfetch(token, `/files?spaces=${APPDATA}&pageSize=1000&fields=nextPageToken,files(id)${page}`)).json();
+    for (const f of r.files || []) ids.push(f.id);
+    page = r.nextPageToken ? `&pageToken=${encodeURIComponent(r.nextPageToken)}` : '';
+  } while (page);
+  return ids;
+}
+
+async function uploadOnce(token, { name, blob, fileId, mime }) {
+  const meta = fileId ? { name } : { name, parents: [APPDATA] };
   const method = fileId ? 'PATCH' : 'POST';
   const base = fileId ? `${DRIVE_UPLOAD_API}/files/${fileId}` : `${DRIVE_UPLOAD_API}/files`;
   let res;
@@ -166,18 +166,18 @@ async function putFile(token, args) {
   catch (err) { if (err.status === 404 && args.fileId) return uploadOnce(token, { ...args, fileId: null }); throw err; }
 }
 
-async function trashFile(token, id) {
-  try {
-    await dfetch(token, `/files/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) });
-  } catch (err) { if (err.status !== 404) throw err; }
+async function deleteFile(token, id) {
+  try { await dfetch(token, `/files/${id}`, { method: 'DELETE' }); }
+  catch (err) { if (err.status !== 404) throw err; }
 }
 
 // ---------------------------------------------------------------------------
-// Local index: what the library holds, by entry id. { entries: {id: {fid, fp, cat, size}}, extrasFp, folderId, manifestId }
+// Local index: what the library holds, by entry id. { v, entries: {id: {fid, fp, cat, size}}, extrasFp, manifestId }
 // ---------------------------------------------------------------------------
+const INDEX_V = 2;
 async function loadIndex(db) {
-  try { const v = await metaGet(db, 'lib_index'); if (v) return JSON.parse(v); } catch { /* rebuilt below */ }
-  return { entries: {}, extrasFp: '', folderId: null, manifestId: null };
+  try { const v = await metaGet(db, 'lib_index'); if (v) { const i = JSON.parse(v); if (i.v === INDEX_V) return i; } } catch { /* rebuilt below */ }
+  return { v: INDEX_V, entries: {}, extrasFp: '', manifestId: null }; // an index from the visible-folder build (no v) is dropped: everything uploads again, into the app data space
 }
 const saveIndex = (db, idx) => metaSet(db, 'lib_index', JSON.stringify(idx));
 
@@ -207,7 +207,7 @@ async function scan(db) {
 // ---------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------
-// state: off | idle | syncing | offline | signed_out | key_missing | insufficient_storage | error
+// state: off | idle | syncing | offline | signed_out | needs_access | key_missing | insufficient_storage | error
 let status = { state: 'off', pending: 0, lastSyncAt: 0, skipped: 0, detail: '' };
 const listeners = new Set();
 function setStatus(patch) { status = { ...status, ...patch }; for (const f of listeners) { try { f(status); } catch { /* a listener never stops a run */ } } }
@@ -222,6 +222,7 @@ function libraryStatusText(s) {
     case 'idle': return `Up to date.${when}${skip}`;
     case 'offline': return `Waiting for a connection. ${s.pending ? `${s.pending} change${s.pending === 1 ? '' : 's'} waiting.` : ''}`.trim();
     case 'signed_out': return 'Google account not connected: uploads are paused.';
+    case 'needs_access': return 'Drive needs one more permission: Disconnect, then Connect Drive again.';
     case 'key_missing': return 'The key on this phone is gone. Enter your passkey to resume.';
     case 'insufficient_storage': return 'Not enough Drive space: uploads are paused.';
     case 'error': return `Last attempt failed (${s.detail || 'unknown'}). It tries again soon.`;
@@ -240,7 +241,7 @@ async function writeManifest(db, token, idx, dek, extras) {
   for (const [id, e] of Object.entries(idx.entries)) if (e.fid) entries[id] = { fid: e.fid, fp: e.fp, cat: e.cat, size: e.size };
   const manifest = { ...header, index: await sealIndex(dek, { entries, extras, at: Date.now() }) };
   idx.manifestId = await putFile(token, {
-    folderId: idx.folderId, name: MANIFEST_NAME, blob: new Blob([JSON.stringify(manifest)]), fileId: idx.manifestId, mime: 'application/json'
+    name: MANIFEST_NAME, blob: new Blob([JSON.stringify(manifest)]), fileId: idx.manifestId, mime: 'application/json'
   });
 }
 
@@ -264,7 +265,6 @@ async function runSync(db) {
   if (!todo.length && !gone.length && extrasFp === idx.extrasFp) { setStatus({ state: 'idle', pending: 0, lastSyncAt: Date.now(), skipped }); return; }
   setStatus({ state: 'syncing', pending: todo.length + gone.length });
 
-  if (!idx.folderId) idx.folderId = await findFolder(token, true);
   const { availableBytes } = await getDriveStorageEstimate(token);
   let used = 0, done = 0, doneTodo = 0, changed = false, stopped = null;
   const t0 = Date.now();
@@ -277,7 +277,7 @@ async function runSync(db) {
       if (obj.tooLarge) { idx.entries[r.id] = { fp: r.fp, fid: null, cat: r.cat, size: 0, skipped: 'large' }; changed = true; done += 1; doneTodo += 1; continue; }
       if (availableBytes !== null && used + obj.blob.size > availableBytes) { stopped = 'insufficient_storage'; break; }
       const prev = idx.entries[r.id];
-      const fid = await putFile(token, { folderId: idx.folderId, name: `e_${r.id}.dz`, blob: obj.blob, fileId: prev ? prev.fid : null, mime: 'application/octet-stream' });
+      const fid = await putFile(token, { name: `e_${r.id}.dz`, blob: obj.blob, fileId: prev ? prev.fid : null, mime: 'application/octet-stream' });
       used += obj.blob.size;
       idx.entries[r.id] = { fid, fp: r.fp, cat: r.cat, size: obj.blob.size };
       changed = true; done += 1; doneTodo += 1;
@@ -287,7 +287,7 @@ async function runSync(db) {
     if (!stopped) {
       for (const id of gone) {
         if (Date.now() - t0 > RUN_BUDGET_MS) break;
-        if (idx.entries[id].fid) await trashFile(token, idx.entries[id].fid);
+        if (idx.entries[id].fid) await deleteFile(token, idx.entries[id].fid);
         delete idx.entries[id];
         changed = true; done += 1;
       }
@@ -316,7 +316,8 @@ async function syncLibrary(db) {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) { setStatus({ state: 'offline' }); return; }
     await runSync(db);
   } catch (err) {
-    if (err && (err.status === 401 || err.status === 403)) setStatus({ state: 'signed_out' });
+    if (err && err.status === 401) setStatus({ state: 'signed_out' });
+    else if (err && err.status === 403) setStatus({ state: 'needs_access' }); // the account was connected before drive.appdata was asked for
     else setStatus({ state: 'error', detail: err && err.status ? `Drive ${err.status}` : 'network' });
     nextTryAt = Date.now() + RETRY_MS;
   } finally { running = false; }
@@ -343,16 +344,16 @@ const libraryIsEnabled = async (db) => (await metaGet(db, 'lib_enabled')) === 't
 async function libraryExists() {
   const auth = await ensureSignedIn({ silent: true });
   if (!auth.ok) return false;
-  const folderId = await findFolder(auth.accessToken, false);
-  return !!(folderId && await findManifest(auth.accessToken, folderId));
+  return !!(await findManifest(auth.accessToken));
 }
 
 async function enableLibrary(db, { passphrase, hint = '' }) {
   const auth = await ensureSignedIn({ silent: false });
   const token = auth.accessToken;
-  const folderId = await findFolder(token, true);
-  const manifestId = await findManifest(token, folderId);
-  const idx = { entries: {}, extrasFp: '', folderId, manifestId };
+  let manifestId;
+  try { manifestId = await findManifest(token); }
+  catch (err) { throw err.status === 403 ? new Error('needs_access') : err; }
+  const idx = { v: INDEX_V, entries: {}, extrasFp: '', manifestId };
   let dek, header, adopted = false;
   if (manifestId) {
     const manifest = await (await dfetch(token, `/files/${manifestId}?alt=media`)).json();
@@ -380,8 +381,9 @@ async function enableLibrary(db, { passphrase, hint = '' }) {
 // The key on this phone is gone (storage cleared): the passkey unwraps it again from the manifest.
 async function unlockLibrary(db, passphrase) {
   const auth = await ensureSignedIn({ silent: false });
-  const folderId = await findFolder(auth.accessToken, false);
-  const manifestId = folderId ? await findManifest(auth.accessToken, folderId) : null;
+  let manifestId;
+  try { manifestId = await findManifest(auth.accessToken); }
+  catch (err) { throw err.status === 403 ? new Error('needs_access') : err; }
   if (!manifestId) throw new Error('no_library');
   const manifest = await (await dfetch(auth.accessToken, `/files/${manifestId}?alt=media`)).json();
   await keyPut(await openLibraryKey(passphrase, manifest));
@@ -396,7 +398,7 @@ async function disableLibrary(db, { deleteFromDrive = false } = {}) {
   await keyDel().catch(() => {});
   if (deleteFromDrive) {
     const auth = await ensureSignedIn({ silent: true });
-    if (auth.ok) { const f = await findFolder(auth.accessToken, false); if (f) await trashFile(auth.accessToken, f); }
+    if (auth.ok) for (const id of await listAppFiles(auth.accessToken)) await deleteFile(auth.accessToken, id);
   }
   await metaDel(db, 'lib_index'); await metaDel(db, 'lib_header');
   setStatus({ state: 'off', pending: 0, lastSyncAt: 0, skipped: 0, detail: '' });
@@ -408,8 +410,9 @@ async function disableLibrary(db, { deleteFromDrive = false } = {}) {
 async function restoreLibrary(db, { passphrase, sourcePin = null, currentPrivateKey = null, onProgress }) {
   const auth = await ensureSignedIn({ silent: false });
   const token = auth.accessToken;
-  const folderId = await findFolder(token, false);
-  const manifestId = folderId ? await findManifest(token, folderId) : null;
+  let manifestId;
+  try { manifestId = await findManifest(token); }
+  catch (err) { return { ok: false, reason: err.status === 403 ? 'needs_access' : 'drive_error' }; }
   if (!manifestId) return { ok: false, reason: 'no_library' };
   const manifest = await (await dfetch(token, `/files/${manifestId}?alt=media`)).json();
   let key, payload;

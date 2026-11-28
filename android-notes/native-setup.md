@@ -171,14 +171,16 @@ here is web-UI on console.cloud.google.com — no terminal.
 2. **Enable the Google Drive API**: APIs & Services → Library → search "Google Drive API" → Enable.
 3. **Configure the OAuth consent screen**: APIs & Services → OAuth consent screen.
    - User type: External (unless you have a Google Workspace to make it Internal).
-   - Scopes: add `https://www.googleapis.com/auth/drive.file` only — do not add `drive` or
-     `drive.readonly`, both are restricted and require a paid security assessment (Decision 26).
+   - Scopes: add `https://www.googleapis.com/auth/drive.file` (manual backups, Decision 26) and
+     `https://www.googleapis.com/auth/drive.appdata` (continuous backup, Decision 600) — nothing else. Do not add `drive` or
+     `drive.readonly`, both are restricted and require a paid security assessment. A phone that connected Drive before
+     `drive.appdata` was added must Disconnect and Connect Drive once to grant it.
    - While in Testing status, add your own Google account under "Test users" so you can sign in
      during development.
    - **Before relying on auto-backup: Audience → Publish App → switch from Testing to Production.**
      Skipping this means your refresh token silently expires after 7 days (Decision 27) — auto-backup
-     would just stop working with no error message pointing at the cause. Because the only scope
-     requested is non-sensitive, publishing does not trigger Google's full manual review queue.
+     would just stop working with no error message pointing at the cause. Because both scopes
+     requested are non-sensitive, publishing does not trigger Google's full manual review queue.
 4. **Create a Web application OAuth client**: APIs & Services > Credentials > Create Credentials > OAuth client ID > Application type: Web application. No redirect URI is needed. Copy its client ID (ends `.apps.googleusercontent.com`). The plugin hands this ID to Google Sign-In's ID-token request, which needs the Web client; an Android-type ID there fails with error 10.
 5. **Create an Android OAuth client** in the same project: Application type: Android. Package name: `com.arkly.app`. SHA-1: open the latest run of the build workflow on GitHub > Summary > "Google Drive setup values" and copy the SHA-1 line (no command to run). This client has no ID to copy; Google matches the app by package name and SHA-1. The SHA-1 changes only if the release keystore changes.
 6. **Set the variable** on GitHub: repository Settings > Secrets and variables > Actions > Variables tab > New repository variable. Name `GDRIVE_WEB_CLIENT_ID`, value the Web client ID from step 4. It is a variable, not a secret: the ID is inside the APK anyway.

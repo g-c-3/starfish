@@ -24,7 +24,10 @@ if (!/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(id)) {
 const cfg = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
 cfg.plugins = cfg.plugins || {};
 cfg.plugins.GoogleAuth = {
-  scopes: ['https://www.googleapis.com/auth/drive.file'], // the only scope; the app sees only files it created (Decision 26)
+  scopes: [
+    'https://www.googleapis.com/auth/drive.file', // manual backups: the app sees only files it created (Decision 26)
+    'https://www.googleapis.com/auth/drive.appdata' // continuous backup: the app's hidden space, nothing else (Decision 600)
+  ],
   grantOfflineAccess: false, // no refresh token of our own (Decision 30)
   androidClientId: id
 };

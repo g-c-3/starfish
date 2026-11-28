@@ -1,7 +1,7 @@
 // gdrive.js — optional, opt-in Google Drive backup (Decisions 25-29). Same encrypted archive
 // format as backup.js (Decision 28); Drive is a second destination, never a replacement for it.
 //
-// Auth model: drive.file scope only (Decision 26) via @codetrix-studio/capacitor-google-auth.
+// Auth model: drive.file (manual backups, Decision 26) and drive.appdata (continuous backup, Decision 600) via @codetrix-studio/capacitor-google-auth.
 // No serverAuthCode/refresh-token exchange is implemented here. Access is asked in two ways (Decision 277):
 // GoogleAuth.refresh() is the quiet one: it uses the account this app signed in earlier, shows no screen, and fails
 // when there is none, so it is safe at start-up and for the automatic backup. GoogleAuth.signIn() is the only call that
