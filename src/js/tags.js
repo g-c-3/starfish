@@ -121,8 +121,8 @@ export function createTagControl(host, { max = MAX_TAGS, selected = [], getKnown
       <input class="tc-input" type="text" placeholder="New tag" autocomplete="off" maxlength="${MAX_TAG_LENGTH}" aria-label="New tag" />
       <button type="button" class="secondary-btn tc-plus" aria-label="Add tag">+</button>
       <button type="button" class="secondary-btn tc-drop" aria-label="Saved tags">${CHEVRON}</button>
-    </div>
-    <div class="tag-suggest hidden" role="listbox" aria-label="Saved tags that match"></div>`;
+      <div class="tag-suggest tag-chips hidden" role="listbox" aria-label="Saved tags that match"></div>
+    </div>`;
   host.replaceChildren(root);
   const q = (s) => root.querySelector(s);
   const input = q('.tc-input'), plus = q('.tc-plus'), drop = q('.tc-drop'), chips = q('.tc-selected'), count = q('.tc-count'), panel = q('.tag-suggest');
@@ -130,13 +130,16 @@ export function createTagControl(host, { max = MAX_TAGS, selected = [], getKnown
   for (const t of selected) { const n = cleanTagName(t); if (n && !sel.some((x) => lower(x) === lower(n)) && sel.length < max) sel.push(n); }
   const full = () => sel.length >= max;
 
-  // The list is as tall as the room below the input down to the keyboard or the bottom of the screen, and scrolls.
+  // The suggestions float over what is below the input (absolute, so nothing moves). The card is as tall as the room from the input down
+  // to the keyboard, the bottom of the screen or the bottom of the dialog, whichever comes first, and scrolls inside.
   const fit = () => {
     if (panel.classList.contains('hidden')) return;
     const vv = window.visualViewport;
-    const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    const room = bottom - panel.getBoundingClientRect().top - 12;
-    panel.style.maxHeight = `${Math.max(88, Math.floor(room))}px`;
+    let limit = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const box = panel.closest('.modal-box');
+    if (box) limit = Math.min(limit, box.getBoundingClientRect().bottom);
+    const room = limit - panel.getBoundingClientRect().top - 10;
+    panel.style.maxHeight = `${Math.max(64, Math.floor(room))}px`;
   };
   const renderSuggest = () => {
     const list = !full() && suggestOn ? suggestTags(getKnown(), input.value, sel) : [];
@@ -174,6 +177,9 @@ export function createTagControl(host, { max = MAX_TAGS, selected = [], getKnown
   plus.onclick = () => add(input.value);
   input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(input.value); } };
   input.oninput = () => { renderSuggest(); onChange(); };
+  input.onfocus = renderSuggest;
+  input.onblur = () => { setTimeout(() => { if (document.activeElement !== input) panel.classList.add('hidden'); }, 120); };
+  panel.onmousedown = (e) => e.preventDefault(); // a tap on the card keeps the input focused, so the keyboard stays
   drop.onclick = async () => {
     const t = await openTagPicker({ known: getKnown(), chosen: sel });
     if (t) add(t);
