@@ -129,7 +129,7 @@ export async function moveToVault(db, key, id) {
     }
     if (!sameContent || back.row.label !== row.label || gotDescription !== wantDescription
       || !sameSchedule(back.row, row) || nul(back.row.extension) !== nul(row.extension) || nul(back.row.auto_category) !== nul(row.auto_category)
-      || back.row.created_at !== row.created_at || !same(await tagNames(db, copyId), tags.slice(0, 2))) {
+      || back.row.created_at !== row.created_at || !same(await tagNames(db, copyId), tags.slice(0, 3))) {
       throw new Error('The copy did not match.');
     }
     if (shared) await handOver(db, row); else await permanentlyDeleteEntry(db, id);

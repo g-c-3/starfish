@@ -89,7 +89,7 @@ async function saveVaultEntry(db, privateSessionKey, { type, label, tags = [], d
     throw err;
   }
 
-  for (const tagName of tags.slice(0, 2)) { // MAX_TAGS (Decision 90)
+  for (const tagName of tags.slice(0, 3)) { // MAX_TAGS (Decisions 90, 587)
     await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [tagName]);
     const tagRow = (await db.query(`SELECT id FROM tags WHERE name=?`, [tagName])).values[0];
     await db.run(`INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)`, [id, tagRow.id]);

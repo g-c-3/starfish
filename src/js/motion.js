@@ -4,7 +4,7 @@
 // leaves, the file arrives; on close the file leaves, the page returns. Only transform and opacity animate.
 import '../css/motion.css';
 
-const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen, #explorer-viewer'; // every file or page that opens over another
+const LAYERS = '#editor-screen, #viewer-screen, #explorer-screen, #phone-screen, #explorer-viewer, #tags-screen'; // every file or page that opens over another
 const DIALOGS = '.modal-overlay';
 // Pages by depth. A page that appears while another of the same parent goes away is a pair: deeper = forward, shallower = back.
 const DEPTH = {

@@ -265,6 +265,12 @@
         </div>
       </details>
 
+      <details id="tags-settings" data-tone="violet">
+        <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg></span><span class="tile-label">Tags Management</span></summary>
+        <p class="mode-description">Every tag used in the app: add, rename or delete one, and choose whether saved tags are suggested while you type.</p>
+        <button id="tags-manage-open-btn" type="button" class="secondary-btn">Open Tags Management</button>
+      </details>
+
       <details id="currency-settings" data-tone="violet">
         <summary><span class="tile-icon"><svg class="ic" aria-hidden="true"><use href="#i-money"/></svg></span><span class="tile-label">Currency</span></summary>
         <p class="mode-description">One symbol for every Money entry. Changing it only relabels; amounts are never converted.</p>
@@ -517,7 +523,7 @@
     </div>
   </div>
 
-  <!-- Save dialog (Decision 91): name, tags (max 2), description, one Save. Reused by every capture and edit. -->
+  <!-- Save dialog (Decision 91): name, tags (max 3, Decision 587), notes, one Save. Reused by every capture and edit. -->
   <div id="save-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="sd-heading">
     <div class="modal-box">
       <h3 id="sd-heading">Save</h3>
@@ -550,18 +556,26 @@
           <button type="button" id="sd-alert-btn" class="secondary-btn sd-alert-btn"><svg class="ic" aria-hidden="true"><use href="#i-speaker"/></svg><span class="sd-alert-text">Same as all reminders</span></button>
         </div>
       </div>
-      <div class="field-row"><span class="field-label">Tags</span><span id="sd-tag-count" class="field-hint">0 / 2</span></div>
-      <div id="sd-tag-chips" class="tag-chips"></div>
-      <div class="tag-add">
-        <input id="sd-new-tag" type="text" placeholder="New tag" autocomplete="off" maxlength="30" />
-        <button id="sd-add-tag-btn" type="button" class="secondary-btn">Add</button>
+      <div id="sd-tags"></div>
+      <div id="sd-notes">
+        <label class="field-label" for="sd-desc">Notes</label>
+        <textarea id="sd-desc" rows="3" placeholder="Optional"></textarea>
       </div>
-      <label class="field-label" for="sd-desc">Description</label>
-      <textarea id="sd-desc" rows="3" placeholder="Optional"></textarea>
       <div class="sheet-actions">
         <button id="sd-cancel-btn" type="button" class="secondary-btn">Cancel</button>
         <button id="sd-save-btn" type="button">Save</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Saved tags (Decision 588): every saved tag with a search box; a tap adds it to the file being saved. -->
+  <div id="tag-picker-dialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tpk-title">
+    <div class="modal-box tpk-box">
+      <h3 id="tpk-title">Saved tags</h3>
+      <input id="tpk-search" type="text" placeholder="Search tags" autocomplete="off" aria-label="Search saved tags" />
+      <div id="tpk-list" class="tpk-list"></div>
+      <p id="tpk-empty" class="mode-description hidden"></p>
+      <div class="sheet-actions"><button id="tpk-close-btn" type="button" class="secondary-btn">Close</button></div>
     </div>
   </div>
 
@@ -580,6 +594,20 @@
   </div>
 
   <!-- Entry viewer shell (Decision 92): reminder detail now; location, voice, image, PDF reuse it. -->
+  <div id="tags-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Tags Management">
+    <header class="editor-bar">
+      <button id="tg-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <span class="tg-title">Tags Management</span>
+      <button id="tg-add-btn" class="icon-btn" aria-label="New tag" title="New tag"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+    </header>
+    <div class="tg-body">
+      <label class="switch-row"><input type="checkbox" id="tg-suggest-toggle" /> Suggest saved tags while typing</label>
+      <p class="mode-description">Typing G lists the saved tags that start with G; each letter narrows the list.</p>
+      <div id="tg-list" class="tg-list"></div>
+      <p id="tg-empty" class="mode-description hidden">No tags yet. Tap + to add one.</p>
+    </div>
+  </div>
+
   <div id="explorer-screen" class="hidden" role="dialog" aria-modal="true" aria-label="File explorer">
     <header id="explorer-head" class="editor-bar">
       <button id="explorer-back-btn" class="icon-btn" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
@@ -757,14 +785,12 @@
       <label class="field-label" for="mf-amount">Amount (<span id="mf-symbol"></span>)</label>
       <input id="mf-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
       <div id="mf-loan" class="hidden">
-        <label class="field-label" for="mf-person">Person</label>
+        <label class="field-label" for="mf-person">Name</label>
         <input id="mf-person" type="text" autocomplete="off" maxlength="60" placeholder="Optional" />
         <label class="field-label" for="mf-due">Due date</label>
         <input id="mf-due" type="date" />
       </div>
-      <label class="field-label" for="mf-category">Category</label>
-      <input id="mf-category" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
-      <div id="mf-cat-chips" class="tag-chips"></div>
+      <div id="mf-tags"></div>
       <label class="field-label" for="mf-method">Payment method</label>
       <input id="mf-method" type="text" autocomplete="off" maxlength="40" placeholder="Optional" />
       <div id="mf-method-chips" class="tag-chips"></div>
@@ -784,6 +810,8 @@
         <input id="mf-rep-note" type="text" autocomplete="off" maxlength="120" placeholder="Optional" />
         <button id="mf-rep-add" type="button" class="secondary-btn">+ Add repayment</button>
       </div>
+      <label class="field-label" for="mf-notes">Notes</label>
+      <textarea id="mf-notes" rows="3" placeholder="Optional"></textarea>
       <div id="mf-status" class="status-line" aria-live="polite"></div>
       <div class="sheet-actions">
         <button id="mf-cancel-btn" type="button" class="secondary-btn">Cancel</button>

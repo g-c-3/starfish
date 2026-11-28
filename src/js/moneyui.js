@@ -1,6 +1,7 @@
 // Money form and repayment dialogs (Decisions 126, 128). DOM only; saving and reading rows stays in app.js.
 // hooks.open(finish) registers the dialog so a lock can close it; hooks.close() clears that.
 import { LOAN_KINDS, parseAmount, normalize, addRepayment, remaining, formatAmount, recentValues } from './money.js';
+import { createTagControl, MAX_TAGS } from './tags.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -29,14 +30,18 @@ function methodChoices(items) {
   return out.slice(0, 10);
 }
 
+// What the last completed form held beyond the amount details: the chosen tags and the Notes (Decisions 589, 590).
+let lastExtras = { tags: [], notes: '' };
+export const moneyFormExtras = () => ({ tags: lastExtras.tags.slice(), notes: lastExtras.notes });
+
 // Resolves a normalized details object, or null (cancelled). details prefills an edit.
 // Lent and Borrowed carry a repayments section at the end; the kind is fixed while any repayment is listed,
 // because switching it would change what the repayments mean.
 // draft (Decision 189): attach('form', get) keeps the fields while the form is open; touch() follows each change.
-export function openMoneyForm({ details = null, items = [], symbol = '₹', heading = 'New money entry', hooks = {}, draft = null } = {}) {
+export function openMoneyForm({ details = null, items = [], symbol = '₹', heading = 'New money entry', hooks = {}, draft = null, tags = [], notes = '', known = [], toast = () => {} } = {}) {
   return new Promise((resolve) => {
     const dlg = $('money-dialog'), status = $('mf-status');
-    const amountEl = $('mf-amount'), catEl = $('mf-category'), methodEl = $('mf-method');
+    const amountEl = $('mf-amount'), methodEl = $('mf-method'), notesEl = $('mf-notes');
     const whenEl = $('mf-when'), personEl = $('mf-person'), dueEl = $('mf-due');
     const repAmt = $('mf-rep-amount'), repWhen = $('mf-rep-when'), repMethod = $('mf-rep-method'), repNote = $('mf-rep-note');
     const reps = details && details.repayments ? details.repayments.map((r) => ({ ...r })) : [];
@@ -46,7 +51,7 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
     $('mf-heading').textContent = heading;
     $('mf-symbol').textContent = symbol;
     amountEl.value = details ? plainInput(details.amount) : '';
-    catEl.value = details ? details.category : '';
+    notesEl.value = notes || '';
     methodEl.value = details ? details.method : '';
     whenEl.value = toLocalInput(details ? details.at : Date.now());
     personEl.value = details && details.person ? details.person : '';
@@ -56,7 +61,9 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
     repWhen.value = toLocalInput(Date.now());
 
     const touch = () => { if (draft) draft.touch(); };
-    fillChips($('mf-cat-chips'), catEl, recentValues(items, 'category'), touch);
+    // Tags (Decision 589): the shared control, up to three. An older entry that has a category and no tag starts with it as a tag.
+    const seed = tags.length ? tags : String(details && details.category ? details.category : '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, MAX_TAGS);
+    const tagCtl = createTagControl($('mf-tags'), { max: MAX_TAGS, selected: seed, getKnown: () => known, toast, onChange: touch });
     const methods = methodChoices(items);
     fillChips($('mf-method-chips'), methodEl, methods, touch);
     fillChips($('mf-rep-chips'), repMethod, methods);
@@ -105,7 +112,7 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
 
     dlg.oninput = dlg.onchange = draft ? touch : null;
     const detach = draft ? draft.attach('form', () => ({
-      kind, amount: amountEl.value, category: catEl.value, method: methodEl.value, when: whenEl.value,
+      kind, amount: amountEl.value, tags: tagCtl.get(), newTag: tagCtl.typed(), notes: notesEl.value, method: methodEl.value, when: whenEl.value,
       person: personEl.value, due: dueEl.value, reps: reps.map((r) => ({ ...r }))
     })) : null;
     const finish = (value) => {
@@ -125,7 +132,9 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
       if (details && sameMinute(at, details.at)) at = details.at; // the picker holds whole minutes; unchanged means unchanged
       const loan = LOAN_KINDS.includes(kind);
       if (loan && repAmt.value.trim()) { status.textContent = 'Tap + to add the repayment, or clear the amount.'; return; }
-      const input = { kind, amount: a.minor, category: catEl.value, method: methodEl.value, at };
+      tagCtl.commitTyped(); // a tag typed but not yet added still counts, when there is room
+      const chosen = tagCtl.get();
+      const input = { kind, amount: a.minor, category: chosen.join(', '), method: methodEl.value, at };
       if (loan) {
         input.person = personEl.value;
         input.due = dueEl.value ? new Date(`${dueEl.value}T00:00:00`).getTime() : null;
@@ -133,6 +142,7 @@ export function openMoneyForm({ details = null, items = [], symbol = '₹', head
       }
       const r = normalize(input);
       if (!r.ok) { status.textContent = r.error; return; }
+      lastExtras = { tags: chosen, notes: notesEl.value.trim() };
       finish(r.value);
     };
     $('mf-cancel-btn').onclick = () => (hooks.leave ? hooks.leave() : finish(null));

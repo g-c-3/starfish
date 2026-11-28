@@ -23,7 +23,8 @@ import { getSelectableEntries, runBulkAction, shareEntry, downloadPlain, editEnt
 import * as Money from './money.js';
 import { chartHtml, bucketReadout } from './moneychart.js';
 import { canMove, moveToVault, moveToHome } from './move.js';
-import { openMoneyForm, openRepayDialog } from './moneyui.js';
+import { openMoneyForm, openRepayDialog, moneyFormExtras } from './moneyui.js';
+import { initTags, listKnownTags, createTagControl, tagPickerOpen, closeTagPicker, tagsPageOpen, closeTagsPage, closeTagsUi, openTagsPage } from './tags.js';
 import { parseFormDraft, resolveFormDraft } from './autosave.js';
 import { checkForUpdate } from './update-check.js';
 import { downloadAndInstallUpdate, purgeUpdateDownload } from './update-install.js';
@@ -506,6 +507,8 @@ function backAction() {
   if (activeRemSound) return () => activeRemSound.finish(); // Back closes the Reminder sound dialog
   if (activeLocProv) return () => activeLocProv.finish(); // Back closes the map provider dialog
   if (activeText) return () => activeText.finish(null); // Back cancels the text sheet
+  if (tagPickerOpen()) return () => closeTagPicker(); // Back closes the saved-tags dialog before the sheet under it (Decision 588)
+  if (tagsPageOpen()) return () => closeTagsPage(); // Back leaves the Tags Management page (Decision 591)
   if (activeCompose) return () => activeCompose.finish(null); // Back cancels the order sheet
   if (activeMoney) return () => activeMoney.leave(); // Back = Cancel on the Money form and repayment dialog; asks Discard when changed (Decisions 132, 133)
   if (selection) return exitSelection; // Back leaves selection mode first (Decision 122)
@@ -2468,6 +2471,8 @@ function dismissOverlays(vaultOnly = false) {
   if (activeLocFix && (!vaultOnly || activeLocFix.isVault)) activeLocFix.finish(null); // a pending fix is dropped, nothing saved
   if (activeLocProv && !vaultOnly) activeLocProv.finish(); // nothing typed is saved
   if (activeRemSound && !vaultOnly) activeRemSound.finish();
+  closeTagPicker(); // it may list Vault tags
+  if (!vaultOnly) closeTagsPage();
   if (activeMoney && (!vaultOnly || activeMoney.isVault)) activeMoney.finish(null); // a Vault lock leaves a Home form alone
   const hadAny = (activeSaveDialog && (!vaultOnly || activeSaveDialog.isVault)) || (activeEditor && (!vaultOnly || activeEditor.isVault)) || (activeViewer && (!vaultOnly || activeViewer.isVault));
   if (hadAny) overlayAbortCount++;
@@ -2481,14 +2486,16 @@ function dismissOverlays(vaultOnly = false) {
 // Resolves { name, tags, description, mode } or null (cancelled). An untouched Save returns the default
 // name, no tags, no description. count > 1 shows the naming switch: mode 'own' (each file keeps its own
 // name; name is null) or 'number' (one common name, numbered).
-function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null, reminder = null, draft = null } = {}) {
+function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], description = '', isVault = false, count = 1, discardLabel = null, reminder = null, draft = null, notes = true, tagsShown = true } = {}) {
   return new Promise(async (resolve) => {
     const $ = (id) => document.getElementById(id);
-    const dlg = $('save-dialog'), nameEl = $('sd-name'), descEl = $('sd-desc'), newTagEl = $('sd-new-tag');
-    const chipsEl = $('sd-tag-chips'), countEl = $('sd-tag-count'), modeEl = $('sd-mode');
-    let selected = tags.slice(0, MAX_TAGS);
+    const dlg = $('save-dialog'), nameEl = $('sd-name'), descEl = $('sd-desc'), modeEl = $('sd-mode');
     let known = [];
-    try { known = await listTagsForScope(db, isVault); } catch { known = []; }
+    try { known = await listKnownTags(db, listTagsForScope, isVault); } catch { known = []; }
+    // The one tag control (Decisions 587 to 589): chosen tags, input with + and the saved-tags button, suggestions.
+    const tagCtl = createTagControl($('sd-tags'), { max: MAX_TAGS, selected: tags, getKnown: () => known, toast, onChange: () => { if (draft) draft.touch(); } });
+    $('sd-notes').classList.toggle('hidden', !notes); // Money keeps its Tags and Notes on its own form (Decisions 589, 590)
+    $('sd-tags').classList.toggle('hidden', !tagsShown);
     let mode = 'own';
 
     // Reminder block (Decision 92): when + repeat live in the same dialog, so a reminder is saved in one step too.
@@ -2531,7 +2538,6 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
 
     $('sd-heading').textContent = heading;
     descEl.value = description || '';
-    newTagEl.value = '';
     $('sd-cancel-btn').textContent = discardLabel || 'Cancel';
 
     const applyMode = () => {
@@ -2545,44 +2551,10 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
     modeEl.querySelectorAll('button').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; applyMode(); }; });
     applyMode();
 
-    const has = (list, t) => list.some((x) => x.toLowerCase() === t.toLowerCase());
-    const renderChips = () => {
-      const names = [...known, ...selected.filter((t) => !has(known, t))];
-      chipsEl.innerHTML = names.map((t) => {
-        const on = has(selected, t);
-        const off = !on && selected.length >= MAX_TAGS;
-        return `<button type="button" class="${on ? 'selected' : ''}${off ? ' disabled' : ''}" data-tag="${escapeHtml(t)}" aria-pressed="${on}">${escapeHtml(t)}</button>`;
-      }).join('');
-      countEl.textContent = `${selected.length} / ${MAX_TAGS}`;
-      chipsEl.querySelectorAll('button').forEach((b) => { b.onclick = () => {
-        const t = b.dataset.tag;
-        if (has(selected, t)) selected = selected.filter((x) => x.toLowerCase() !== t.toLowerCase());
-        else if (selected.length >= MAX_TAGS) { toast(`An entry can have up to ${MAX_TAGS} tags`); return; }
-        else selected.push(t);
-        renderChips();
-        if (draft) draft.touch();
-      }; });
-    };
-    renderChips();
-
-    const addTag = () => {
-      const t = newTagEl.value.trim();
-      if (!t) return true;
-      if (has(selected, t)) { newTagEl.value = ''; return true; }
-      if (selected.length >= MAX_TAGS) { toast(`An entry can have up to ${MAX_TAGS} tags`); return false; }
-      selected.push(known.find((k) => k.toLowerCase() === t.toLowerCase()) || t);
-      newTagEl.value = '';
-      renderChips();
-      if (draft) draft.touch();
-      return true;
-    };
-    $('sd-add-tag-btn').onclick = addTag;
-    newTagEl.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } };
-
     // Draft (Decision 189): the dialog's fields, kept while it is open. Typing, choosing and the date pickers raise input/change.
     dlg.oninput = dlg.onchange = draft ? () => draft.touch() : null;
     const detach = draft ? draft.attach('save', () => ({
-      name: nameEl.value, description: descEl.value, tags: selected.slice(), newTag: newTagEl.value,
+      name: nameEl.value, description: descEl.value, tags: tagCtl.get(), newTag: tagCtl.typed(),
       when: reminder ? whenEl.value : '', repeat: reminder ? repeatEl.value : ''
     })) : null;
     const finish = (result) => {
@@ -2594,13 +2566,13 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
       resolve(result);
     };
     $('sd-save-btn').onclick = () => {
-      addTag(); // a tag typed but not yet added still counts
+      tagCtl.commitTyped(); // a tag typed but not yet added still counts, when there is room
       const typed = nameEl.value.trim();
       const own = count > 1 && mode === 'own';
       const result = {
         name: own ? null : (typed || defaultName),
-        tags: selected.slice(0, MAX_TAGS),
-        description: descEl.value.trim(),
+        tags: tagCtl.get().slice(0, MAX_TAGS),
+        description: notes ? descEl.value.trim() : String(description || '').trim(),
         mode: count > 1 ? mode : 'single'
       };
       if (reminder) {
@@ -2620,7 +2592,7 @@ function openSaveDialog({ heading = 'Save', defaultName = '', name, tags = [], d
     };
     // Capture dialogs (Discard) ask Yes/No before dropping the take; Cancel and Back to editing leave at once.
     // Edit dialogs ask only when a field changed since opening (Decision 133).
-    const snap = () => JSON.stringify([nameEl.value, descEl.value, selected, newTagEl.value, whenEl ? whenEl.value : '', repeatEl ? repeatEl.value : '']);
+    const snap = () => JSON.stringify([nameEl.value, descEl.value, tagCtl.get(), tagCtl.typed(), whenEl ? whenEl.value : '', repeatEl ? repeatEl.value : '']);
     const startSnap = snap();
     const requestLeave = async () => {
       if (discardLabel === 'Discard') {
@@ -3947,6 +3919,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     paint();
   })();
 
+  // Tags (Decisions 587 to 592): the saved-tags dialog, the Tags Management page and the suggestion switch share this module.
+  await initTags({ getDb: () => db, metaGet, metaSet, toast, askText, askYesNo, onState: updateBackButtonState, refresh: async () => { await renderMainTimeline(); } });
+  document.getElementById('tags-manage-open-btn')?.addEventListener('click', () => openTagsPage());
+
   // Currency symbol (Decision 130): chips for common symbols, free text for any other. Relabels only.
   (function wireCurrencySettings() {
     const chipsEl = document.getElementById('currency-chips');
@@ -4343,8 +4319,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!d) text('Details cannot be read');
         else {
           const fmt = (n) => Money.formatAmount(n, currencySymbol), loan = Money.isLoan(d), st = Money.status(d);
-          kv([['Kind', Money.KIND_LABELS[d.kind]], ['Amount', fmt(d.amount)], ['Category', d.category], ['Method', d.method], ['Date', formatSavedDate(d.at)],
-            ...(loan ? [['Person', d.person], ['Due', d.due ? formatSavedDate(d.due) : ''], ['Status', Money.STATUS_LABELS[st]], ['Returned', fmt(Money.repaid(d))], ['Remaining', fmt(Money.remaining(d))]] : [])]);
+          kv([['Kind', Money.KIND_LABELS[d.kind]], ['Amount', fmt(d.amount)], ['Tags', d.category], ['Method', d.method], ['Date', formatSavedDate(d.at)],
+            ...(loan ? [['Name', d.person], ['Due', d.due ? formatSavedDate(d.due) : ''], ['Status', Money.STATUS_LABELS[st]], ['Returned', fmt(Money.repaid(d))], ['Remaining', fmt(Money.remaining(d))]] : [])]);
           if (loan && d.repayments && d.repayments.length) {
             const h = document.createElement('div'); h.className = 'tp-h'; h.textContent = `Repayments (${d.repayments.length})`; add(h);
             kv(d.repayments.map((r) => [formatSavedDate(r.at), [fmt(r.amount), r.method, r.note].filter(Boolean).join(' · ')]), 'tp-dl tp-dl-tight');
@@ -4704,14 +4680,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Form, then the Save dialog. The name defaults to a generic one: the label is the only plaintext a Vault row carries (Decision 135).
         await loadCurrencySymbol();
         const items = vaultMoneyItems();
-        let details = null, d = null;
+        let details = null, d = null, held = { tags: [], notes: '' };
+        const knownTags = await listKnownTags(db, listTagsForScope, true).catch(() => []);
         const mark = overlayAbortCount;
         const draft = formDraft('money', true); // Decision 189
         try {
           while (!d) {
-            details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks, draft });
+            details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: vaultMoneyHooks, draft, tags: held.tags, notes: held.notes, known: knownTags, toast });
             if (!details) break;
-            d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: Money.summary(details), isVault: true, discardLabel: 'Back to amount', draft });
+            held = moneyFormExtras();
+            d = await openSaveDialog({ heading: 'Save vault money entry', defaultName: Money.summary(details), isVault: true, discardLabel: 'Back to amount', draft, tags: held.tags, description: held.notes, notes: false, tagsShown: false });
             if (!d && overlayAbortCount !== mark) break; // locked meanwhile
           }
         } finally { draft.end(); }
@@ -5399,14 +5377,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Form, then the Save dialog (name defaults to the readable summary; tags; the description is the note).
       await loadCurrencySymbol();
       const items = await moneyItems();
-      let details = null, d = null;
+      let details = null, d = null, held = { tags: [], notes: '' };
+      const knownTags = await listKnownTags(db, listTagsForScope, false).catch(() => []);
       const mark = overlayAbortCount;
       const draft = formDraft('money', false); // Decision 189
       try {
         while (!d) {
-          details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: moneyHooks, draft });
+          details = await openMoneyForm({ details, items, symbol: currencySymbol, hooks: moneyHooks, draft, tags: held.tags, notes: held.notes, known: knownTags, toast });
           if (!details) break;
-          d = await openSaveDialog({ heading: 'Save money entry', defaultName: Money.summary(details), discardLabel: 'Back to amount', draft });
+          held = moneyFormExtras();
+          d = await openSaveDialog({ heading: 'Save money entry', defaultName: Money.summary(details), discardLabel: 'Back to amount', draft, tags: held.tags, description: held.notes, notes: false, tagsShown: false });
           if (!d && overlayAbortCount !== mark) break; // locked meanwhile
         }
       } finally { draft.end(); }
@@ -6663,15 +6643,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const items = isVault ? vaultMoneyItems() : await moneyItems();
     const tags = item.tags || await getEntryTags(item.id);
     const autoName = item.label === Money.summary(old);
-    let details = old, d = null;
+    let details = old, d = null, held = { tags, notes: item.description || '' };
+    const knownTags = await listKnownTags(db, listTagsForScope, isVault).catch(() => []);
     const mark = overlayAbortCount;
     const draft = formDraft('money', isVault, { id: item.id, label: item.label }); // Decision 190
     try {
       while (!d) {
-        details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks, draft });
+        details = await openMoneyForm({ details, items, symbol: currencySymbol, heading: 'Edit money entry', hooks: isVault ? vaultMoneyHooks : moneyHooks, draft, tags: held.tags, notes: held.notes, known: knownTags, toast });
         if (!details) break;
+        held = moneyFormExtras();
         const next = Money.summary(details);
-        d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags, description: item.description || '', isVault, discardLabel: 'Back to amount', draft });
+        d = await openSaveDialog({ heading: 'Save changes', name: autoName ? next : item.label, defaultName: next, tags: held.tags, description: held.notes, isVault, discardLabel: 'Back to amount', draft, notes: false, tagsShown: false });
         if (!d && overlayAbortCount !== mark) break; // locked meanwhile
       }
     } finally { draft.end(); }
@@ -6718,12 +6700,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           <dl class="detail-list">
             ${line('Kind', Money.KIND_LABELS[d.kind])}
             ${line('Date', full(d.at))}
-            ${line('Person', d.person)}
+            ${line('Name', d.person)}
             ${line('Category', d.category)}
             ${line('Payment method', d.method)}
             ${line('Due', d.due ? new Date(d.due).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')}
             ${loan ? line('Returned', fmt(Money.repaid(d))) + line('Remaining', fmt(Money.remaining(d))) : ''}
-            ${line('Description', row.description)}
+            ${line('Notes', row.description)}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
           </dl>
           ${loan ? `<p class="settings-group">Repayments</p><dl class="detail-list">${reps || '<div><dt>None yet</dt><dd></dd></div>'}</dl>` : ''}
@@ -6780,7 +6762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <dl class="detail-list">
             ${st === 'snoozed' ? `<div><dt>Snoozed until</dt><dd>${escapeHtml(formatEntryDate(row.snoozed_until))}</dd></div>` : ''}
             <div><dt>Repeat</dt><dd>${escapeHtml(repeatLabel(row.repeat_rule))}</dd></div>
-            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${row.description ? `<div><dt>Notes</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
             <div><dt>Created</dt><dd>${escapeHtml(formatEntryDate(row.created_at))}</dd></div>
           </dl>
@@ -6866,7 +6848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <dl class="detail-list">
             ${has && customLabel ? `<div><dt>Label</dt><dd>${escapeHtml(customLabel)}</dd></div>` : ''}
             ${has ? `<div><dt>Decimal</dt><dd>${row.latitude.toFixed(6)}, ${row.longitude.toFixed(6)}</dd></div>` : ''}
-            ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+            ${row.description ? `<div><dt>Notes</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
             ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</dd></div>` : ''}
             <div><dt>Saved</dt><dd>${escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '')}</dd></div>
           </dl>
@@ -7001,7 +6983,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div id="vv-player"${playerH ? ` style="min-height:${playerH}px"` : ''}></div>
             <dl class="detail-list">
-              ${row.description ? `<div><dt>Description</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
+              ${row.description ? `<div><dt>Notes</dt><dd>${escapeHtml(row.description)}</dd></div>` : ''}
               ${tags.length ? `<div><dt>Tags</dt><dd class="tag-wrap">${tags.map((tg) => `<span class="tag">${escapeHtml(tg)}</span>`).join('')}</dd></div>` : ''}
               <div><dt>Saved</dt><dd>${escapeHtml(formatEntryDate(saved))}</dd></div>
             </dl>

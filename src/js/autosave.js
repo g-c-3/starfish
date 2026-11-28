@@ -6,7 +6,7 @@
 import { parseAmount, normalize, KIND_LABELS } from './money.js';
 import { parseCoordinates } from './geoparse.js';
 
-const MAX_TAGS = 2; // Decision 90
+const MAX_TAGS = 3; // Decisions 90, 587 — a file holds at most three tags
 const str = (v) => String(v ?? '').trim();
 
 export function parseFormDraft(raw) {

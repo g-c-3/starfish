@@ -496,7 +496,7 @@ async function listTagsForScope(db, isPrivate) {
   return (rows.values || []).map((r) => r.name);
 }
 
-const MAX_TAGS = 2; // Decision 90 — an entry holds at most two tags
+const MAX_TAGS = 3; // Decisions 90, 587 — an entry holds at most three tags
 
 export {
   MAX_TAGS, listTagsForScope,
